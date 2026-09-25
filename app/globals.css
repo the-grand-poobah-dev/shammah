@@ -1,0 +1,242 @@
+:root {
+  --bg: #f3f5ed;
+  --surface: #ffffff;
+  --border: #e1e6d9;
+  --ink: #1f2a20;
+  --ink-muted: #647062;
+  --ink-faint: #93a08f;
+  --gold: #b8842a;
+  --gold-soft: #f4e9d6;
+  --teal: #1e6b66;
+  --teal-soft: #dceeec;
+  --rose: #a94b46;
+  --rose-soft: #f3dfdd;
+  --radius: 14px;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-body: var(--font-work-sans), -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+}
+
+a {
+  color: var(--teal);
+}
+
+button {
+  font-family: inherit;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Shell */
+
+.shell {
+  max-width: 620px;
+  margin: 0 auto;
+  min-height: 100vh;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* Topbar */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: rgba(243, 245, 237, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.brand-mark {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0;
+}
+
+.brand-tag {
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+.signin-btn {
+  background: var(--ink);
+  color: var(--bg);
+  border: none;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.signin-btn:hover {
+  background: var(--teal);
+}
+
+.signin-btn:active {
+  transform: scale(0.97);
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.user-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--teal);
+}
+
+/* Feed */
+
+.feed {
+  padding: 18px 16px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Empty state */
+
+.empty-state {
+  margin-top: 40px;
+  padding: 36px 24px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.empty-state h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.empty-state p {
+  font-size: 14px;
+  color: var(--ink-muted);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 40ch;
+  margin-inline: auto;
+}
+
+/* Post card */
+
+.post-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent, var(--gold));
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+.post-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--accent-soft, var(--gold-soft));
+  flex-shrink: 0;
+}
+
+.post-header-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.post-author {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.category-chip {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text, var(--gold));
+  background: var(--accent-soft, var(--gold-soft));
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin-top: 3px;
+}
+
+.post-text {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+}
+
+.post-media {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  display: block;
+}
