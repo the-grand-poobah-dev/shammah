@@ -1,4 +1,4 @@
-# Kletos — real app scaffold
+# Shammah — real app scaffold
 
 ## What's here
 - `supabase/schema.sql` — run this once in Supabase's SQL Editor to create your database
