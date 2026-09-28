@@ -44,6 +44,13 @@ export default function Feed() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
 
+  // Category filter + compose state
+  const [activeCategory, setActiveCategory] = useState(null); // null = all
+  const [composeText, setComposeText] = useState('');
+  const [composeCategory, setComposeCategory] = useState('prayer');
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState('');
+
   // Auth panel state
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState('signin'); // signin | signup | forgot | oauth
@@ -68,10 +75,14 @@ export default function Feed() {
       }
     });
 
-    loadPosts();
-
     return () => subscription.unsubscribe();
   }, []);
+
+  // Reload the feed when the category changes or when someone signs in/out
+  // (posts are only readable by signed-in users, so the feed must refetch after login)
+  useEffect(() => {
+    loadPosts(activeCategory);
+  }, [activeCategory, session?.user?.id]);
 
   async function loadProfile(userId) {
     const { data, error } = await supabase
@@ -82,13 +93,41 @@ export default function Feed() {
     if (!error) setProfile(data);
   }
 
-  async function loadPosts() {
-    const { data, error } = await supabase
+  async function loadPosts(category) {
+    let query = supabase
       .from('posts')
       .select('id, text_content, media_url, media_type, created_at, category_id, profiles(display_name)')
       .order('created_at', { ascending: false })
       .limit(50);
+    if (category) query = query.eq('category_id', category);
+    const { data, error } = await query;
     if (!error) setPosts(data);
+  }
+
+  async function handleCreatePost(e) {
+    e.preventDefault();
+    const text = composeText.trim();
+    if (!text || !session) return;
+    setPosting(true);
+    setPostError('');
+    const { error } = await supabase.from('posts').insert({
+      author_id: session.user.id,
+      church_id: profile?.church_id ?? null,
+      category_id: composeCategory,
+      text_content: text,
+    });
+    setPosting(false);
+    if (error) {
+      setPostError(error.message);
+      return;
+    }
+    setComposeText('');
+    // Show the new post: if a different category is filtered, jump to the one just posted in
+    if (activeCategory && activeCategory !== composeCategory) {
+      setActiveCategory(composeCategory);
+    } else {
+      loadPosts(activeCategory);
+    }
   }
 
   function openAuth(mode) {
@@ -374,14 +413,65 @@ export default function Feed() {
         </div>
       )}
 
+      <nav className="category-bar" aria-label="Browse by category">
+        <button
+          className={`filter-chip${activeCategory === null ? ' active' : ''}`}
+          onClick={() => setActiveCategory(null)}
+        >
+          All
+        </button>
+        {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
+          <button
+            key={id}
+            className={`filter-chip${activeCategory === id ? ' active' : ''}`}
+            style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
+            onClick={() => setActiveCategory(id)}
+          >
+            {c.label}
+          </button>
+        ))}
+      </nav>
+
       <main className="feed">
+        {session && (
+          <form className="compose" onSubmit={handleCreatePost}>
+            <textarea
+              value={composeText}
+              onChange={(e) => setComposeText(e.target.value)}
+              placeholder="Share something with your church family…"
+              rows={3}
+              maxLength={2000}
+              required
+            />
+            <div className="compose-row">
+              <select
+                value={composeCategory}
+                onChange={(e) => setComposeCategory(e.target.value)}
+                aria-label="Category"
+              >
+                {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
+                  <option key={id} value={id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className="auth-primary compose-btn" disabled={posting || !composeText.trim()}>
+                {posting ? 'Posting…' : 'Post'}
+              </button>
+            </div>
+            {postError && <p className="auth-message">{postError}</p>}
+          </form>
+        )}
+
         {posts.length === 0 && (
           <div className="empty-state">
             <h2>Nothing here yet</h2>
             <p>
-              {session
-                ? 'Run the seed data step in the README, or post one from the Supabase Table Editor to see it show up here.'
-                : 'Sign in or create an account to join the church feed.'}
+              {!session
+                ? 'Sign in or create an account to join the church feed.'
+                : activeCategory
+                  ? `No posts in ${categoryStyle(activeCategory).label} yet. Be the first to share one.`
+                  : 'Be the first to share something with your church family.'}
             </p>
             {!session && (
               <div className="empty-auth-actions">
