@@ -46,13 +46,10 @@ export default function Feed() {
 
   // Auth panel state
   const [showAuth, setShowAuth] = useState(false);
-  const [authMode, setAuthMode] = useState('signin'); // signin | signup | phone | forgot | oauth
+  const [authMode, setAuthMode] = useState('signin'); // signin | signup | forgot | oauth
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -92,6 +89,12 @@ export default function Feed() {
       .order('created_at', { ascending: false })
       .limit(50);
     if (!error) setPosts(data);
+  }
+
+  function openAuth(mode) {
+    setShowAuth(true);
+    setAuthMode(mode);
+    setMessage('');
   }
 
   // ---------- Auth helpers ----------
@@ -166,40 +169,6 @@ export default function Feed() {
     setMessage('Password reset email sent. Check your inbox.');
   }
 
-  async function handlePhoneSendOtp(e) {
-    e.preventDefault();
-    setLoading(true);
-    setMessage('');
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: phone.trim(),
-    });
-    setLoading(false);
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-    setOtpSent(true);
-    setMessage('SMS code sent. Enter it below.');
-  }
-
-  async function handlePhoneVerifyOtp(e) {
-    e.preventDefault();
-    setLoading(true);
-    setMessage('');
-    const { error } = await supabase.auth.verifyOtp({
-      phone: phone.trim(),
-      token: otp.trim(),
-      type: 'sms',
-    });
-    setLoading(false);
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-    setShowAuth(false);
-    setMessage('');
-  }
-
   async function handleOAuth(provider) {
     setLoading(true);
     setMessage('');
@@ -236,16 +205,14 @@ export default function Feed() {
             </button>
           </div>
         ) : (
-          <button
-            className="signin-btn"
-            onClick={() => {
-              setShowAuth(true);
-              setAuthMode('signin');
-              setMessage('');
-            }}
-          >
-            Sign in
-          </button>
+          <div className="auth-header-actions">
+            <button className="signin-btn" onClick={() => openAuth('signin')}>
+              Sign in
+            </button>
+            <button className="signup-btn" onClick={() => openAuth('signup')}>
+              Sign up
+            </button>
+          </div>
         )}
       </header>
 
@@ -257,25 +224,25 @@ export default function Feed() {
               ×
             </button>
 
+            <h2 className="auth-panel-title">
+              {authMode === 'signup'
+                ? 'Create your account'
+                : authMode === 'forgot'
+                  ? 'Reset password'
+                  : authMode === 'oauth'
+                    ? 'Continue with social'
+                    : 'Welcome back'}
+            </h2>
+
             <div className="auth-tabs">
               <button
                 className={authMode === 'signin' || authMode === 'signup' || authMode === 'forgot' ? 'active' : ''}
                 onClick={() => {
-                  setAuthMode('signin');
+                  setAuthMode(authMode === 'signup' ? 'signup' : 'signin');
                   setMessage('');
                 }}
               >
                 Email
-              </button>
-              <button
-                className={authMode === 'phone' ? 'active' : ''}
-                onClick={() => {
-                  setAuthMode('phone');
-                  setMessage('');
-                  setOtpSent(false);
-                }}
-              >
-                Phone
               </button>
               <button
                 className={authMode === 'oauth' ? 'active' : ''}
@@ -380,37 +347,6 @@ export default function Feed() {
               </form>
             )}
 
-            {/* ----- Phone OTP ----- */}
-            {authMode === 'phone' && (
-              <form onSubmit={otpSent ? handlePhoneVerifyOtp : handlePhoneSendOtp}>
-                <label>
-                  Phone number (with country code)
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+2547XXXXXXXX"
-                    required
-                  />
-                </label>
-                {otpSent && (
-                  <label>
-                    SMS code
-                    <input
-                      type="text"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value)}
-                      placeholder="123456"
-                      required
-                    />
-                  </label>
-                )}
-                <button type="submit" className="auth-primary" disabled={loading}>
-                  {loading ? 'Please wait…' : otpSent ? 'Verify code' : 'Send SMS code'}
-                </button>
-              </form>
-            )}
-
             {/* ----- Social / OAuth ----- */}
             {authMode === 'oauth' && (
               <div className="auth-oauth">
@@ -431,22 +367,6 @@ export default function Feed() {
                 >
                   Continue with Facebook
                 </button>
-                <button
-                  type="button"
-                  className="auth-oauth-btn twitter"
-                  onClick={() => handleOAuth('twitter')}
-                  disabled={loading}
-                >
-                  Continue with X (Twitter)
-                </button>
-                <button
-                  type="button"
-                  className="auth-oauth-btn zoom"
-                  onClick={() => handleOAuth('zoom')}
-                  disabled={loading}
-                >
-                  Continue with Zoom
-                </button>
                 {loading && <p className="auth-hint" style={{ marginTop: 12 }}>Redirecting…</p>}
               </div>
             )}
@@ -459,9 +379,20 @@ export default function Feed() {
           <div className="empty-state">
             <h2>Nothing here yet</h2>
             <p>
-              Run the seed data step in the README, or post one from the Supabase Table Editor
-              to see it show up here.
+              {session
+                ? 'Run the seed data step in the README, or post one from the Supabase Table Editor to see it show up here.'
+                : 'Sign in or create an account to join the church feed.'}
             </p>
+            {!session && (
+              <div className="empty-auth-actions">
+                <button className="signin-btn" onClick={() => openAuth('signin')}>
+                  Sign in
+                </button>
+                <button className="signup-btn" onClick={() => openAuth('signup')}>
+                  Sign up
+                </button>
+              </div>
+            )}
           </div>
         )}
 
