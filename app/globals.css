@@ -136,6 +136,22 @@ a:focus-visible {
   background: var(--teal);
 }
 
+.signout-btn {
+  margin-left: 6px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.signout-btn:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
 /* Feed */
 
 .feed {
@@ -239,4 +255,212 @@ a:focus-visible {
   border-radius: 10px;
   border: 1px solid var(--border);
   display: block;
+}
+
+/* ---------- Auth panel ---------- */
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 42, 32, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.auth-panel {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  width: 100%;
+  max-width: 380px;
+  padding: 28px 24px 24px;
+  position: relative;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.auth-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.auth-tabs button {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 8px 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.auth-tabs button.active {
+  color: var(--ink);
+  background: var(--gold-soft);
+  font-weight: 600;
+}
+
+.auth-panel label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  margin-bottom: 14px;
+}
+
+.auth-panel input {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  background: #fafbf7;
+}
+
+.auth-panel input:focus {
+  outline: 2px solid var(--teal);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.auth-primary {
+  width: 100%;
+  margin-top: 6px;
+  background: var(--ink);
+  color: var(--bg);
+  border: none;
+  border-radius: 999px;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-primary:hover:not(:disabled) {
+  background: var(--teal);
+}
+
+.auth-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-links {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.auth-links button {
+  background: none;
+  border: none;
+  color: var(--teal);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-message {
+  background: var(--gold-soft);
+  color: var(--ink);
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin: 0 0 16px;
+  line-height: 1.4;
+}
+
+.auth-hint {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: 0 0 14px;
+  line-height: 1.4;
+}
+
+.auth-oauth {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-oauth-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--ink);
+  transition: background 0.12s ease;
+}
+
+.auth-oauth-btn:hover:not(:disabled) {
+  background: #f7f8f3;
+}
+
+.auth-oauth-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-oauth-btn.google {
+  border-color: #dadce0;
+}
+
+.auth-oauth-btn.facebook {
+  background: #1877f2;
+  color: #fff;
+  border-color: #1877f2;
+}
+
+.auth-oauth-btn.facebook:hover:not(:disabled) {
+  background: #166fe5;
+}
+
+.auth-oauth-btn.twitter {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+
+.auth-oauth-btn.twitter:hover:not(:disabled) {
+  background: #222;
+}
+
+.auth-oauth-btn.zoom {
+  background: #2d8cff;
+  color: #fff;
+  border-color: #2d8cff;
+}
+
+.auth-oauth-btn.zoom:hover:not(:disabled) {
+  background: #2681f0;
 }

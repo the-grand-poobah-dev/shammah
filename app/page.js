@@ -42,12 +42,48 @@ function initials(name) {
 export default function Feed() {
   const [posts, setPosts] = useState([]);
   const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+
+  // Auth panel state
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState('signin'); // signin | signup | phone | forgot | oauth
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      if (data.session) loadProfile(data.session.user.id);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s) {
+        loadProfile(s.user.id);
+      } else {
+        setProfile(null);
+      }
+    });
+
     loadPosts();
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  async function loadProfile(userId) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('display_name, role, church_id')
+      .eq('id', userId)
+      .single();
+    if (!error) setProfile(data);
+  }
 
   async function loadPosts() {
     const { data, error } = await supabase
@@ -58,12 +94,130 @@ export default function Feed() {
     if (!error) setPosts(data);
   }
 
-  async function signIn() {
-    const email = prompt('Email for magic link sign-in:');
-    if (!email) return;
-    await supabase.auth.signInWithOtp({ email });
-    alert('Check your email for a sign-in link.');
+  // ---------- Auth helpers ----------
+
+  async function handleEmailSignUp(e) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+    const { error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: { display_name: name.trim() || undefined },
+      },
+    });
+    setLoading(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage('Check your email for a confirmation link, then come back and sign in.');
+    setAuthMode('signin');
   }
+
+  async function handleEmailSignIn(e) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    setLoading(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setShowAuth(false);
+    setMessage('');
+  }
+
+  async function handleMagicLink(e) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: {
+        data: { display_name: name.trim() || undefined },
+      },
+    });
+    setLoading(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage('Check your email for a magic link. You can close this panel.');
+  }
+
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/`,
+    });
+    setLoading(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage('Password reset email sent. Check your inbox.');
+  }
+
+  async function handlePhoneSendOtp(e) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+    const { error } = await supabase.auth.signInWithOtp({
+      phone: phone.trim(),
+    });
+    setLoading(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setOtpSent(true);
+    setMessage('SMS code sent. Enter it below.');
+  }
+
+  async function handlePhoneVerifyOtp(e) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+    const { error } = await supabase.auth.verifyOtp({
+      phone: phone.trim(),
+      token: otp.trim(),
+      type: 'sms',
+    });
+    setLoading(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setShowAuth(false);
+    setMessage('');
+  }
+
+  async function handleOAuth(provider) {
+    setLoading(true);
+    setMessage('');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    setLoading(false);
+    if (error) setMessage(error.message);
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+  }
+
+  const headerName = profile?.display_name || session?.user?.email || 'Member';
 
   return (
     <div className="shell">
@@ -72,17 +226,233 @@ export default function Feed() {
           <h1 className="brand-mark">Shammah</h1>
           <span className="brand-tag">church feed</span>
         </div>
+
         {session ? (
           <div className="user-chip">
             <span className="user-dot" />
-            {session.user.email}
+            <span>{headerName}</span>
+            <button className="signout-btn" onClick={handleSignOut} title="Sign out">
+              Sign out
+            </button>
           </div>
         ) : (
-          <button className="signin-btn" onClick={signIn}>
+          <button
+            className="signin-btn"
+            onClick={() => {
+              setShowAuth(true);
+              setAuthMode('signin');
+              setMessage('');
+            }}
+          >
             Sign in
           </button>
         )}
       </header>
+
+      {/* ========== Auth Panel ========== */}
+      {showAuth && (
+        <div className="auth-overlay" onClick={() => setShowAuth(false)}>
+          <div className="auth-panel" onClick={(e) => e.stopPropagation()}>
+            <button className="auth-close" onClick={() => setShowAuth(false)} aria-label="Close">
+              ×
+            </button>
+
+            <div className="auth-tabs">
+              <button
+                className={authMode === 'signin' || authMode === 'signup' || authMode === 'forgot' ? 'active' : ''}
+                onClick={() => {
+                  setAuthMode('signin');
+                  setMessage('');
+                }}
+              >
+                Email
+              </button>
+              <button
+                className={authMode === 'phone' ? 'active' : ''}
+                onClick={() => {
+                  setAuthMode('phone');
+                  setMessage('');
+                  setOtpSent(false);
+                }}
+              >
+                Phone
+              </button>
+              <button
+                className={authMode === 'oauth' ? 'active' : ''}
+                onClick={() => {
+                  setAuthMode('oauth');
+                  setMessage('');
+                }}
+              >
+                Social
+              </button>
+            </div>
+
+            {message && <p className="auth-message">{message}</p>}
+
+            {/* ----- Email / Password ----- */}
+            {(authMode === 'signin' || authMode === 'signup') && (
+              <form onSubmit={authMode === 'signup' ? handleEmailSignUp : handleEmailSignIn}>
+                {authMode === 'signup' && (
+                  <label>
+                    Your name
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Grace Wanjiku"
+                      required
+                    />
+                  </label>
+                )}
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                  />
+                </label>
+                <label>
+                  Password
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    minLength={6}
+                    required
+                  />
+                </label>
+
+                <button type="submit" className="auth-primary" disabled={loading}>
+                  {loading ? 'Please wait…' : authMode === 'signup' ? 'Create account' : 'Sign in'}
+                </button>
+
+                <div className="auth-links">
+                  {authMode === 'signin' ? (
+                    <>
+                      <button type="button" onClick={() => setAuthMode('signup')}>
+                        Need an account? Sign up
+                      </button>
+                      <button type="button" onClick={() => setAuthMode('forgot')}>
+                        Forgot password?
+                      </button>
+                      <button type="button" onClick={handleMagicLink}>
+                        Send magic link instead
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => setAuthMode('signin')}>
+                      Already have an account? Sign in
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
+
+            {/* ----- Forgot password ----- */}
+            {authMode === 'forgot' && (
+              <form onSubmit={handleForgotPassword}>
+                <p className="auth-hint">
+                  Enter the email you used to sign up. We will send a reset link.
+                </p>
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                  />
+                </label>
+                <button type="submit" className="auth-primary" disabled={loading}>
+                  {loading ? 'Sending…' : 'Send reset link'}
+                </button>
+                <div className="auth-links">
+                  <button type="button" onClick={() => setAuthMode('signin')}>
+                    Back to sign in
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ----- Phone OTP ----- */}
+            {authMode === 'phone' && (
+              <form onSubmit={otpSent ? handlePhoneVerifyOtp : handlePhoneSendOtp}>
+                <label>
+                  Phone number (with country code)
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+2547XXXXXXXX"
+                    required
+                  />
+                </label>
+                {otpSent && (
+                  <label>
+                    SMS code
+                    <input
+                      type="text"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                      placeholder="123456"
+                      required
+                    />
+                  </label>
+                )}
+                <button type="submit" className="auth-primary" disabled={loading}>
+                  {loading ? 'Please wait…' : otpSent ? 'Verify code' : 'Send SMS code'}
+                </button>
+              </form>
+            )}
+
+            {/* ----- Social / OAuth ----- */}
+            {authMode === 'oauth' && (
+              <div className="auth-oauth">
+                <p className="auth-hint">One click. We never see your password on these platforms.</p>
+                <button
+                  type="button"
+                  className="auth-oauth-btn google"
+                  onClick={() => handleOAuth('google')}
+                  disabled={loading}
+                >
+                  Continue with Google
+                </button>
+                <button
+                  type="button"
+                  className="auth-oauth-btn facebook"
+                  onClick={() => handleOAuth('facebook')}
+                  disabled={loading}
+                >
+                  Continue with Facebook
+                </button>
+                <button
+                  type="button"
+                  className="auth-oauth-btn twitter"
+                  onClick={() => handleOAuth('twitter')}
+                  disabled={loading}
+                >
+                  Continue with X (Twitter)
+                </button>
+                <button
+                  type="button"
+                  className="auth-oauth-btn zoom"
+                  onClick={() => handleOAuth('zoom')}
+                  disabled={loading}
+                >
+                  Continue with Zoom
+                </button>
+                {loading && <p className="auth-hint" style={{ marginTop: 12 }}>Redirecting…</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <main className="feed">
         {posts.length === 0 && (
