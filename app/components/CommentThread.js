@@ -1,16 +1,16 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { timeAgo } from '../lib/postDisplay';
-import Avatar from './Avatar';
-import ProfileBadge from './ProfileBadge';
+import { initials, timeAgo } from '../lib/postDisplay';
 import { detectMentionQuery, insertMention, splitMentions } from '../lib/mentions';
 import ReactionBar from './ReactionBar';
+import MemberName from './MemberName';
 
 export default function CommentThread({ postId, session, onRequireSignIn, onCountChange }) {
   const [state, setState] = useState('loading'); // loading | ready | error
   const [comments, setComments] = useState([]); // flat, newest replies included
   const [nameById, setNameById] = useState({}); // profile id -> display name (authors + mentions)
+  const [badgeById, setBadgeById] = useState({}); // profile id -> badge
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState(null); // { id, name }
   const [busy, setBusy] = useState(false);
@@ -24,7 +24,7 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
     async function load() {
       const { data, error: loadErr } = await supabase
         .from('comments')
-        .select('id, parent_id, author_id, text_content, mentioned_user_ids, created_at, profiles(display_name, avatar_url, badge, badge_verified)')
+        .select('id, parent_id, author_id, text_content, mentioned_user_ids, created_at, profiles(display_name, badge, avatar_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
       if (cancelled) return;
@@ -37,8 +37,12 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
       onCountChange((data || []).length);
 
       const known = {};
+      const badges = {};
       (data || []).forEach((c) => {
-        if (c.author_id) known[c.author_id] = (c.profiles && c.profiles.display_name) || 'Someone';
+        if (c.author_id) {
+          known[c.author_id] = (c.profiles && c.profiles.display_name) || 'Someone';
+          if (c.profiles?.badge) badges[c.author_id] = c.profiles.badge;
+        }
       });
       const missing = new Set();
       (data || []).forEach((c) => (c.mentioned_user_ids || []).forEach((id) => {
@@ -47,13 +51,17 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
       if (missing.size > 0) {
         const { data: extra } = await supabase
           .from('profiles')
-          .select('id, display_name')
+          .select('id, display_name, badge')
           .in('id', Array.from(missing));
         (extra || []).forEach((p) => {
           known[p.id] = p.display_name || 'Someone';
+          if (p.badge) badges[p.id] = p.badge;
         });
       }
-      if (!cancelled) setNameById(known);
+      if (!cancelled) {
+        setNameById(known);
+        setBadgeById(badges);
+      }
     }
     load();
     return () => {
@@ -163,14 +171,20 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
       (comment.profiles && comment.profiles.display_name) ||
       nameById[comment.author_id] ||
       (session && comment.author_id === session.user.id ? 'You' : 'Someone');
+    const authorBadge =
+      (comment.profiles && comment.profiles.badge) || badgeById[comment.author_id] || null;
+    const authorAvatar = comment.profiles?.avatar_url || null;
     const mentionNames = (comment.mentioned_user_ids || []).map((id) => nameById[id]).filter(Boolean);
     return (
       <div className={`comment-row${isReply ? ' comment-reply' : ''}`}>
-        <Avatar name={authorName} src={comment.profiles?.avatar_url} className="comment-avatar" />
+        {authorAvatar ? (
+          <img className="avatar comment-avatar avatar-img" src={authorAvatar} alt="" />
+        ) : (
+          <span className="avatar comment-avatar">{initials(authorName)}</span>
+        )}
         <div className="comment-body">
           <div className="comment-bubble">
-            <span className="comment-author">{authorName}</span>
-            <ProfileBadge badge={comment.profiles?.badge} verified={comment.profiles?.badge_verified} />
+            <MemberName name={authorName} badgeId={authorBadge} layout="inline" className="comment-author" />
             <p className="comment-text">
               {splitMentions(comment.text_content, mentionNames).map((piece, i) =>
                 typeof piece === 'string' ? (

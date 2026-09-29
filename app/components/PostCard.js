@@ -1,11 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { categoryStyle } from '../lib/postDisplay';
-import Avatar from './Avatar';
-import ProfileBadge from './ProfileBadge';
+import { categoryStyle, initials } from '../lib/postDisplay';
 import ReactionBar from './ReactionBar';
 import CommentThread from './CommentThread';
+import MemberName from './MemberName';
 
 function PollBlock({ options, counts, myVote, canVote, onVote }) {
   const total = options.reduce((sum, o) => sum + (counts[o.id] || 0), 0);
@@ -91,6 +90,8 @@ export default function PostCard({ post, session, openAuth, pollOptions, pollCou
 
   const cat = categoryStyle(post.category_id);
   const authorName = (post.profiles && post.profiles.display_name) || 'Someone';
+  const authorBadge = post.profiles?.badge || null;
+  const authorAvatar = post.profiles?.avatar_url || null;
 
   useEffect(() => {
     let cancelled = false;
@@ -132,10 +133,13 @@ export default function PostCard({ post, session, openAuth, pollOptions, pollCou
       style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
     >
       <div className="post-header">
-        <Avatar name={authorName} src={post.profiles?.avatar_url} />
+        {authorAvatar ? (
+          <img className="avatar avatar-img" src={authorAvatar} alt="" />
+        ) : (
+          <div className="avatar">{initials(authorName)}</div>
+        )}
         <div className="post-header-text">
-          <span className="post-author">{authorName}</span>
-          <ProfileBadge badge={post.profiles?.badge} verified={post.profiles?.badge_verified} />
+          <MemberName name={authorName} badgeId={authorBadge} layout="inline" className="post-author" />
           <span className="category-chip">{cat.label}</span>
         </div>
       </div>

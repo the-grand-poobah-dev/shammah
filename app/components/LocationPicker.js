@@ -1,116 +1,121 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { HAS_MAPS_KEY, loadPlacesLibrary } from '../lib/googleMaps';
 
-// value: { label, placeId, lat, lng } | null
-// Uses Google's Place Autocomplete web component (Places API "New").
-// Falls back to a plain text box if there's no API key or Google fails to load.
-export default function LocationPicker({ value, onChange }) {
-  const holderRef = useRef(null);
-  const [mode, setMode] = useState(HAS_MAPS_KEY ? 'loading' : 'text'); // loading | google | text
-  const [textValue, setTextValue] = useState('');
-  const picked = !!value && !value.typed; // a place chosen from Google (not free text)
+/**
+ * Free place search via OpenStreetMap Nominatim (no API key).
+ * Returns { name, lat, lng } on select.
+ * Respect Nominatim usage policy: one request at a time, reasonable delay, User-Agent set by browser.
+ */
+export default function LocationPicker({ value, onChange, placeholder = 'Search city, town, or church…' }) {
+  const [query, setQuery] = useState(value?.name || '');
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const timer = useRef(null);
+  const wrapRef = useRef(null);
 
   useEffect(() => {
-    if (!HAS_MAPS_KEY || picked || mode === 'text') return undefined;
-    let cancelled = false;
-    let el = null;
+    function onDoc(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
 
-    loadPlacesLibrary()
-      .then((lib) => {
-        if (cancelled || !holderRef.current) return;
-        // City / region level only: we don't want people typing home addresses.
-        el = new lib.PlaceAutocompleteElement({
-          includedPrimaryTypes: [
-            'locality',
-            'sublocality',
-            'administrative_area_level_2',
-            'administrative_area_level_1',
-            'country',
-          ],
+  // Keep input in sync if parent clears value
+  useEffect(() => {
+    if (!value?.name && query && !open) setQuery('');
+  }, [value?.name]);
+
+  function search(q) {
+    setQuery(q);
+    setError('');
+    if (timer.current) clearTimeout(timer.current);
+    if (!q.trim() || q.trim().length < 2) {
+      setResults([]);
+      setOpen(false);
+      return;
+    }
+    timer.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const url =
+          'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=' +
+          encodeURIComponent(q.trim());
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json' },
         });
-        el.style.width = '100%';
-        el.style.colorScheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        if (!res.ok) throw new Error('Search failed');
+        const data = await res.json();
+        const mapped = (data || []).map((r) => ({
+          name: r.display_name,
+          lat: parseFloat(r.lat),
+          lng: parseFloat(r.lon),
+        }));
+        setResults(mapped);
+        setOpen(true);
+      } catch {
+        setError('Could not search places. Try again.');
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+  }
 
-        const handle = async (event) => {
-          try {
-            const place = event.placePrediction ? event.placePrediction.toPlace() : event.place;
-            await place.fetchFields({
-              fields: ['id', 'displayName', 'formattedAddress', 'location', 'addressComponents'],
-            });
-            onChange(toValue(place));
-          } catch {
-            /* ignore: person can just search again */
-          }
-        };
-        el.addEventListener('gmp-select', handle);
-        el.addEventListener('gmp-placeselect', handle); // older API versions
-        holderRef.current.innerHTML = '';
-        holderRef.current.appendChild(el);
-        setMode('google');
-      })
-      .catch(() => {
-        if (!cancelled) setMode('text');
-      });
+  function pick(place) {
+    setQuery(place.name);
+    setOpen(false);
+    setResults([]);
+    onChange?.(place);
+  }
 
-    return () => {
-      cancelled = true;
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [picked]);
-
-  if (picked) {
-    return (
-      <div className="loc-chip">
-        <span className="loc-pin" aria-hidden="true">📍</span>
-        <span className="loc-label">{value.label}</span>
-        <button type="button" className="loc-clear" onClick={() => onChange(null)}>
-          Change
-        </button>
-      </div>
-    );
+  function clear() {
+    setQuery('');
+    setResults([]);
+    setOpen(false);
+    onChange?.(null);
   }
 
   return (
-    <div>
-      {mode === 'loading' && <p className="onb-hint">Loading map search…</p>}
-      <div ref={holderRef} className="loc-google" style={{ display: mode === 'google' ? 'block' : 'none' }} />
-      {mode === 'text' && (
+    <div className="location-picker" ref={wrapRef}>
+      <div className="location-input-row">
         <input
           type="text"
-          className="onb-input"
-          value={textValue}
-          maxLength={80}
-          placeholder="e.g. Nairobi, Kenya"
-          onChange={(e) => {
-            setTextValue(e.target.value);
-            const label = e.target.value.trim();
-            onChange(label ? { label, placeId: null, lat: null, lng: null, typed: true } : null);
-          }}
+          className="location-input"
+          value={query}
+          onChange={(e) => search(e.target.value)}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder={placeholder}
+          autoComplete="off"
+          aria-autocomplete="list"
+          aria-expanded={open}
         />
+        {query && (
+          <button type="button" className="location-clear" onClick={clear} aria-label="Clear location">
+            ×
+          </button>
+        )}
+      </div>
+      {loading && <p className="location-hint">Searching…</p>}
+      {error && <p className="location-error">{error}</p>}
+      {open && results.length > 0 && (
+        <ul className="location-results" role="listbox">
+          {results.map((r, i) => (
+            <li key={`${r.lat}-${r.lng}-${i}`}>
+              <button type="button" role="option" onClick={() => pick(r)}>
+                {r.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {value?.name && !open && (
+        <p className="location-selected">
+          📍 {value.name.length > 60 ? value.name.slice(0, 57) + '…' : value.name}
+        </p>
       )}
     </div>
   );
-}
-
-function toValue(place) {
-  const comps = place.addressComponents || [];
-  const pick = (...types) => {
-    for (const t of types) {
-      const c = comps.find((x) => (x.types || []).includes(t));
-      if (c) return c.longText;
-    }
-    return null;
-  };
-  const city = pick('locality', 'sublocality', 'administrative_area_level_2', 'administrative_area_level_1');
-  const country = pick('country');
-  const label = [city, country].filter(Boolean).join(', ') || place.formattedAddress || place.displayName;
-  const loc = place.location;
-  return {
-    label,
-    placeId: place.id || null,
-    lat: loc ? Math.round(loc.lat() * 100) / 100 : null,
-    lng: loc ? Math.round(loc.lng() * 100) / 100 : null,
-  };
 }

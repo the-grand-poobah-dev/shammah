@@ -3,9 +3,9 @@ import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { CATEGORY_STYLES, categoryStyle, initials } from './lib/postDisplay';
 import PostCard from './components/PostCard';
-import Avatar from './components/Avatar';
-import ProfileBadge from './components/ProfileBadge';
 import OnboardingWizard from './components/OnboardingWizard';
+import ProfileSettings from './components/ProfileSettings';
+import MemberName from './components/MemberName';
 
 const SECTIONS = [
   { id: 'all', label: 'All' },
@@ -69,6 +69,8 @@ export default function Feed() {
   const [dark, setDark] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [churches, setChurches] = useState([]);
@@ -124,18 +126,36 @@ export default function Feed() {
   async function loadProfile(userId) {
     const { data, error } = await supabase
       .from('profiles')
-      .select(
-        'display_name, role, church_id, badge, badge_verified, avatar_url, cover_url, about, location_label, onboarding_completed_at, display_name_changed_at'
-      )
+      .select('display_name, role, church_id, badge, avatar_url, cover_url, about, date_of_birth, location_name, location_lat, location_lng, display_name_changed_at, onboarded_at, badge_set_at')
       .eq('id', userId)
       .single();
-    if (!error) setProfile(data);
+    if (error) {
+      // Profile row may not exist yet (e.g. trigger lag) — create a minimal one
+      if (error.code === 'PGRST116') {
+        const meta = (await supabase.auth.getUser()).data?.user?.user_metadata || {};
+        const fallbackName = meta.display_name || meta.full_name || meta.name || null;
+        await supabase.from('profiles').upsert({ id: userId, display_name: fallbackName });
+        const { data: retry } = await supabase
+          .from('profiles')
+          .select('display_name, role, church_id, badge, avatar_url, cover_url, about, date_of_birth, location_name, location_lat, location_lng, display_name_changed_at, onboarded_at, badge_set_at')
+          .eq('id', userId)
+          .single();
+        if (retry) {
+          setProfile(retry);
+          setNeedsOnboarding(!retry.onboarded_at);
+        }
+        return;
+      }
+      return;
+    }
+    setProfile(data);
+    setNeedsOnboarding(!data?.onboarded_at);
   }
 
   async function loadPosts(category) {
     let query = supabase
       .from('posts')
-      .select('id, text_content, media_url, media_type, created_at, category_id, profiles(display_name, avatar_url, badge, badge_verified)')
+      .select('id, text_content, media_url, media_type, created_at, category_id, profiles(display_name, badge, avatar_url)')
       .order('created_at', { ascending: false })
       .limit(50);
     if (category) query = query.eq('category_id', category);
@@ -457,10 +477,20 @@ export default function Feed() {
             {session ? (
               <div className="avatar-menu">
                 <button className="me-btn" onClick={() => setMenuOpen((o) => !o)}>
-                  <Avatar name={headerName} src={profile?.avatar_url} className="avatar-sm">
-                    <i className="status-dot" />
-                  </Avatar>
-                  <span className="me-name">{headerName}</span>
+                  {profile?.avatar_url ? (
+                    <span className="avatar avatar-sm avatar-img-wrap">
+                      <img src={profile.avatar_url} alt="" className="avatar-img" />
+                      <i className="status-dot" />
+                    </span>
+                  ) : (
+                    <span className="avatar avatar-sm">
+                      {initials(headerName)}
+                      <i className="status-dot" />
+                    </span>
+                  )}
+                  <span className="me-name">
+                    <MemberName name={headerName} badgeId={profile?.badge} layout="inline" />
+                  </span>
                 </button>
                 {menuOpen && (
                   <div className="dropdown" onMouseLeave={() => setMenuOpen(false)}>
@@ -475,6 +505,15 @@ export default function Feed() {
                       }}
                     >
                       View profile
+                    </button>
+                    <button
+                      className="dropdown-item"
+                      onClick={() => {
+                        setShowSettings(true);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      Profile settings
                     </button>
                     <button className="dropdown-item danger" onClick={handleSignOut}>
                       Log out
@@ -496,41 +535,61 @@ export default function Feed() {
         )}
       </header>
 
+      {needsOnboarding && session && (
+        <OnboardingWizard
+          session={session}
+          initialName={profile?.display_name || session.user.user_metadata?.display_name || session.user.user_metadata?.full_name || ''}
+          onComplete={() => {
+            setNeedsOnboarding(false);
+            loadProfile(session.user.id);
+          }}
+        />
+      )}
+
+      {showSettings && session && (
+        <ProfileSettings
+          session={session}
+          profile={profile}
+          onClose={() => setShowSettings(false)}
+          onSaved={() => loadProfile(session.user.id)}
+        />
+      )}
+
       {showProfile && session && (
         <div className="auth-overlay" onClick={() => setShowProfile(false)}>
-          <div className="auth-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="auth-panel profile-preview-panel" onClick={(e) => e.stopPropagation()}>
             <button className="auth-close" onClick={() => setShowProfile(false)} aria-label="Close">
               ×
             </button>
             <div className="profile-view">
-              <div
-                className="profile-cover"
-                style={profile?.cover_url ? { backgroundImage: `url(${profile.cover_url})` } : undefined}
-              />
-              <Avatar name={headerName} src={profile?.avatar_url} className="avatar-lg profile-view-avatar" />
-              <h2 className="auth-panel-title profile-view-name">{headerName}</h2>
-              {profile?.badge && <ProfileBadge badge={profile.badge} verified={profile.badge_verified} />}
-              {profile?.about && <p className="profile-about">{profile.about}</p>}
-              {profile?.location_label && <p className="mut">📍 {profile.location_label}</p>}
+              {profile?.cover_url && (
+                <div className="profile-preview-cover" style={{ backgroundImage: `url(${profile.cover_url})` }} />
+              )}
+              {profile?.avatar_url ? (
+                <img className="avatar avatar-lg avatar-img" src={profile.avatar_url} alt="" />
+              ) : (
+                <span className="avatar avatar-lg">{initials(headerName)}</span>
+              )}
+              <MemberName name={headerName} badgeId={profile?.badge} layout="stack" className="profile-preview-name" />
               <p className="mut">{session.user.email}</p>
-              {profile?.role && profile.role !== 'member' && <span className="category-chip">{profile.role}</span>}
+              {profile?.about && <p className="profile-preview-about">{profile.about}</p>}
+              {profile?.location_name && (
+                <p className="profile-preview-loc">📍 {profile.location_name.split(',').slice(0, 2).join(',').trim()}</p>
+              )}
+              <button
+                type="button"
+                className="auth-primary"
+                style={{ marginTop: 16, width: '100%' }}
+                onClick={() => {
+                  setShowProfile(false);
+                  setShowSettings(true);
+                }}
+              >
+                Edit profile
+              </button>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Mandatory onboarding: blocks the app until the profile is set up */}
-      {session && profile && !profile.onboarding_completed_at && (
-        <OnboardingWizard
-          key={session.user.id}
-          session={session}
-          profile={profile}
-          onDone={(updated) => {
-            setProfile(updated);
-            loadPosts(activeCategory);
-          }}
-          onSignOut={handleSignOut}
-        />
       )}
 
       {/* ========== Auth Panel ========== */}
