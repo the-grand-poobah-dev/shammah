@@ -77,6 +77,39 @@ function initials(name) {
 function PollBlock({ options, counts, myVote, canVote, onVote }) {
   const total = options.reduce((sum, o) => sum + (counts[o.id] || 0), 0);
   const hasVoted = myVote != null;
+  const hasImages = options.some((o) => o.image_url);
+
+  if (hasImages) {
+    return (
+      <div className="poll">
+        <div className="poll-grid">
+          {options.map((opt) => {
+            const votes = counts[opt.id] || 0;
+            const pct = total ? Math.round((votes / total) * 100) : 0;
+            const mine = myVote === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                className={`poll-image-card${mine ? ' mine' : ''}`}
+                disabled={!canVote || hasVoted}
+                onClick={() => onVote(opt.id)}
+              >
+                {opt.image_url && <img src={opt.image_url} alt={opt.label || ''} />}
+                <span className="poll-image-meta">
+                  <span>{opt.label}{mine && ' ✓'}</span>
+                  {hasVoted && <span>{pct}%</span>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="poll-meta">
+          {total} vote{total !== 1 ? 's' : ''} · anonymous poll
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="poll">
@@ -148,7 +181,8 @@ export default function Feed() {
 
   // Polls
   const [isPoll, setIsPoll] = useState(false);
-  const [pollOptions, setPollOptions] = useState(['', '']);
+  const [pollOptions, setPollOptions] = useState([{ label: '', file: null, preview: null }, { label: '', file: null, preview: null }]);
+  const [pollUploading, setPollUploading] = useState(false);
   const [pollOptionsByPost, setPollOptionsByPost] = useState({}); // post_id -> [{id,label}]
   const [pollCountsByPost, setPollCountsByPost] = useState({}); // post_id -> {option_id: count}
   const [myVoteByPost, setMyVoteByPost] = useState({}); // post_id -> option_id
@@ -220,7 +254,7 @@ export default function Feed() {
     if (postIds.length === 0) return;
     const { data: options } = await supabase
       .from('poll_options')
-      .select('id, post_id, label, position')
+      .select('id, post_id, label, image_url, position')
       .in('post_id', postIds)
       .order('position');
     if (options && options.length) {
@@ -276,15 +310,21 @@ export default function Feed() {
   }
 
   function addPollOption() {
-    if (pollOptions.length < 6) setPollOptions((o) => [...o, '']);
+    if (pollOptions.length < 4) setPollOptions((o) => [...o, { label: '', file: null, preview: null }]);
   }
 
   function removePollOption(i) {
     if (pollOptions.length > 2) setPollOptions((o) => o.filter((_, idx) => idx !== i));
   }
 
-  function updatePollOption(i, value) {
-    setPollOptions((o) => o.map((opt, idx) => (idx === i ? value : opt)));
+  function updatePollOptionLabel(i, value) {
+    setPollOptions((o) => o.map((opt, idx) => (idx === i ? { ...opt, label: value } : opt)));
+  }
+
+  function updatePollOptionImage(i, file) {
+    setPollOptions((o) =>
+      o.map((opt, idx) => (idx === i ? { ...opt, file, preview: file ? URL.createObjectURL(file) : null } : opt))
+    );
   }
 
   async function loadChurches() {
@@ -303,13 +343,38 @@ export default function Feed() {
     e.preventDefault();
     const text = composeText.trim();
     if (!text || !session) return;
-    const cleanOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
+    const cleanOptions = pollOptions.filter((o) => o.label.trim() || o.file);
     if (isPoll && cleanOptions.length < 2) {
       setPostError('A poll needs at least 2 options.');
       return;
     }
     setPosting(true);
     setPostError('');
+
+    let optionsToInsert = [];
+    if (isPoll) {
+      setPollUploading(true);
+      try {
+        optionsToInsert = await Promise.all(
+          cleanOptions.map(async (opt, position) => {
+            let image_url = null;
+            if (opt.file) {
+              const path = `${session.user.id}/${Date.now()}-${position}-${opt.file.name.replace(/\s+/g, '_')}`;
+              const { error: upErr } = await supabase.storage.from('poll-images').upload(path, opt.file);
+              if (upErr) throw upErr;
+              image_url = supabase.storage.from('poll-images').getPublicUrl(path).data.publicUrl;
+            }
+            return { label: opt.label.trim(), image_url, position };
+          })
+        );
+      } catch (upErr) {
+        setPosting(false);
+        setPollUploading(false);
+        setPostError('One of the poll images failed to upload: ' + upErr.message);
+        return;
+      }
+      setPollUploading(false);
+    }
     const { data: inserted, error } = await supabase
       .from('posts')
       .insert({
@@ -326,9 +391,9 @@ export default function Feed() {
       return;
     }
     if (isPoll) {
-      const { error: optError } = await supabase.from('poll_options').insert(
-        cleanOptions.map((label, position) => ({ post_id: inserted.id, label, position }))
-      );
+      const { error: optError } = await supabase
+        .from('poll_options')
+        .insert(optionsToInsert.map((o) => ({ ...o, post_id: inserted.id })));
       if (optError) {
         setPosting(false);
         setPostError('Post created, but the poll options failed to save: ' + optError.message);
@@ -338,7 +403,7 @@ export default function Feed() {
     setPosting(false);
     setComposeText('');
     setIsPoll(false);
-    setPollOptions(['', '']);
+    setPollOptions([{ label: '', file: null, preview: null }, { label: '', file: null, preview: null }]);
     // Show the new post: if a different category is filtered, jump to the one just posted in
     if (activeCategory && activeCategory !== composeCategory) {
       setActiveCategory(composeCategory);
@@ -847,11 +912,24 @@ export default function Feed() {
               <div className="poll-editor">
                 {pollOptions.map((opt, i) => (
                   <div className="poll-editor-row" key={i}>
+                    <label className="poll-image-pick">
+                      {opt.preview ? (
+                        <img src={opt.preview} alt="" />
+                      ) : (
+                        <span>+ Photo</span>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => updatePollOptionImage(i, e.target.files?.[0] || null)}
+                        hidden
+                      />
+                    </label>
                     <input
                       type="text"
-                      value={opt}
-                      onChange={(e) => updatePollOption(i, e.target.value)}
-                      placeholder={`Option ${i + 1}`}
+                      value={opt.label}
+                      onChange={(e) => updatePollOptionLabel(i, e.target.value)}
+                      placeholder={`Option ${i + 1} (caption, optional if you add a photo)`}
                       maxLength={80}
                     />
                     {pollOptions.length > 2 && (
@@ -861,12 +939,15 @@ export default function Feed() {
                     )}
                   </div>
                 ))}
-                {pollOptions.length < 6 && (
+                {pollOptions.length < 4 && (
                   <button type="button" className="poll-add-option" onClick={addPollOption}>
                     + Add option
                   </button>
                 )}
-                <p className="poll-hint">Votes are anonymous — no one, including you as the poster, sees who picked what.</p>
+                <p className="poll-hint">
+                  Up to 4 options, each with an optional photo. Votes are anonymous — no one, including you as
+                  the poster, sees who picked what.
+                </p>
               </div>
             )}
 
@@ -887,11 +968,12 @@ export default function Feed() {
                 className="auth-primary compose-btn"
                 disabled={
                   posting ||
+                  pollUploading ||
                   !composeText.trim() ||
-                  (isPoll && pollOptions.filter((o) => o.trim()).length < 2)
+                  (isPoll && pollOptions.filter((o) => o.label.trim() || o.file).length < 2)
                 }
               >
-                {posting ? 'Posting…' : 'Post'}
+                {pollUploading ? 'Uploading…' : posting ? 'Posting…' : 'Post'}
               </button>
             </div>
             {postError && <p className="auth-message">{postError}</p>}
