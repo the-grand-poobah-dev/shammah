@@ -1,7 +1,9 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { initials, timeAgo } from '../lib/postDisplay';
+import { timeAgo } from '../lib/postDisplay';
+import Avatar from './Avatar';
+import ProfileBadge from './ProfileBadge';
 import { detectMentionQuery, insertMention, splitMentions } from '../lib/mentions';
 import ReactionBar from './ReactionBar';
 
@@ -22,7 +24,7 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
     async function load() {
       const { data, error: loadErr } = await supabase
         .from('comments')
-        .select('id, parent_id, author_id, text_content, mentioned_user_ids, created_at, profiles(display_name)')
+        .select('id, parent_id, author_id, text_content, mentioned_user_ids, created_at, profiles(display_name, avatar_url, badge, badge_verified)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
       if (cancelled) return;
@@ -164,10 +166,11 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
     const mentionNames = (comment.mentioned_user_ids || []).map((id) => nameById[id]).filter(Boolean);
     return (
       <div className={`comment-row${isReply ? ' comment-reply' : ''}`}>
-        <span className="avatar comment-avatar">{initials(authorName)}</span>
+        <Avatar name={authorName} src={comment.profiles?.avatar_url} className="comment-avatar" />
         <div className="comment-body">
           <div className="comment-bubble">
             <span className="comment-author">{authorName}</span>
+            <ProfileBadge badge={comment.profiles?.badge} verified={comment.profiles?.badge_verified} />
             <p className="comment-text">
               {splitMentions(comment.text_content, mentionNames).map((piece, i) =>
                 typeof piece === 'string' ? (

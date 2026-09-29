@@ -3,6 +3,9 @@ import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { CATEGORY_STYLES, categoryStyle, initials } from './lib/postDisplay';
 import PostCard from './components/PostCard';
+import Avatar from './components/Avatar';
+import ProfileBadge from './components/ProfileBadge';
+import OnboardingWizard from './components/OnboardingWizard';
 
 const SECTIONS = [
   { id: 'all', label: 'All' },
@@ -121,7 +124,9 @@ export default function Feed() {
   async function loadProfile(userId) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('display_name, role, church_id')
+      .select(
+        'display_name, role, church_id, badge, badge_verified, avatar_url, cover_url, about, location_label, onboarding_completed_at, display_name_changed_at'
+      )
       .eq('id', userId)
       .single();
     if (!error) setProfile(data);
@@ -130,7 +135,7 @@ export default function Feed() {
   async function loadPosts(category) {
     let query = supabase
       .from('posts')
-      .select('id, text_content, media_url, media_type, created_at, category_id, profiles(display_name)')
+      .select('id, text_content, media_url, media_type, created_at, category_id, profiles(display_name, avatar_url, badge, badge_verified)')
       .order('created_at', { ascending: false })
       .limit(50);
     if (category) query = query.eq('category_id', category);
@@ -452,10 +457,9 @@ export default function Feed() {
             {session ? (
               <div className="avatar-menu">
                 <button className="me-btn" onClick={() => setMenuOpen((o) => !o)}>
-                  <span className="avatar avatar-sm">
-                    {initials(headerName)}
+                  <Avatar name={headerName} src={profile?.avatar_url} className="avatar-sm">
                     <i className="status-dot" />
-                  </span>
+                  </Avatar>
                   <span className="me-name">{headerName}</span>
                 </button>
                 {menuOpen && (
@@ -499,13 +503,34 @@ export default function Feed() {
               ×
             </button>
             <div className="profile-view">
-              <span className="avatar avatar-lg">{initials(headerName)}</span>
-              <h2 className="auth-panel-title">{headerName}</h2>
+              <div
+                className="profile-cover"
+                style={profile?.cover_url ? { backgroundImage: `url(${profile.cover_url})` } : undefined}
+              />
+              <Avatar name={headerName} src={profile?.avatar_url} className="avatar-lg profile-view-avatar" />
+              <h2 className="auth-panel-title profile-view-name">{headerName}</h2>
+              {profile?.badge && <ProfileBadge badge={profile.badge} verified={profile.badge_verified} />}
+              {profile?.about && <p className="profile-about">{profile.about}</p>}
+              {profile?.location_label && <p className="mut">📍 {profile.location_label}</p>}
               <p className="mut">{session.user.email}</p>
-              {profile?.role && <span className="category-chip">{profile.role}</span>}
+              {profile?.role && profile.role !== 'member' && <span className="category-chip">{profile.role}</span>}
             </div>
           </div>
         </div>
+      )}
+
+      {/* Mandatory onboarding: blocks the app until the profile is set up */}
+      {session && profile && !profile.onboarding_completed_at && (
+        <OnboardingWizard
+          key={session.user.id}
+          session={session}
+          profile={profile}
+          onDone={(updated) => {
+            setProfile(updated);
+            loadPosts(activeCategory);
+          }}
+          onSignOut={handleSignOut}
+        />
       )}
 
       {/* ========== Auth Panel ========== */}

@@ -1,7 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { categoryStyle, initials } from '../lib/postDisplay';
+import { categoryStyle } from '../lib/postDisplay';
+import Avatar from './Avatar';
+import ProfileBadge from './ProfileBadge';
 import ReactionBar from './ReactionBar';
 import CommentThread from './CommentThread';
 
@@ -130,9 +132,10 @@ export default function PostCard({ post, session, openAuth, pollOptions, pollCou
       style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
     >
       <div className="post-header">
-        <div className="avatar">{initials(authorName)}</div>
+        <Avatar name={authorName} src={post.profiles?.avatar_url} />
         <div className="post-header-text">
           <span className="post-author">{authorName}</span>
+          <ProfileBadge badge={post.profiles?.badge} verified={post.profiles?.badge_verified} />
           <span className="category-chip">{cat.label}</span>
         </div>
       </div>
