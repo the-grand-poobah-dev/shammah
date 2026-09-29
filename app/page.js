@@ -1,11 +1,8 @@
 'use client';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { CATEGORY_STYLES, categoryStyle, initials } from './lib/postDisplay';
 import PostCard from './components/PostCard';
-import OnboardingWizard from './components/OnboardingWizard';
-import ProfileSettings from './components/ProfileSettings';
-import MemberName from './components/MemberName';
 
 const SECTIONS = [
   { id: 'all', label: 'All' },
@@ -69,11 +66,11 @@ export default function Feed() {
   const [dark, setDark] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [churches, setChurches] = useState([]);
+  const [headerHidden, setHeaderHidden] = useState(false);
+  const lastScrollY = useRef(0);
 
   // Polls
   const [isPoll, setIsPoll] = useState(false);
@@ -112,6 +109,24 @@ export default function Feed() {
     if (typeof window !== 'undefined') localStorage.setItem('shammah-theme', dark ? 'dark' : 'light');
   }, [dark]);
 
+  // Auto-hide secondary header (sections + categories) on scroll down; show on scroll up
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY || 0;
+      const delta = y - lastScrollY.current;
+      if (y < 48) {
+        setHeaderHidden(false);
+      } else if (delta > 8) {
+        setHeaderHidden(true);
+      } else if (delta < -8) {
+        setHeaderHidden(false);
+      }
+      lastScrollY.current = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   // Churches list is real data — load it once we know who's signed in
   useEffect(() => {
     if (tab === 'churches' && session) loadChurches();
@@ -126,36 +141,16 @@ export default function Feed() {
   async function loadProfile(userId) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('display_name, role, church_id, badge, avatar_url, cover_url, about, date_of_birth, location_name, location_lat, location_lng, display_name_changed_at, onboarded_at, badge_set_at')
+      .select('display_name, role, church_id')
       .eq('id', userId)
       .single();
-    if (error) {
-      // Profile row may not exist yet (e.g. trigger lag) — create a minimal one
-      if (error.code === 'PGRST116') {
-        const meta = (await supabase.auth.getUser()).data?.user?.user_metadata || {};
-        const fallbackName = meta.display_name || meta.full_name || meta.name || null;
-        await supabase.from('profiles').upsert({ id: userId, display_name: fallbackName });
-        const { data: retry } = await supabase
-          .from('profiles')
-          .select('display_name, role, church_id, badge, avatar_url, cover_url, about, date_of_birth, location_name, location_lat, location_lng, display_name_changed_at, onboarded_at, badge_set_at')
-          .eq('id', userId)
-          .single();
-        if (retry) {
-          setProfile(retry);
-          setNeedsOnboarding(!retry.onboarded_at);
-        }
-        return;
-      }
-      return;
-    }
-    setProfile(data);
-    setNeedsOnboarding(!data?.onboarded_at);
+    if (!error) setProfile(data);
   }
 
   async function loadPosts(category) {
     let query = supabase
       .from('posts')
-      .select('id, text_content, media_url, media_type, created_at, category_id, profiles(display_name, badge, avatar_url)')
+      .select('id, text_content, media_url, media_type, created_at, category_id, profiles(display_name)')
       .order('created_at', { ascending: false })
       .limit(50);
     if (category) query = query.eq('category_id', category);
@@ -430,163 +425,145 @@ export default function Feed() {
 
   return (
     <div className="shell">
-      <header className="topbar">
-        {session && !searchOpen && (
-          <button className="icon-btn" aria-label="Search" onClick={() => setSearchOpen(true)}>
-            <svg viewBox="0 0 24 24" className="icon"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
-          </button>
-        )}
-
-        {searchOpen ? (
-          <div className="search-row">
-            <input
-              autoFocus
-              className="search-input"
-              placeholder="Search posts…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <button
-              className="icon-btn"
-              aria-label="Close search"
-              onClick={() => {
-                setSearchOpen(false);
-                setSearchTerm('');
-              }}
-            >
-              ✕
+      <div className="sticky-header">
+        <header className="topbar">
+          {session && !searchOpen && (
+            <button className="icon-btn" aria-label="Search" onClick={() => setSearchOpen(true)}>
+              <svg viewBox="0 0 24 24" className="icon"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
             </button>
-          </div>
-        ) : (
-          <div className="brand">
-            <h1 className="brand-mark">Shammah</h1>
-            <span className="brand-tag">church feed</span>
-          </div>
-        )}
+          )}
 
-        {!searchOpen && (
-          <div className="topbar-right">
-            <button
-              className="theme-switch"
-              role="switch"
-              aria-checked={dark}
-              aria-label="Toggle dark mode"
-              onClick={() => setDark((d) => !d)}
-            />
+          {searchOpen ? (
+            <div className="search-row">
+              <input
+                autoFocus
+                className="search-input"
+                placeholder="Search posts…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <button
+                className="icon-btn"
+                aria-label="Close search"
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchTerm('');
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div className="brand">
+              <h1 className="brand-mark">Shammah</h1>
+              <span className="brand-tag">church feed</span>
+            </div>
+          )}
 
-            {session ? (
-              <div className="avatar-menu">
-                <button className="me-btn" onClick={() => setMenuOpen((o) => !o)}>
-                  {profile?.avatar_url ? (
-                    <span className="avatar avatar-sm avatar-img-wrap">
-                      <img src={profile.avatar_url} alt="" className="avatar-img" />
-                      <i className="status-dot" />
-                    </span>
-                  ) : (
+          {!searchOpen && (
+            <div className="topbar-right">
+              <button
+                className="theme-switch"
+                role="switch"
+                aria-checked={dark}
+                aria-label="Toggle dark mode"
+                onClick={() => setDark((d) => !d)}
+              />
+
+              {session ? (
+                <div className="avatar-menu">
+                  <button className="me-btn" onClick={() => setMenuOpen((o) => !o)}>
                     <span className="avatar avatar-sm">
                       {initials(headerName)}
                       <i className="status-dot" />
                     </span>
+                    <span className="me-name">{headerName}</span>
+                  </button>
+                  {menuOpen && (
+                    <div className="dropdown" onMouseLeave={() => setMenuOpen(false)}>
+                      <button className="dropdown-item" onClick={focusCompose}>
+                        Create a post
+                      </button>
+                      <button
+                        className="dropdown-item"
+                        onClick={() => {
+                          setShowProfile(true);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        View profile
+                      </button>
+                      <button className="dropdown-item danger" onClick={handleSignOut}>
+                        Log out
+                      </button>
+                    </div>
                   )}
-                  <span className="me-name">
-                    <MemberName name={headerName} badgeId={profile?.badge} layout="inline" />
-                  </span>
-                </button>
-                {menuOpen && (
-                  <div className="dropdown" onMouseLeave={() => setMenuOpen(false)}>
-                    <button className="dropdown-item" onClick={focusCompose}>
-                      Create a post
-                    </button>
-                    <button
-                      className="dropdown-item"
-                      onClick={() => {
-                        setShowProfile(true);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      View profile
-                    </button>
-                    <button
-                      className="dropdown-item"
-                      onClick={() => {
-                        setShowSettings(true);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      Profile settings
-                    </button>
-                    <button className="dropdown-item danger" onClick={handleSignOut}>
-                      Log out
-                    </button>
-                  </div>
-                )}
+                </div>
+              ) : (
+                <div className="auth-header-actions">
+                  <button className="signin-btn" onClick={() => openAuth('signin')}>
+                    Sign in
+                  </button>
+                  <button className="signup-btn" onClick={() => openAuth('signup')}>
+                    Sign up
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </header>
+
+        {tab === 'home' && (
+          <div className={`header-secondary${headerHidden ? ' is-collapsed' : ''}`}>
+            <nav className="section-menu" aria-label="Browse by type">
+              <div className="section-menu-inner">
+                {SECTIONS.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`section-item${section === s.id ? ' active' : ''}`}
+                    onClick={() => setSection(s.id)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <div className="auth-header-actions">
-                <button className="signin-btn" onClick={() => openAuth('signin')}>
-                  Sign in
+            </nav>
+
+            {section === 'all' && (
+              <nav className="category-bar" aria-label="Browse by category">
+                <button
+                  className={`filter-chip${activeCategory === null ? ' active' : ''}`}
+                  onClick={() => setActiveCategory(null)}
+                >
+                  All
                 </button>
-                <button className="signup-btn" onClick={() => openAuth('signup')}>
-                  Sign up
-                </button>
-              </div>
+                {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
+                  <button
+                    key={id}
+                    className={`filter-chip${activeCategory === id ? ' active' : ''}`}
+                    style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
+                    onClick={() => setActiveCategory(id)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </nav>
             )}
           </div>
         )}
-      </header>
-
-      {needsOnboarding && session && (
-        <OnboardingWizard
-          session={session}
-          initialName={profile?.display_name || session.user.user_metadata?.display_name || session.user.user_metadata?.full_name || ''}
-          onComplete={() => {
-            setNeedsOnboarding(false);
-            loadProfile(session.user.id);
-          }}
-        />
-      )}
-
-      {showSettings && session && (
-        <ProfileSettings
-          session={session}
-          profile={profile}
-          onClose={() => setShowSettings(false)}
-          onSaved={() => loadProfile(session.user.id)}
-        />
-      )}
+      </div>
 
       {showProfile && session && (
         <div className="auth-overlay" onClick={() => setShowProfile(false)}>
-          <div className="auth-panel profile-preview-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="auth-panel" onClick={(e) => e.stopPropagation()}>
             <button className="auth-close" onClick={() => setShowProfile(false)} aria-label="Close">
               ×
             </button>
             <div className="profile-view">
-              {profile?.cover_url && (
-                <div className="profile-preview-cover" style={{ backgroundImage: `url(${profile.cover_url})` }} />
-              )}
-              {profile?.avatar_url ? (
-                <img className="avatar avatar-lg avatar-img" src={profile.avatar_url} alt="" />
-              ) : (
-                <span className="avatar avatar-lg">{initials(headerName)}</span>
-              )}
-              <MemberName name={headerName} badgeId={profile?.badge} layout="stack" className="profile-preview-name" />
+              <span className="avatar avatar-lg">{initials(headerName)}</span>
+              <h2 className="auth-panel-title">{headerName}</h2>
               <p className="mut">{session.user.email}</p>
-              {profile?.about && <p className="profile-preview-about">{profile.about}</p>}
-              {profile?.location_name && (
-                <p className="profile-preview-loc">📍 {profile.location_name.split(',').slice(0, 2).join(',').trim()}</p>
-              )}
-              <button
-                type="button"
-                className="auth-primary"
-                style={{ marginTop: 16, width: '100%' }}
-                onClick={() => {
-                  setShowProfile(false);
-                  setShowSettings(true);
-                }}
-              >
-                Edit profile
-              </button>
+              {profile?.role && <span className="category-chip">{profile.role}</span>}
             </div>
           </div>
         </div>
@@ -748,41 +725,6 @@ export default function Feed() {
             )}
           </div>
         </div>
-      )}
-
-      {tab === 'home' && (
-        <nav className="section-bar" aria-label="Browse by type">
-          {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              className={`pill${section === s.id ? ' active' : ''}`}
-              onClick={() => setSection(s.id)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </nav>
-      )}
-
-      {tab === 'home' && section === 'all' && (
-        <nav className="category-bar" aria-label="Browse by category">
-          <button
-            className={`filter-chip${activeCategory === null ? ' active' : ''}`}
-            onClick={() => setActiveCategory(null)}
-          >
-            All
-          </button>
-          {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
-            <button
-              key={id}
-              className={`filter-chip${activeCategory === id ? ' active' : ''}`}
-              style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
-              onClick={() => setActiveCategory(id)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </nav>
       )}
 
       <main className="feed">
@@ -989,16 +931,18 @@ export default function Feed() {
       </main>
 
       <nav className="bottom-nav" aria-label="Main">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={`tab-btn${tab === t.id ? ' active' : ''}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.icon}
-            <span>{t.label}</span>
-          </button>
-        ))}
+        <div className="bottom-nav-pill">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`tab-btn${tab === t.id ? ' active' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
+              {t.icon}
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
       </nav>
     </div>
   );
