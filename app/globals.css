@@ -950,3 +950,148 @@ a:focus-visible {
 .tab-btn.active {
   color: var(--teal);
 }
+
+/* ---------- Poll compose ---------- */
+
+.poll-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.poll-toggle input {
+  accent-color: var(--teal);
+}
+
+.poll-editor {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg);
+}
+
+.poll-editor-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.poll-editor-row input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.poll-editor-row button {
+  background: none;
+  border: none;
+  color: var(--ink-faint);
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.poll-add-option {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--teal);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.poll-hint {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin: 2px 0 0;
+  line-height: 1.4;
+}
+
+/* ---------- Poll display / voting ---------- */
+
+.poll {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+
+.poll-option-btn {
+  text-align: left;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.poll-option-btn:hover:not(:disabled) {
+  border-color: var(--accent, var(--teal));
+  background: var(--accent-soft, var(--teal-soft));
+}
+
+.poll-option-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.poll-result {
+  position: relative;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.poll-result.mine {
+  border-color: var(--accent, var(--teal));
+}
+
+.poll-result-bar {
+  position: absolute;
+  inset: 0;
+  background: var(--accent-soft, var(--teal-soft));
+  z-index: 0;
+}
+
+.poll-result-label,
+.poll-result-pct {
+  position: relative;
+  z-index: 1;
+}
+
+.poll-result-pct {
+  color: var(--ink-muted);
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-left: 10px;
+}
+
+.poll-meta {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin: 0;
+}

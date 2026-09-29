@@ -74,6 +74,47 @@ function initials(name) {
   return chars.join('').toUpperCase();
 }
 
+function PollBlock({ options, counts, myVote, canVote, onVote }) {
+  const total = options.reduce((sum, o) => sum + (counts[o.id] || 0), 0);
+  const hasVoted = myVote != null;
+
+  return (
+    <div className="poll">
+      {options.map((opt) => {
+        const votes = counts[opt.id] || 0;
+        const pct = total ? Math.round((votes / total) * 100) : 0;
+        const mine = myVote === opt.id;
+        if (!hasVoted) {
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              className="poll-option-btn"
+              disabled={!canVote}
+              onClick={() => onVote(opt.id)}
+            >
+              {opt.label}
+            </button>
+          );
+        }
+        return (
+          <div key={opt.id} className={`poll-result${mine ? ' mine' : ''}`}>
+            <div className="poll-result-bar" style={{ width: `${pct}%` }} />
+            <span className="poll-result-label">
+              {opt.label}
+              {mine && ' ✓'}
+            </span>
+            <span className="poll-result-pct">{pct}%</span>
+          </div>
+        );
+      })}
+      <p className="poll-meta">
+        {total} vote{total !== 1 ? 's' : ''} · anonymous poll
+      </p>
+    </div>
+  );
+}
+
 export default function Feed() {
   const [posts, setPosts] = useState([]);
   const [session, setSession] = useState(null);
@@ -104,6 +145,13 @@ export default function Feed() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [churches, setChurches] = useState([]);
+
+  // Polls
+  const [isPoll, setIsPoll] = useState(false);
+  const [pollOptions, setPollOptions] = useState(['', '']);
+  const [pollOptionsByPost, setPollOptionsByPost] = useState({}); // post_id -> [{id,label}]
+  const [pollCountsByPost, setPollCountsByPost] = useState({}); // post_id -> {option_id: count}
+  const [myVoteByPost, setMyVoteByPost] = useState({}); // post_id -> option_id
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -162,7 +210,81 @@ export default function Feed() {
       .limit(50);
     if (category) query = query.eq('category_id', category);
     const { data, error } = await query;
-    if (!error) setPosts(data);
+    if (!error) {
+      setPosts(data);
+      loadPollData(data.map((p) => p.id));
+    }
+  }
+
+  async function loadPollData(postIds) {
+    if (postIds.length === 0) return;
+    const { data: options } = await supabase
+      .from('poll_options')
+      .select('id, post_id, label, position')
+      .in('post_id', postIds)
+      .order('position');
+    if (options && options.length) {
+      const byPost = {};
+      options.forEach((o) => {
+        (byPost[o.post_id] ||= []).push(o);
+      });
+      setPollOptionsByPost(byPost);
+
+      const pollPostIds = Object.keys(byPost);
+      const { data: results } = await supabase.rpc('poll_results', { p_post_ids: pollPostIds });
+      const counts = {};
+      (results || []).forEach((r) => {
+        (counts[r.post_id] ||= {})[r.option_id] = r.votes;
+      });
+      setPollCountsByPost(counts);
+
+      if (session) {
+        const { data: mine } = await supabase
+          .from('poll_votes')
+          .select('post_id, option_id')
+          .eq('voter_id', session.user.id)
+          .in('post_id', pollPostIds);
+        const myVotes = {};
+        (mine || []).forEach((v) => {
+          myVotes[v.post_id] = v.option_id;
+        });
+        setMyVoteByPost(myVotes);
+      }
+    } else {
+      setPollOptionsByPost({});
+      setPollCountsByPost({});
+      setMyVoteByPost({});
+    }
+  }
+
+  async function handleVote(postId, optionId) {
+    if (!session) return;
+    const { error } = await supabase
+      .from('poll_votes')
+      .upsert(
+        { post_id: postId, option_id: optionId, voter_id: session.user.id },
+        { onConflict: 'post_id,voter_id' }
+      );
+    if (error) return;
+    setMyVoteByPost((v) => ({ ...v, [postId]: optionId }));
+    const { data: results } = await supabase.rpc('poll_results', { p_post_ids: [postId] });
+    const counts = {};
+    (results || []).forEach((r) => {
+      counts[r.option_id] = r.votes;
+    });
+    setPollCountsByPost((c) => ({ ...c, [postId]: counts }));
+  }
+
+  function addPollOption() {
+    if (pollOptions.length < 6) setPollOptions((o) => [...o, '']);
+  }
+
+  function removePollOption(i) {
+    if (pollOptions.length > 2) setPollOptions((o) => o.filter((_, idx) => idx !== i));
+  }
+
+  function updatePollOption(i, value) {
+    setPollOptions((o) => o.map((opt, idx) => (idx === i ? value : opt)));
   }
 
   async function loadChurches() {
@@ -181,20 +303,42 @@ export default function Feed() {
     e.preventDefault();
     const text = composeText.trim();
     if (!text || !session) return;
+    const cleanOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
+    if (isPoll && cleanOptions.length < 2) {
+      setPostError('A poll needs at least 2 options.');
+      return;
+    }
     setPosting(true);
     setPostError('');
-    const { error } = await supabase.from('posts').insert({
-      author_id: session.user.id,
-      church_id: profile?.church_id ?? null,
-      category_id: composeCategory,
-      text_content: text,
-    });
-    setPosting(false);
+    const { data: inserted, error } = await supabase
+      .from('posts')
+      .insert({
+        author_id: session.user.id,
+        church_id: profile?.church_id ?? null,
+        category_id: composeCategory,
+        text_content: text,
+      })
+      .select('id')
+      .single();
     if (error) {
+      setPosting(false);
       setPostError(error.message);
       return;
     }
+    if (isPoll) {
+      const { error: optError } = await supabase.from('poll_options').insert(
+        cleanOptions.map((label, position) => ({ post_id: inserted.id, label, position }))
+      );
+      if (optError) {
+        setPosting(false);
+        setPostError('Post created, but the poll options failed to save: ' + optError.message);
+        return;
+      }
+    }
+    setPosting(false);
     setComposeText('');
+    setIsPoll(false);
+    setPollOptions(['', '']);
     // Show the new post: if a different category is filtered, jump to the one just posted in
     if (activeCategory && activeCategory !== composeCategory) {
       setActiveCategory(composeCategory);
@@ -602,11 +746,51 @@ export default function Feed() {
       )}
 
       <main className="feed">
-        {tab === 'home' && section !== 'all' && (
+        {tab === 'home' && section !== 'all' && section !== 'polls' && (
           <div className="coming-soon">
             <h2>{SECTIONS.find((s) => s.id === section)?.label} is on the way</h2>
             <p>This part of Shammah is still being built. Real {section} content will show up here.</p>
           </div>
+        )}
+
+        {tab === 'home' && section === 'polls' && (
+          <>
+            {Object.keys(pollOptionsByPost).length === 0 && (
+              <div className="empty-state">
+                <h2>No polls yet</h2>
+                <p>Switch to "All" and check "Make this a poll" when you post to start one.</p>
+              </div>
+            )}
+            {posts
+              .filter((p) => pollOptionsByPost[p.id])
+              .map((p) => {
+                const cat = categoryStyle(p.category_id);
+                const authorName = p.profiles?.display_name || 'Someone';
+                return (
+                  <article
+                    key={p.id}
+                    className="post-card"
+                    style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
+                  >
+                    <div className="post-header">
+                      <div className="avatar">{initials(authorName)}</div>
+                      <div className="post-header-text">
+                        <span className="post-author">{authorName}</span>
+                        <span className="category-chip">{cat.label}</span>
+                      </div>
+                    </div>
+                    <p className="post-text">{p.text_content}</p>
+                    <PollBlock
+                      options={pollOptionsByPost[p.id]}
+                      counts={pollCountsByPost[p.id] || {}}
+                      myVote={myVoteByPost[p.id]}
+                      canVote={!!session}
+                      onVote={(optionId) => handleVote(p.id, optionId)}
+                    />
+                  </article>
+                );
+              })}
+          </>
         )}
 
         {tab === 'churches' && (
@@ -644,11 +828,48 @@ export default function Feed() {
               id="compose-box"
               value={composeText}
               onChange={(e) => setComposeText(e.target.value)}
-              placeholder="Share something with your church family…"
+              placeholder={isPoll ? 'Ask your question…' : 'Share something with your church family…'}
               rows={3}
               maxLength={2000}
               required
             />
+
+            <label className="poll-toggle">
+              <input
+                type="checkbox"
+                checked={isPoll}
+                onChange={(e) => setIsPoll(e.target.checked)}
+              />
+              Make this a poll
+            </label>
+
+            {isPoll && (
+              <div className="poll-editor">
+                {pollOptions.map((opt, i) => (
+                  <div className="poll-editor-row" key={i}>
+                    <input
+                      type="text"
+                      value={opt}
+                      onChange={(e) => updatePollOption(i, e.target.value)}
+                      placeholder={`Option ${i + 1}`}
+                      maxLength={80}
+                    />
+                    {pollOptions.length > 2 && (
+                      <button type="button" onClick={() => removePollOption(i)} aria-label="Remove option">
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {pollOptions.length < 6 && (
+                  <button type="button" className="poll-add-option" onClick={addPollOption}>
+                    + Add option
+                  </button>
+                )}
+                <p className="poll-hint">Votes are anonymous — no one, including you as the poster, sees who picked what.</p>
+              </div>
+            )}
+
             <div className="compose-row">
               <select
                 value={composeCategory}
@@ -661,7 +882,15 @@ export default function Feed() {
                   </option>
                 ))}
               </select>
-              <button type="submit" className="auth-primary compose-btn" disabled={posting || !composeText.trim()}>
+              <button
+                type="submit"
+                className="auth-primary compose-btn"
+                disabled={
+                  posting ||
+                  !composeText.trim() ||
+                  (isPoll && pollOptions.filter((o) => o.trim()).length < 2)
+                }
+              >
                 {posting ? 'Posting…' : 'Post'}
               </button>
             </div>
@@ -719,6 +948,17 @@ export default function Feed() {
                     </div>
                   </div>
                   <p className="post-text">{p.text_content}</p>
+
+                  {pollOptionsByPost[p.id] && (
+                    <PollBlock
+                      options={pollOptionsByPost[p.id]}
+                      counts={pollCountsByPost[p.id] || {}}
+                      myVote={myVoteByPost[p.id]}
+                      canVote={!!session}
+                      onVote={(optionId) => handleVote(p.id, optionId)}
+                    />
+                  )}
+
                   {p.media_url && p.media_type === 'image' && (
                     <img className="post-media" src={p.media_url} alt="" />
                   )}
