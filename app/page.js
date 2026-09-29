@@ -1,36 +1,8 @@
 'use client';
 import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-
-const CATEGORY_STYLES = {
-  lessons: { label: 'Lessons & Icebreakers', accent: '#b8842a', soft: '#f4e9d6', text: '#8a611c' },
-  stories: { label: 'Stories & Experiences', accent: '#1e6b66', soft: '#dceeec', text: '#175450' },
-  podcasts: { label: 'Podcasts & Videos', accent: '#a94b46', soft: '#f3dfdd', text: '#833a36' },
-  events: { label: 'Events', accent: '#b8842a', soft: '#f4e9d6', text: '#8a611c' },
-  involved: { label: 'Get Involved', accent: '#1e6b66', soft: '#dceeec', text: '#175450' },
-  resources: { label: 'Resources', accent: '#a94b46', soft: '#f3dfdd', text: '#833a36' },
-  parent: { label: 'Parent Corner', accent: '#b8842a', soft: '#f4e9d6', text: '#8a611c' },
-  worship: { label: 'Worship & Creative Arts', accent: '#1e6b66', soft: '#dceeec', text: '#175450' },
-  teen: { label: 'Teen Talks', accent: '#a94b46', soft: '#f3dfdd', text: '#833a36' },
-  kids: { label: "Kids' Corner", accent: '#b8842a', soft: '#f4e9d6', text: '#8a611c' },
-  volunteer: { label: 'Volunteer Spotlight', accent: '#1e6b66', soft: '#dceeec', text: '#175450' },
-  hacks: { label: 'Ministry Hacks', accent: '#a94b46', soft: '#f3dfdd', text: '#833a36' },
-  prayer: { label: 'Prayer Requests & Praise Reports', accent: '#b8842a', soft: '#f4e9d6', text: '#8a611c' },
-  seasonal: { label: 'Seasonal Specials', accent: '#1e6b66', soft: '#dceeec', text: '#175450' },
-  faq: { label: 'FAQ for Parents/Volunteers', accent: '#a94b46', soft: '#f3dfdd', text: '#833a36' },
-  field: { label: 'From the Mission Field', accent: '#b8842a', soft: '#f4e9d6', text: '#8a611c' },
-};
-
-function categoryStyle(categoryId) {
-  return (
-    CATEGORY_STYLES[categoryId] || {
-      label: categoryId,
-      accent: '#b8842a',
-      soft: '#f4e9d6',
-      text: '#8a611c',
-    }
-  );
-}
+import { CATEGORY_STYLES, categoryStyle, initials } from './lib/postDisplay';
+import PostCard from './components/PostCard';
 
 const SECTIONS = [
   { id: 'all', label: 'All' },
@@ -66,87 +38,6 @@ const TABS = [
   { id: 'churches', label: 'Churches', icon: ICONS.churches },
   { id: 'menu', label: 'Menu', icon: ICONS.menu },
 ];
-
-function initials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  const chars = parts.length > 1 ? [parts[0][0], parts[1][0]] : [parts[0][0]];
-  return chars.join('').toUpperCase();
-}
-
-function PollBlock({ options, counts, myVote, canVote, onVote }) {
-  const total = options.reduce((sum, o) => sum + (counts[o.id] || 0), 0);
-  const hasVoted = myVote != null;
-  const hasImages = options.some((o) => o.image_url);
-
-  if (hasImages) {
-    return (
-      <div className="poll">
-        <div className="poll-grid">
-          {options.map((opt) => {
-            const votes = counts[opt.id] || 0;
-            const pct = total ? Math.round((votes / total) * 100) : 0;
-            const mine = myVote === opt.id;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                className={`poll-image-card${mine ? ' mine' : ''}`}
-                disabled={!canVote || hasVoted}
-                onClick={() => onVote(opt.id)}
-              >
-                {opt.image_url && <img src={opt.image_url} alt={opt.label || ''} />}
-                <span className="poll-image-meta">
-                  <span>{opt.label}{mine && ' ✓'}</span>
-                  {hasVoted && <span>{pct}%</span>}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="poll-meta">
-          {total} vote{total !== 1 ? 's' : ''} · anonymous poll
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="poll">
-      {options.map((opt) => {
-        const votes = counts[opt.id] || 0;
-        const pct = total ? Math.round((votes / total) * 100) : 0;
-        const mine = myVote === opt.id;
-        if (!hasVoted) {
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              className="poll-option-btn"
-              disabled={!canVote}
-              onClick={() => onVote(opt.id)}
-            >
-              {opt.label}
-            </button>
-          );
-        }
-        return (
-          <div key={opt.id} className={`poll-result${mine ? ' mine' : ''}`}>
-            <div className="poll-result-bar" style={{ width: `${pct}%` }} />
-            <span className="poll-result-label">
-              {opt.label}
-              {mine && ' ✓'}
-            </span>
-            <span className="poll-result-pct">{pct}%</span>
-          </div>
-        );
-      })}
-      <p className="poll-meta">
-        {total} vote{total !== 1 ? 's' : ''} · anonymous poll
-      </p>
-    </div>
-  );
-}
 
 export default function Feed() {
   const [posts, setPosts] = useState([]);
@@ -828,33 +719,18 @@ export default function Feed() {
             )}
             {posts
               .filter((p) => pollOptionsByPost[p.id])
-              .map((p) => {
-                const cat = categoryStyle(p.category_id);
-                const authorName = p.profiles?.display_name || 'Someone';
-                return (
-                  <article
-                    key={p.id}
-                    className="post-card"
-                    style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
-                  >
-                    <div className="post-header">
-                      <div className="avatar">{initials(authorName)}</div>
-                      <div className="post-header-text">
-                        <span className="post-author">{authorName}</span>
-                        <span className="category-chip">{cat.label}</span>
-                      </div>
-                    </div>
-                    <p className="post-text">{p.text_content}</p>
-                    <PollBlock
-                      options={pollOptionsByPost[p.id]}
-                      counts={pollCountsByPost[p.id] || {}}
-                      myVote={myVoteByPost[p.id]}
-                      canVote={!!session}
-                      onVote={(optionId) => handleVote(p.id, optionId)}
-                    />
-                  </article>
-                );
-              })}
+              .map((p) => (
+                <PostCard
+                  key={p.id}
+                  post={p}
+                  session={session}
+                  openAuth={openAuth}
+                  pollOptions={pollOptionsByPost[p.id]}
+                  pollCounts={pollCountsByPost[p.id] || {}}
+                  myVote={myVoteByPost[p.id]}
+                  onVote={(optionId) => handleVote(p.id, optionId)}
+                />
+              ))}
           </>
         )}
 
@@ -1007,47 +883,25 @@ export default function Feed() {
 
         {tab === 'home' &&
           section === 'all' &&
-          visiblePosts.map((p, i) => {
-            const cat = categoryStyle(p.category_id);
-            const authorName = p.profiles?.display_name || 'Someone';
-            return (
-              <Fragment key={p.id}>
-                {i === 3 && !searchTerm && (
-                  <div className="follow-card">
-                    <span className="mut-light">People to follow</span>
-                    <p className="mut">Following is coming soon — for now, browse posts by category above.</p>
-                  </div>
-                )}
-                <article
-                  className="post-card"
-                  style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
-                >
-                  <div className="post-header">
-                    <div className="avatar">{initials(authorName)}</div>
-                    <div className="post-header-text">
-                      <span className="post-author">{authorName}</span>
-                      <span className="category-chip">{cat.label}</span>
-                    </div>
-                  </div>
-                  <p className="post-text">{p.text_content}</p>
-
-                  {pollOptionsByPost[p.id] && (
-                    <PollBlock
-                      options={pollOptionsByPost[p.id]}
-                      counts={pollCountsByPost[p.id] || {}}
-                      myVote={myVoteByPost[p.id]}
-                      canVote={!!session}
-                      onVote={(optionId) => handleVote(p.id, optionId)}
-                    />
-                  )}
-
-                  {p.media_url && p.media_type === 'image' && (
-                    <img className="post-media" src={p.media_url} alt="" />
-                  )}
-                </article>
-              </Fragment>
-            );
-          })}
+          visiblePosts.map((p, i) => (
+            <Fragment key={p.id}>
+              {i === 3 && !searchTerm && (
+                <div className="follow-card">
+                  <span className="mut-light">People to follow</span>
+                  <p className="mut">Following is coming soon — for now, browse posts by category above.</p>
+                </div>
+              )}
+              <PostCard
+                post={p}
+                session={session}
+                openAuth={openAuth}
+                pollOptions={pollOptionsByPost[p.id]}
+                pollCounts={pollCountsByPost[p.id] || {}}
+                myVote={myVoteByPost[p.id]}
+                onVote={(optionId) => handleVote(p.id, optionId)}
+              />
+            </Fragment>
+          ))}
       </main>
 
       <nav className="bottom-nav" aria-label="Main">
