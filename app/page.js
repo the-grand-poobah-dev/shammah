@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 const CATEGORY_STYLES = {
@@ -32,6 +32,41 @@ function categoryStyle(categoryId) {
   );
 }
 
+const SECTIONS = [
+  { id: 'all', label: 'All' },
+  { id: 'videos', label: 'Videos' },
+  { id: 'podcasts', label: 'Podcasts' },
+  { id: 'courses', label: 'Courses' },
+  { id: 'polls', label: 'Polls' },
+  { id: 'bible', label: 'Bible' },
+];
+
+const ICONS = {
+  home: (
+    <svg viewBox="0 0 24 24" className="icon"><path d="M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z" /></svg>
+  ),
+  messages: (
+    <svg viewBox="0 0 24 24" className="icon"><path d="M21 12a8 8 0 01-11.5 7.2L4 20l1-4.5A8 8 0 1121 12z" /></svg>
+  ),
+  alerts: (
+    <svg viewBox="0 0 24 24" className="icon"><path d="M6 9a6 6 0 1112 0c0 6 2 7 2 7H4s2-1 2-7zm4 10a2 2 0 004 0" /></svg>
+  ),
+  churches: (
+    <svg viewBox="0 0 24 24" className="icon"><path d="M12 2v5m-2-2.5h4M5 22V12l7-5 7 5v10zm5 0v-5h4v5" /></svg>
+  ),
+  menu: (
+    <svg viewBox="0 0 24 24" className="icon"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+  ),
+};
+
+const TABS = [
+  { id: 'home', label: 'Home', icon: ICONS.home },
+  { id: 'messages', label: 'Messages', icon: ICONS.messages },
+  { id: 'alerts', label: 'Alerts', icon: ICONS.alerts },
+  { id: 'churches', label: 'Churches', icon: ICONS.churches },
+  { id: 'menu', label: 'Menu', icon: ICONS.menu },
+];
+
 function initials(name) {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
@@ -60,6 +95,16 @@ export default function Feed() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // App shell: bottom tab, content-type pill, theme, search, avatar menu
+  const [tab, setTab] = useState('home'); // home | messages | alerts | churches | menu
+  const [section, setSection] = useState('all'); // all | videos | podcasts | courses | polls | bible
+  const [dark, setDark] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [churches, setChurches] = useState([]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -77,6 +122,22 @@ export default function Feed() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Remember the person's light/dark choice on this device
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('shammah-theme') : null;
+    if (saved === 'dark') setDark(true);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    if (typeof window !== 'undefined') localStorage.setItem('shammah-theme', dark ? 'dark' : 'light');
+  }, [dark]);
+
+  // Churches list is real data — load it once we know who's signed in
+  useEffect(() => {
+    if (tab === 'churches' && session) loadChurches();
+  }, [tab, session?.user?.id]);
 
   // Reload the feed when the category changes or when someone signs in/out
   // (posts are only readable by signed-in users, so the feed must refetch after login)
@@ -102,6 +163,18 @@ export default function Feed() {
     if (category) query = query.eq('category_id', category);
     const { data, error } = await query;
     if (!error) setPosts(data);
+  }
+
+  async function loadChurches() {
+    const { data, error } = await supabase.from('churches').select('id, name').order('name');
+    if (!error) setChurches(data);
+  }
+
+  function focusCompose() {
+    setMenuOpen(false);
+    setTab('home');
+    setSection('all');
+    setTimeout(() => document.getElementById('compose-box')?.focus(), 50);
   }
 
   async function handleCreatePost(e) {
@@ -226,34 +299,114 @@ export default function Feed() {
   }
 
   const headerName = profile?.display_name || session?.user?.email || 'Member';
+  const visiblePosts = searchTerm.trim()
+    ? posts.filter((p) => (p.text_content || '').toLowerCase().includes(searchTerm.trim().toLowerCase()))
+    : posts;
 
   return (
     <div className="shell">
       <header className="topbar">
-        <div className="brand">
-          <h1 className="brand-mark">Shammah</h1>
-          <span className="brand-tag">church feed</span>
-        </div>
+        {session && !searchOpen && (
+          <button className="icon-btn" aria-label="Search" onClick={() => setSearchOpen(true)}>
+            <svg viewBox="0 0 24 24" className="icon"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
+          </button>
+        )}
 
-        {session ? (
-          <div className="user-chip">
-            <span className="user-dot" />
-            <span>{headerName}</span>
-            <button className="signout-btn" onClick={handleSignOut} title="Sign out">
-              Sign out
+        {searchOpen ? (
+          <div className="search-row">
+            <input
+              autoFocus
+              className="search-input"
+              placeholder="Search posts…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <button
+              className="icon-btn"
+              aria-label="Close search"
+              onClick={() => {
+                setSearchOpen(false);
+                setSearchTerm('');
+              }}
+            >
+              ✕
             </button>
           </div>
         ) : (
-          <div className="auth-header-actions">
-            <button className="signin-btn" onClick={() => openAuth('signin')}>
-              Sign in
-            </button>
-            <button className="signup-btn" onClick={() => openAuth('signup')}>
-              Sign up
-            </button>
+          <div className="brand">
+            <h1 className="brand-mark">Shammah</h1>
+            <span className="brand-tag">church feed</span>
+          </div>
+        )}
+
+        {!searchOpen && (
+          <div className="topbar-right">
+            <button
+              className="theme-switch"
+              role="switch"
+              aria-checked={dark}
+              aria-label="Toggle dark mode"
+              onClick={() => setDark((d) => !d)}
+            />
+
+            {session ? (
+              <div className="avatar-menu">
+                <button className="me-btn" onClick={() => setMenuOpen((o) => !o)}>
+                  <span className="avatar avatar-sm">
+                    {initials(headerName)}
+                    <i className="status-dot" />
+                  </span>
+                  <span className="me-name">{headerName}</span>
+                </button>
+                {menuOpen && (
+                  <div className="dropdown" onMouseLeave={() => setMenuOpen(false)}>
+                    <button className="dropdown-item" onClick={focusCompose}>
+                      Create a post
+                    </button>
+                    <button
+                      className="dropdown-item"
+                      onClick={() => {
+                        setShowProfile(true);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      View profile
+                    </button>
+                    <button className="dropdown-item danger" onClick={handleSignOut}>
+                      Log out
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="auth-header-actions">
+                <button className="signin-btn" onClick={() => openAuth('signin')}>
+                  Sign in
+                </button>
+                <button className="signup-btn" onClick={() => openAuth('signup')}>
+                  Sign up
+                </button>
+              </div>
+            )}
           </div>
         )}
       </header>
+
+      {showProfile && session && (
+        <div className="auth-overlay" onClick={() => setShowProfile(false)}>
+          <div className="auth-panel" onClick={(e) => e.stopPropagation()}>
+            <button className="auth-close" onClick={() => setShowProfile(false)} aria-label="Close">
+              ×
+            </button>
+            <div className="profile-view">
+              <span className="avatar avatar-lg">{initials(headerName)}</span>
+              <h2 className="auth-panel-title">{headerName}</h2>
+              <p className="mut">{session.user.email}</p>
+              {profile?.role && <span className="category-chip">{profile.role}</span>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========== Auth Panel ========== */}
       {showAuth && (
@@ -413,29 +566,82 @@ export default function Feed() {
         </div>
       )}
 
-      <nav className="category-bar" aria-label="Browse by category">
-        <button
-          className={`filter-chip${activeCategory === null ? ' active' : ''}`}
-          onClick={() => setActiveCategory(null)}
-        >
-          All
-        </button>
-        {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
+      {tab === 'home' && (
+        <nav className="section-bar" aria-label="Browse by type">
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              className={`pill${section === s.id ? ' active' : ''}`}
+              onClick={() => setSection(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {tab === 'home' && section === 'all' && (
+        <nav className="category-bar" aria-label="Browse by category">
           <button
-            key={id}
-            className={`filter-chip${activeCategory === id ? ' active' : ''}`}
-            style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
-            onClick={() => setActiveCategory(id)}
+            className={`filter-chip${activeCategory === null ? ' active' : ''}`}
+            onClick={() => setActiveCategory(null)}
           >
-            {c.label}
+            All
           </button>
-        ))}
-      </nav>
+          {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
+            <button
+              key={id}
+              className={`filter-chip${activeCategory === id ? ' active' : ''}`}
+              style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
+              onClick={() => setActiveCategory(id)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <main className="feed">
-        {session && (
+        {tab === 'home' && section !== 'all' && (
+          <div className="coming-soon">
+            <h2>{SECTIONS.find((s) => s.id === section)?.label} is on the way</h2>
+            <p>This part of Shammah is still being built. Real {section} content will show up here.</p>
+          </div>
+        )}
+
+        {tab === 'churches' && (
+          <>
+            <h2 className="section-title">Churches on Shammah</h2>
+            {churches.length === 0 && <p className="mut">No churches yet.</p>}
+            {churches.map((c) => (
+              <div className="church-row" key={c.id}>
+                <span className="avatar">{initials(c.name)}</span>
+                <span className="church-name">{c.name}</span>
+                {profile?.church_id === c.id && <span className="category-chip">Your church</span>}
+              </div>
+            ))}
+          </>
+        )}
+
+        {(tab === 'messages' || tab === 'alerts' || tab === 'menu') && (
+          <div className="coming-soon">
+            <h2>{tab === 'messages' ? 'Messages' : tab === 'alerts' ? 'Notifications' : 'Menu'} is on the way</h2>
+            <p>This part of Shammah is still being built.</p>
+          </div>
+        )}
+
+        {tab === 'home' && section === 'all' && session && (
+          <div className="verse-card">
+            <span className="mut-light">Verse of the day</span>
+            <p>God is our refuge and strength, a very present help in trouble.</p>
+            <span className="mut-light">Psalm 46:1</span>
+          </div>
+        )}
+
+        {tab === 'home' && section === 'all' && (
           <form className="compose" onSubmit={handleCreatePost}>
             <textarea
+              id="compose-box"
               value={composeText}
               onChange={(e) => setComposeText(e.target.value)}
               placeholder="Share something with your church family…"
@@ -463,15 +669,17 @@ export default function Feed() {
           </form>
         )}
 
-        {posts.length === 0 && (
+        {tab === 'home' && section === 'all' && visiblePosts.length === 0 && (
           <div className="empty-state">
             <h2>Nothing here yet</h2>
             <p>
               {!session
                 ? 'Sign in or create an account to join the church feed.'
-                : activeCategory
-                  ? `No posts in ${categoryStyle(activeCategory).label} yet. Be the first to share one.`
-                  : 'Be the first to share something with your church family.'}
+                : searchTerm
+                  ? `No posts match "${searchTerm}".`
+                  : activeCategory
+                    ? `No posts in ${categoryStyle(activeCategory).label} yet. Be the first to share one.`
+                    : 'Be the first to share something with your church family.'}
             </p>
             {!session && (
               <div className="empty-auth-actions">
@@ -486,30 +694,52 @@ export default function Feed() {
           </div>
         )}
 
-        {posts.map((p) => {
-          const cat = categoryStyle(p.category_id);
-          const authorName = p.profiles?.display_name || 'Someone';
-          return (
-            <article
-              key={p.id}
-              className="post-card"
-              style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
-            >
-              <div className="post-header">
-                <div className="avatar">{initials(authorName)}</div>
-                <div className="post-header-text">
-                  <span className="post-author">{authorName}</span>
-                  <span className="category-chip">{cat.label}</span>
-                </div>
-              </div>
-              <p className="post-text">{p.text_content}</p>
-              {p.media_url && p.media_type === 'image' && (
-                <img className="post-media" src={p.media_url} alt="" />
-              )}
-            </article>
-          );
-        })}
+        {tab === 'home' &&
+          section === 'all' &&
+          visiblePosts.map((p, i) => {
+            const cat = categoryStyle(p.category_id);
+            const authorName = p.profiles?.display_name || 'Someone';
+            return (
+              <Fragment key={p.id}>
+                {i === 3 && !searchTerm && (
+                  <div className="follow-card">
+                    <span className="mut-light">People to follow</span>
+                    <p className="mut">Following is coming soon — for now, browse posts by category above.</p>
+                  </div>
+                )}
+                <article
+                  className="post-card"
+                  style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
+                >
+                  <div className="post-header">
+                    <div className="avatar">{initials(authorName)}</div>
+                    <div className="post-header-text">
+                      <span className="post-author">{authorName}</span>
+                      <span className="category-chip">{cat.label}</span>
+                    </div>
+                  </div>
+                  <p className="post-text">{p.text_content}</p>
+                  {p.media_url && p.media_type === 'image' && (
+                    <img className="post-media" src={p.media_url} alt="" />
+                  )}
+                </article>
+              </Fragment>
+            );
+          })}
       </main>
+
+      <nav className="bottom-nav" aria-label="Main">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={`tab-btn${tab === t.id ? ' active' : ''}`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.icon}
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
