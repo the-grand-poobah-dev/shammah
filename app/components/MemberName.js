@@ -1,26 +1,15 @@
-'use client';
-import MemberBadge from './MemberBadge';
+import ProfileBadge from './ProfileBadge';
 
 /**
- * Name + optional badge, always shown together in public contexts.
- * layout: 'inline' (name then badge to the right) | 'stack' (name, badge below)
+ * A person's name with their badge, shown together everywhere a name appears in public.
+ * layout 'inline': badge sits to the right of the name (feeds, comments)
+ * layout 'stack':  badge sits directly below the name (profile views)
  */
-export default function MemberName({ name, badgeId, layout = 'inline', className = '' }) {
-  const display = name || 'Someone';
-
-  if (layout === 'stack') {
-    return (
-      <span className={`member-name-stack ${className}`.trim()}>
-        <span className="member-name-text">{display}</span>
-        {badgeId && <MemberBadge badgeId={badgeId} size="sm" />}
-      </span>
-    );
-  }
-
+export default function MemberName({ name, badge, verified = false, layout = 'inline', nameClassName = '' }) {
   return (
-    <span className={`member-name-inline ${className}`.trim()}>
-      <span className="member-name-text">{display}</span>
-      {badgeId && <MemberBadge badgeId={badgeId} size="sm" />}
+    <span className={`member-name member-name-${layout}`}>
+      <span className={`member-name-text ${nameClassName}`.trim()}>{name || 'Someone'}</span>
+      {badge && <ProfileBadge badge={badge} verified={verified} />}
     </span>
   );
 }

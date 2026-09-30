@@ -1,7 +1,9 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { initials, timeAgo } from '../lib/postDisplay';
+import { timeAgo } from '../lib/postDisplay';
+import Avatar from './Avatar';
+import MemberName from './MemberName';
 import { detectMentionQuery, insertMention, splitMentions } from '../lib/mentions';
 import ReactionBar from './ReactionBar';
 
@@ -22,7 +24,7 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
     async function load() {
       const { data, error: loadErr } = await supabase
         .from('comments')
-        .select('id, parent_id, author_id, text_content, mentioned_user_ids, created_at, profiles(display_name)')
+        .select('id, parent_id, author_id, text_content, mentioned_user_ids, created_at, profiles(display_name, avatar_url, badge, badge_verified)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
       if (cancelled) return;
@@ -157,17 +159,18 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
   }
 
   function CommentRow({ comment, isReply }) {
+    const cAuthor = Array.isArray(comment.profiles) ? comment.profiles[0] : comment.profiles;
     const authorName =
-      (comment.profiles && comment.profiles.display_name) ||
+      (cAuthor && cAuthor.display_name) ||
       nameById[comment.author_id] ||
       (session && comment.author_id === session.user.id ? 'You' : 'Someone');
     const mentionNames = (comment.mentioned_user_ids || []).map((id) => nameById[id]).filter(Boolean);
     return (
       <div className={`comment-row${isReply ? ' comment-reply' : ''}`}>
-        <span className="avatar comment-avatar">{initials(authorName)}</span>
+        <Avatar name={authorName} src={cAuthor?.avatar_url} className="comment-avatar" />
         <div className="comment-body">
           <div className="comment-bubble">
-            <span className="comment-author">{authorName}</span>
+            <MemberName name={authorName} badge={cAuthor?.badge} verified={cAuthor?.badge_verified} nameClassName="comment-author" />
             <p className="comment-text">
               {splitMentions(comment.text_content, mentionNames).map((piece, i) =>
                 typeof piece === 'string' ? (

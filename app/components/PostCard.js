@@ -1,7 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { categoryStyle, initials } from '../lib/postDisplay';
+import { categoryStyle } from '../lib/postDisplay';
+import Avatar from './Avatar';
+import MemberName from './MemberName';
 import ReactionBar from './ReactionBar';
 import CommentThread from './CommentThread';
 
@@ -88,7 +90,9 @@ export default function PostCard({ post, session, openAuth, pollOptions, pollCou
   const [shareMsg, setShareMsg] = useState('');
 
   const cat = categoryStyle(post.category_id);
-  const authorName = (post.profiles && post.profiles.display_name) || 'Someone';
+  // Supabase can hand back the joined profile as an object or a one-item list
+  const author = Array.isArray(post.profiles) ? post.profiles[0] : post.profiles;
+  const authorName = (author && author.display_name) || 'Someone';
 
   useEffect(() => {
     let cancelled = false;
@@ -130,9 +134,9 @@ export default function PostCard({ post, session, openAuth, pollOptions, pollCou
       style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
     >
       <div className="post-header">
-        <div className="avatar">{initials(authorName)}</div>
+        <Avatar name={authorName} src={author?.avatar_url} />
         <div className="post-header-text">
-          <span className="post-author">{authorName}</span>
+          <MemberName name={authorName} badge={author?.badge} verified={author?.badge_verified} nameClassName="post-author" />
           <span className="category-chip">{cat.label}</span>
         </div>
       </div>

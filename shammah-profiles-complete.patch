@@ -1,0 +1,3157 @@
+diff --git a/app/components/CommentThread.js b/app/components/CommentThread.js
+index db39b15..668790f 100644
+--- a/app/components/CommentThread.js
++++ b/app/components/CommentThread.js
+@@ -1,7 +1,9 @@
+ 'use client';
+ import { useEffect, useRef, useState } from 'react';
+ import { supabase } from '../../lib/supabaseClient';
+-import { initials, timeAgo } from '../lib/postDisplay';
++import { timeAgo } from '../lib/postDisplay';
++import Avatar from './Avatar';
++import MemberName from './MemberName';
+ import { detectMentionQuery, insertMention, splitMentions } from '../lib/mentions';
+ import ReactionBar from './ReactionBar';
+ 
+@@ -22,7 +24,7 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
+     async function load() {
+       const { data, error: loadErr } = await supabase
+         .from('comments')
+-        .select('id, parent_id, author_id, text_content, mentioned_user_ids, created_at, profiles(display_name)')
++        .select('id, parent_id, author_id, text_content, mentioned_user_ids, created_at, profiles(display_name, avatar_url, badge, badge_verified)')
+         .eq('post_id', postId)
+         .order('created_at', { ascending: true });
+       if (cancelled) return;
+@@ -157,17 +159,18 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
+   }
+ 
+   function CommentRow({ comment, isReply }) {
++    const cAuthor = Array.isArray(comment.profiles) ? comment.profiles[0] : comment.profiles;
+     const authorName =
+-      (comment.profiles && comment.profiles.display_name) ||
++      (cAuthor && cAuthor.display_name) ||
+       nameById[comment.author_id] ||
+       (session && comment.author_id === session.user.id ? 'You' : 'Someone');
+     const mentionNames = (comment.mentioned_user_ids || []).map((id) => nameById[id]).filter(Boolean);
+     return (
+       <div className={`comment-row${isReply ? ' comment-reply' : ''}`}>
+-        <span className="avatar comment-avatar">{initials(authorName)}</span>
++        <Avatar name={authorName} src={cAuthor?.avatar_url} className="comment-avatar" />
+         <div className="comment-body">
+           <div className="comment-bubble">
+-            <span className="comment-author">{authorName}</span>
++            <MemberName name={authorName} badge={cAuthor?.badge} verified={cAuthor?.badge_verified} nameClassName="comment-author" />
+             <p className="comment-text">
+               {splitMentions(comment.text_content, mentionNames).map((piece, i) =>
+                 typeof piece === 'string' ? (
+diff --git a/app/components/LocationPicker.js b/app/components/LocationPicker.js
+index 45c76ee..6cdc185 100644
+--- a/app/components/LocationPicker.js
++++ b/app/components/LocationPicker.js
+@@ -1,121 +1,116 @@
+ 'use client';
+ import { useEffect, useRef, useState } from 'react';
++import { HAS_MAPS_KEY, loadPlacesLibrary } from '../lib/googleMaps';
+ 
+-/**
+- * Free place search via OpenStreetMap Nominatim (no API key).
+- * Returns { name, lat, lng } on select.
+- * Respect Nominatim usage policy: one request at a time, reasonable delay, User-Agent set by browser.
+- */
+-export default function LocationPicker({ value, onChange, placeholder = 'Search city, town, or church…' }) {
+-  const [query, setQuery] = useState(value?.name || '');
+-  const [results, setResults] = useState([]);
+-  const [open, setOpen] = useState(false);
+-  const [loading, setLoading] = useState(false);
+-  const [error, setError] = useState('');
+-  const timer = useRef(null);
+-  const wrapRef = useRef(null);
++// value: { label, placeId, lat, lng } | null
++// Uses Google's Place Autocomplete web component (Places API "New").
++// Falls back to a plain text box if there's no API key or Google fails to load.
++export default function LocationPicker({ value, onChange }) {
++  const holderRef = useRef(null);
++  const [mode, setMode] = useState(HAS_MAPS_KEY ? 'loading' : 'text'); // loading | google | text
++  const [textValue, setTextValue] = useState('');
++  const picked = !!value && !value.typed; // a place chosen from Google (not free text)
+ 
+   useEffect(() => {
+-    function onDoc(e) {
+-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+-    }
+-    document.addEventListener('mousedown', onDoc);
+-    return () => document.removeEventListener('mousedown', onDoc);
+-  }, []);
+-
+-  // Keep input in sync if parent clears value
+-  useEffect(() => {
+-    if (!value?.name && query && !open) setQuery('');
+-  }, [value?.name]);
++    if (!HAS_MAPS_KEY || picked || mode === 'text') return undefined;
++    let cancelled = false;
++    let el = null;
+ 
+-  function search(q) {
+-    setQuery(q);
+-    setError('');
+-    if (timer.current) clearTimeout(timer.current);
+-    if (!q.trim() || q.trim().length < 2) {
+-      setResults([]);
+-      setOpen(false);
+-      return;
+-    }
+-    timer.current = setTimeout(async () => {
+-      setLoading(true);
+-      try {
+-        const url =
+-          'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=' +
+-          encodeURIComponent(q.trim());
+-        const res = await fetch(url, {
+-          headers: { Accept: 'application/json' },
++    loadPlacesLibrary()
++      .then((lib) => {
++        if (cancelled || !holderRef.current) return;
++        // City / region level only: we don't want people typing home addresses.
++        el = new lib.PlaceAutocompleteElement({
++          includedPrimaryTypes: [
++            'locality',
++            'sublocality',
++            'administrative_area_level_2',
++            'administrative_area_level_1',
++            'country',
++          ],
+         });
+-        if (!res.ok) throw new Error('Search failed');
+-        const data = await res.json();
+-        const mapped = (data || []).map((r) => ({
+-          name: r.display_name,
+-          lat: parseFloat(r.lat),
+-          lng: parseFloat(r.lon),
+-        }));
+-        setResults(mapped);
+-        setOpen(true);
+-      } catch {
+-        setError('Could not search places. Try again.');
+-        setResults([]);
+-      } finally {
+-        setLoading(false);
+-      }
+-    }, 400);
+-  }
++        el.style.width = '100%';
++        el.style.colorScheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+ 
+-  function pick(place) {
+-    setQuery(place.name);
+-    setOpen(false);
+-    setResults([]);
+-    onChange?.(place);
+-  }
++        const handle = async (event) => {
++          try {
++            const place = event.placePrediction ? event.placePrediction.toPlace() : event.place;
++            await place.fetchFields({
++              fields: ['id', 'displayName', 'formattedAddress', 'location', 'addressComponents'],
++            });
++            onChange(toValue(place));
++          } catch {
++            /* ignore: person can just search again */
++          }
++        };
++        el.addEventListener('gmp-select', handle);
++        el.addEventListener('gmp-placeselect', handle); // older API versions
++        holderRef.current.innerHTML = '';
++        holderRef.current.appendChild(el);
++        setMode('google');
++      })
++      .catch(() => {
++        if (!cancelled) setMode('text');
++      });
++
++    return () => {
++      cancelled = true;
++      if (el && el.parentNode) el.parentNode.removeChild(el);
++    };
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [picked]);
+ 
+-  function clear() {
+-    setQuery('');
+-    setResults([]);
+-    setOpen(false);
+-    onChange?.(null);
++  if (picked) {
++    return (
++      <div className="loc-chip">
++        <span className="loc-pin" aria-hidden="true">📍</span>
++        <span className="loc-label">{value.label}</span>
++        <button type="button" className="loc-clear" onClick={() => onChange(null)}>
++          Change
++        </button>
++      </div>
++    );
+   }
+ 
+   return (
+-    <div className="location-picker" ref={wrapRef}>
+-      <div className="location-input-row">
++    <div>
++      {mode === 'loading' && <p className="onb-hint">Loading map search…</p>}
++      <div ref={holderRef} className="loc-google" style={{ display: mode === 'google' ? 'block' : 'none' }} />
++      {mode === 'text' && (
+         <input
+           type="text"
+-          className="location-input"
+-          value={query}
+-          onChange={(e) => search(e.target.value)}
+-          onFocus={() => results.length > 0 && setOpen(true)}
+-          placeholder={placeholder}
+-          autoComplete="off"
+-          aria-autocomplete="list"
+-          aria-expanded={open}
++          className="onb-input"
++          value={textValue}
++          maxLength={80}
++          placeholder="e.g. Nairobi, Kenya"
++          onChange={(e) => {
++            setTextValue(e.target.value);
++            const label = e.target.value.trim();
++            onChange(label ? { label, placeId: null, lat: null, lng: null, typed: true } : null);
++          }}
+         />
+-        {query && (
+-          <button type="button" className="location-clear" onClick={clear} aria-label="Clear location">
+-            ×
+-          </button>
+-        )}
+-      </div>
+-      {loading && <p className="location-hint">Searching…</p>}
+-      {error && <p className="location-error">{error}</p>}
+-      {open && results.length > 0 && (
+-        <ul className="location-results" role="listbox">
+-          {results.map((r, i) => (
+-            <li key={`${r.lat}-${r.lng}-${i}`}>
+-              <button type="button" role="option" onClick={() => pick(r)}>
+-                {r.name}
+-              </button>
+-            </li>
+-          ))}
+-        </ul>
+-      )}
+-      {value?.name && !open && (
+-        <p className="location-selected">
+-          📍 {value.name.length > 60 ? value.name.slice(0, 57) + '…' : value.name}
+-        </p>
+       )}
+     </div>
+   );
+ }
++
++function toValue(place) {
++  const comps = place.addressComponents || [];
++  const pick = (...types) => {
++    for (const t of types) {
++      const c = comps.find((x) => (x.types || []).includes(t));
++      if (c) return c.longText;
++    }
++    return null;
++  };
++  const city = pick('locality', 'sublocality', 'administrative_area_level_2', 'administrative_area_level_1');
++  const country = pick('country');
++  const label = [city, country].filter(Boolean).join(', ') || place.formattedAddress || place.displayName;
++  const loc = place.location;
++  return {
++    label,
++    placeId: place.id || null,
++    lat: loc ? Math.round(loc.lat() * 100) / 100 : null,
++    lng: loc ? Math.round(loc.lng() * 100) / 100 : null,
++  };
++}
+diff --git a/app/components/MemberBadge.js b/app/components/MemberBadge.js
+deleted file mode 100644
+index 65ddda3..0000000
+--- a/app/components/MemberBadge.js
++++ /dev/null
+@@ -1,24 +0,0 @@
+-'use client';
+-import { getBadge } from '../lib/badges';
+-
+-/**
+- * Compact badge chip shown next to a member's name in feeds, comments, headers.
+- * size: 'sm' | 'md'
+- */
+-export default function MemberBadge({ badgeId, size = 'sm' }) {
+-  const badge = getBadge(badgeId);
+-  if (!badge) return null;
+-
+-  return (
+-    <span
+-      className={`member-badge member-badge-${size}`}
+-      title={badge.description || badge.label}
+-      aria-label={badge.label}
+-    >
+-      <span className="member-badge-icon" aria-hidden>
+-        {badge.icon}
+-      </span>
+-      <span className="member-badge-label">{badge.label}</span>
+-    </span>
+-  );
+-}
+diff --git a/app/components/MemberName.js b/app/components/MemberName.js
+index cf2d913..9b58b31 100644
+--- a/app/components/MemberName.js
++++ b/app/components/MemberName.js
+@@ -1,26 +1,15 @@
+-'use client';
+-import MemberBadge from './MemberBadge';
++import ProfileBadge from './ProfileBadge';
+ 
+ /**
+- * Name + optional badge, always shown together in public contexts.
+- * layout: 'inline' (name then badge to the right) | 'stack' (name, badge below)
++ * A person's name with their badge, shown together everywhere a name appears in public.
++ * layout 'inline': badge sits to the right of the name (feeds, comments)
++ * layout 'stack':  badge sits directly below the name (profile views)
+  */
+-export default function MemberName({ name, badgeId, layout = 'inline', className = '' }) {
+-  const display = name || 'Someone';
+-
+-  if (layout === 'stack') {
+-    return (
+-      <span className={`member-name-stack ${className}`.trim()}>
+-        <span className="member-name-text">{display}</span>
+-        {badgeId && <MemberBadge badgeId={badgeId} size="sm" />}
+-      </span>
+-    );
+-  }
+-
++export default function MemberName({ name, badge, verified = false, layout = 'inline', nameClassName = '' }) {
+   return (
+-    <span className={`member-name-inline ${className}`.trim()}>
+-      <span className="member-name-text">{display}</span>
+-      {badgeId && <MemberBadge badgeId={badgeId} size="sm" />}
++    <span className={`member-name member-name-${layout}`}>
++      <span className={`member-name-text ${nameClassName}`.trim()}>{name || 'Someone'}</span>
++      {badge && <ProfileBadge badge={badge} verified={verified} />}
+     </span>
+   );
+ }
+diff --git a/app/components/OnboardingWizard.js b/app/components/OnboardingWizard.js
+index c9cd073..f72ff4c 100644
+--- a/app/components/OnboardingWizard.js
++++ b/app/components/OnboardingWizard.js
+@@ -1,290 +1,384 @@
+ 'use client';
+-import { useState } from 'react';
++import { useEffect, useMemo, useRef, useState } from 'react';
+ import { supabase } from '../../lib/supabaseClient';
+-import { BADGES } from '../lib/badges';
++import { BADGES, BADGE_GROUPS, badgeById } from '../lib/badges';
++import { prepareImage } from '../lib/imageTools';
++import Avatar from './Avatar';
++import BadgeIcon from './BadgeIcon';
++import ProfileBadge from './ProfileBadge';
+ import LocationPicker from './LocationPicker';
+ 
+-const STEPS = ['name', 'badge', 'photos', 'about', 'details'];
++// ---------------------------------------------------------------
++// What must be filled in before someone can use Shammah.
++// Flip any of these to true/false to change what's mandatory.
++// (Name, badge and date of birth are also enforced by the database.)
++// ---------------------------------------------------------------
++const REQUIRED = { name: true, badge: true, dob: true, avatar: false, cover: false, about: false, location: false };
+ 
+-/**
+- * Mandatory first-run wizard after sign-up / first login.
+- * Required to finish: display name + badge.
+- * Photos, about, DOB, location are skippable.
+- */
+-export default function OnboardingWizard({ session, initialName, onComplete }) {
+-  const [step, setStep] = useState(0);
+-  const [busy, setBusy] = useState(false);
+-  const [error, setError] = useState('');
++const ABOUT_MAX = 250;
++const MIN_AGE = 13;
++const STEPS = ['Your name', 'Your badge', 'Your photos', 'About you'];
++
++function maxDobString() {
++  const d = new Date();
++  d.setFullYear(d.getFullYear() - MIN_AGE);
++  return d.toISOString().slice(0, 10);
++}
+ 
+-  const [displayName, setDisplayName] = useState(initialName || '');
+-  const [badge, setBadge] = useState('');
+-  const [avatarFile, setAvatarFile] = useState(null);
+-  const [avatarPreview, setAvatarPreview] = useState(null);
+-  const [coverFile, setCoverFile] = useState(null);
+-  const [coverPreview, setCoverPreview] = useState(null);
++export default function OnboardingWizard({ session, profile, onDone, onSignOut }) {
++  const user = session.user;
++  const provider = user.app_metadata?.provider; // 'google' | 'facebook' | 'email'
++  const providerLabel = provider === 'google' ? 'Google' : provider === 'facebook' ? 'Facebook' : null;
++  const originalName = (profile.display_name || '').trim();
++
++  const [step, setStep] = useState(0);
++  const [name, setName] = useState(originalName);
++  const [badge, setBadge] = useState(profile.badge || null);
++  const [badgeConfirmed, setBadgeConfirmed] = useState(false);
++  const [avatar, setAvatar] = useState(null); // { blob, previewUrl }
++  const [cover, setCover] = useState(null);
+   const [about, setAbout] = useState('');
+   const [dob, setDob] = useState('');
+   const [location, setLocation] = useState(null);
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState('');
+ 
+-  const current = STEPS[step];
+-  const progress = ((step + 1) / STEPS.length) * 100;
++  const headingRef = useRef(null);
++  useEffect(() => {
++    headingRef.current?.focus();
++  }, [step]);
+ 
+-  function pickAvatar(e) {
+-    const f = e.target.files?.[0];
+-    if (!f) return;
+-    if (f.size > 5 * 1024 * 1024) {
+-      setError('Profile photo must be under 5 MB.');
+-      return;
+-    }
+-    setError('');
+-    setAvatarFile(f);
+-    setAvatarPreview(URL.createObjectURL(f));
++  // Lock page scroll behind the dialog
++  useEffect(() => {
++    const prev = document.body.style.overflow;
++    document.body.style.overflow = 'hidden';
++    return () => {
++      document.body.style.overflow = prev;
++    };
++  }, []);
++
++  const nameTrim = name.trim();
++  const nameChanged = nameTrim !== originalName;
++  const nameValid = nameTrim.length >= 2 && nameTrim.length <= 50;
++  const badgeObj = badgeById(badge);
++  const maxDob = useMemo(maxDobString, []);
++  const dobValid = !!dob && dob >= '1900-01-01' && dob <= maxDob;
++
++  function canLeaveStep(s) {
++    if (s === 0) return !REQUIRED.name || nameValid;
++    if (s === 1) return !REQUIRED.badge || (!!badge && (badgeConfirmed || !!profile.badge));
++    if (s === 2) return (!REQUIRED.avatar || !!avatar) && (!REQUIRED.cover || !!cover);
++    return true;
+   }
+ 
+-  function pickCover(e) {
+-    const f = e.target.files?.[0];
+-    if (!f) return;
+-    if (f.size > 8 * 1024 * 1024) {
+-      setError('Cover photo must be under 8 MB.');
+-      return;
+-    }
++  function next() {
+     setError('');
+-    setCoverFile(f);
+-    setCoverPreview(URL.createObjectURL(f));
++    if (canLeaveStep(step)) setStep((s) => Math.min(s + 1, STEPS.length - 1));
+   }
+ 
+-  async function uploadImage(bucket, file) {
+-    if (!file) return null;
+-    const ext = file.name.split('.').pop() || 'jpg';
+-    const path = `${session.user.id}/${Date.now()}.${ext}`;
+-    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, {
+-      cacheControl: '3600',
+-      upsert: true,
+-    });
+-    if (upErr) throw upErr;
+-    return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
++  async function pickImage(file, kind) {
++    setError('');
++    if (!file) return;
++    try {
++      const spec = kind === 'avatar' ? { width: 512, height: 512 } : { width: 1500, height: 500 };
++      const result = await prepareImage(file, spec);
++      if (kind === 'avatar') {
++        if (avatar) URL.revokeObjectURL(avatar.previewUrl);
++        setAvatar(result);
++      } else {
++        if (cover) URL.revokeObjectURL(cover.previewUrl);
++        setCover(result);
++      }
++    } catch (e) {
++      setError(e.message);
++    }
+   }
+ 
+-  function canProceed() {
+-    if (current === 'name') return displayName.trim().length >= 2;
+-    if (current === 'badge') return !!badge;
+-    return true; // photos / about / details are optional
++  async function upload(kind, item) {
++    const path = `${user.id}/${kind}.jpg`;
++    const { error: upErr } = await supabase.storage
++      .from('profile-media')
++      .upload(path, item.blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
++    if (upErr) throw new Error(`Could not upload your ${kind === 'avatar' ? 'profile' : 'cover'} picture: ${upErr.message}`);
++    const { data } = supabase.storage.from('profile-media').getPublicUrl(path);
++    return `${data.publicUrl}?v=${Date.now()}`; // cache-buster so a re-upload shows immediately
+   }
+ 
+   async function finish() {
+-    if (!displayName.trim() || !badge) {
+-      setError('Name and badge are required.');
++    setError('');
++    if (REQUIRED.dob && !dobValid) {
++      setError(`Please enter a valid date of birth (you must be at least ${MIN_AGE}).`);
+       return;
+     }
++    if (REQUIRED.about && !about.trim()) return setError('Please write a short "about" line.');
++    if (REQUIRED.location && !location) return setError('Please choose your location.');
++
+     setBusy(true);
+-    setError('');
+     try {
+-      let avatar_url = null;
+-      let cover_url = null;
+-      try {
+-        avatar_url = await uploadImage('avatars', avatarFile);
+-        cover_url = await uploadImage('covers', coverFile);
+-      } catch (upErr) {
+-        // Photos are optional — don't block onboarding if upload fails
+-        console.warn('Photo upload failed during onboarding:', upErr);
+-      }
++      const avatarUrl = avatar ? await upload('avatar', avatar) : null;
++      const coverUrl = cover ? await upload('cover', cover) : null;
+ 
+-      const payload = {
+-        display_name: displayName.trim(),
++      // Private data goes in its own owner-only table
++      const { error: dobErr } = await supabase
++        .from('profile_private')
++        .upsert({ id: user.id, date_of_birth: dob }, { onConflict: 'id' });
++      if (dobErr) throw new Error(dobErr.message);
++
++      const update = {
++        display_name: nameTrim,
+         badge,
+         about: about.trim() || null,
+-        date_of_birth: dob || null,
+-        location_name: location?.name || null,
++        location_label: location?.label || null,
++        location_place_id: location?.placeId || null,
+         location_lat: location?.lat ?? null,
+         location_lng: location?.lng ?? null,
+-        onboarded_at: new Date().toISOString(),
++        onboarding_completed_at: new Date().toISOString(), // the database overwrites this with its own clock
+       };
+-      if (avatar_url) payload.avatar_url = avatar_url;
+-      if (cover_url) payload.cover_url = cover_url;
+-
+-      const { error: updErr } = await supabase.from('profiles').update(payload).eq('id', session.user.id);
+-      if (updErr) throw updErr;
++      if (avatarUrl) update.avatar_url = avatarUrl;
++      if (coverUrl) update.cover_url = coverUrl;
+ 
+-      onComplete?.();
+-    } catch (err) {
+-      setError(err.message || 'Something went wrong. Please try again.');
++      const { data, error: profErr } = await supabase
++        .from('profiles')
++        .update(update)
++        .eq('id', user.id)
++        .select(
++          'display_name, role, church_id, badge, badge_verified, avatar_url, cover_url, about, location_label, onboarding_completed_at, display_name_changed_at'
++        )
++        .single();
++      if (profErr) throw new Error(profErr.message);
++      onDone(data);
++    } catch (e) {
++      setError(e.message || 'Something went wrong. Please try again.');
+       setBusy(false);
+     }
+   }
+ 
+-  function next() {
+-    setError('');
+-    if (!canProceed()) {
+-      if (current === 'name') setError('Please enter a name (at least 2 characters).');
+-      if (current === 'badge') setError('Please choose a member badge. This cannot be changed later.');
+-      return;
+-    }
+-    if (step < STEPS.length - 1) setStep((s) => s + 1);
+-    else finish();
+-  }
+-
+-  function back() {
+-    setError('');
+-    if (step > 0) setStep((s) => s - 1);
+-  }
+-
+-  function skip() {
+-    // Only allowed on optional steps
+-    if (current === 'name' || current === 'badge') return;
+-    setError('');
+-    if (step < STEPS.length - 1) setStep((s) => s + 1);
+-    else finish();
+-  }
++  const isLast = step === STEPS.length - 1;
+ 
+   return (
+-    <div className="onboard-overlay" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
+-      <div className="onboard-panel">
+-        <div className="onboard-progress" aria-hidden>
+-          <div className="onboard-progress-bar" style={{ width: `${progress}%` }} />
++    <div className="onb-overlay">
++      {/* No close button, no click-outside, no Escape: this step is mandatory. */}
++      <div className="onb-panel" role="dialog" aria-modal="true" aria-labelledby="onb-title">
++        <div className="onb-top">
++          <div className="onb-progress" aria-label={`Step ${step + 1} of ${STEPS.length}`}>
++            {STEPS.map((label, i) => (
++              <span key={label} className={`onb-dot${i === step ? ' current' : ''}${i < step ? ' done' : ''}`} />
++            ))}
++          </div>
++          <button type="button" className="onb-signout" onClick={onSignOut}>
++            Not you? Sign out
++          </button>
+         </div>
+ 
+-        <p className="onboard-step-label">
+-          Step {step + 1} of {STEPS.length}
+-        </p>
+-
+-        {current === 'name' && (
+-          <>
+-            <h2 id="onboard-title" className="onboard-title">
+-              What should we call you?
+-            </h2>
+-            <p className="onboard-sub">
+-              This name appears on your posts and profile. You can change it once every 90 days.
+-            </p>
+-            <label className="onboard-label">
+-              Display name
++        <div className="onb-body">
++          <p className="onb-step">
++            Step {step + 1} of {STEPS.length}
++          </p>
++
++          {/* ---------- Step 1: name ---------- */}
++          {step === 0 && (
++            <>
++              <h2 id="onb-title" className="onb-title" tabIndex={-1} ref={headingRef}>
++                Welcome to Shammah{originalName ? `, ${originalName.split(' ')[0]}` : ''}
++              </h2>
++              <p className="onb-lead">
++                Let&apos;s set up your profile so your church family knows who you are.
++              </p>
++              <label className="onb-label" htmlFor="onb-name">
++                Your name
++              </label>
+               <input
++                id="onb-name"
++                className="onb-input"
+                 type="text"
+-                value={displayName}
+-                onChange={(e) => setDisplayName(e.target.value)}
+-                placeholder="e.g. Grace Wanjiku"
+-                maxLength={60}
+-                autoFocus
++                value={name}
++                maxLength={50}
++                autoComplete="name"
++                onChange={(e) => setName(e.target.value)}
+               />
+-            </label>
+-          </>
+-        )}
+-
+-        {current === 'badge' && (
+-          <>
+-            <h2 id="onboard-title" className="onboard-title">
+-              Choose your member badge
+-            </h2>
+-            <p className="onboard-sub">
+-              This appears next to your name everywhere in Shammah. You pick it once — after that only
+-              the platform team can change it at your request.
+-            </p>
+-            <div className="badge-grid">
+-              {BADGES.map((b) => (
+-                <button
+-                  key={b.id}
+-                  type="button"
+-                  className={`badge-option${badge === b.id ? ' selected' : ''}`}
+-                  onClick={() => setBadge(b.id)}
+-                >
+-                  <span className="badge-option-icon">{b.icon}</span>
+-                  <span className="badge-option-label">{b.label}</span>
+-                  <span className="badge-option-desc">{b.description}</span>
+-                </button>
+-              ))}
+-            </div>
+-          </>
+-        )}
+-
+-        {current === 'photos' && (
+-          <>
+-            <h2 id="onboard-title" className="onboard-title">
+-              Add photos
+-            </h2>
+-            <p className="onboard-sub">Optional — you can skip and add these later in Profile settings.</p>
+-            <div className="photo-upload-row">
+-              <label className="photo-upload-card">
+-                <span className="photo-upload-title">Profile picture</span>
+-                {avatarPreview ? (
+-                  <img src={avatarPreview} alt="" className="photo-preview avatar-preview" />
+-                ) : (
+-                  <span className="photo-placeholder">📷</span>
+-                )}
+-                <input type="file" accept="image/*" onChange={pickAvatar} hidden />
+-                <span className="photo-upload-cta">{avatarPreview ? 'Change' : 'Choose photo'}</span>
+-              </label>
+-              <label className="photo-upload-card">
+-                <span className="photo-upload-title">Cover picture</span>
+-                {coverPreview ? (
+-                  <img src={coverPreview} alt="" className="photo-preview cover-preview" />
+-                ) : (
+-                  <span className="photo-placeholder">🖼️</span>
+-                )}
+-                <input type="file" accept="image/*" onChange={pickCover} hidden />
+-                <span className="photo-upload-cta">{coverPreview ? 'Change' : 'Choose photo'}</span>
++              {providerLabel && (
++                <p className="onb-hint">
++                  This is the name from your {providerLabel} account. Keep it, or change it to the name you&apos;d
++                  like others to see.
++                </p>
++              )}
++              <div className={`onb-notice${nameChanged ? ' warn' : ''}`}>
++                {nameChanged
++                  ? 'Heads up: because you changed your name, you won’t be able to change it again for 90 days.'
++                  : 'You can change your name once every 90 days. Keeping the name above doesn’t use up your change.'}
++              </div>
++              {name.length > 0 && !nameValid && (
++                <p className="onb-error">Your name must be between 2 and 50 characters.</p>
++              )}
++            </>
++          )}
++
++          {/* ---------- Step 2: badge ---------- */}
++          {step === 1 && (
++            <>
++              <h2 id="onb-title" className="onb-title" tabIndex={-1} ref={headingRef}>
++                Choose your badge
++              </h2>
++              <p className="onb-lead">It appears under your name across Shammah.</p>
++
++              <div className="onb-notice warn">
++                <strong>Your badge is permanent.</strong> You can&apos;t change it yourself later; if it ever needs to
++                change, you&apos;ll have to contact the Shammah team.
++              </div>
++
++              <div role="radiogroup" aria-label="Member badge">
++                {BADGE_GROUPS.map((g) => (
++                  <div key={g.id} className="onb-badge-group">
++                    <p className="onb-group-label">{g.label}</p>
++                    <div className="onb-badge-grid">
++                      {BADGES.filter((b) => b.group === g.id).map((b) => (
++                        <button
++                          key={b.id}
++                          type="button"
++                          role="radio"
++                          aria-checked={badge === b.id}
++                          disabled={!!profile.badge}
++                          className={`onb-badge-opt${badge === b.id ? ' selected' : ''}`}
++                          onClick={() => {
++                            setBadge(b.id);
++                            setBadgeConfirmed(false);
++                          }}
++                        >
++                          <BadgeIcon badge={b} size={20} />
++                          <span>{b.label}</span>
++                        </button>
++                      ))}
++                    </div>
++                  </div>
++                ))}
++              </div>
++
++              {badgeObj && <p className="onb-badge-desc">{badgeObj.desc}</p>}
++
++              {badge && !profile.badge && (
++                <label className="onb-check">
++                  <input type="checkbox" checked={badgeConfirmed} onChange={(e) => setBadgeConfirmed(e.target.checked)} />
++                  <span>
++                    I understand my <b>{badgeObj?.label}</b> badge is permanent.
++                  </span>
++                </label>
++              )}
++            </>
++          )}
++
++          {/* ---------- Step 3: photos ---------- */}
++          {step === 2 && (
++            <>
++              <h2 id="onb-title" className="onb-title" tabIndex={-1} ref={headingRef}>
++                Add your photos
++              </h2>
++              <p className="onb-lead">
++                {REQUIRED.avatar || REQUIRED.cover
++                  ? 'Add your pictures to continue.'
++                  : 'Optional: you can skip this and add them later in your profile settings.'}
++              </p>
++
++              <div className="onb-preview">
++                <div className="onb-preview-cover" style={cover ? { backgroundImage: `url(${cover.previewUrl})` } : undefined} />
++                <div className="onb-preview-row">
++                  <Avatar name={nameTrim} src={avatar?.previewUrl} className="avatar-xl" />
++                  <div className="onb-preview-text">
++                    <span className="onb-preview-name">{nameTrim || 'Your name'}</span>
++                    {badge && <ProfileBadge badge={badge} />}
++                  </div>
++                </div>
++              </div>
++
++              <div className="onb-photo-actions">
++                <label className="onb-btn-secondary">
++                  {avatar ? 'Change profile picture' : 'Add profile picture'}
++                  <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => pickImage(e.target.files?.[0], 'avatar')} />
++                </label>
++                <label className="onb-btn-secondary">
++                  {cover ? 'Change cover picture' : 'Add cover picture'}
++                  <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => pickImage(e.target.files?.[0], 'cover')} />
++                </label>
++              </div>
++              <p className="onb-hint">Pictures are cropped to fit: square for your profile, wide for your cover.</p>
++            </>
++          )}
++
++          {/* ---------- Step 4: about, birthday, location ---------- */}
++          {step === 3 && (
++            <>
++              <h2 id="onb-title" className="onb-title" tabIndex={-1} ref={headingRef}>
++                Tell us about you
++              </h2>
++
++              <label className="onb-label" htmlFor="onb-about">
++                About you {!REQUIRED.about && <span className="onb-opt">(optional)</span>}
+               </label>
+-            </div>
+-          </>
+-        )}
+-
+-        {current === 'about' && (
+-          <>
+-            <h2 id="onboard-title" className="onboard-title">
+-              A short about
+-            </h2>
+-            <p className="onboard-sub">Optional. Share a verse, calling, or one-liner (max ~250 characters).</p>
+-            <label className="onboard-label">
+-              About
+               <textarea
++                id="onb-about"
++                className="onb-input onb-textarea"
++                rows={3}
++                maxLength={ABOUT_MAX}
+                 value={about}
+-                onChange={(e) => setAbout(e.target.value.slice(0, 250))}
+-                rows={4}
+-                placeholder="e.g. Saved by grace. Serving youth ministry in Nairobi."
+-                maxLength={250}
++                placeholder="A line or two about your faith journey, ministry or calling…"
++                onChange={(e) => setAbout(e.target.value)}
+               />
+-              <span className="char-count">{about.length}/250</span>
+-            </label>
+-          </>
+-        )}
+-
+-        {current === 'details' && (
+-          <>
+-            <h2 id="onboard-title" className="onboard-title">
+-              A few more details
+-            </h2>
+-            <p className="onboard-sub">Optional. Helps your church community know you better.</p>
+-            <label className="onboard-label">
+-              Date of birth
+-              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+-            </label>
+-            <label className="onboard-label" style={{ marginTop: 14 }}>
+-              Location
++              <p className={`onb-counter${about.length >= ABOUT_MAX - 20 ? ' near' : ''}`}>
++                {about.length}/{ABOUT_MAX}
++              </p>
++
++              <label className="onb-label" htmlFor="onb-dob">
++                Date of birth
++              </label>
++              <input
++                id="onb-dob"
++                className="onb-input"
++                type="date"
++                value={dob}
++                min="1900-01-01"
++                max={maxDob}
++                onChange={(e) => setDob(e.target.value)}
++              />
++              <p className="onb-hint">Only you can see this. You must be at least {MIN_AGE} to join Shammah.</p>
++
++              <label className="onb-label">
++                Where are you based? {!REQUIRED.location && <span className="onb-opt">(optional)</span>}
++              </label>
+               <LocationPicker value={location} onChange={setLocation} />
+-            </label>
+-          </>
+-        )}
++              <p className="onb-hint">We only keep your city and country, never a street address.</p>
++            </>
++          )}
+ 
+-        {error && <p className="onboard-error">{error}</p>}
++          {error && (
++            <p className="onb-error" role="alert">
++              {error}
++            </p>
++          )}
++        </div>
+ 
+-        <div className="onboard-actions">
+-          {step > 0 && (
+-            <button type="button" className="onboard-btn secondary" onClick={back} disabled={busy}>
++        <div className="onb-footer">
++          {step > 0 ? (
++            <button type="button" className="onb-btn-ghost" onClick={() => setStep((s) => s - 1)} disabled={busy}>
+               Back
+             </button>
++          ) : (
++            <span />
+           )}
+-          <div className="onboard-actions-right">
+-            {(current === 'photos' || current === 'about' || current === 'details') && (
+-              <button type="button" className="onboard-btn ghost" onClick={skip} disabled={busy}>
+-                Skip
++
++          <div className="onb-footer-right">
++            {step === 2 && !REQUIRED.avatar && !REQUIRED.cover && !avatar && !cover && (
++              <button type="button" className="onb-btn-ghost" onClick={next}>
++                Skip for now
++              </button>
++            )}
++            {!isLast ? (
++              <button type="button" className="onb-btn-primary" onClick={next} disabled={!canLeaveStep(step)}>
++                Continue
++              </button>
++            ) : (
++              <button type="button" className="onb-btn-primary" onClick={finish} disabled={busy || (REQUIRED.dob && !dobValid)}>
++                {busy ? 'Saving…' : 'Finish setup'}
+               </button>
+             )}
+-            <button
+-              type="button"
+-              className="onboard-btn primary"
+-              onClick={next}
+-              disabled={busy || !canProceed()}
+-            >
+-              {busy ? 'Saving…' : step === STEPS.length - 1 ? 'Finish' : 'Continue'}
+-            </button>
+           </div>
+         </div>
+       </div>
+diff --git a/app/components/PostCard.js b/app/components/PostCard.js
+index 0396186..20f7a9f 100644
+--- a/app/components/PostCard.js
++++ b/app/components/PostCard.js
+@@ -1,7 +1,9 @@
+ 'use client';
+ import { useEffect, useState } from 'react';
+ import { supabase } from '../../lib/supabaseClient';
+-import { categoryStyle, initials } from '../lib/postDisplay';
++import { categoryStyle } from '../lib/postDisplay';
++import Avatar from './Avatar';
++import MemberName from './MemberName';
+ import ReactionBar from './ReactionBar';
+ import CommentThread from './CommentThread';
+ 
+@@ -88,7 +90,9 @@ export default function PostCard({ post, session, openAuth, pollOptions, pollCou
+   const [shareMsg, setShareMsg] = useState('');
+ 
+   const cat = categoryStyle(post.category_id);
+-  const authorName = (post.profiles && post.profiles.display_name) || 'Someone';
++  // Supabase can hand back the joined profile as an object or a one-item list
++  const author = Array.isArray(post.profiles) ? post.profiles[0] : post.profiles;
++  const authorName = (author && author.display_name) || 'Someone';
+ 
+   useEffect(() => {
+     let cancelled = false;
+@@ -130,9 +134,9 @@ export default function PostCard({ post, session, openAuth, pollOptions, pollCou
+       style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
+     >
+       <div className="post-header">
+-        <div className="avatar">{initials(authorName)}</div>
++        <Avatar name={authorName} src={author?.avatar_url} />
+         <div className="post-header-text">
+-          <span className="post-author">{authorName}</span>
++          <MemberName name={authorName} badge={author?.badge} verified={author?.badge_verified} nameClassName="post-author" />
+           <span className="category-chip">{cat.label}</span>
+         </div>
+       </div>
+diff --git a/app/components/ProfileSettings.js b/app/components/ProfileSettings.js
+index 9e1875d..87dafcb 100644
+--- a/app/components/ProfileSettings.js
++++ b/app/components/ProfileSettings.js
+@@ -1,220 +1,482 @@
+ 'use client';
+-import { useEffect, useState } from 'react';
++import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
++import Link from 'next/link';
++import { useRouter } from 'next/navigation';
+ import { supabase } from '../../lib/supabaseClient';
+-import { getBadge, nameChangeDaysLeft } from '../lib/badges';
++import { BADGES, badgeById, nameChangeDaysLeft } from '../lib/badges';
++import { prepareImage } from '../lib/imageTools';
++import Avatar from './Avatar';
++import BadgeIcon from './BadgeIcon';
++import MemberName from './MemberName';
+ import LocationPicker from './LocationPicker';
+-import MemberBadge from './MemberBadge';
+-import { initials } from '../lib/postDisplay';
+-
+-/**
+- * Full profile settings panel — beautiful, calm, church-friendly UI.
+- * Name change limited to once / 90 days. Badge is locked.
+- */
+-export default function ProfileSettings({ session, profile, onClose, onSaved }) {
+-  const [displayName, setDisplayName] = useState(profile?.display_name || '');
+-  const [about, setAbout] = useState(profile?.about || '');
+-  const [dob, setDob] = useState(profile?.date_of_birth || '');
+-  const [location, setLocation] = useState(
+-    profile?.location_name
+-      ? { name: profile.location_name, lat: profile.location_lat, lng: profile.location_lng }
+-      : null
++
++const COLS =
++  'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, location_place_id, location_lat, location_lng, onboarding_completed_at, display_name_changed_at';
++const ABOUT_MAX = 250;
++const MIN_AGE = 13;
++
++function Ico({ d, size = 18 }) {
++  return (
++    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
++      {(Array.isArray(d) ? d : [d]).map((p, i) => (
++        <path key={i} d={p} />
++      ))}
++    </svg>
+   );
+-  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || null);
+-  const [coverUrl, setCoverUrl] = useState(profile?.cover_url || null);
+-  const [avatarFile, setAvatarFile] = useState(null);
+-  const [coverFile, setCoverFile] = useState(null);
+-  const [busy, setBusy] = useState(false);
+-  const [message, setMessage] = useState('');
+-  const [error, setError] = useState('');
++}
+ 
+-  const daysLeft = nameChangeDaysLeft(profile?.display_name_changed_at);
+-  const canChangeName = daysLeft === 0;
+-  const badge = getBadge(profile?.badge);
++const ICONS = {
++  camera: ['M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z', 'M12 17a4 4 0 100-8 4 4 0 000 8z'],
++  user: ['M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2', 'M12 11a4 4 0 100-8 4 4 0 000 8z'],
++  quote: ['M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z'],
++  pin: ['M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z', 'M12 13a3 3 0 100-6 3 3 0 000 6z'],
++  shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
++  lock: ['M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z', 'M7 11V7a5 5 0 0110 0v4'],
++  key: ['M21 2l-2 2m-7.6 7.6a5.5 5.5 0 11-7.8 7.8 5.5 5.5 0 017.8-7.8zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4'],
++  cake: ['M20 21v-8a2 2 0 00-2-2H6a2 2 0 00-2 2v8', 'M4 16s1.5 2 4 2 4-2 4-2 1.5 2 4 2 4-2 4-2', 'M2 21h20', 'M12 8V5'],
++};
+ 
+-  useEffect(() => {
+-    setDisplayName(profile?.display_name || '');
+-    setAbout(profile?.about || '');
+-    setDob(profile?.date_of_birth || '');
+-    setAvatarUrl(profile?.avatar_url || null);
+-    setCoverUrl(profile?.cover_url || null);
++export default function ProfileSettings({ session }) {
++  const router = useRouter();
++  const uid = session.user.id;
++
++  const [loading, setLoading] = useState(true);
++  const [profile, setProfile] = useState(null);
++  const [dobOrig, setDobOrig] = useState('');
++  const [pending, setPending] = useState(null); // pending badge-change request
++
++  const [name, setName] = useState('');
++  const [about, setAbout] = useState('');
++  const [dob, setDob] = useState('');
++  const [location, setLocation] = useState(null);
++
++  const [saving, setSaving] = useState(false);
++  const [busyImg, setBusyImg] = useState(null); // 'avatar' | 'cover' | null
++  const [toast, setToast] = useState(null);
++  const [reqOpen, setReqOpen] = useState(false);
++  const toastTimer = useRef(null);
++
++  const notify = useCallback((type, text) => {
++    setToast({ type, text });
++    clearTimeout(toastTimer.current);
++    toastTimer.current = setTimeout(() => setToast(null), 4500);
++  }, []);
++
++  function applyProfile(p) {
++    setProfile(p);
++    setName(p.display_name || '');
++    setAbout(p.about || '');
+     setLocation(
+-      profile?.location_name
+-        ? { name: profile.location_name, lat: profile.location_lat, lng: profile.location_lng }
++      p.location_label
++        ? { label: p.location_label, placeId: p.location_place_id, lat: p.location_lat, lng: p.location_lng }
+         : null
+     );
+-  }, [profile]);
+-
+-  async function uploadImage(bucket, file) {
+-    if (!file) return null;
+-    const ext = file.name.split('.').pop() || 'jpg';
+-    const path = `${session.user.id}/${Date.now()}.${ext}`;
+-    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, {
+-      cacheControl: '3600',
+-      upsert: true,
+-    });
+-    if (upErr) throw upErr;
+-    return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+   }
+ 
+-  function onAvatarPick(e) {
+-    const f = e.target.files?.[0];
+-    if (!f) return;
+-    if (f.size > 5 * 1024 * 1024) {
+-      setError('Profile photo must be under 5 MB.');
+-      return;
+-    }
+-    setError('');
+-    setAvatarFile(f);
+-    setAvatarUrl(URL.createObjectURL(f));
++  useEffect(() => {
++    let cancelled = false;
++    (async () => {
++      const [profRes, privRes, reqRes] = await Promise.all([
++        supabase.from('profiles').select(COLS).eq('id', uid).single(),
++        supabase.from('profile_private').select('date_of_birth').eq('id', uid).maybeSingle(),
++        supabase.from('badge_requests').select('id, requested_badge, created_at').eq('user_id', uid).eq('status', 'pending').maybeSingle(),
++      ]);
++      if (cancelled) return;
++      if (profRes.error) notify('error', 'Could not load your profile. Please refresh.');
++      else applyProfile(profRes.data);
++      const d = privRes.data?.date_of_birth || '';
++      setDobOrig(d);
++      setDob(d);
++      setPending(reqRes.error ? null : reqRes.data || null); // table only exists after migration 005
++      setLoading(false);
++    })();
++    return () => {
++      cancelled = true;
++    };
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [uid]);
++
++  const maxDob = useMemo(() => {
++    const d = new Date();
++    d.setFullYear(d.getFullYear() - MIN_AGE);
++    return d.toISOString().slice(0, 10);
++  }, []);
++
++  if (loading) {
++    return (
++      <div className="st-wrap">
++        <div className="st-skeleton st-skel-hero" />
++        <div className="st-skeleton st-skel-card" />
++        <div className="st-skeleton st-skel-card" />
++      </div>
++    );
+   }
++  if (!profile) return null;
+ 
+-  function onCoverPick(e) {
+-    const f = e.target.files?.[0];
+-    if (!f) return;
+-    if (f.size > 8 * 1024 * 1024) {
+-      setError('Cover photo must be under 8 MB.');
+-      return;
+-    }
+-    setError('');
+-    setCoverFile(f);
+-    setCoverUrl(URL.createObjectURL(f));
++  if (!profile.onboarding_completed_at) {
++    return (
++      <div className="st-wrap">
++        <div className="st-card st-center">
++          <h2 className="st-h">Finish setting up first</h2>
++          <p className="st-sub">Complete the short welcome steps, then come back here to fine-tune your profile.</p>
++          <Link href="/" className="st-btn st-btn-primary">
++            Continue setup
++          </Link>
++        </div>
++      </div>
++    );
+   }
+ 
+-  async function handleSave(e) {
+-    e.preventDefault();
+-    setBusy(true);
+-    setError('');
+-    setMessage('');
++  // ---------- derived state ----------
++  const nameTrim = name.trim();
++  const daysLeft = nameChangeDaysLeft(profile.display_name_changed_at);
++  const nameLocked = daysLeft > 0;
++  const unlockDate = profile.display_name_changed_at
++    ? new Date(new Date(profile.display_name_changed_at).getTime() + 90 * 86400000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
++    : '';
++  const nameChanged = nameTrim !== (profile.display_name || '');
++  const nameValid = nameTrim.length >= 2 && nameTrim.length <= 50;
++  const aboutChanged = about.trim() !== (profile.about || '');
++  const dobChanged = dob !== dobOrig;
++  const dobValid = !!dob && dob >= '1900-01-01' && dob <= maxDob;
++  const locChanged = (location?.label || '') !== (profile.location_label || '');
++  const dirty = nameChanged || aboutChanged || dobChanged || locChanged;
++  const canSave = dirty && !saving && (!nameChanged || (nameValid && !nameLocked)) && dobValid;
++
++  const badge = badgeById(profile.badge);
++  const strength = Math.round(
++    ([profile.avatar_url, profile.cover_url, profile.about, profile.location_label, dobOrig].filter(Boolean).length / 5) * 100
++  );
++
++  // ---------- actions ----------
++  async function save() {
++    if (!canSave) return;
++    setSaving(true);
+     try {
+-      const payload = {
+-        about: about.trim() || null,
+-        date_of_birth: dob || null,
+-        location_name: location?.name || null,
+-        location_lat: location?.lat ?? null,
+-        location_lng: location?.lng ?? null,
+-      };
+-
+-      if (canChangeName && displayName.trim() && displayName.trim() !== profile?.display_name) {
+-        payload.display_name = displayName.trim();
++      if (dobChanged) {
++        const { error } = await supabase.from('profile_private').upsert({ id: uid, date_of_birth: dob }, { onConflict: 'id' });
++        if (error) throw new Error(error.message);
++        setDobOrig(dob);
+       }
+-
+-      if (avatarFile) {
+-        payload.avatar_url = await uploadImage('avatars', avatarFile);
++      const upd = {};
++      if (nameChanged) upd.display_name = nameTrim;
++      if (aboutChanged) upd.about = about.trim() || null;
++      if (locChanged) {
++        upd.location_label = location?.label || null;
++        upd.location_place_id = location?.placeId || null;
++        upd.location_lat = location?.lat ?? null;
++        upd.location_lng = location?.lng ?? null;
+       }
+-      if (coverFile) {
+-        payload.cover_url = await uploadImage('covers', coverFile);
++      if (Object.keys(upd).length) {
++        const { data, error } = await supabase.from('profiles').update(upd).eq('id', uid).select(COLS).single();
++        if (error) throw new Error(error.message);
++        applyProfile(data);
+       }
++      notify('success', 'Your profile has been updated.');
++    } catch (e) {
++      notify('error', e.message || 'Could not save. Please try again.');
++    }
++    setSaving(false);
++  }
++
++  function discard() {
++    applyProfile(profile);
++    setDob(dobOrig);
++  }
+ 
+-      const { error: updErr } = await supabase.from('profiles').update(payload).eq('id', session.user.id);
+-      if (updErr) throw updErr;
+-
+-      setMessage('Profile saved.');
+-      setAvatarFile(null);
+-      setCoverFile(null);
+-      onSaved?.();
+-    } catch (err) {
+-      setError(err.message || 'Could not save. Please try again.');
+-    } finally {
+-      setBusy(false);
++  async function changeImage(kind, file) {
++    if (!file) return;
++    setBusyImg(kind);
++    try {
++      const spec = kind === 'avatar' ? { width: 512, height: 512 } : { width: 1500, height: 500 };
++      const { blob } = await prepareImage(file, spec);
++      const path = `${uid}/${kind}.jpg`;
++      const { error: upErr } = await supabase.storage.from('profile-media').upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
++      if (upErr) throw new Error(upErr.message);
++      const url = `${supabase.storage.from('profile-media').getPublicUrl(path).data.publicUrl}?v=${Date.now()}`;
++      const { data, error } = await supabase.from('profiles').update({ [`${kind}_url`]: url }).eq('id', uid).select(COLS).single();
++      if (error) throw new Error(error.message);
++      setProfile(data);
++      notify('success', kind === 'avatar' ? 'Profile picture updated.' : 'Cover picture updated.');
++    } catch (e) {
++      notify('error', e.message || 'Could not upload that picture.');
++    }
++    setBusyImg(null);
++  }
++
++  async function removeImage(kind) {
++    setBusyImg(kind);
++    try {
++      await supabase.storage.from('profile-media').remove([`${uid}/${kind}.jpg`]);
++      const { data, error } = await supabase.from('profiles').update({ [`${kind}_url`]: null }).eq('id', uid).select(COLS).single();
++      if (error) throw new Error(error.message);
++      setProfile(data);
++      notify('success', 'Picture removed.');
++    } catch (e) {
++      notify('error', e.message || 'Could not remove that picture.');
+     }
++    setBusyImg(null);
+   }
+ 
++  async function signOut() {
++    await supabase.auth.signOut();
++    router.push('/');
++  }
++
++  const provider = session.user.app_metadata?.provider;
++  const memberSince = session.user.created_at
++    ? new Date(session.user.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
++    : '';
++
+   return (
+-    <div className="auth-overlay" onClick={onClose}>
+-      <div className="profile-settings-panel" onClick={(e) => e.stopPropagation()}>
+-        <button className="auth-close" onClick={onClose} aria-label="Close">
+-          ×
+-        </button>
+-
+-        {/* Cover + avatar hero */}
+-        <div className="ps-hero">
+-          <div className="ps-cover" style={coverUrl ? { backgroundImage: `url(${coverUrl})` } : undefined}>
+-            <label className="ps-cover-edit">
+-              <input type="file" accept="image/*" onChange={onCoverPick} hidden />
+-              Change cover
++    <div className="st-wrap">
++      {/* ---------- Hero ---------- */}
++      <section className="st-hero st-rise" style={{ '--d': '0ms' }}>
++        <div className="st-cover" style={profile.cover_url ? { backgroundImage: `url(${profile.cover_url})` } : undefined}>
++          <label className="st-glass-btn" aria-label="Change cover picture">
++            <Ico d={ICONS.camera} size={16} />
++            <span>{busyImg === 'cover' ? 'Uploading…' : profile.cover_url ? 'Change cover' : 'Add cover'}</span>
++            <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={!!busyImg} onChange={(e) => { changeImage('cover', e.target.files?.[0]); e.target.value = ''; }} />
++          </label>
++        </div>
++
++        <div className="st-hero-body">
++          <div className="st-avatar-wrap">
++            <Avatar name={profile.display_name} src={profile.avatar_url} className="st-avatar" />
++            {busyImg === 'avatar' && <span className="st-avatar-busy" />}
++            <label className="st-cam" aria-label="Change profile picture">
++              <Ico d={ICONS.camera} size={16} />
++              <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={!!busyImg} onChange={(e) => { changeImage('avatar', e.target.files?.[0]); e.target.value = ''; }} />
+             </label>
+           </div>
+-          <div className="ps-avatar-wrap">
+-            {avatarUrl ? (
+-              <img src={avatarUrl} alt="" className="ps-avatar" />
+-            ) : (
+-              <span className="ps-avatar ps-avatar-fallback">
+-                {initials(displayName || profile?.display_name || '?')}
+-              </span>
+-            )}
+-            <label className="ps-avatar-edit">
+-              <input type="file" accept="image/*" onChange={onAvatarPick} hidden />
+-              ✎
+-            </label>
++
++          <div className="st-hero-id">
++            <h1 className="st-name">
++              <MemberName name={profile.display_name} badge={profile.badge} verified={profile.badge_verified} layout="inline" />
++            </h1>
++            <p className="st-meta">
++              {profile.location_label ? `📍 ${profile.location_label}` : 'Add your location below'}
++              {memberSince && <span> · Member since {memberSince}</span>}
++            </p>
++          </div>
++
++          <div className="st-meter" title="How complete your profile is">
++            <div className="st-meter-top">
++              <span>Profile strength</span>
++              <b>{strength}%</b>
++            </div>
++            <div className="st-meter-track">
++              <div className="st-meter-fill" style={{ width: `${strength}%` }} />
++            </div>
+           </div>
++
++          {(profile.avatar_url || profile.cover_url) && (
++            <p className="st-remove-row">
++              {profile.avatar_url && (
++                <button type="button" className="st-link" disabled={!!busyImg} onClick={() => removeImage('avatar')}>
++                  Remove profile picture
++                </button>
++              )}
++              {profile.cover_url && (
++                <button type="button" className="st-link" disabled={!!busyImg} onClick={() => removeImage('cover')}>
++                  Remove cover
++                </button>
++              )}
++            </p>
++          )}
+         </div>
++      </section>
+ 
+-        <div className="ps-body">
+-          <div className="ps-identity">
+-            <h2 className="ps-title">{displayName || profile?.display_name || 'Your profile'}</h2>
+-            {profile?.badge && <MemberBadge badgeId={profile.badge} size="md" />}
+-            <p className="ps-email">{session.user.email}</p>
++      {/* ---------- Name ---------- */}
++      <section className="st-card st-rise" style={{ '--d': '60ms' }}>
++        <header className="st-card-head">
++          <span className="st-ico"><Ico d={ICONS.user} /></span>
++          <div>
++            <h2 className="st-h">Your name</h2>
++            <p className="st-sub">This is how you appear on posts and comments.</p>
++          </div>
++        </header>
++        <label className="st-label" htmlFor="st-name">Display name</label>
++        <input id="st-name" className="st-input" value={name} maxLength={50} disabled={nameLocked} onChange={(e) => setName(e.target.value)} />
++        {nameLocked ? (
++          <div className="st-lock">
++            <Ico d={ICONS.lock} size={16} />
++            <span>
++              You changed your name recently. You can change it again in <b>{daysLeft} day{daysLeft !== 1 ? 's' : ''}</b> (on {unlockDate}).
++            </span>
+           </div>
++        ) : (
++          <p className="st-hint">
++            {nameChanged ? 'After you save, your name will be locked for 90 days.' : 'You can change your name once every 90 days.'}
++          </p>
++        )}
++        {nameChanged && !nameValid && <p className="st-error">Your name must be between 2 and 50 characters.</p>}
++      </section>
+ 
+-          {badge && (
+-            <div className="ps-badge-lock">
+-              <p>
+-                <strong>Member badge:</strong> {badge.icon} {badge.label}
+-              </p>
+-              <p className="ps-hint">
+-                Badges cannot be changed after onboarding. Message the Shammah team if you need an update.
+-              </p>
++      {/* ---------- About ---------- */}
++      <section className="st-card st-rise" style={{ '--d': '120ms' }}>
++        <header className="st-card-head">
++          <span className="st-ico"><Ico d={ICONS.quote} /></span>
++          <div>
++            <h2 className="st-h">About you</h2>
++            <p className="st-sub">A line or two about your faith, ministry or calling.</p>
++          </div>
++        </header>
++        <textarea className="st-input st-textarea" rows={4} maxLength={ABOUT_MAX} value={about} placeholder="Share a verse, a calling, or a few words about yourself…" onChange={(e) => setAbout(e.target.value)} />
++        <p className={`st-counter${about.length >= ABOUT_MAX - 20 ? ' near' : ''}`}>{about.length}/{ABOUT_MAX}</p>
++      </section>
++
++      {/* ---------- Personal ---------- */}
++      <section className="st-card st-rise" style={{ '--d': '180ms' }}>
++        <header className="st-card-head">
++          <span className="st-ico"><Ico d={ICONS.pin} /></span>
++          <div>
++            <h2 className="st-h">Where &amp; when</h2>
++            <p className="st-sub">Your city is public. Your birthday stays private.</p>
++          </div>
++        </header>
++        <label className="st-label">Location</label>
++        <LocationPicker value={location} onChange={setLocation} />
++        <p className="st-hint">We only keep your city and country, never a street address.</p>
++
++        <label className="st-label" htmlFor="st-dob">
++          <Ico d={ICONS.cake} size={14} /> Date of birth
++        </label>
++        <input id="st-dob" className="st-input" type="date" value={dob} min="1900-01-01" max={maxDob} onChange={(e) => setDob(e.target.value)} />
++        <p className="st-hint">Only you can see this.</p>
++        {dob && !dobValid && <p className="st-error">Please enter a valid date (you must be at least {MIN_AGE}).</p>}
++      </section>
++
++      {/* ---------- Badge ---------- */}
++      <section className="st-card st-rise" style={{ '--d': '240ms' }}>
++        <header className="st-card-head">
++          <span className="st-ico"><Ico d={ICONS.shield} /></span>
++          <div>
++            <h2 className="st-h">Your badge</h2>
++            <p className="st-sub">Shown beside your name across Shammah.</p>
++          </div>
++        </header>
++        {badge ? (
++          <div className="st-badge-hero">
++            <span className="st-badge-ring"><BadgeIcon badge={badge} size={28} /></span>
++            <div className="st-badge-text">
++              <b>{badge.label}{profile.badge_verified && <span className="st-verified"> · Verified</span>}</b>
++              <span>{badge.desc}</span>
+             </div>
+-          )}
++            <span className="st-perm"><Ico d={ICONS.lock} size={13} /> Permanent</span>
++          </div>
++        ) : (
++          <p className="st-hint">No badge yet.</p>
++        )}
++        {pending ? (
++          <div className="st-lock">
++            <Ico d={ICONS.shield} size={16} />
++            <span>
++              Change request pending: <b>{badgeById(pending.requested_badge)?.label || pending.requested_badge}</b>. The Shammah team will review it.
++            </span>
++          </div>
++        ) : (
++          <button type="button" className="st-btn st-btn-ghost" onClick={() => setReqOpen(true)}>
++            Request a badge change
++          </button>
++        )}
++      </section>
+ 
+-          <form onSubmit={handleSave} className="ps-form">
+-            <label className="onboard-label">
+-              Display name
+-              <input
+-                type="text"
+-                value={displayName}
+-                onChange={(e) => setDisplayName(e.target.value)}
+-                maxLength={60}
+-                disabled={!canChangeName}
+-              />
+-              {!canChangeName ? (
+-                <span className="ps-hint">
+-                  You can change your name again in {daysLeft} day{daysLeft === 1 ? '' : 's'}.
+-                </span>
+-              ) : (
+-                <span className="ps-hint">You may change this once every 90 days.</span>
+-              )}
+-            </label>
++      {/* ---------- Account ---------- */}
++      <section className="st-card st-rise" style={{ '--d': '300ms' }}>
++        <header className="st-card-head">
++          <span className="st-ico"><Ico d={ICONS.key} /></span>
++          <div>
++            <h2 className="st-h">Account</h2>
++            <p className="st-sub">
++              {session.user.email}
++              {provider && provider !== 'email' ? ` · signed in with ${provider === 'google' ? 'Google' : provider === 'facebook' ? 'Facebook' : provider}` : ''}
++            </p>
++          </div>
++        </header>
++        <button type="button" className="st-btn st-btn-danger" onClick={signOut}>Log out</button>
++      </section>
+ 
+-            <label className="onboard-label">
+-              About
+-              <textarea
+-                value={about}
+-                onChange={(e) => setAbout(e.target.value.slice(0, 250))}
+-                rows={3}
+-                maxLength={250}
+-                placeholder="A short word about yourself…"
+-              />
+-              <span className="char-count">{about.length}/250</span>
+-            </label>
++      {/* ---------- Save bar ---------- */}
++      <div className={`st-savebar${dirty ? ' show' : ''}`} role="region" aria-live="polite" aria-hidden={!dirty}>
++        <span className="st-savebar-text">You have unsaved changes</span>
++        <div className="st-savebar-actions">
++          <button type="button" className="st-btn st-btn-plain" onClick={discard} disabled={saving} tabIndex={dirty ? 0 : -1}>Discard</button>
++          <button type="button" className="st-btn st-btn-primary" onClick={save} disabled={!canSave} tabIndex={dirty ? 0 : -1}>
++            {saving ? 'Saving…' : 'Save changes'}
++          </button>
++        </div>
++      </div>
+ 
+-            <label className="onboard-label">
+-              Date of birth
+-              <input type="date" value={dob || ''} onChange={(e) => setDob(e.target.value)} />
+-            </label>
++      {toast && (
++        <div className={`st-toast ${toast.type}`} role="status">
++          {toast.text}
++        </div>
++      )}
+ 
+-            <label className="onboard-label">
+-              Location
+-              <LocationPicker value={location} onChange={setLocation} />
+-            </label>
++      {reqOpen && (
++        <BadgeRequestModal
++          current={profile.badge}
++          uid={uid}
++          onClose={() => setReqOpen(false)}
++          onSent={(req) => {
++            setPending(req);
++            setReqOpen(false);
++            notify('success', 'Request sent. We will get back to you.');
++          }}
++          onError={(m) => notify('error', m)}
++        />
++      )}
++    </div>
++  );
++}
++
++function BadgeRequestModal({ current, uid, onClose, onSent, onError }) {
++  const options = BADGES.filter((b) => b.id !== current);
++  const [target, setTarget] = useState(options[0]?.id || '');
++  const [reason, setReason] = useState('');
++  const [busy, setBusy] = useState(false);
++  const valid = target && reason.trim().length >= 10;
++
++  useEffect(() => {
++    const onKey = (e) => e.key === 'Escape' && onClose();
++    document.addEventListener('keydown', onKey);
++    return () => document.removeEventListener('keydown', onKey);
++  }, [onClose]);
+ 
+-            {error && <p className="onboard-error">{error}</p>}
+-            {message && <p className="onboard-success">{message}</p>}
++  async function submit() {
++    if (!valid) return;
++    setBusy(true);
++    const { data, error } = await supabase
++      .from('badge_requests')
++      .insert({ user_id: uid, current_badge: current, requested_badge: target, reason: reason.trim() })
++      .select('id, requested_badge, created_at')
++      .single();
++    setBusy(false);
++    if (error) {
++      onError(error.message.includes('one_pending') ? 'You already have a request waiting for review.' : error.message);
++      return;
++    }
++    onSent(data);
++  }
+ 
+-            <button type="submit" className="onboard-btn primary ps-save" disabled={busy}>
+-              {busy ? 'Saving…' : 'Save changes'}
+-            </button>
+-          </form>
++  return (
++    <div className="st-modal-back" onClick={onClose}>
++      <div className="st-modal" role="dialog" aria-modal="true" aria-labelledby="st-req-title" onClick={(e) => e.stopPropagation()}>
++        <h3 id="st-req-title" className="st-h">Request a badge change</h3>
++        <p className="st-sub">Badges are permanent, so changes are reviewed personally by the Shammah team.</p>
++        <label className="st-label" htmlFor="st-req-badge">New badge</label>
++        <select id="st-req-badge" className="st-input" value={target} onChange={(e) => setTarget(e.target.value)}>
++          {options.map((b) => (
++            <option key={b.id} value={b.id}>{b.label}</option>
++          ))}
++        </select>
++        <label className="st-label" htmlFor="st-req-reason">Why should it change?</label>
++        <textarea id="st-req-reason" className="st-input st-textarea" rows={4} maxLength={500} value={reason} placeholder="For example: I was ordained in June 2026 and now serve as a pastor at…" onChange={(e) => setReason(e.target.value)} />
++        <p className="st-counter">{reason.trim().length < 10 ? 'At least 10 characters' : `${reason.length}/500`}</p>
++        <div className="st-modal-actions">
++          <button type="button" className="st-btn st-btn-plain" onClick={onClose} disabled={busy}>Cancel</button>
++          <button type="button" className="st-btn st-btn-primary" onClick={submit} disabled={!valid || busy}>{busy ? 'Sending…' : 'Send request'}</button>
+         </div>
+       </div>
+     </div>
+diff --git a/app/globals.css b/app/globals.css
+index 2c974a7..5186069 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -1700,3 +1700,1181 @@ a:focus-visible {
+ .mention-suggestions button:hover {
+   background: var(--bg);
+ }
++
++/* =====================================================================
++   Profiles: pictures, badges, onboarding wizard, settings page
++   ===================================================================== */
++
++/* ---------- Avatars with pictures ---------- */
++
++.avatar-img {
++  width: 100%;
++  height: 100%;
++  object-fit: cover;
++  display: block;
++  border-radius: 50%;
++}
++
++.avatar-xl {
++  width: 76px;
++  height: 76px;
++  font-size: 24px;
++  border: 3px solid var(--surface);
++  background: linear-gradient(135deg, var(--gold), var(--teal));
++  color: #fff;
++}
++
++/* ---------- Name + badge (badge sits to the right of the name in feeds) ---------- */
++
++.member-name {
++  display: inline-flex;
++  align-items: center;
++  min-width: 0;
++  max-width: 100%;
++}
++
++.member-name-inline {
++  flex-wrap: wrap;
++  gap: 2px 8px;
++}
++
++.member-name-stack {
++  flex-direction: column;
++  gap: 6px;
++}
++
++.member-name-text {
++  min-width: 0;
++  overflow-wrap: anywhere;
++}
++
++.profile-badge {
++  display: inline-flex;
++  align-items: center;
++  gap: 4px;
++  padding: 2px 9px 2px 7px;
++  border-radius: 999px;
++  font-size: 11px;
++  font-weight: 700;
++  line-height: 1.4;
++  white-space: nowrap;
++  color: var(--teal);
++  background: var(--teal-soft);
++  border: 1px solid color-mix(in srgb, var(--teal) 28%, transparent);
++}
++
++.profile-badge svg {
++  flex-shrink: 0;
++}
++
++.profile-badge-check {
++  color: var(--gold);
++}
++
++.comment-bubble .member-name {
++  display: flex;
++}
++
++/* ---------- Profile popup (cover + picture) ---------- */
++
++.profile-view {
++  padding-top: 0;
++}
++
++.profile-cover {
++  height: 96px;
++  margin: -28px -24px 0;
++  border-radius: var(--radius) var(--radius) 0 0;
++  background: linear-gradient(135deg, var(--gold-soft), var(--teal-soft));
++  background-size: cover;
++  background-position: center;
++}
++
++.profile-view-avatar {
++  margin-top: -28px;
++  border: 3px solid var(--surface);
++}
++
++.profile-view-name {
++  padding-right: 0;
++  margin-bottom: 4px;
++}
++
++.profile-about {
++  font-size: 14px;
++  line-height: 1.5;
++  color: var(--ink);
++  margin: 8px 0;
++  white-space: pre-wrap;
++}
++
++.profile-edit-link {
++  display: inline-block;
++  margin-top: 12px;
++  padding: 8px 18px;
++  border-radius: 999px;
++  border: 1px solid var(--border);
++  color: var(--ink);
++  font-size: 13px;
++  font-weight: 600;
++  text-decoration: none;
++}
++
++.profile-edit-link:hover {
++  border-color: var(--teal);
++  color: var(--teal);
++}
++
++a.dropdown-item {
++  text-decoration: none;
++  box-sizing: border-box;
++}
++
++/* ---------- Onboarding wizard ---------- */
++
++.onb-overlay {
++  position: fixed;
++  inset: 0;
++  z-index: 200;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  padding: 16px;
++  background: rgba(31, 42, 32, 0.6);
++  backdrop-filter: blur(3px);
++}
++
++.onb-panel {
++  width: 100%;
++  max-width: 460px;
++  max-height: calc(100vh - 32px);
++  max-height: calc(100dvh - 32px);
++  display: flex;
++  flex-direction: column;
++  background: var(--surface);
++  border: 1px solid var(--border);
++  border-radius: 18px;
++  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
++  overflow: hidden;
++}
++
++.onb-top {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  padding: 16px 20px 0;
++}
++
++.onb-progress {
++  display: flex;
++  gap: 6px;
++}
++
++.onb-dot {
++  width: 26px;
++  height: 4px;
++  border-radius: 999px;
++  background: var(--border);
++}
++
++.onb-dot.done {
++  background: var(--teal);
++}
++
++.onb-dot.current {
++  background: var(--gold);
++}
++
++.onb-signout {
++  background: none;
++  border: none;
++  color: var(--ink-faint);
++  font-size: 12px;
++  cursor: pointer;
++  text-decoration: underline;
++}
++
++.onb-body {
++  padding: 14px 20px 8px;
++  overflow-y: auto;
++  flex: 1;
++}
++
++.onb-step {
++  margin: 0 0 4px;
++  font-size: 12px;
++  color: var(--ink-faint);
++}
++
++.onb-title {
++  font-family: var(--font-display);
++  font-size: 22px;
++  font-weight: 600;
++  margin: 0 0 6px;
++  color: var(--ink);
++  outline: none;
++}
++
++.onb-lead {
++  font-size: 14px;
++  color: var(--ink-muted);
++  line-height: 1.45;
++  margin: 0 0 16px;
++}
++
++.onb-label {
++  display: block;
++  font-size: 13px;
++  font-weight: 600;
++  color: var(--ink);
++  margin: 14px 0 6px;
++}
++
++.onb-opt {
++  font-weight: 400;
++  color: var(--ink-faint);
++}
++
++.onb-input {
++  display: block;
++  width: 100%;
++  padding: 10px 12px;
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  font-size: 15px;
++  font-family: inherit;
++  background: var(--bg);
++  color: var(--ink);
++}
++
++.onb-input:focus {
++  outline: 2px solid var(--teal);
++  outline-offset: 0;
++  border-color: transparent;
++}
++
++.onb-textarea {
++  resize: none;
++  line-height: 1.45;
++}
++
++.onb-counter {
++  text-align: right;
++  font-size: 12px;
++  color: var(--ink-faint);
++  margin: 4px 0 0;
++}
++
++.onb-counter.near {
++  color: var(--rose);
++}
++
++.onb-hint {
++  font-size: 12px;
++  color: var(--ink-muted);
++  line-height: 1.4;
++  margin: 6px 0 0;
++}
++
++.onb-error {
++  font-size: 13px;
++  color: var(--rose);
++  background: var(--rose-soft);
++  border-radius: 8px;
++  padding: 8px 12px;
++  margin: 12px 0 0;
++  line-height: 1.4;
++}
++
++.onb-notice {
++  font-size: 13px;
++  line-height: 1.45;
++  color: var(--ink);
++  background: var(--teal-soft);
++  border-radius: 10px;
++  padding: 10px 12px;
++  margin: 12px 0 0;
++}
++
++.onb-notice.warn {
++  background: var(--gold-soft);
++}
++
++/* Badge picker */
++
++.onb-badge-group {
++  margin-top: 14px;
++}
++
++.onb-group-label {
++  margin: 0 0 6px;
++  font-size: 11px;
++  font-weight: 700;
++  letter-spacing: 0.06em;
++  text-transform: uppercase;
++  color: var(--ink-faint);
++}
++
++.onb-badge-grid {
++  display: grid;
++  grid-template-columns: repeat(2, 1fr);
++  gap: 8px;
++}
++
++.onb-badge-opt {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  padding: 10px 12px;
++  border: 1px solid var(--border);
++  border-radius: 10px;
++  background: var(--bg);
++  color: var(--ink);
++  font-size: 14px;
++  font-weight: 500;
++  text-align: left;
++  cursor: pointer;
++}
++
++.onb-badge-opt svg {
++  color: var(--teal);
++  flex-shrink: 0;
++}
++
++.onb-badge-opt.selected {
++  border-color: var(--teal);
++  background: var(--teal-soft);
++  box-shadow: 0 0 0 1px var(--teal);
++  font-weight: 600;
++}
++
++.onb-badge-opt:disabled {
++  opacity: 0.6;
++  cursor: not-allowed;
++}
++
++.onb-badge-desc {
++  font-size: 13px;
++  color: var(--ink-muted);
++  margin: 12px 0 0;
++}
++
++.onb-check {
++  display: flex;
++  align-items: flex-start;
++  gap: 8px;
++  margin-top: 12px;
++  font-size: 13px;
++  line-height: 1.4;
++  color: var(--ink);
++  cursor: pointer;
++}
++
++.onb-check input {
++  margin-top: 2px;
++  width: 16px;
++  height: 16px;
++  accent-color: var(--teal);
++}
++
++/* Photos */
++
++.onb-preview {
++  border: 1px solid var(--border);
++  border-radius: 12px;
++  overflow: hidden;
++  background: var(--bg);
++}
++
++.onb-preview-cover {
++  aspect-ratio: 3 / 1;
++  background: linear-gradient(135deg, var(--gold-soft), var(--teal-soft));
++  background-size: cover;
++  background-position: center;
++}
++
++.onb-preview-row {
++  display: flex;
++  align-items: flex-end;
++  gap: 12px;
++  padding: 0 14px 14px;
++  margin-top: -30px;
++}
++
++.onb-preview-text {
++  display: flex;
++  flex-direction: column;
++  min-width: 0;
++  padding-bottom: 2px;
++}
++
++.onb-preview-name {
++  font-size: 16px;
++  font-weight: 700;
++  color: var(--ink);
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.onb-photo-actions {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 8px;
++  margin-top: 12px;
++}
++
++.onb-btn-secondary {
++  display: inline-block;
++  padding: 9px 14px;
++  border: 1px solid var(--border);
++  border-radius: 999px;
++  background: var(--surface);
++  color: var(--ink);
++  font-size: 13px;
++  font-weight: 600;
++  cursor: pointer;
++}
++
++.onb-btn-secondary:hover {
++  border-color: var(--teal);
++}
++
++/* Location */
++
++.loc-google {
++  width: 100%;
++}
++
++.loc-chip {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  padding: 10px 12px;
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  background: var(--bg);
++  font-size: 14px;
++}
++
++.loc-label {
++  flex: 1;
++  min-width: 0;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.loc-clear {
++  background: none;
++  border: none;
++  color: var(--teal);
++  font-size: 13px;
++  font-weight: 600;
++  cursor: pointer;
++}
++
++/* Footer buttons */
++
++.onb-footer {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 8px;
++  padding: 12px 20px 16px;
++  border-top: 1px solid var(--border);
++}
++
++.onb-footer-right {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++}
++
++.onb-btn-primary {
++  background: var(--ink);
++  color: var(--bg);
++  border: none;
++  border-radius: 999px;
++  padding: 11px 22px;
++  font-size: 14px;
++  font-weight: 600;
++  cursor: pointer;
++}
++
++.onb-btn-primary:hover:not(:disabled) {
++  background: var(--teal);
++}
++
++.onb-btn-primary:disabled {
++  opacity: 0.5;
++  cursor: not-allowed;
++}
++
++.onb-btn-ghost {
++  background: none;
++  border: none;
++  color: var(--ink-muted);
++  font-size: 14px;
++  font-weight: 600;
++  padding: 10px 12px;
++  cursor: pointer;
++}
++
++@media (max-width: 480px) {
++  .onb-overlay {
++    padding: 0;
++    align-items: flex-end;
++  }
++  .onb-panel {
++    max-width: none;
++    max-height: 100dvh;
++    height: 100dvh;
++    border-radius: 0;
++    border: none;
++  }
++}
++
++/* =====================================================================
++   Profile settings page  (/settings)
++   ===================================================================== */
++
++.st-page {
++  min-height: 100vh;
++  padding-bottom: 140px;
++  background:
++    radial-gradient(900px 380px at 8% -90px, color-mix(in srgb, var(--gold) 18%, transparent), transparent 70%),
++    radial-gradient(800px 360px at 100% -70px, color-mix(in srgb, var(--teal) 18%, transparent), transparent 70%),
++    var(--bg);
++  color: var(--ink);
++}
++
++.st-wrap {
++  max-width: 640px;
++  margin: 0 auto;
++  padding: 16px 16px 0;
++  display: flex;
++  flex-direction: column;
++  gap: 16px;
++}
++
++.st-topbar {
++  position: sticky;
++  top: 0;
++  z-index: 30;
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  padding: 12px 16px;
++  background: color-mix(in srgb, var(--bg) 78%, transparent);
++  backdrop-filter: blur(14px);
++  -webkit-backdrop-filter: blur(14px);
++  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
++}
++
++.st-back {
++  width: 38px;
++  height: 38px;
++  display: grid;
++  place-items: center;
++  border-radius: 50%;
++  border: 1px solid var(--border);
++  background: var(--surface);
++  color: var(--ink);
++  transition: transform 0.15s ease, border-color 0.15s ease;
++}
++
++.st-back:hover {
++  border-color: var(--teal);
++  transform: translateX(-2px);
++}
++
++.st-title {
++  font-family: var(--font-display);
++  font-size: 20px;
++  font-weight: 600;
++  margin: 0;
++}
++
++/* Hero */
++
++.st-hero {
++  background: var(--surface);
++  border: 1px solid var(--border);
++  border-radius: 22px;
++  overflow: hidden;
++  box-shadow: 0 10px 34px rgba(31, 42, 32, 0.08);
++}
++
++.st-cover {
++  position: relative;
++  height: 172px;
++  background:
++    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.35), transparent 40%),
++    linear-gradient(135deg, var(--gold), var(--teal));
++  background-size: cover;
++  background-position: center;
++}
++
++.st-cover::after {
++  content: '';
++  position: absolute;
++  inset: 0;
++  background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent 55%);
++  pointer-events: none;
++}
++
++.st-glass-btn {
++  position: absolute;
++  right: 12px;
++  bottom: 12px;
++  z-index: 2;
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  padding: 8px 14px;
++  border-radius: 999px;
++  color: #fff;
++  font-size: 13px;
++  font-weight: 600;
++  cursor: pointer;
++  background: rgba(20, 26, 22, 0.42);
++  border: 1px solid rgba(255, 255, 255, 0.35);
++  backdrop-filter: blur(10px);
++  -webkit-backdrop-filter: blur(10px);
++  transition: background 0.15s ease, transform 0.15s ease;
++}
++
++.st-glass-btn:hover {
++  background: rgba(20, 26, 22, 0.6);
++  transform: translateY(-1px);
++}
++
++.st-hero-body {
++  padding: 0 20px 18px;
++}
++
++.st-avatar-wrap {
++  position: relative;
++  width: 112px;
++  height: 112px;
++  margin-top: -56px;
++}
++
++.st-avatar {
++  width: 112px;
++  height: 112px;
++  font-size: 34px;
++  border: 4px solid var(--surface);
++  background: linear-gradient(135deg, var(--gold), var(--teal));
++  color: #fff;
++  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
++}
++
++.st-avatar-busy {
++  position: absolute;
++  inset: 4px;
++  border-radius: 50%;
++  background: rgba(0, 0, 0, 0.4);
++}
++
++.st-avatar-busy::after {
++  content: '';
++  position: absolute;
++  inset: 34%;
++  border: 3px solid rgba(255, 255, 255, 0.4);
++  border-top-color: #fff;
++  border-radius: 50%;
++  animation: st-spin 0.8s linear infinite;
++}
++
++.st-cam {
++  position: absolute;
++  right: 2px;
++  bottom: 4px;
++  width: 36px;
++  height: 36px;
++  display: grid;
++  place-items: center;
++  border-radius: 50%;
++  background: var(--ink);
++  color: var(--bg);
++  border: 3px solid var(--surface);
++  cursor: pointer;
++  transition: transform 0.15s ease;
++}
++
++.st-cam:hover {
++  transform: scale(1.08);
++}
++
++.st-hero-id {
++  margin-top: 12px;
++}
++
++.st-name {
++  font-family: var(--font-display);
++  font-size: 26px;
++  font-weight: 600;
++  line-height: 1.2;
++  margin: 0;
++}
++
++.st-meta {
++  margin: 4px 0 0;
++  font-size: 13px;
++  color: var(--ink-muted);
++}
++
++.st-meter {
++  margin-top: 16px;
++}
++
++.st-meter-top {
++  display: flex;
++  justify-content: space-between;
++  font-size: 12px;
++  color: var(--ink-muted);
++  margin-bottom: 6px;
++}
++
++.st-meter-top b {
++  color: var(--ink);
++}
++
++.st-meter-track {
++  height: 7px;
++  border-radius: 999px;
++  background: var(--border);
++  overflow: hidden;
++}
++
++.st-meter-fill {
++  height: 100%;
++  border-radius: 999px;
++  background: linear-gradient(90deg, var(--gold), var(--teal));
++  transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
++}
++
++.st-remove-row {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 4px 16px;
++  margin: 12px 0 0;
++}
++
++.st-link {
++  background: none;
++  border: none;
++  padding: 0;
++  font-size: 12.5px;
++  font-weight: 600;
++  color: var(--ink-faint);
++  text-decoration: underline;
++  cursor: pointer;
++}
++
++.st-link:hover:not(:disabled) {
++  color: var(--rose);
++}
++
++/* Cards */
++
++.st-card {
++  background: var(--surface);
++  border: 1px solid var(--border);
++  border-radius: 20px;
++  padding: 20px;
++  box-shadow: 0 6px 22px rgba(31, 42, 32, 0.05);
++}
++
++.st-center {
++  text-align: center;
++}
++
++.st-card-head {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  margin-bottom: 14px;
++}
++
++.st-ico {
++  width: 42px;
++  height: 42px;
++  flex-shrink: 0;
++  display: grid;
++  place-items: center;
++  border-radius: 13px;
++  color: var(--teal);
++  background: linear-gradient(135deg, var(--gold-soft), var(--teal-soft));
++  border: 1px solid color-mix(in srgb, var(--teal) 18%, transparent);
++}
++
++.st-h {
++  font-family: var(--font-display);
++  font-size: 18px;
++  font-weight: 600;
++  margin: 0;
++  color: var(--ink);
++}
++
++.st-sub {
++  margin: 2px 0 0;
++  font-size: 13px;
++  color: var(--ink-muted);
++  line-height: 1.4;
++}
++
++.st-label {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++  font-size: 13px;
++  font-weight: 600;
++  margin: 14px 0 6px;
++  color: var(--ink);
++}
++
++.st-input {
++  display: block;
++  width: 100%;
++  padding: 12px 14px;
++  border-radius: 12px;
++  border: 1px solid var(--border);
++  background: var(--bg);
++  color: var(--ink);
++  font: inherit;
++  font-size: 15px;
++  transition: border-color 0.15s ease, box-shadow 0.15s ease;
++}
++
++.st-input:focus {
++  outline: none;
++  border-color: var(--teal);
++  box-shadow: 0 0 0 4px color-mix(in srgb, var(--teal) 16%, transparent);
++}
++
++.st-input:disabled {
++  opacity: 0.6;
++  cursor: not-allowed;
++}
++
++.st-textarea {
++  resize: none;
++  line-height: 1.5;
++}
++
++.st-counter {
++  text-align: right;
++  margin: 4px 2px 0;
++  font-size: 12px;
++  color: var(--ink-faint);
++}
++
++.st-counter.near {
++  color: var(--rose);
++}
++
++.st-hint {
++  margin: 6px 2px 0;
++  font-size: 12px;
++  color: var(--ink-muted);
++  line-height: 1.4;
++}
++
++.st-error {
++  margin: 8px 0 0;
++  padding: 8px 12px;
++  border-radius: 10px;
++  font-size: 13px;
++  color: var(--rose);
++  background: var(--rose-soft);
++}
++
++.st-lock {
++  display: flex;
++  gap: 10px;
++  align-items: flex-start;
++  margin-top: 10px;
++  padding: 10px 12px;
++  border-radius: 12px;
++  font-size: 13px;
++  line-height: 1.45;
++  background: var(--gold-soft);
++  color: var(--ink);
++}
++
++.st-lock svg {
++  flex-shrink: 0;
++  margin-top: 2px;
++  color: var(--gold);
++}
++
++/* Badge */
++
++.st-badge-hero {
++  display: flex;
++  align-items: center;
++  gap: 14px;
++  padding: 14px;
++  border-radius: 16px;
++  background: linear-gradient(135deg, var(--gold-soft), var(--teal-soft));
++  border: 1px solid color-mix(in srgb, var(--gold) 25%, transparent);
++  margin-bottom: 12px;
++}
++
++.st-badge-ring {
++  width: 56px;
++  height: 56px;
++  flex-shrink: 0;
++  display: grid;
++  place-items: center;
++  border-radius: 50%;
++  color: var(--teal);
++  background: var(--surface);
++  box-shadow: 0 0 0 2px var(--gold), 0 6px 16px rgba(0, 0, 0, 0.1);
++}
++
++.st-badge-text {
++  display: flex;
++  flex-direction: column;
++  min-width: 0;
++  flex: 1;
++  font-size: 13px;
++  color: var(--ink-muted);
++  gap: 2px;
++}
++
++.st-badge-text b {
++  font-size: 16px;
++  color: var(--ink);
++}
++
++.st-verified {
++  color: var(--gold);
++  font-weight: 600;
++  font-size: 13px;
++}
++
++.st-perm {
++  display: inline-flex;
++  align-items: center;
++  gap: 4px;
++  padding: 4px 10px;
++  border-radius: 999px;
++  font-size: 11px;
++  font-weight: 700;
++  color: var(--ink-muted);
++  background: var(--surface);
++  border: 1px solid var(--border);
++  white-space: nowrap;
++}
++
++/* Buttons */
++
++.st-btn {
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  gap: 6px;
++  padding: 11px 20px;
++  border-radius: 999px;
++  border: 1px solid transparent;
++  font: inherit;
++  font-size: 14px;
++  font-weight: 600;
++  cursor: pointer;
++  text-decoration: none;
++  transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
++}
++
++.st-btn:active:not(:disabled) {
++  transform: scale(0.97);
++}
++
++.st-btn:disabled {
++  opacity: 0.5;
++  cursor: not-allowed;
++}
++
++.st-btn-primary {
++  background: linear-gradient(135deg, var(--teal), color-mix(in srgb, var(--teal) 70%, var(--gold)));
++  color: #fff;
++  box-shadow: 0 6px 16px color-mix(in srgb, var(--teal) 30%, transparent);
++}
++
++.st-btn-primary:hover:not(:disabled) {
++  box-shadow: 0 8px 22px color-mix(in srgb, var(--teal) 42%, transparent);
++}
++
++.st-btn-ghost {
++  background: transparent;
++  color: var(--ink);
++  border-color: var(--border);
++}
++
++.st-btn-ghost:hover {
++  border-color: var(--teal);
++  color: var(--teal);
++}
++
++.st-btn-plain {
++  background: transparent;
++  color: var(--ink-muted);
++}
++
++.st-btn-danger {
++  background: var(--rose-soft);
++  color: var(--rose);
++}
++
++/* Save bar */
++
++.st-savebar {
++  position: fixed;
++  left: 50%;
++  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
++  z-index: 40;
++  width: min(calc(100% - 24px), 620px);
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 10px;
++  padding: 10px 10px 10px 18px;
++  border-radius: 999px;
++  background: color-mix(in srgb, var(--surface) 82%, transparent);
++  border: 1px solid var(--border);
++  backdrop-filter: blur(16px);
++  -webkit-backdrop-filter: blur(16px);
++  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.2);
++  transform: translate(-50%, 140%);
++  opacity: 0;
++  pointer-events: none;
++  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1), opacity 0.25s ease;
++}
++
++.st-savebar.show {
++  transform: translate(-50%, 0);
++  opacity: 1;
++  pointer-events: auto;
++}
++
++.st-savebar-text {
++  font-size: 13px;
++  font-weight: 600;
++  color: var(--ink);
++}
++
++.st-savebar-actions {
++  display: flex;
++  gap: 4px;
++}
++
++.st-savebar .st-btn {
++  padding: 9px 16px;
++}
++
++/* Toast + modal */
++
++.st-toast {
++  position: fixed;
++  top: calc(70px + env(safe-area-inset-top, 0px));
++  left: 50%;
++  transform: translateX(-50%);
++  z-index: 60;
++  max-width: calc(100% - 32px);
++  padding: 12px 18px;
++  border-radius: 14px;
++  font-size: 14px;
++  font-weight: 600;
++  color: #fff;
++  background: var(--teal);
++  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
++  animation: st-drop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1);
++}
++
++.st-toast.error {
++  background: var(--rose);
++}
++
++.st-modal-back {
++  position: fixed;
++  inset: 0;
++  z-index: 70;
++  display: grid;
++  place-items: center;
++  padding: 16px;
++  background: rgba(20, 26, 22, 0.55);
++  backdrop-filter: blur(4px);
++  animation: st-fade 0.2s ease;
++}
++
++.st-modal {
++  width: 100%;
++  max-width: 440px;
++  max-height: 90vh;
++  overflow-y: auto;
++  padding: 22px;
++  border-radius: 22px;
++  background: var(--surface);
++  border: 1px solid var(--border);
++  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
++  animation: st-rise 0.3s ease both;
++}
++
++.st-modal-actions {
++  display: flex;
++  justify-content: flex-end;
++  gap: 6px;
++  margin-top: 14px;
++}
++
++/* Loading skeletons */
++
++.st-skeleton {
++  border-radius: 20px;
++  background: linear-gradient(100deg, var(--surface) 30%, var(--border) 50%, var(--surface) 70%);
++  background-size: 200% 100%;
++  animation: st-shimmer 1.4s linear infinite;
++}
++
++.st-skel-hero { height: 300px; }
++.st-skel-card { height: 150px; }
++
++/* Motion */
++
++.st-rise {
++  animation: st-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
++  animation-delay: var(--d, 0ms);
++}
++
++@keyframes st-rise {
++  from { opacity: 0; transform: translateY(14px); }
++  to { opacity: 1; transform: none; }
++}
++@keyframes st-drop {
++  from { opacity: 0; transform: translate(-50%, -12px); }
++  to { opacity: 1; transform: translate(-50%, 0); }
++}
++@keyframes st-fade { from { opacity: 0; } to { opacity: 1; } }
++@keyframes st-spin { to { transform: rotate(360deg); } }
++@keyframes st-shimmer { to { background-position: -200% 0; } }
++
++@media (prefers-reduced-motion: reduce) {
++  .st-rise, .st-toast, .st-modal, .st-modal-back, .st-skeleton, .st-avatar-busy::after {
++    animation: none;
++  }
++  .st-savebar, .st-meter-fill { transition: none; }
++}
++
++[data-theme='dark'] .st-hero,
++[data-theme='dark'] .st-card {
++  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
++}
++
++@media (max-width: 480px) {
++  .st-cover { height: 140px; }
++  .st-name { font-size: 22px; }
++  .st-badge-hero { flex-wrap: wrap; }
++}
+diff --git a/app/lib/badges.js b/app/lib/badges.js
+index 7af9cd2..71c758e 100644
+--- a/app/lib/badges.js
++++ b/app/lib/badges.js
+@@ -1,32 +1,76 @@
+-// Member badges — chosen once at onboarding, locked afterward.
+-// Icons are simple emoji for zero dependency; swap for SVGs later if desired.
++// Member badges. The ids here must match the rows in the `badges` table
++// (supabase/migrations/001_onboarding.sql). To add a badge: add it here AND
++// run  insert into badges (id, label, sort_order) values (...)  in Supabase.
++//
++// Icons are 24x24 stroke paths (one or more `d` strings) drawn by <BadgeIcon />.
++
++export const BADGE_GROUPS = [
++  { id: 'community', label: 'Community' },
++  { id: 'serving', label: 'Serving' },
++  { id: 'ministry', label: 'Ministry & leadership' },
++];
+ 
+ export const BADGES = [
+-  { id: 'believer', label: 'Believer', icon: '✝️', description: 'Following Christ' },
+-  { id: 'student', label: 'Student', icon: '📖', description: 'Growing in the Word' },
+-  { id: 'teacher', label: 'Teacher', icon: '💡', description: 'Teaching & discipling' },
+-  { id: 'missionary', label: 'Missionary', icon: '🌍', description: 'On the mission field' },
+-  { id: 'pastor', label: 'Pastor', icon: '🕊️', description: 'Shepherding a flock' },
+-  { id: 'bishop', label: 'Bishop', icon: '✝️', description: 'Overseeing churches' },
+-  { id: 'reverend', label: 'Reverend', icon: '🙏', description: 'Ordained minister' },
+-  { id: 'deacon', label: 'Deacon', icon: '🤝', description: 'Serving the body' },
+-  { id: 'elder', label: 'Elder', icon: '🌿', description: 'Church leadership' },
+-  { id: 'evangelist', label: 'Evangelist', icon: '📣', description: 'Spreading the Gospel' },
+-  { id: 'worship_leader', label: 'Worship Leader', icon: '🎵', description: 'Leading worship' },
+-  { id: 'volunteer', label: 'Volunteer', icon: '❤️', description: 'Serving with joy' },
++  // ----- Community -----
++  { id: 'believer', label: 'Believer', group: 'community', desc: 'Following Jesus and growing in faith.',
++    icon: ['M12 3v18', 'M6 9h12'] },
++  { id: 'seeker', label: 'Seeker', group: 'community', desc: 'Exploring the Christian faith.',
++    icon: ['M12 21a9 9 0 100-18 9 9 0 000 18z', 'M15.5 8.5l-2 5-5 2 2-5z'] },
++  { id: 'student', label: 'Student', group: 'community', desc: 'Learning in school, college or Bible study.',
++    icon: ['M2 9l10-5 10 5-10 5z', 'M6 11v5c3 2 9 2 12 0v-5'] },
++  { id: 'intercessor', label: 'Intercessor', group: 'community', desc: 'Standing in the gap in prayer.',
++    icon: ['M12 21s-8-5.2-8-11a4.5 4.5 0 018-2.6A4.5 4.5 0 0120 10c0 5.8-8 11-8 11z'] },
++
++  // ----- Serving -----
++  { id: 'teacher', label: 'Teacher', group: 'serving', desc: 'Teaching the Word (Sunday school, small groups, classes).',
++    icon: ['M2 5h7a3 3 0 013 3v13a2 2 0 00-2-2H2z', 'M22 5h-7a3 3 0 00-3 3v13a2 2 0 012-2h8z'] },
++  { id: 'worship', label: 'Worship Leader', group: 'serving', desc: 'Leading God\u2019s people in worship and music.',
++    icon: ['M9 18V5l12-2v13', 'M9 18a3 3 0 11-6 0 3 3 0 016 0z', 'M21 16a3 3 0 11-6 0 3 3 0 016 0z'] },
++  { id: 'youth', label: 'Youth Leader', group: 'serving', desc: 'Discipling teens and young adults.',
++    icon: ['M13 2L3 14h8l-1 8 10-12h-8z'] },
++  { id: 'deacon', label: 'Deacon / Deaconess', group: 'serving', desc: 'Serving the church family.',
++    icon: ['M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z'] },
++  { id: 'elder', label: 'Elder', group: 'serving', desc: 'A leader who helps oversee the church.',
++    icon: ['M3 9l9-6 9 6', 'M4 21h16', 'M6 21V9', 'M10 21V9', 'M14 21V9', 'M18 21V9'] },
++  { id: 'evangelist', label: 'Evangelist', group: 'serving', desc: 'Sharing the gospel far and wide.',
++    icon: ['M3 11v2a1 1 0 001 1h3l7 4V6L7 10H4a1 1 0 00-1 1z', 'M17.5 9.5a4 4 0 010 5'] },
++  { id: 'missionary', label: 'Missionary', group: 'serving', desc: 'Serving God across cultures and borders.',
++    icon: ['M12 21a9 9 0 100-18 9 9 0 000 18z', 'M3 12h18', 'M12 3a14 14 0 010 18', 'M12 3a14 14 0 000 18'] },
++  { id: 'chaplain', label: 'Chaplain', group: 'serving', desc: 'Caring for people in hospitals, schools, prisons, the forces.',
++    icon: ['M12 3c2 3 3 4.5 3 6.5a3 3 0 11-6 0c0-2 1-3.5 3-6.5z', 'M8 21h8', 'M12 15v6'] },
++
++  // ----- Ministry & leadership -----
++  { id: 'pastor', label: 'Pastor', group: 'ministry', desc: 'Shepherding a congregation.',
++    icon: ['M10 21V8a4 4 0 118 0 3 3 0 01-3 3'] },
++  { id: 'reverend', label: 'Reverend', group: 'ministry', desc: 'Ordained minister.',
++    icon: ['M12 21a9 9 0 100-18 9 9 0 000 18z', 'M12 7v10', 'M8.5 10.5h7'] },
++  { id: 'priest', label: 'Priest', group: 'ministry', desc: 'Ordained priest.',
++    icon: ['M8 3h8v5a4 4 0 01-8 0z', 'M12 12v6', 'M8 21h8'] },
++  { id: 'bishop', label: 'Bishop', group: 'ministry', desc: 'Overseeing pastors and churches.',
++    icon: ['M7 17c0-6 2-12 5-14 3 2 5 8 5 14', 'M5 17h14', 'M5 21h14', 'M12 7v6', 'M9.5 10h5'] },
++  { id: 'apostle', label: 'Apostle', group: 'ministry', desc: 'Sent to plant and strengthen churches.',
++    icon: ['M22 2L11 13', 'M22 2l-7 20-4-9-9-4z'] },
++  { id: 'prophet', label: 'Prophet', group: 'ministry', desc: 'Speaking God\u2019s word to His people.',
++    icon: ['M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z', 'M12 15a3 3 0 100-6 3 3 0 000 6z'] },
+ ];
+ 
+-export function getBadge(id) {
+-  if (!id) return null;
+-  return BADGES.find((b) => b.id === id) || { id, label: id, icon: '✦', description: '' };
++const BY_ID = Object.fromEntries(BADGES.map((b) => [b.id, b]));
++
++export function badgeById(id) {
++  return id ? BY_ID[id] || null : null;
+ }
+ 
+-/** Days remaining before the user can change their display name again. */
++// ---- helpers used by the settings page ----
++
++/** Days remaining before the person can change their display name again (0 = can change now). */
+ export function nameChangeDaysLeft(changedAt) {
+   if (!changedAt) return 0;
+   const then = new Date(changedAt).getTime();
+   if (Number.isNaN(then)) return 0;
+   const unlock = then + 90 * 24 * 60 * 60 * 1000;
+-  const left = Math.ceil((unlock - Date.now()) / (24 * 60 * 60 * 1000));
+-  return Math.max(0, left);
++  return Math.max(0, Math.ceil((unlock - Date.now()) / (24 * 60 * 60 * 1000)));
++}
++
++export function getBadge(id) {
++  return badgeById(id);
+ }
+diff --git a/app/page.js b/app/page.js
+index 92b4049..8b41e6a 100644
+--- a/app/page.js
++++ b/app/page.js
+@@ -3,6 +3,10 @@ import { Fragment, useEffect, useRef, useState } from 'react';
+ import { supabase } from '../lib/supabaseClient';
+ import { CATEGORY_STYLES, categoryStyle, initials } from './lib/postDisplay';
+ import PostCard from './components/PostCard';
++import Link from 'next/link';
++import Avatar from './components/Avatar';
++import MemberName from './components/MemberName';
++import OnboardingWizard from './components/OnboardingWizard';
+ 
+ const SECTIONS = [
+   { id: 'all', label: 'All' },
+@@ -201,7 +205,9 @@ export default function Feed() {
+   async function loadProfile(userId) {
+     const { data, error } = await supabase
+       .from('profiles')
+-      .select('display_name, role, church_id')
++      .select(
++        'display_name, role, church_id, badge, badge_verified, avatar_url, cover_url, about, location_label, onboarding_completed_at, display_name_changed_at'
++      )
+       .eq('id', userId)
+       .single();
+     if (!error) setProfile(data);
+@@ -210,7 +216,7 @@ export default function Feed() {
+   async function loadPosts(category) {
+     let query = supabase
+       .from('posts')
+-      .select('id, text_content, media_url, media_type, created_at, category_id, profiles(display_name)')
++      .select('id, text_content, media_url, media_type, created_at, category_id, profiles(display_name, avatar_url, badge, badge_verified)')
+       .order('created_at', { ascending: false })
+       .limit(50);
+     if (category) query = query.eq('category_id', category);
+@@ -533,10 +539,9 @@ export default function Feed() {
+               {session ? (
+                 <div className="avatar-menu">
+                   <button className="me-btn" onClick={() => setMenuOpen((o) => !o)}>
+-                    <span className="avatar avatar-sm">
+-                      {initials(headerName)}
++                    <Avatar name={headerName} src={profile?.avatar_url} className="avatar-sm">
+                       <i className="status-dot" />
+-                    </span>
++                    </Avatar>
+                     <span className="me-name">{headerName}</span>
+                   </button>
+                   {menuOpen && (
+@@ -553,6 +558,9 @@ export default function Feed() {
+                       >
+                         View profile
+                       </button>
++                      <Link className="dropdown-item" href="/settings" onClick={() => setMenuOpen(false)}>
++                        Profile settings
++                      </Link>
+                       <button className="dropdown-item danger" onClick={handleSignOut}>
+                         Log out
+                       </button>
+@@ -629,15 +637,40 @@ export default function Feed() {
+               ×
+             </button>
+             <div className="profile-view">
+-              <span className="avatar avatar-lg">{initials(headerName)}</span>
+-              <h2 className="auth-panel-title">{headerName}</h2>
++              <div
++                className="profile-cover"
++                style={profile?.cover_url ? { backgroundImage: `url(${profile.cover_url})` } : undefined}
++              />
++              <Avatar name={headerName} src={profile?.avatar_url} className="avatar-lg profile-view-avatar" />
++              <h2 className="auth-panel-title profile-view-name">
++                <MemberName name={headerName} badge={profile?.badge} verified={profile?.badge_verified} layout="stack" />
++              </h2>
++              {profile?.about && <p className="profile-about">{profile.about}</p>}
++              {profile?.location_label && <p className="mut">📍 {profile.location_label}</p>}
+               <p className="mut">{session.user.email}</p>
+-              {profile?.role && <span className="category-chip">{profile.role}</span>}
++              {profile?.role && profile.role !== 'member' && <span className="category-chip">{profile.role}</span>}
++              <Link className="profile-edit-link" href="/settings" onClick={() => setShowProfile(false)}>
++                Edit profile
++              </Link>
+             </div>
+           </div>
+         </div>
+       )}
+ 
++      {/* Mandatory onboarding: blocks the app until the profile is set up */}
++      {session && profile && !profile.onboarding_completed_at && (
++        <OnboardingWizard
++          key={session.user.id}
++          session={session}
++          profile={profile}
++          onDone={(updated) => {
++            setProfile(updated);
++            loadPosts(activeCategory);
++          }}
++          onSignOut={handleSignOut}
++        />
++      )}
++
+       {/* ========== Auth Panel ========== */}
+       {showAuth && (
+         <div className="auth-overlay" onClick={() => setShowAuth(false)}>
+diff --git a/app/settings/page.js b/app/settings/page.js
+new file mode 100644
+index 0000000..80d9158
+--- /dev/null
++++ b/app/settings/page.js
+@@ -0,0 +1,50 @@
++'use client';
++import { useEffect, useState } from 'react';
++import Link from 'next/link';
++import { supabase } from '../../lib/supabaseClient';
++import ProfileSettings from '../components/ProfileSettings';
++
++export default function SettingsPage() {
++  const [session, setSession] = useState(undefined); // undefined = still checking
++
++  // Use the same light/dark choice as the main app
++  useEffect(() => {
++    const saved = localStorage.getItem('shammah-theme');
++    document.documentElement.setAttribute('data-theme', saved === 'dark' ? 'dark' : 'light');
++  }, []);
++
++  useEffect(() => {
++    supabase.auth.getSession().then(({ data }) => setSession(data.session));
++    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
++    return () => subscription.unsubscribe();
++  }, []);
++
++  return (
++    <div className="st-page">
++      <header className="st-topbar">
++        <Link href="/" className="st-back" aria-label="Back to Shammah">
++          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
++            <path d="M15 18l-6-6 6-6" />
++          </svg>
++        </Link>
++        <h1 className="st-title">Profile settings</h1>
++      </header>
++
++      {session === undefined && (
++        <div className="st-wrap">
++          <div className="st-skeleton st-skel-hero" />
++        </div>
++      )}
++      {session === null && (
++        <div className="st-wrap">
++          <div className="st-card st-center">
++            <h2 className="st-h">Please sign in</h2>
++            <p className="st-sub">Sign in to edit your profile.</p>
++            <Link href="/" className="st-btn st-btn-primary">Go to Shammah</Link>
++          </div>
++        </div>
++      )}
++      {session && <ProfileSettings session={session} />}
++    </div>
++  );
++}
+diff --git a/supabase/migrations/005_badge_requests.sql b/supabase/migrations/005_badge_requests.sql
+new file mode 100644
+index 0000000..1b685f5
+--- /dev/null
++++ b/supabase/migrations/005_badge_requests.sql
+@@ -0,0 +1,43 @@
++-- Shammah migration 005: badge change requests (the "Request a badge change" button)
++-- Safe to re-run.
++
++create table if not exists badge_requests (
++  id uuid primary key default gen_random_uuid(),
++  user_id uuid not null references profiles(id) on delete cascade,
++  current_badge text references badges(id),
++  requested_badge text not null references badges(id),
++  reason text not null check (char_length(reason) between 10 and 500),
++  status text not null default 'pending' check (status in ('pending', 'approved', 'declined')),
++  created_at timestamptz not null default now(),
++  reviewed_at timestamptz
++);
++
++-- one waiting request per person
++create unique index if not exists one_pending_badge_request
++  on badge_requests (user_id) where status = 'pending';
++
++alter table badge_requests enable row level security;
++grant select, insert on badge_requests to authenticated;
++
++drop policy if exists "people read their own badge requests" on badge_requests;
++create policy "people read their own badge requests" on badge_requests
++  for select to authenticated using (auth.uid() = user_id);
++
++drop policy if exists "people file their own badge requests" on badge_requests;
++create policy "people file their own badge requests" on badge_requests
++  for insert to authenticated with check (auth.uid() = user_id and status = 'pending');
++
++notify pgrst, 'reload schema';
++
++-- ---------------------------------------------------------------
++-- HOW YOU REVIEW REQUESTS (SQL Editor):
++--   select r.id, p.display_name, r.current_badge, r.requested_badge, r.reason, r.created_at
++--   from badge_requests r join profiles p on p.id = r.user_id
++--   where r.status = 'pending' order by r.created_at;
++--
++-- To approve one:
++--   update profiles set badge = '<requested_badge>' where id = '<user_id>';
++--   update badge_requests set status = 'approved', reviewed_at = now() where id = '<request id>';
++-- To decline:
++--   update badge_requests set status = 'declined', reviewed_at = now() where id = '<request id>';
++-- ---------------------------------------------------------------
