@@ -69,6 +69,10 @@ export default function Feed() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [churches, setChurches] = useState([]);
+  // Category ticker: gently auto-scrolls to hint there's more to see,
+  // and stops the moment the person interacts or a few seconds after login.
+  const categoryBarRef = useRef(null);
+  const [tickerOn, setTickerOn] = useState(true);
 
   // Polls
   const [isPoll, setIsPoll] = useState(false);
@@ -107,74 +111,72 @@ export default function Feed() {
     if (typeof window !== 'undefined') localStorage.setItem('shammah-theme', dark ? 'dark' : 'light');
   }, [dark]);
 
-  // Category ticker: a gentle "there's more here" hint. It nudges back and forth on
-  // its own, stops the instant someone touches it themselves, respects "reduce motion"
-  // accessibility settings, and otherwise settles down a few seconds after sign-in
-  // (once someone's signed in, they're an active user tapping things — not browsing
-  // passively — so the motion should get out of the way).
-  const tickerRef = useRef(null);
-  const tickerMotion = useRef({ raf: null, dir: 1, stopped: false });
+  // Ticker auto-scrolls the category bar a little at a time; stops on its
+  // own a few seconds after sign-in, or immediately if the person touches
+  // or taps it themselves.
+  useEffect(() => {
+    if (!tickerOn) return;
+    const el = categoryBarRef.current;
+    if (!el || el.scrollWidth <= el.clientWidth + 1) return;
+    const id = setInterval(() => {
+      if (!el) return;
+      el.scrollLeft += 1.5;
+      if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 1) {
+        el.scrollLeft = 0;
+      }
+    }, 40);
+    return () => clearInterval(id);
+  }, [tickerOn]);
 
-  function stopTickerMotion() {
-    const m = tickerMotion.current;
-    m.stopped = true;
-    if (m.raf) cancelAnimationFrame(m.raf);
-    m.raf = null;
+  useEffect(() => {
+    if (!session) return;
+    const t = setTimeout(() => setTickerOn(false), 5000);
+    return () => clearTimeout(t);
+  }, [session?.user?.id]);
+
+  function stopTicker() {
+    setTickerOn(false);
   }
 
-  useEffect(() => {
-    const m = tickerMotion.current;
-    if (section !== 'all' || m.stopped) return undefined;
-    if (typeof window === 'undefined') return undefined;
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      m.stopped = true;
-      return undefined;
-    }
+  // Custom drag-to-scroll for the category bar — handles mouse and touch
+  // identically via Pointer Events, so it never depends on (or fights)
+  // the browser's own native touch-scroll behavior.
+  const dragRef = useRef({ active: false, startX: 0, startScroll: 0, moved: false });
 
-    const SPEED = 26; // pixels per second — slow; a hint, not a distraction
-    let last = performance.now();
+  function categoryPointerDown(e) {
+    stopTicker();
+    const el = categoryBarRef.current;
+    if (!el) return;
+    dragRef.current = { active: true, startX: e.clientX, startScroll: el.scrollLeft, moved: false };
+    el.setPointerCapture?.(e.pointerId);
+  }
 
-    function step(now) {
-      const mm = tickerMotion.current;
-      if (mm.stopped) return;
-      const el = tickerRef.current;
-      if (!el) {
-        mm.raf = requestAnimationFrame(step);
-        return;
-      }
-      const dt = (now - last) / 1000;
-      last = now;
-      const max = el.scrollWidth - el.clientWidth;
-      if (max <= 4) {
-        // Nothing hidden off-screen (e.g. a very wide phone) — no need to hint anything
-        mm.raf = requestAnimationFrame(step);
-        return;
-      }
-      let next = el.scrollLeft + mm.dir * SPEED * dt;
-      if (next >= max) {
-        next = max;
-        mm.dir = -1;
-      } else if (next <= 0) {
-        next = 0;
-        mm.dir = 1;
-      }
-      el.scrollLeft = next;
-      mm.raf = requestAnimationFrame(step);
-    }
+  function categoryPointerMove(e) {
+    const d = dragRef.current;
+    if (!d.active) return;
+    const el = categoryBarRef.current;
+    if (!el) return;
+    const dx = e.clientX - d.startX;
+    if (Math.abs(dx) > 4) d.moved = true;
+    el.scrollLeft = d.startScroll - dx;
+  }
 
-    m.raf = requestAnimationFrame(step);
+  function categoryPointerUp() {
+    dragRef.current.active = false;
+  }
+
+  // A chip's click should only select the category if this gesture was a
+  // tap, not the release of a drag.
+  function categoryChipClick(fn) {
     return () => {
-      if (m.raf) cancelAnimationFrame(m.raf);
-      m.raf = null;
+      if (dragRef.current.moved) {
+        dragRef.current.moved = false;
+        return;
+      }
+      stopTicker();
+      fn();
     };
-  }, [section]);
-
-  // Settle the motion a few seconds after the person is signed in
-  useEffect(() => {
-    if (!session) return undefined;
-    const timer = setTimeout(stopTickerMotion, 3000);
-    return () => clearTimeout(timer);
-  }, [session?.user?.id]);
+  }
 
   // Churches list is real data — load it once we know who's signed in
   useEffect(() => {
@@ -580,29 +582,30 @@ export default function Feed() {
 
             {section === 'all' && (
               <nav
-                className="category-ticker"
+                className="category-bar"
                 aria-label="Browse by category"
-                ref={tickerRef}
-                onPointerDown={stopTickerMotion}
-                onWheel={stopTickerMotion}
+                ref={categoryBarRef}
+                onPointerDown={categoryPointerDown}
+                onPointerMove={categoryPointerMove}
+                onPointerUp={categoryPointerUp}
+                onPointerCancel={categoryPointerUp}
+                onWheel={stopTicker}
               >
                 <button
-                  className={`ticker-item${activeCategory === null ? ' active' : ''}`}
-                  onClick={() => setActiveCategory(null)}
+                  className={`filter-chip${activeCategory === null ? ' active' : ''}`}
+                  onClick={categoryChipClick(() => setActiveCategory(null))}
                 >
                   All
                 </button>
                 {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
-                  <Fragment key={id}>
-                    <span className="ticker-dot" aria-hidden="true" />
-                    <button
-                      className={`ticker-item${activeCategory === id ? ' active' : ''}`}
-                      style={{ '--accent': c.accent }}
-                      onClick={() => setActiveCategory(id)}
-                    >
-                      {c.label}
-                    </button>
-                  </Fragment>
+                  <button
+                    key={id}
+                    className={`filter-chip${activeCategory === id ? ' active' : ''}`}
+                    style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
+                    onClick={categoryChipClick(() => setActiveCategory(id))}
+                  >
+                    {c.label}
+                  </button>
                 ))}
               </nav>
             )}

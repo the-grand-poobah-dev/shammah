@@ -80,7 +80,7 @@ a:focus-visible {
   }
 }
 
-/* Sticky header stack — topbar and the section/category rows stay pinned together while scrolling */
+/* Sticky header stack (topbar always visible; secondary collapses on scroll) */
 
 .sticky-header {
   position: sticky;
@@ -91,10 +91,6 @@ a:focus-visible {
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   padding-top: env(safe-area-inset-top, 0px);
-}
-
-.header-secondary {
-  padding-bottom: 2px;
 }
 
 /* Topbar */
@@ -545,61 +541,63 @@ a:focus-visible {
 }
 
 
-/* Category ticker — a slim, tape-like strip, deliberately not styled like the section pills above it */
+/* Category filter bar — horizontal slider */
 
-.category-ticker {
+.category-bar {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 2px 14px 10px;
+  gap: 8px;
   overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 14px 12px;
   scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  -webkit-mask-image: linear-gradient(to right, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
-  mask-image: linear-gradient(to right, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
 }
 
-.category-ticker::-webkit-scrollbar {
+.category-bar:active {
+  cursor: grabbing;
+}
+
+.category-bar::-webkit-scrollbar {
   display: none;
 }
 
-.ticker-item {
+.filter-chip {
   flex-shrink: 0;
-  border: none;
-  background: none;
-  padding: 4px 1px 6px;
-  font-size: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent, var(--ink-faint)) 24%, transparent);
+  background: color-mix(in srgb, var(--accent, var(--ink-faint)) 13%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--accent-text, var(--ink-muted));
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  white-space: nowrap;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
 }
 
-.ticker-item:hover {
-  color: var(--ink-muted);
+.filter-chip:hover {
+  border-color: var(--accent, var(--ink-faint));
 }
 
-.ticker-item:active {
-  transform: scale(0.97);
+.filter-chip:active {
+  transform: scale(0.96);
 }
 
-.ticker-item.active {
-  color: var(--accent, var(--ink));
-  border-bottom-color: var(--accent, var(--ink));
-}
-
-.ticker-dot {
-  flex-shrink: 0;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--ink-faint);
-  opacity: 0.55;
+.filter-chip.active {
+  background: color-mix(in srgb, var(--accent, var(--ink)) 55%, transparent);
+  border-color: var(--accent, var(--ink));
+  color: #fff;
+  font-weight: 700;
+  box-shadow:
+    0 0 0 1px var(--accent, var(--ink)),
+    0 0 12px 2px color-mix(in srgb, var(--accent, var(--ink)) 65%, transparent),
+    0 0 26px 4px color-mix(in srgb, var(--accent, var(--ink)) 35%, transparent);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent, var(--ink)) 85%, transparent);
 }
 
 /* Compose box */
