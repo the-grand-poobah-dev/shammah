@@ -1,0 +1,61 @@
+diff --git a/app/page.js b/app/page.js
+index 6025126..92b4049 100644
+--- a/app/page.js
++++ b/app/page.js
+@@ -39,6 +39,9 @@ const TABS = [
+   { id: 'menu', label: 'Menu', icon: ICONS.menu },
+ ];
+ 
++// Most options a single poll can have (text and photo options share this limit)
++const MAX_POLL_OPTIONS = 6;
++
+ export default function Feed() {
+   const [posts, setPosts] = useState([]);
+   const [session, setSession] = useState(null);
+@@ -278,7 +281,7 @@ export default function Feed() {
+   }
+ 
+   function addPollOption() {
+-    if (pollOptions.length < 4) setPollOptions((o) => [...o, { label: '', file: null, preview: null }]);
++    if (pollOptions.length < MAX_POLL_OPTIONS) setPollOptions((o) => [...o, { label: '', file: null, preview: null }]);
+   }
+ 
+   function removePollOption(i) {
+@@ -907,13 +910,13 @@ export default function Feed() {
+                     )}
+                   </div>
+                 ))}
+-                {pollOptions.length < 4 && (
++                {pollOptions.length < MAX_POLL_OPTIONS && (
+                   <button type="button" className="poll-add-option" onClick={addPollOption}>
+                     + Add option
+                   </button>
+                 )}
+                 <p className="poll-hint">
+-                  Up to 4 options, each with an optional photo. Votes are anonymous — no one, including you as
++                  Up to {MAX_POLL_OPTIONS} options, each with an optional photo. Votes are anonymous — no one, including you as
+                   the poster, sees who picked what.
+                 </p>
+               </div>
+diff --git a/supabase/migrations/002_fix_posts_policy.sql b/supabase/migrations/002_fix_posts_policy.sql
+new file mode 100644
+index 0000000..bfaec6e
+--- /dev/null
++++ b/supabase/migrations/002_fix_posts_policy.sql
+@@ -0,0 +1,16 @@
++-- Shammah migration 002: fix "new row violates row-level security policy for table posts"
++--
++-- Cause: 001_onboarding.sql replaced the posts insert rule with one that requires
++-- profiles.onboarding_completed_at to be set. The app never sets that column
++-- (the wizard in the repo writes onboarded_at, and page.js doesn't show it yet),
++-- so nobody could post.
++--
++-- This puts back the original rule: you can post as yourself. We'll tighten it again
++-- once the wizard is wired into the app and existing users have been through it.
++
++drop policy if exists "onboarded users can insert their own posts" on posts;
++drop policy if exists "users can insert their own posts" on posts;
++create policy "users can insert their own posts" on posts
++  for insert with check (auth.uid() = author_id);
++
++notify pgrst, 'reload schema';

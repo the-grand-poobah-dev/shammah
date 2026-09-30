@@ -1241,9 +1241,15 @@ a:focus-visible {
   transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.poll-option-btn:hover:not(:disabled) {
-  border-color: var(--accent, var(--teal));
-  background: var(--accent-soft, var(--teal-soft));
+/* Tints are mixed from the category colour with transparency, so they sit
+   gently behind the text in both light and dark mode (the old solid pastel
+   fills turned light text unreadable in dark mode). Hover only where a real
+   pointer exists, so a tap on a phone doesn't leave the option stuck lit. */
+@media (hover: hover) {
+  .poll-option-btn:hover:not(:disabled) {
+    border-color: var(--accent, var(--teal));
+    background: color-mix(in srgb, var(--accent, var(--teal)) 12%, transparent);
+  }
 }
 
 .poll-option-btn:disabled {
@@ -1262,17 +1268,25 @@ a:focus-visible {
   align-items: center;
   font-size: 14px;
   font-weight: 500;
+  color: var(--ink);
 }
 
 .poll-result.mine {
   border-color: var(--accent, var(--teal));
+  font-weight: 600;
 }
 
 .poll-result-bar {
   position: absolute;
   inset: 0;
-  background: var(--accent-soft, var(--teal-soft));
+  background: color-mix(in srgb, var(--accent, var(--teal)) 14%, transparent);
   z-index: 0;
+  transition: width 0.3s ease;
+}
+
+/* Your pick: a slightly deeper tint than the others, still light enough to read through */
+.poll-result.mine .poll-result-bar {
+  background: color-mix(in srgb, var(--accent, var(--teal)) 26%, transparent);
 }
 
 .poll-result-label,
