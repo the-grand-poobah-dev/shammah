@@ -1,5 +1,6 @@
 import { Fraunces, Work_Sans } from 'next/font/google';
 import './globals.css';
+import './cx.css'; // categories + churches pages
 
 const fraunces = Fraunces({
   subsets: ['latin'],

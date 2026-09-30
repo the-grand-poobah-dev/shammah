@@ -561,6 +561,9 @@ export default function Feed() {
                       <Link className="dropdown-item" href="/settings" onClick={() => setMenuOpen(false)}>
                         Profile settings
                       </Link>
+                      <Link className="dropdown-item" href="/categories" onClick={() => setMenuOpen(false)}>
+                        Browse categories
+                      </Link>
                       <button className="dropdown-item danger" onClick={handleSignOut}>
                         Log out
                       </button>
@@ -867,12 +870,16 @@ export default function Feed() {
             <h2 className="section-title">Churches on Shammah</h2>
             {churches.length === 0 && <p className="mut">No churches yet.</p>}
             {churches.map((c) => (
-              <div className="church-row" key={c.id}>
+              <Link className="church-row" key={c.id} href={`/churches/${c.id}`}>
                 <span className="avatar">{initials(c.name)}</span>
                 <span className="church-name">{c.name}</span>
                 {profile?.church_id === c.id && <span className="category-chip">Your church</span>}
-              </div>
+              </Link>
             ))}
+            <div className="church-tab-actions">
+              <Link className="signin-btn" href="/churches">Search all churches</Link>
+              <Link className="signup-btn" href="/churches/new">Start a church</Link>
+            </div>
           </>
         )}
 
