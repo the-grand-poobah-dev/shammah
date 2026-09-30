@@ -141,13 +141,24 @@ export default function PostCard({ post, session, openAuth, pollOptions, pollCou
         </div>
       </div>
 
-      <p className="post-text">{post.text_content}</p>
+      {post.text_content && <p className="post-text">{post.text_content}</p>}
 
       {pollOptions && (
         <PollBlock options={pollOptions} counts={pollCounts} myVote={myVote} canVote={!!session} onVote={onVote} />
       )}
 
-      {post.media_url && post.media_type === 'image' && <img className="post-media" src={post.media_url} alt="" />}
+      {/* Media: image / video / reel / audio / podcast */}
+      {post.media_url && post.media_type === 'image' && (
+        <img className="post-media" src={post.media_url} alt="" loading="lazy" />
+      )}
+      {post.media_url && (post.media_type === 'video' || post.media_type === 'reel') && (
+        <video className="post-media" src={post.media_url} controls playsInline preload="metadata" />
+      )}
+      {post.media_url && (post.media_type === 'audio' || post.media_type === 'podcast') && (
+        <div className="post-audio-wrap">
+          <audio className="post-audio" src={post.media_url} controls preload="metadata" />
+        </div>
+      )}
 
       <div className="post-actions">
         <ReactionBar targetType="post" targetId={post.id} session={session} onRequireSignIn={requireSignIn} />

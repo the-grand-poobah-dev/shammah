@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Avatar from './components/Avatar';
 import MemberName from './components/MemberName';
 import OnboardingWizard from './components/OnboardingWizard';
+import { uploadPostMedia } from './lib/mediaUpload';
 
 const SECTIONS = [
   { id: 'all', label: 'All' },
@@ -57,6 +58,9 @@ export default function Feed() {
   const [composeCategory, setComposeCategory] = useState('prayer');
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState('');
+  const [mediaFile, setMediaFile] = useState(null);
+  const [mediaPreview, setMediaPreview] = useState(null);
+  const [mediaUploading, setMediaUploading] = useState(false);
 
   // Auth panel state
   const [showAuth, setShowAuth] = useState(false);
@@ -319,7 +323,7 @@ export default function Feed() {
   async function handleCreatePost(e) {
     e.preventDefault();
     const text = composeText.trim();
-    if (!text || !session) return;
+    if ((!text && !mediaFile) || !session) return;
     const cleanOptions = pollOptions.filter((o) => o.label.trim() || o.file);
     if (isPoll && cleanOptions.length < 2) {
       setPostError('A poll needs at least 2 options.');
@@ -352,13 +356,34 @@ export default function Feed() {
       }
       setPollUploading(false);
     }
+
+    // Real media upload (image / video / audio)
+    let media_url = null;
+    let media_type = null;
+    if (mediaFile) {
+      setMediaUploading(true);
+      try {
+        const uploaded = await uploadPostMedia(mediaFile, session.user.id);
+        media_url = uploaded.url;
+        media_type = uploaded.type;
+      } catch (err) {
+        setPostError(err.message || 'Media upload failed');
+        setPosting(false);
+        setMediaUploading(false);
+        return;
+      }
+      setMediaUploading(false);
+    }
+
     const { data: inserted, error } = await supabase
       .from('posts')
       .insert({
         author_id: session.user.id,
         church_id: profile?.church_id ?? null,
         category_id: composeCategory,
-        text_content: text,
+        text_content: text || null,
+        media_url,
+        media_type,
       })
       .select('id')
       .single();
@@ -381,6 +406,8 @@ export default function Feed() {
     setComposeText('');
     setIsPoll(false);
     setPollOptions([{ label: '', file: null, preview: null }, { label: '', file: null, preview: null }]);
+    setMediaFile(null);
+    setMediaPreview(null);
     // Show the new post: if a different category is filtered, jump to the one just posted in
     if (activeCategory && activeCategory !== composeCategory) {
       setActiveCategory(composeCategory);
@@ -907,8 +934,50 @@ export default function Feed() {
               placeholder={isPoll ? 'Ask your question…' : 'Share something with your church family…'}
               rows={3}
               maxLength={2000}
-              required
             />
+
+            {/* Media attachment */}
+            <div className="compose-media">
+              {mediaPreview && (
+                <div className="media-preview">
+                  {mediaFile?.type?.startsWith('image/') && (
+                    <img src={mediaPreview} alt="Preview" />
+                  )}
+                  {mediaFile?.type?.startsWith('video/') && (
+                    <video src={mediaPreview} controls playsInline />
+                  )}
+                  {mediaFile?.type?.startsWith('audio/') && (
+                    <audio src={mediaPreview} controls />
+                  )}
+                  <button
+                    type="button"
+                    className="media-remove"
+                    onClick={() => {
+                      setMediaFile(null);
+                      setMediaPreview(null);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+              <label className="media-pick">
+                📷 / 🎥 / 🎵 Add photo, video or audio
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setMediaFile(f);
+                    setMediaPreview(URL.createObjectURL(f));
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              {mediaUploading && <p className="mut-light">Uploading media…</p>}
+            </div>
 
             <label className="poll-toggle">
               <input
@@ -980,11 +1049,12 @@ export default function Feed() {
                 disabled={
                   posting ||
                   pollUploading ||
-                  !composeText.trim() ||
+                  mediaUploading ||
+                  (!composeText.trim() && !mediaFile) ||
                   (isPoll && pollOptions.filter((o) => o.label.trim() || o.file).length < 2)
                 }
               >
-                {pollUploading ? 'Uploading…' : posting ? 'Posting…' : 'Post'}
+                {mediaUploading || pollUploading ? 'Uploading…' : posting ? 'Posting…' : 'Post'}
               </button>
             </div>
             {postError && <p className="auth-message">{postError}</p>}
