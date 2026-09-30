@@ -69,8 +69,6 @@ export default function Feed() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [churches, setChurches] = useState([]);
-  const [headerHidden, setHeaderHidden] = useState(false);
-  const lastScrollY = useRef(0);
 
   // Polls
   const [isPoll, setIsPoll] = useState(false);
@@ -109,23 +107,74 @@ export default function Feed() {
     if (typeof window !== 'undefined') localStorage.setItem('shammah-theme', dark ? 'dark' : 'light');
   }, [dark]);
 
-  // Auto-hide secondary header (sections + categories) on scroll down; show on scroll up
+  // Category ticker: a gentle "there's more here" hint. It nudges back and forth on
+  // its own, stops the instant someone touches it themselves, respects "reduce motion"
+  // accessibility settings, and otherwise settles down a few seconds after sign-in
+  // (once someone's signed in, they're an active user tapping things — not browsing
+  // passively — so the motion should get out of the way).
+  const tickerRef = useRef(null);
+  const tickerMotion = useRef({ raf: null, dir: 1, stopped: false });
+
+  function stopTickerMotion() {
+    const m = tickerMotion.current;
+    m.stopped = true;
+    if (m.raf) cancelAnimationFrame(m.raf);
+    m.raf = null;
+  }
+
   useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY || 0;
-      const delta = y - lastScrollY.current;
-      if (y < 48) {
-        setHeaderHidden(false);
-      } else if (delta > 8) {
-        setHeaderHidden(true);
-      } else if (delta < -8) {
-        setHeaderHidden(false);
+    const m = tickerMotion.current;
+    if (section !== 'all' || m.stopped) return undefined;
+    if (typeof window === 'undefined') return undefined;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      m.stopped = true;
+      return undefined;
+    }
+
+    const SPEED = 26; // pixels per second — slow; a hint, not a distraction
+    let last = performance.now();
+
+    function step(now) {
+      const mm = tickerMotion.current;
+      if (mm.stopped) return;
+      const el = tickerRef.current;
+      if (!el) {
+        mm.raf = requestAnimationFrame(step);
+        return;
       }
-      lastScrollY.current = y;
+      const dt = (now - last) / 1000;
+      last = now;
+      const max = el.scrollWidth - el.clientWidth;
+      if (max <= 4) {
+        // Nothing hidden off-screen (e.g. a very wide phone) — no need to hint anything
+        mm.raf = requestAnimationFrame(step);
+        return;
+      }
+      let next = el.scrollLeft + mm.dir * SPEED * dt;
+      if (next >= max) {
+        next = max;
+        mm.dir = -1;
+      } else if (next <= 0) {
+        next = 0;
+        mm.dir = 1;
+      }
+      el.scrollLeft = next;
+      mm.raf = requestAnimationFrame(step);
+    }
+
+    m.raf = requestAnimationFrame(step);
+    return () => {
+      if (m.raf) cancelAnimationFrame(m.raf);
+      m.raf = null;
     };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [section]);
+
+  // Settle the motion a few seconds after the person is signed in
+  useEffect(() => {
+    if (!session) return undefined;
+    const timer = setTimeout(stopTickerMotion, 3000);
+    return () => clearTimeout(timer);
+  }, [session?.user?.id]);
 
   // Churches list is real data — load it once we know who's signed in
   useEffect(() => {
@@ -514,7 +563,7 @@ export default function Feed() {
         </header>
 
         {tab === 'home' && (
-          <div className={`header-secondary${headerHidden ? ' is-collapsed' : ''}`}>
+          <div className="header-secondary">
             <nav className="section-menu" aria-label="Browse by type">
               <div className="section-menu-inner">
                 {SECTIONS.map((s) => (
@@ -530,22 +579,30 @@ export default function Feed() {
             </nav>
 
             {section === 'all' && (
-              <nav className="category-bar" aria-label="Browse by category">
+              <nav
+                className="category-ticker"
+                aria-label="Browse by category"
+                ref={tickerRef}
+                onPointerDown={stopTickerMotion}
+                onWheel={stopTickerMotion}
+              >
                 <button
-                  className={`filter-chip${activeCategory === null ? ' active' : ''}`}
+                  className={`ticker-item${activeCategory === null ? ' active' : ''}`}
                   onClick={() => setActiveCategory(null)}
                 >
                   All
                 </button>
                 {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
-                  <button
-                    key={id}
-                    className={`filter-chip${activeCategory === id ? ' active' : ''}`}
-                    style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
-                    onClick={() => setActiveCategory(id)}
-                  >
-                    {c.label}
-                  </button>
+                  <Fragment key={id}>
+                    <span className="ticker-dot" aria-hidden="true" />
+                    <button
+                      className={`ticker-item${activeCategory === id ? ' active' : ''}`}
+                      style={{ '--accent': c.accent }}
+                      onClick={() => setActiveCategory(id)}
+                    >
+                      {c.label}
+                    </button>
+                  </Fragment>
                 ))}
               </nav>
             )}

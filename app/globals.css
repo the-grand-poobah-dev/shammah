@@ -80,7 +80,7 @@ a:focus-visible {
   }
 }
 
-/* Sticky header stack (topbar always visible; secondary collapses on scroll) */
+/* Sticky header stack — topbar and the section/category rows stay pinned together while scrolling */
 
 .sticky-header {
   position: sticky;
@@ -94,17 +94,7 @@ a:focus-visible {
 }
 
 .header-secondary {
-  max-height: 140px;
-  overflow: hidden;
-  transition: max-height 0.28s ease, opacity 0.22s ease, margin 0.28s ease;
-  opacity: 1;
-}
-
-.header-secondary.is-collapsed {
-  max-height: 0;
-  opacity: 0;
-  pointer-events: none;
-  margin: 0;
+  padding-bottom: 2px;
 }
 
 /* Topbar */
@@ -555,52 +545,61 @@ a:focus-visible {
 }
 
 
-/* Category filter bar — horizontal slider */
+/* Category ticker — a slim, tape-like strip, deliberately not styled like the section pills above it */
 
-.category-bar {
+.category-ticker {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 14px 10px;
   overflow-x: auto;
-  overflow-y: hidden;
-  padding: 8px 14px 12px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
 }
 
-.category-bar::-webkit-scrollbar {
+.category-ticker::-webkit-scrollbar {
   display: none;
 }
 
-.filter-chip {
+.ticker-item {
   flex-shrink: 0;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--ink-muted);
-  border-radius: 999px;
-  padding: 7px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  scroll-snap-align: start;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
-}
-
-.filter-chip:hover {
-  border-color: var(--accent, var(--ink-faint));
-}
-
-.filter-chip:active {
-  transform: scale(0.96);
-}
-
-.filter-chip.active {
-  background: var(--accent-soft, var(--ink));
-  border-color: var(--accent, var(--ink));
-  color: var(--accent-text, var(--bg));
+  border: none;
+  background: none;
+  padding: 4px 1px 6px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.ticker-item:hover {
+  color: var(--ink-muted);
+}
+
+.ticker-item:active {
+  transform: scale(0.97);
+}
+
+.ticker-item.active {
+  color: var(--accent, var(--ink));
+  border-bottom-color: var(--accent, var(--ink));
+}
+
+.ticker-dot {
+  flex-shrink: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  opacity: 0.55;
 }
 
 /* Compose box */
