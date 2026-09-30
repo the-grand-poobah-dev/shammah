@@ -589,15 +589,13 @@ a:focus-visible {
 }
 
 .filter-chip.active {
-  background: color-mix(in srgb, var(--accent, var(--ink)) 55%, transparent);
+  background: color-mix(in srgb, var(--accent, var(--ink)) 50%, transparent);
   border-color: var(--accent, var(--ink));
   color: #fff;
   font-weight: 700;
-  box-shadow:
-    0 0 0 1px var(--accent, var(--ink)),
-    0 0 12px 2px color-mix(in srgb, var(--accent, var(--ink)) 65%, transparent),
-    0 0 26px 4px color-mix(in srgb, var(--accent, var(--ink)) 35%, transparent);
-  text-shadow: 0 0 8px color-mix(in srgb, var(--accent, var(--ink)) 85%, transparent);
+  /* one soft, low-key glow so the selected category is easy to spot without shouting */
+  box-shadow: 0 0 10px 0 color-mix(in srgb, var(--accent, var(--ink)) 35%, transparent);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 
 /* Compose box */

@@ -147,8 +147,9 @@ export default function Feed() {
     stopTicker();
     const el = categoryBarRef.current;
     if (!el) return;
+    // Don't capture the pointer yet: capturing on press redirects the
+    // follow-up click to the bar itself, so chips would never get tapped.
     dragRef.current = { active: true, startX: e.clientX, startScroll: el.scrollLeft, moved: false };
-    el.setPointerCapture?.(e.pointerId);
   }
 
   function categoryPointerMove(e) {
@@ -157,8 +158,13 @@ export default function Feed() {
     const el = categoryBarRef.current;
     if (!el) return;
     const dx = e.clientX - d.startX;
-    if (Math.abs(dx) > 4) d.moved = true;
-    el.scrollLeft = d.startScroll - dx;
+    if (!d.moved && Math.abs(dx) > 4) {
+      d.moved = true;
+      // Now it's a real drag, so it's safe to capture the pointer; this keeps
+      // the drag smooth even if the finger/mouse leaves the bar.
+      el.setPointerCapture?.(e.pointerId);
+    }
+    if (d.moved) el.scrollLeft = d.startScroll - dx;
   }
 
   function categoryPointerUp() {
