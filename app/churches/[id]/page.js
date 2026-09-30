@@ -176,6 +176,7 @@ export default function ChurchPage() {
         {tab === 'posts' && (
           <PostList
             session={session}
+            profile={profile}
             filter={{ column: 'church_id', value: id }}
             onRequireSignIn={() => router.push('/')}
             emptyTitle="No posts from this church yet"

@@ -11,9 +11,14 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 function admin() {
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+    ? rawUrl
+    : 'https://placeholder.supabase.co';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key';
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    url,
+    key,
     { auth: { persistSession: false, autoRefreshToken: false } }
   );
 }

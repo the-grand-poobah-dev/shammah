@@ -10,7 +10,7 @@ import { useSession } from '../../lib/useSession';
 export default function CategoryPage() {
   const { id } = useParams();
   const router = useRouter();
-  const { session } = useSession();
+  const { session, profile } = useSession();
   const cat = CATEGORY_STYLES[id];
 
   if (!cat) {
@@ -44,6 +44,7 @@ export default function CategoryPage() {
 
         <PostList
           session={session}
+          profile={profile}
           filter={{ column: 'category_id', value: id }}
           onRequireSignIn={() => router.push('/')}
           emptyTitle={`No posts in ${cat.label} yet`}

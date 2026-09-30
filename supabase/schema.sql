@@ -146,6 +146,8 @@ create table if not exists posts (
   media_thumbnail_url     text,
   source                  text not null default 'user',  -- user | rss | import
   external_guid           text,
+  is_pinned               boolean not null default false,
+  pinned_at               timestamptz,
   created_at              timestamptz not null default now(),
   constraint posts_media_type_check
     check (media_type is null or media_type in ('image','video','audio','reel','podcast')),

@@ -6,6 +6,7 @@ import Avatar from './Avatar';
 import MemberName from './MemberName';
 import ReactionBar from './ReactionBar';
 import CommentThread from './CommentThread';
+import PinIcon from './PinIcon';
 
 function PollBlock({ options, counts, myVote, canVote, onVote }) {
   const total = options.reduce((sum, o) => sum + (counts[o.id] || 0), 0);
@@ -84,7 +85,17 @@ function PollBlock({ options, counts, myVote, canVote, onVote }) {
   );
 }
 
-export default function PostCard({ post, session, openAuth, pollOptions, pollCounts, myVote, onVote }) {
+export default function PostCard({
+  post,
+  session,
+  openAuth,
+  pollOptions,
+  pollCounts,
+  myVote,
+  onVote,
+  isAdmin,
+  onTogglePin,
+}) {
   const [commentCount, setCommentCount] = useState(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareMsg, setShareMsg] = useState('');
@@ -130,15 +141,50 @@ export default function PostCard({ post, session, openAuth, pollOptions, pollCou
 
   return (
     <article
-      className="post-card"
+      className={`post-card${post.is_pinned ? ' is-pinned' : ''}`}
       style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
     >
+      {post.is_pinned && (
+        <div className="pinned-announcement-banner">
+          <div className="pinned-badge-left">
+            <span className="pinned-icon-wrapper" aria-hidden="true">
+              <PinIcon className="pinned-icon" />
+            </span>
+            <span className="pinned-banner-text">Pinned Announcement</span>
+          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              className="header-pin-btn is-pinned"
+              onClick={() => onTogglePin?.(post)}
+              title="Unpin this announcement from the top of the feed"
+              aria-label="Unpin announcement"
+            >
+              <PinIcon className="pin-action-icon" />
+              <span>Unpin</span>
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="post-header">
         <Avatar name={authorName} src={author?.avatar_url} />
         <div className="post-header-text">
           <MemberName name={authorName} badge={author?.badge} verified={author?.badge_verified} nameClassName="post-author" />
           <span className="category-chip">{cat.label}</span>
         </div>
+        {!post.is_pinned && isAdmin && (
+          <button
+            type="button"
+            className="header-pin-btn"
+            onClick={() => onTogglePin?.(post)}
+            title="Pin this announcement to top of feed"
+            aria-label="Pin announcement to top"
+          >
+            <PinIcon className="pin-action-icon" />
+            <span>Pin</span>
+          </button>
+        )}
       </div>
 
       {post.text_content && <p className="post-text">{post.text_content}</p>}
@@ -170,6 +216,18 @@ export default function PostCard({ post, session, openAuth, pollOptions, pollCou
           <span className="action-icon">↗</span>
           Share
         </button>
+        {isAdmin && (
+          <button
+            type="button"
+            className={`action-btn pin-btn${post.is_pinned ? ' is-pinned' : ''}`}
+            onClick={() => onTogglePin?.(post)}
+            title={post.is_pinned ? 'Unpin announcement' : 'Pin to top of feed'}
+            aria-label={post.is_pinned ? 'Unpin post' : 'Pin post'}
+          >
+            <PinIcon className="action-icon pin-action-icon" />
+            <span>{post.is_pinned ? 'Pinned' : 'Pin'}</span>
+          </button>
+        )}
         {shareMsg && <span className="share-toast">{shareMsg}</span>}
       </div>
 

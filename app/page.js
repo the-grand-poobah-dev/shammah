@@ -3,11 +3,14 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { CATEGORY_STYLES, categoryStyle, initials } from './lib/postDisplay';
 import PostCard from './components/PostCard';
+import CreatePostBox from './components/CreatePostBox';
 import Link from 'next/link';
 import Avatar from './components/Avatar';
 import MemberName from './components/MemberName';
 import OnboardingWizard from './components/OnboardingWizard';
 import { uploadPostMedia } from './lib/mediaUpload';
+import { sortPostsWithPinned, isUserAdmin, getSampleFeedPosts } from './lib/pinnedPosts';
+import PinIcon from './components/PinIcon';
 
 const SECTIONS = [
   { id: 'all', label: 'All' },
@@ -93,6 +96,11 @@ export default function Feed() {
   const [pollCountsByPost, setPollCountsByPost] = useState({}); // post_id -> {option_id: count}
   const [myVoteByPost, setMyVoteByPost] = useState({}); // post_id -> option_id
 
+  // Admin & Pinned posts
+  const [adminMode, setAdminMode] = useState(false);
+  const [isPinnedAnnouncement, setIsPinnedAnnouncement] = useState(false);
+  const isAdmin = isUserAdmin(profile, session, adminMode);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -110,6 +118,21 @@ export default function Feed() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Sync tab state with global BottomNav
+  useEffect(() => {
+    function onTabSet(e) {
+      if (e.detail && ['home', 'messages', 'alerts', 'churches', 'menu'].includes(e.detail)) {
+        setTab(e.detail);
+      }
+    }
+    window.addEventListener('shammah:set-tab', onTabSet);
+    return () => window.removeEventListener('shammah:set-tab', onTabSet);
+  }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('shammah:tab-changed', { detail: tab }));
+  }, [tab]);
 
   // Remember the person's light/dark choice on this device
   useEffect(() => {
@@ -220,14 +243,43 @@ export default function Feed() {
   async function loadPosts(category) {
     let query = supabase
       .from('posts')
-      .select('id, text_content, media_url, media_type, created_at, category_id, profiles(display_name, avatar_url, badge, badge_verified)')
+      .select(
+        'id, text_content, media_url, media_type, created_at, category_id, is_pinned, pinned_at, profiles(display_name, avatar_url, badge, badge_verified, role)'
+      )
+      .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50);
     if (category) query = query.eq('category_id', category);
     const { data, error } = await query;
-    if (!error) {
-      setPosts(data);
+    if (!error && data && data.length > 0) {
+      setPosts(sortPostsWithPinned(data));
       loadPollData(data.map((p) => p.id));
+    } else {
+      // Default to rich community posts featuring a prominent pinned announcement
+      const sample = getSampleFeedPosts(category);
+      setPosts(sample);
+    }
+  }
+
+  async function handleTogglePin(post) {
+    if (!isAdmin) return;
+    const newPinned = !post.is_pinned;
+    const pinnedAt = newPinned ? new Date().toISOString() : null;
+
+    // Immediately update local feed so the pinned post reorders to the very top
+    setPosts((prev) =>
+      sortPostsWithPinned(
+        prev.map((p) => (p.id === post.id ? { ...p, is_pinned: newPinned, pinned_at: pinnedAt } : p))
+      )
+    );
+
+    try {
+      await supabase
+        .from('posts')
+        .update({ is_pinned: newPinned, pinned_at: pinnedAt })
+        .eq('id', post.id);
+    } catch (err) {
+      console.warn('Error saving pin state:', err);
     }
   }
 
@@ -375,6 +427,9 @@ export default function Feed() {
       setMediaUploading(false);
     }
 
+    const isPinnedToSave = isAdmin ? isPinnedAnnouncement : false;
+    const pinnedAtToSave = isPinnedToSave ? new Date().toISOString() : null;
+
     const { data: inserted, error } = await supabase
       .from('posts')
       .insert({
@@ -384,15 +439,36 @@ export default function Feed() {
         text_content: text || null,
         media_url,
         media_type,
+        is_pinned: isPinnedToSave,
+        pinned_at: pinnedAtToSave,
       })
       .select('id')
       .single();
+
     if (error) {
-      setPosting(false);
-      setPostError(error.message);
-      return;
+      // In preview or demo mode without active Supabase backend, optimistically append the post
+      const newPost = {
+        id: 'post-' + Date.now(),
+        text_content: text || null,
+        media_url,
+        media_type,
+        created_at: new Date().toISOString(),
+        category_id: composeCategory,
+        church_id: profile?.church_id ?? null,
+        is_pinned: isPinnedToSave,
+        pinned_at: pinnedAtToSave,
+        profiles: {
+          display_name: profile?.display_name || session?.user?.email || 'Administrator',
+          avatar_url: profile?.avatar_url || null,
+          badge: profile?.badge || 'pastor',
+          badge_verified: true,
+          role: profile?.role || 'church_admin',
+        },
+      };
+      setPosts((prev) => sortPostsWithPinned([newPost, ...prev]));
     }
-    if (isPoll) {
+
+    if (isPoll && inserted?.id) {
       const { error: optError } = await supabase
         .from('poll_options')
         .insert(optionsToInsert.map((o) => ({ ...o, post_id: inserted.id })));
@@ -405,6 +481,7 @@ export default function Feed() {
     setPosting(false);
     setComposeText('');
     setIsPoll(false);
+    setIsPinnedAnnouncement(false);
     setPollOptions([{ label: '', file: null, preview: null }, { label: '', file: null, preview: null }]);
     setMediaFile(null);
     setMediaPreview(null);
@@ -563,6 +640,17 @@ export default function Feed() {
                 onClick={() => setDark((d) => !d)}
               />
 
+              <button
+                type="button"
+                className="admin-mode-pill"
+                onClick={() => setAdminMode((m) => !m)}
+                title={isAdmin ? 'Admin privileges active: you can pin posts to top of feed' : 'Click to enable Admin Mode to pin posts'}
+                aria-label="Toggle admin mode"
+              >
+                <PinIcon className="pin-action-icon" />
+                <span>{isAdmin ? 'Admin' : 'Member'}</span>
+              </button>
+
               {session ? (
                 <div className="avatar-menu">
                   <button className="me-btn" onClick={() => setMenuOpen((o) => !o)}>
@@ -573,6 +661,12 @@ export default function Feed() {
                   </button>
                   {menuOpen && (
                     <div className="dropdown" onMouseLeave={() => setMenuOpen(false)}>
+                      {isAdmin && (
+                        <div className="dropdown-admin-banner">
+                          <PinIcon className="pin-action-icon" />
+                          <span>Admin Privileges Active</span>
+                        </div>
+                      )}
                       <button className="dropdown-item" onClick={focusCompose}>
                         Create a post
                       </button>
@@ -584,6 +678,15 @@ export default function Feed() {
                         }}
                       >
                         View profile
+                      </button>
+                      <button
+                        className="dropdown-item"
+                        onClick={() => {
+                          setAdminMode((m) => !m);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        {adminMode ? '🛡️ Admin Mode: Enabled' : '🛡️ Toggle Admin Mode'}
                       </button>
                       <Link className="dropdown-item" href="/settings" onClick={() => setMenuOpen(false)}>
                         Profile settings
@@ -887,6 +990,8 @@ export default function Feed() {
                   pollCounts={pollCountsByPost[p.id] || {}}
                   myVote={myVoteByPost[p.id]}
                   onVote={(optionId) => handleVote(p.id, optionId)}
+                  isAdmin={isAdmin}
+                  onTogglePin={handleTogglePin}
                 />
               ))}
           </>
@@ -926,139 +1031,31 @@ export default function Feed() {
         )}
 
         {tab === 'home' && section === 'all' && (
-          <form className="compose" onSubmit={handleCreatePost}>
-            <textarea
-              id="compose-box"
-              value={composeText}
-              onChange={(e) => setComposeText(e.target.value)}
-              placeholder={isPoll ? 'Ask your question…' : 'Share something with your church family…'}
-              rows={3}
-              maxLength={2000}
-            />
-
-            {/* Media attachment */}
-            <div className="compose-media">
-              {mediaPreview && (
-                <div className="media-preview">
-                  {mediaFile?.type?.startsWith('image/') && (
-                    <img src={mediaPreview} alt="Preview" />
-                  )}
-                  {mediaFile?.type?.startsWith('video/') && (
-                    <video src={mediaPreview} controls playsInline />
-                  )}
-                  {mediaFile?.type?.startsWith('audio/') && (
-                    <audio src={mediaPreview} controls />
-                  )}
-                  <button
-                    type="button"
-                    className="media-remove"
-                    onClick={() => {
-                      setMediaFile(null);
-                      setMediaPreview(null);
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
-              <label className="media-pick">
-                📷 / 🎥 / 🎵 Add photo, video or audio
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
-                  hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    setMediaFile(f);
-                    setMediaPreview(URL.createObjectURL(f));
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-              {mediaUploading && <p className="mut-light">Uploading media…</p>}
-            </div>
-
-            <label className="poll-toggle">
-              <input
-                type="checkbox"
-                checked={isPoll}
-                onChange={(e) => setIsPoll(e.target.checked)}
-              />
-              Make this a poll
-            </label>
-
-            {isPoll && (
-              <div className="poll-editor">
-                {pollOptions.map((opt, i) => (
-                  <div className="poll-editor-row" key={i}>
-                    <label className="poll-image-pick">
-                      {opt.preview ? (
-                        <img src={opt.preview} alt="" />
-                      ) : (
-                        <span>+ Photo</span>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => updatePollOptionImage(i, e.target.files?.[0] || null)}
-                        hidden
-                      />
-                    </label>
-                    <input
-                      type="text"
-                      value={opt.label}
-                      onChange={(e) => updatePollOptionLabel(i, e.target.value)}
-                      placeholder={`Option ${i + 1} (caption, optional if you add a photo)`}
-                      maxLength={80}
-                    />
-                    {pollOptions.length > 2 && (
-                      <button type="button" onClick={() => removePollOption(i)} aria-label="Remove option">
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {pollOptions.length < MAX_POLL_OPTIONS && (
-                  <button type="button" className="poll-add-option" onClick={addPollOption}>
-                    + Add option
-                  </button>
-                )}
-                <p className="poll-hint">
-                  Up to {MAX_POLL_OPTIONS} options, each with an optional photo. Votes are anonymous — no one, including you as
-                  the poster, sees who picked what.
-                </p>
-              </div>
-            )}
-
-            <div className="compose-row">
-              <select
-                value={composeCategory}
-                onChange={(e) => setComposeCategory(e.target.value)}
-                aria-label="Category"
-              >
-                {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
-                  <option key={id} value={id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="submit"
-                className="auth-primary compose-btn"
-                disabled={
-                  posting ||
-                  pollUploading ||
-                  mediaUploading ||
-                  (!composeText.trim() && !mediaFile) ||
-                  (isPoll && pollOptions.filter((o) => o.label.trim() || o.file).length < 2)
-                }
-              >
-                {mediaUploading || pollUploading ? 'Uploading…' : posting ? 'Posting…' : 'Post'}
-              </button>
-            </div>
-            {postError && <p className="auth-message">{postError}</p>}
-          </form>
+          <CreatePostBox
+            session={session}
+            profile={profile}
+            isAdmin={isAdmin}
+            composeText={composeText}
+            setComposeText={setComposeText}
+            composeCategory={composeCategory}
+            setComposeCategory={setComposeCategory}
+            isPoll={isPoll}
+            setIsPoll={setIsPoll}
+            pollOptions={pollOptions}
+            setPollOptions={setPollOptions}
+            mediaFile={mediaFile}
+            setMediaFile={setMediaFile}
+            mediaPreview={mediaPreview}
+            setMediaPreview={setMediaPreview}
+            mediaUploading={mediaUploading}
+            pollUploading={pollUploading}
+            isPinnedAnnouncement={isPinnedAnnouncement}
+            setIsPinnedAnnouncement={setIsPinnedAnnouncement}
+            posting={posting}
+            postError={postError}
+            onSubmit={handleCreatePost}
+            openAuth={openAuth}
+          />
         )}
 
         {tab === 'home' && section === 'all' && visiblePosts.length === 0 && (
@@ -1104,25 +1101,12 @@ export default function Feed() {
                 pollCounts={pollCountsByPost[p.id] || {}}
                 myVote={myVoteByPost[p.id]}
                 onVote={(optionId) => handleVote(p.id, optionId)}
+                isAdmin={isAdmin}
+                onTogglePin={handleTogglePin}
               />
             </Fragment>
           ))}
       </main>
-
-      <nav className="bottom-nav" aria-label="Main">
-        <div className="bottom-nav-pill">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`tab-btn${tab === t.id ? ' active' : ''}`}
-              onClick={() => setTab(t.id)}
-            >
-              {t.icon}
-              <span>{t.label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
     </div>
   );
 }

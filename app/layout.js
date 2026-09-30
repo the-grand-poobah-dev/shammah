@@ -1,6 +1,7 @@
 import { Fraunces, Work_Sans } from 'next/font/google';
 import './globals.css';
 import './cx.css'; // categories + churches pages
+import BottomNav from './components/BottomNav';
 
 const fraunces = Fraunces({
   subsets: ['latin'],
@@ -31,7 +32,10 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${workSans.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <BottomNav />
+      </body>
     </html>
   );
 }

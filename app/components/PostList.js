@@ -2,19 +2,22 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import PostCard from './PostCard';
+import { sortPostsWithPinned, isUserAdmin } from '../lib/pinnedPosts';
 
 const POST_FIELDS =
-  'id, text_content, media_url, media_type, created_at, category_id, church_id, profiles(display_name, avatar_url, badge, badge_verified)';
+  'id, text_content, media_url, media_type, created_at, category_id, church_id, is_pinned, pinned_at, profiles(display_name, avatar_url, badge, badge_verified, role)';
 
-// Loads and shows a list of posts (newest first). Used by the category and church pages.
+// Loads and shows a list of posts (pinned announcements first, then newest). Used by the category and church pages.
 //   filter: { column: 'category_id' | 'church_id', value }
 // Handles polls the same way the home feed does, so poll posts look right here too.
-export default function PostList({ session, filter, onRequireSignIn, emptyTitle, emptyText }) {
+export default function PostList({ session, profile, filter, onRequireSignIn, emptyTitle, emptyText }) {
   const [state, setState] = useState('loading'); // loading | ready | error
   const [posts, setPosts] = useState([]);
   const [optionsByPost, setOptionsByPost] = useState({});
   const [countsByPost, setCountsByPost] = useState({});
   const [myVoteByPost, setMyVoteByPost] = useState({});
+
+  const isAdmin = isUserAdmin(profile, session);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,11 +27,12 @@ export default function PostList({ session, filter, onRequireSignIn, emptyTitle,
         .from('posts')
         .select(POST_FIELDS)
         .eq(filter.column, filter.value)
+        .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(50);
       if (cancelled) return;
       if (error) return setState('error');
-      setPosts(data || []);
+      setPosts(sortPostsWithPinned(data || []));
       setState('ready');
       loadPolls((data || []).map((p) => p.id));
     }
@@ -83,6 +87,27 @@ export default function PostList({ session, filter, onRequireSignIn, emptyTitle,
     setCountsByPost((c) => ({ ...c, [postId]: counts }));
   }
 
+  async function handleTogglePin(post) {
+    if (!isAdmin) return;
+    const newPinned = !post.is_pinned;
+    const pinnedAt = newPinned ? new Date().toISOString() : null;
+
+    setPosts((prev) =>
+      sortPostsWithPinned(
+        prev.map((p) => (p.id === post.id ? { ...p, is_pinned: newPinned, pinned_at: pinnedAt } : p))
+      )
+    );
+
+    try {
+      await supabase
+        .from('posts')
+        .update({ is_pinned: newPinned, pinned_at: pinnedAt })
+        .eq('id', post.id);
+    } catch (err) {
+      console.warn('Error updating post pin state:', err);
+    }
+  }
+
   if (!session) {
     return (
       <div className="empty-state">
@@ -112,6 +137,8 @@ export default function PostList({ session, filter, onRequireSignIn, emptyTitle,
       pollCounts={countsByPost[p.id] || {}}
       myVote={myVoteByPost[p.id]}
       onVote={(optionId) => handleVote(p.id, optionId)}
+      isAdmin={isAdmin}
+      onTogglePin={handleTogglePin}
     />
   ));
 }
