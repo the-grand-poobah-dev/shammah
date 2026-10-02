@@ -88,13 +88,18 @@ export default function PostOptionsMenu({ post, authorId, authorName, onReportCl
     showToast('Post link copied to clipboard');
   }
 
+  const [confirmingBlock, setConfirmingBlock] = useState(false);
+
   function handleBlockAuthor() {
     if (!authorId) return;
-    if (confirm(`Block ${authorName}? You won't see their posts or comments.`)) {
-      toggleBlock(authorId);
-      hidePost(post.id);
-      showToast(`Blocked ${authorName}`);
+    if (!confirmingBlock) {
+      setConfirmingBlock(true);
+      return;
     }
+    toggleBlock(authorId);
+    hidePost(post.id);
+    setConfirmingBlock(false);
+    showToast(`Blocked ${authorName}`);
   }
 
   return (
@@ -148,7 +153,7 @@ export default function PostOptionsMenu({ post, authorId, authorName, onReportCl
               {authorId && (
                 <button type="button" className="post-opt-row danger" onClick={handleBlockAuthor}>
                   <UserX size={15} className="opt-icon" />
-                  <span>Block @{authorName}</span>
+                  <span>{confirmingBlock ? `Tap again to confirm block @${authorName}` : `Block @${authorName}`}</span>
                 </button>
               )}
 

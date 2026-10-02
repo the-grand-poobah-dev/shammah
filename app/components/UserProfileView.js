@@ -37,6 +37,7 @@ import {
 } from '../lib/profileManager';
 import { getStoredReposts } from '../lib/postInteractions';
 import { categoryStyle } from '../lib/postDisplay';
+import VerificationBadgeModal from './VerificationBadgeModal';
 
 export default function UserProfileView({
   targetProfile,
@@ -50,6 +51,7 @@ export default function UserProfileView({
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [privacySettings, setPrivacySettings] = useState({ isLocked: false, inboxPermission: 'everyone' });
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [shareToast, setShareToast] = useState('');
 
   const isMe = currentUser?.id && targetProfile?.id === currentUser.id;
@@ -176,6 +178,16 @@ export default function UserProfileView({
                   >
                     <Shield size={15} />
                     <span>Privacy</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="profile-action-btn highlight"
+                    onClick={() => setShowVerificationModal(true)}
+                    title="Request Ministry Verification Badge (Kes. 300 / mo)"
+                  >
+                    <Sparkles size={15} />
+                    <span>Get Verified</span>
                   </button>
                 </>
               ) : (
@@ -550,6 +562,25 @@ export default function UserProfileView({
               </div>
             </div>
 
+            <div className="profile-privacy-section" style={{ marginTop: 18 }}>
+              <h4>Official Ministry Verification Badge</h4>
+              <p className="visibility-desc">
+                Request an official blue verification checkmark &amp; pastoral badge (Pastor, Worship Leader, Elder).
+                Only Kes. 300 / mo with quarterly, bi-annual, and annual discount plans.
+              </p>
+              <button
+                type="button"
+                className="profile-privacy-toggle-btn on"
+                onClick={() => {
+                  setShowPrivacyModal(false);
+                  setShowVerificationModal(true);
+                }}
+              >
+                <Sparkles size={16} />
+                <span>Request Verification Badge</span>
+              </button>
+            </div>
+
             <div className="visibility-modal-actions">
               <button
                 type="button"
@@ -561,6 +592,15 @@ export default function UserProfileView({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Verification Badge Modal */}
+      {showVerificationModal && (
+        <VerificationBadgeModal
+          session={session}
+          profile={targetProfile}
+          onClose={() => setShowVerificationModal(false)}
+        />
       )}
     </div>
   );

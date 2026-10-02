@@ -19,6 +19,8 @@ import {
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import { playSound } from '../lib/soundEffects';
+import InstitutionProfileModal from './InstitutionProfileModal';
+import AuthorOverviewModal from './AuthorOverviewModal';
 
 const SAMPLE_CHURCHES = [
   {
@@ -124,6 +126,7 @@ const SAMPLE_REELS = [
     views: '1.4k',
     thumbnail: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400',
     duration: '0:45',
+    theme: 'reel-theme-violet',
   },
   {
     id: 'reel-2',
@@ -132,6 +135,7 @@ const SAMPLE_REELS = [
     views: '2.8k',
     thumbnail: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400',
     duration: '1:12',
+    theme: 'reel-theme-teal',
   },
   {
     id: 'reel-3',
@@ -140,6 +144,7 @@ const SAMPLE_REELS = [
     views: '890',
     thumbnail: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=400',
     duration: '0:38',
+    theme: 'reel-theme-rose',
   },
   {
     id: 'reel-4',
@@ -148,6 +153,7 @@ const SAMPLE_REELS = [
     views: '3.2k',
     thumbnail: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400',
     duration: '1:45',
+    theme: 'reel-theme-amber',
   },
 ];
 
@@ -186,6 +192,7 @@ function useDragScroll() {
 
 export function ChurchesToFollowCard({ onFollowToggle }) {
   const [followingMap, setFollowingMap] = useState({});
+  const [selectedInst, setSelectedInst] = useState(null);
   const { ref, onPointerDown, onPointerMove, onPointerUp, dragInfo } = useDragScroll();
 
   function handleToggle(cId) {
@@ -202,9 +209,9 @@ export function ChurchesToFollowCard({ onFollowToggle }) {
       <div className="home-highlight-header">
         <div className="hl-header-title">
           <Church size={17} className="hl-icon church-icon" />
-          <span>Churches to Follow</span>
+          <span>Churches &amp; Institutions to Follow</span>
         </div>
-        <Link href="/churches" className="hl-view-all">
+        <Link href="/?tab=churches" className="hl-view-all">
           <span>Explore all</span>
           <ChevronRight size={14} />
         </Link>
@@ -221,7 +228,24 @@ export function ChurchesToFollowCard({ onFollowToggle }) {
         {SAMPLE_CHURCHES.map((c) => {
           const isFollowing = !!followingMap[c.id];
           return (
-            <div key={c.id} className={`church-color-card ${c.theme}`}>
+            <div
+              key={c.id}
+              className={`church-color-card ${c.theme}`}
+              onClick={() => {
+                if (dragInfo.current.hasMoved) return;
+                setSelectedInst({
+                  id: c.id,
+                  name: c.name,
+                  categoryLabel: 'Church',
+                  location: c.city,
+                  membersCount: c.membersCount,
+                  logo_url: c.avatar,
+                  about: `${c.name} is a vibrant faith community centered on Christ, prayer, worship and biblical discipleship in ${c.city}.`,
+                  verified: true,
+                });
+                playSound('reaction');
+              }}
+            >
               <div className="church-card-top">
                 <Avatar name={c.name} src={c.avatar} className="avatar-md" />
                 <div className="church-card-meta">
@@ -260,12 +284,20 @@ export function ChurchesToFollowCard({ onFollowToggle }) {
           );
         })}
       </div>
+
+      {selectedInst && (
+        <InstitutionProfileModal
+          institution={selectedInst}
+          onClose={() => setSelectedInst(null)}
+        />
+      )}
     </div>
   );
 }
 
 export function PeopleToFollowCard({ onFollowToggle }) {
   const [followingMap, setFollowingMap] = useState({});
+  const [selectedPerson, setSelectedPerson] = useState(null);
   const { ref, onPointerDown, onPointerMove, onPointerUp, dragInfo } = useDragScroll();
 
   function handleToggle(pId) {
@@ -301,7 +333,23 @@ export function PeopleToFollowCard({ onFollowToggle }) {
         {SAMPLE_PEOPLE.map((p) => {
           const isFollowing = !!followingMap[p.id];
           return (
-            <div key={p.id} className={`person-color-card ${p.theme}`}>
+            <div
+              key={p.id}
+              className={`person-color-card ${p.theme}`}
+              onClick={() => {
+                if (dragInfo.current.hasMoved) return;
+                setSelectedPerson({
+                  id: p.id,
+                  display_name: p.name,
+                  avatar_url: p.avatar,
+                  role: p.role,
+                  badge: p.badge,
+                  badge_verified: true,
+                  about: p.bio,
+                });
+                playSound('reaction');
+              }}
+            >
               <div className="person-card-top">
                 <Avatar name={p.name} src={p.avatar} className="avatar-md" />
                 <div className="person-card-meta">
@@ -340,6 +388,15 @@ export function PeopleToFollowCard({ onFollowToggle }) {
           );
         })}
       </div>
+
+      {selectedPerson && (
+        <AuthorOverviewModal
+          author={selectedPerson}
+          authorId={selectedPerson.id}
+          currentUser={null}
+          onClose={() => setSelectedPerson(null)}
+        />
+      )}
     </div>
   );
 }
@@ -375,7 +432,7 @@ export function TrendingReelsCard({ onSelectSection }) {
         {SAMPLE_REELS.map((reel) => (
           <div
             key={reel.id}
-            className="reel-color-card"
+            className={`reel-color-card ${reel.theme || ''}`}
             onClick={() => {
               if (dragInfo.current.hasMoved) return;
               playSound('reaction');

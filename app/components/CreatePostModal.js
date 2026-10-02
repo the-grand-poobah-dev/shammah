@@ -31,8 +31,8 @@ export default function CreatePostModal({
 }) {
   if (!isOpen) return null;
 
-  async function handleModalSubmit(e, visibility) {
-    const success = await onSubmit(e, visibility);
+  async function handleModalSubmit(e, visibility, identityMeta) {
+    const success = await onSubmit(e, visibility, identityMeta);
     // If post is created without error, close modal
     if (!postError) {
       onClose();
@@ -41,7 +41,7 @@ export default function CreatePostModal({
 
   return (
     <div className="create-post-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="create-post-modal-card" onClick={(e) => e.stopPropagation()}>
+      <div className="create-post-modal-card neon-glow-modal" onClick={(e) => e.stopPropagation()}>
         <div className="create-post-modal-header">
           <div className="cp-header-title">
             <span className="cp-icon-wrap">

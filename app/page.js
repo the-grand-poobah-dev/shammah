@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { CATEGORY_STYLES, categoryStyle, initials } from './lib/postDisplay';
 import PostCard from './components/PostCard';
 import CreatePostBox from './components/CreatePostBox';
+import CreatePostModal from './components/CreatePostModal';
 import Link from 'next/link';
 import Avatar from './components/Avatar';
 import MemberName from './components/MemberName';
@@ -23,6 +24,7 @@ import RssFeedsView from './components/RssFeedsView';
 import BibleReaderView from './components/BibleReaderView';
 import NotificationsView from './components/NotificationsView';
 import ExploreView from './components/ExploreView';
+import InstitutionsView from './components/InstitutionsView';
 import {
   ChurchesToFollowCard,
   PeopleToFollowCard,
@@ -31,6 +33,8 @@ import {
 } from './components/HomeHighlights';
 import { getHomefeedPostsWithRss } from './lib/rssManager';
 import { playSound } from './lib/soundEffects';
+import { rankPostsWithAlgorithm } from './lib/feedAlgorithm';
+import { getBlockedUsers, getFollows } from './lib/profileManager';
 
 const SECTIONS = TOP_NAV_SECTIONS;
 
@@ -77,6 +81,7 @@ export default function Feed() {
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [mediaUploading, setMediaUploading] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Auth panel state
   const [showAuth, setShowAuth] = useState(false);
@@ -287,6 +292,44 @@ export default function Feed() {
     loadPosts(activeCategory);
   }, [activeCategory, session?.user?.id]);
 
+  // Global events: create post modal, auth, category selection, and algorithm feedback
+  useEffect(() => {
+    function handleOpenCreateModal() {
+      setShowCreateModal(true);
+    }
+    function handleAuthEvent(e) {
+      if (e.detail) {
+        setAuthMode(e.detail);
+        setShowAuth(true);
+      }
+    }
+    function handleAlgUpdate() {
+      loadPosts(activeCategory);
+    }
+    function handleSelectCat(e) {
+      if (e.detail) {
+        setActiveCategory(e.detail);
+        loadPosts(e.detail);
+      }
+    }
+
+    window.addEventListener('shammah:open-create-post', handleOpenCreateModal);
+    window.addEventListener('shammah:open-auth', handleAuthEvent);
+    window.addEventListener('shammah:feed-algorithm-updated', handleAlgUpdate);
+    window.addEventListener('shammah:blocks-updated', handleAlgUpdate);
+    window.addEventListener('shammah:follows-updated', handleAlgUpdate);
+    window.addEventListener('shammah:select-category', handleSelectCat);
+
+    return () => {
+      window.removeEventListener('shammah:open-create-post', handleOpenCreateModal);
+      window.removeEventListener('shammah:open-auth', handleAuthEvent);
+      window.removeEventListener('shammah:feed-algorithm-updated', handleAlgUpdate);
+      window.removeEventListener('shammah:blocks-updated', handleAlgUpdate);
+      window.removeEventListener('shammah:follows-updated', handleAlgUpdate);
+      window.removeEventListener('shammah:select-category', handleSelectCat);
+    };
+  }, [activeCategory]);
+
   async function loadProfile(userId) {
     const { data, error } = await supabase
       .from('profiles')
@@ -462,7 +505,7 @@ export default function Feed() {
     setTimeout(() => document.getElementById('compose-box')?.focus(), 50);
   }
 
-  async function handleCreatePost(e) {
+  async function handleCreatePost(e, visibility = 'public', identityMeta = null) {
     e.preventDefault();
     if (!composeCategory) {
       setPostError('Please select a category for your post from the dropdown before posting.');
@@ -541,6 +584,14 @@ export default function Feed() {
 
     if (error) {
       // In preview or demo mode without active Supabase backend, optimistically append the post
+      const isAnon = identityMeta?.identityMode === 'anonymous';
+      const isPseudo = identityMeta?.identityMode === 'pseudo';
+      const displayName = isAnon
+        ? 'Anonymous Disciple'
+        : isPseudo
+          ? identityMeta?.pseudoName || 'Humble Seeker #402'
+          : profile?.display_name || session?.user?.email || 'Member';
+
       const newPost = {
         id: 'post-' + Date.now(),
         text_content: text || null,
@@ -551,12 +602,14 @@ export default function Feed() {
         church_id: profile?.church_id ?? null,
         is_pinned: isPinnedToSave,
         pinned_at: pinnedAtToSave,
+        is_anonymous: isAnon,
+        is_pseudo: isPseudo,
         profiles: {
-          display_name: profile?.display_name || session?.user?.email || 'Administrator',
-          avatar_url: profile?.avatar_url || null,
-          badge: profile?.badge || 'pastor',
-          badge_verified: true,
-          role: profile?.role || 'church_admin',
+          display_name: displayName,
+          avatar_url: isAnon || isPseudo ? null : profile?.avatar_url || null,
+          badge: isAnon ? null : isPseudo ? 'pilgrim' : profile?.badge || 'member',
+          badge_verified: isAnon || isPseudo ? false : profile?.badge_verified || false,
+          role: isAnon || isPseudo ? 'member' : profile?.role || 'member',
         },
       };
       setPosts((prev) => sortPostsWithPinned([newPost, ...prev]));
@@ -581,6 +634,7 @@ export default function Feed() {
     setPollOptions([{ label: '', file: null, preview: null }, { label: '', file: null, preview: null }]);
     setMediaFile(null);
     setMediaPreview(null);
+    setShowCreateModal(false);
     // Show the new post: if a different category is filtered, jump to the one just posted in
     if (activeCategory && activeCategory !== composeCategory) {
       setActiveCategory(composeCategory);
@@ -702,9 +756,17 @@ export default function Feed() {
 
   const headerName = profile?.display_name || session?.user?.email || 'Member';
   const feedPostsWithRss = mounted ? getHomefeedPostsWithRss(posts, session?.user) : posts;
-  const visiblePosts = searchTerm.trim()
-    ? feedPostsWithRss.filter((p) => (p.text_content || '').toLowerCase().includes(searchTerm.trim().toLowerCase()))
+  const algorithmRankedPosts = mounted
+    ? rankPostsWithAlgorithm(feedPostsWithRss, {
+        blockedUserIds: getBlockedUsers(),
+        followedUserIds: getFollows(),
+      })
     : feedPostsWithRss;
+  const visiblePosts = searchTerm.trim()
+    ? algorithmRankedPosts.filter((p) =>
+        (p.text_content || '').toLowerCase().includes(searchTerm.trim().toLowerCase())
+      )
+    : algorithmRankedPosts;
 
   return (
     <div className="shell">
@@ -1179,21 +1241,11 @@ export default function Feed() {
         )}
 
         {tab === 'churches' && (
-          <>
-            <h2 className="section-title">Churches on Shammah</h2>
-            {churches.length === 0 && <p className="mut">No churches yet.</p>}
-            {churches.map((c) => (
-              <Link className="church-row" key={c.id} href={`/churches/${c.id}`}>
-                <span className="avatar">{initials(c.name)}</span>
-                <span className="church-name">{c.name}</span>
-                {profile?.church_id === c.id && <span className="category-chip">Your church</span>}
-              </Link>
-            ))}
-            <div className="church-tab-actions">
-              <Link className="signin-btn" href="/churches">Search all churches</Link>
-              <Link className="signup-btn" href="/churches/new">Start a church</Link>
-            </div>
-          </>
+          <InstitutionsView
+            session={session}
+            currentUser={profile}
+            openAuth={openAuth}
+          />
         )}
 
         {tab === 'messages' && (
@@ -1335,10 +1387,46 @@ export default function Feed() {
                 onVote={(optionId) => handleVote(p.id, optionId)}
                 isAdmin={isAdmin}
                 onTogglePin={handleTogglePin}
+                onSelectCategory={(catId) => {
+                  setActiveCategory(catId);
+                  loadPosts(catId);
+                }}
+                onOpenDirectMessage={() => {
+                  setTab('messages');
+                }}
               />
             </Fragment>
           ))}
       </main>
+
+      {/* Create Post Dialog / Modal (Triggered by Bottom Nav Plus Icon or Compose Action) */}
+      <CreatePostModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        session={session}
+        profile={profile}
+        isAdmin={isAdmin}
+        composeText={composeText}
+        setComposeText={setComposeText}
+        composeCategory={composeCategory}
+        setComposeCategory={setComposeCategory}
+        isPoll={isPoll}
+        setIsPoll={setIsPoll}
+        pollOptions={pollOptions}
+        setPollOptions={setPollOptions}
+        mediaFile={mediaFile}
+        setMediaFile={setMediaFile}
+        mediaPreview={mediaPreview}
+        setMediaPreview={setMediaPreview}
+        mediaUploading={mediaUploading}
+        pollUploading={pollUploading}
+        isPinnedAnnouncement={isPinnedAnnouncement}
+        setIsPinnedAnnouncement={setIsPinnedAnnouncement}
+        posting={posting}
+        postError={postError}
+        onSubmit={handleCreatePost}
+        openAuth={openAuth}
+      />
     </div>
   );
 }

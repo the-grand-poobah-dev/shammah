@@ -132,11 +132,9 @@ export default function InboxView({ currentUser }) {
   }
 
   function handleDeleteMsg(msgId) {
-    if (confirm('Delete this message for everyone in this fellowship chat?')) {
-      deleteDirectMessage(activeConv.id, msgId);
-      loadConversations();
-      playSound('reaction');
-    }
+    deleteDirectMessage(activeConv.id, msgId);
+    loadConversations();
+    playSound('reaction');
   }
 
   function handleReaction(msgId, emoji) {
@@ -152,6 +150,37 @@ export default function InboxView({ currentUser }) {
       setHighlightedMsgId(quotedMsgId);
       setTimeout(() => setHighlightedMsgId(null), 2000);
     }
+  }
+
+  // Guard: Logged off members cannot send or receive messages
+  if (!currentUser?.id) {
+    return (
+      <div className="inbox-shell">
+        <div className="inbox-logged-off-gate">
+          <div className="inbox-gate-card">
+            <div className="inbox-gate-icon-wrap">
+              <Lock size={36} className="inbox-gate-lock-icon" />
+            </div>
+            <h2>End-to-End Encrypted Messages</h2>
+            <p>
+              Direct messaging and status story replies are reserved for signed-in fellowship members.
+              Sign in or create your account to securely message pastors, leaders, and friends.
+            </p>
+            <button
+              type="button"
+              className="inbox-gate-signin-btn"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('shammah:open-auth', { detail: 'signin' }));
+                }
+              }}
+            >
+              Sign In to Message
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

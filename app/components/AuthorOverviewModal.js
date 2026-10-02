@@ -25,7 +25,11 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
   const [blocked, setBlocked] = useState(false);
   const [profileSettings, setProfileSettings] = useState({ isLocked: false, inboxPermission: 'everyone' });
 
+  const [toastMsg, setToastMsg] = useState('');
+  const [confirmingBlock, setConfirmingBlock] = useState(false);
+
   const isMe = currentUser?.id && currentUser.id === authorId;
+  const isLoggedIn = Boolean(currentUser?.id);
   const name = author?.display_name || author?.name || 'Fellowship Member';
   const role = author?.role || 'Christian Fellowship Member';
   const badge = author?.badge;
@@ -39,28 +43,54 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
     }
   }, [authorId]);
 
+  function showToast(msg) {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 3000);
+  }
+
   function handleFollowToggle() {
     if (isMe) return;
+    if (!isLoggedIn) {
+      showToast('Please sign in or create an account to follow members.');
+      return;
+    }
     const next = toggleFollow(authorId);
     setFollowing(next);
+    showToast(next ? `Now following ${name}` : `Unfollowed ${name}`);
   }
 
   function handleBlockToggle() {
     if (isMe) return;
-    const action = blocked ? 'Unblock' : 'Block';
-    if (confirm(`Are you sure you want to ${action.toLowerCase()} ${name}? ${blocked ? 'Their posts will reappear in your feed.' : 'You will no longer see their posts or messages.'}`)) {
+    if (!isLoggedIn) {
+      showToast('Please sign in to block or manage member connections.');
+      return;
+    }
+    if (blocked) {
       const next = toggleBlock(authorId);
       setBlocked(next);
-      if (next) {
-        onClose();
+      setConfirmingBlock(false);
+      showToast(`Unblocked ${name}`);
+    } else {
+      if (!confirmingBlock) {
+        setConfirmingBlock(true);
+        return;
       }
+      const next = toggleBlock(authorId);
+      setBlocked(next);
+      setConfirmingBlock(false);
+      showToast(`Blocked ${name}`);
+      setTimeout(() => onClose(), 800);
     }
   }
 
   function handleMessageClick() {
     if (isMe) return;
+    if (!isLoggedIn) {
+      showToast('🔒 Please sign in to send or receive direct messages.');
+      return;
+    }
     if (profileSettings.isLocked && profileSettings.inboxPermission === 'none') {
-      alert(`${name} has restricted direct messaging in their privacy settings.`);
+      showToast(`${name} has restricted direct messaging in their privacy settings.`);
       return;
     }
     playSound('reaction');
@@ -83,7 +113,7 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
 
   return (
     <div className="author-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="author-modal-card" onClick={(e) => e.stopPropagation()}>
+      <div className="author-modal-card neon-glow-modal" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="author-modal-close" onClick={onClose} aria-label="Close">
           <X size={18} />
         </button>
@@ -171,14 +201,28 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
               <span>Visit Page</span>
             </Link>
 
-            <button
-              type="button"
-              className={`author-action-btn block-btn${blocked ? ' is-blocked' : ''}`}
-              onClick={handleBlockToggle}
-            >
-              <ShieldAlert size={15} />
-              <span>{blocked ? 'Unblock User' : 'Block User'}</span>
-            </button>
+            {confirmingBlock ? (
+              <div className="author-block-confirm-box">
+                <span>Block {name}? You won&apos;t see their posts or messages.</span>
+                <div className="confirm-btn-row">
+                  <button type="button" className="btn-confirm-danger" onClick={handleBlockToggle}>
+                    Yes, Block
+                  </button>
+                  <button type="button" className="btn-confirm-cancel" onClick={() => setConfirmingBlock(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className={`author-action-btn block-btn${blocked ? ' is-blocked' : ''}`}
+                onClick={handleBlockToggle}
+              >
+                <ShieldAlert size={15} />
+                <span>{blocked ? 'Unblock User' : 'Block User'}</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="author-modal-self-actions">
@@ -186,6 +230,12 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
               <ExternalLink size={15} />
               <span>View Your Profile &amp; Settings</span>
             </Link>
+          </div>
+        )}
+
+        {toastMsg && (
+          <div className="author-modal-toast" role="status">
+            <span>{toastMsg}</span>
           </div>
         )}
       </div>

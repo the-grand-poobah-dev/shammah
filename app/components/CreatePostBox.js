@@ -20,12 +20,16 @@ import {
   Church,
   Lock,
   AlertCircle,
+  EyeOff,
+  User,
+  RefreshCw,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
 import { CATEGORY_STYLES, categoryStyle, initials } from '../lib/postDisplay';
 import { VISIBILITY_OPTIONS } from '../lib/postInteractions';
 import { playSound } from '../lib/soundEffects';
+import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousManager';
 
 const MAX_POLL_OPTIONS = 6;
 
@@ -66,6 +70,9 @@ export default function CreatePostBox({
   const [visibility, setVisibility] = useState('public');
   const [showVisMenu, setShowVisMenu] = useState(false);
   const [categoryError, setCategoryError] = useState(false);
+  const [postIdentity, setPostIdentity] = useState('real'); // real | anonymous | pseudo
+  const [pseudoProfile, setPseudoProfile] = useState(() => generatePseudoIdentity());
+  const [showIdentityMenu, setShowIdentityMenu] = useState(false);
 
   const photoInputRef = useRef(null);
   const videoInputRef = useRef(null);
@@ -73,9 +80,23 @@ export default function CreatePostBox({
   const categoryMenuRef = useRef(null);
   const categoryTriggerRef = useRef(null);
   const visMenuRef = useRef(null);
+  const identityMenuRef = useRef(null);
 
   const headerName = profile?.display_name || session?.user?.email || 'Member';
   const cat = composeCategory ? categoryStyle(composeCategory) : null;
+
+  // Active identity displayed
+  const currentIdentityName =
+    postIdentity === 'anonymous'
+      ? ANONYMOUS_IDENTITY.name
+      : postIdentity === 'pseudo'
+        ? pseudoProfile.name
+        : headerName;
+
+  const currentIdentityAvatar =
+    postIdentity === 'anonymous' || postIdentity === 'pseudo'
+      ? null
+      : profile?.avatar_url;
 
   // Close category dropdown on click outside
   useEffect(() => {
@@ -90,6 +111,9 @@ export default function CreatePostBox({
       }
       if (visMenuRef.current && !visMenuRef.current.contains(event.target)) {
         setShowVisMenu(false);
+      }
+      if (identityMenuRef.current && !identityMenuRef.current.contains(event.target)) {
+        setShowIdentityMenu(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -190,7 +214,7 @@ export default function CreatePostBox({
       return;
     }
     setCategoryError(false);
-    onSubmit(e, visibility);
+    onSubmit(e, visibility, { identityMode: postIdentity, pseudoName: pseudoProfile.name });
   }
 
   const CurrentVisIcon = VIS_ICONS[visibility] || Globe;
@@ -199,17 +223,100 @@ export default function CreatePostBox({
     <form className="compose compose-genz" onSubmit={handleFormSubmit}>
       {/* Top Header: Avatar + Author + Privacy Selector + Admin Pin Toggle */}
       <div className="compose-header">
-        <div className="compose-author-row">
-          <Avatar name={headerName} src={profile?.avatar_url} className="avatar-sm" />
+        <div className="compose-author-row" ref={identityMenuRef}>
+          <Avatar name={currentIdentityName} src={currentIdentityAvatar} className="avatar-sm" />
           <div className="compose-author-meta">
-            <span className="compose-author-name">{headerName}</span>
+            <button
+              type="button"
+              className="compose-identity-toggle-btn"
+              onClick={() => setShowIdentityMenu((v) => !v)}
+              title="Click to post anonymously or with an auto-generated pseudo name"
+            >
+              <span className="compose-author-name">{currentIdentityName}</span>
+              <ChevronDown size={12} className="identity-chevron" />
+            </button>
             <span className="compose-author-sub">
-              {profile?.role === 'platform_admin'
-                ? 'Platform Administrator'
-                : profile?.role === 'church_admin'
-                  ? 'Church Administrator'
-                  : 'Fellowship Community'}
+              {postIdentity === 'anonymous'
+                ? 'Posting Anonymously 🕵️'
+                : postIdentity === 'pseudo'
+                  ? 'Pseudonym Protected 🎲'
+                  : profile?.role === 'platform_admin'
+                    ? 'Platform Administrator'
+                    : profile?.role === 'church_admin'
+                      ? 'Church Administrator'
+                      : 'Fellowship Community'}
             </span>
+
+            {/* Identity Dropdown Menu */}
+            {showIdentityMenu && (
+              <div className="compose-identity-dropdown" role="menu">
+                <button
+                  type="button"
+                  className={`ident-opt-btn${postIdentity === 'real' ? ' active' : ''}`}
+                  onClick={() => {
+                    setPostIdentity('real');
+                    setShowIdentityMenu(false);
+                    playSound('reaction');
+                  }}
+                >
+                  <User size={15} />
+                  <div className="ident-opt-text">
+                    <strong>Post as Yourself</strong>
+                    <small>{headerName}</small>
+                  </div>
+                  {postIdentity === 'real' && <Check size={14} className="ident-opt-check" />}
+                </button>
+
+                <button
+                  type="button"
+                  className={`ident-opt-btn${postIdentity === 'anonymous' ? ' active' : ''}`}
+                  onClick={() => {
+                    setPostIdentity('anonymous');
+                    setShowIdentityMenu(false);
+                    playSound('reaction');
+                  }}
+                >
+                  <EyeOff size={15} />
+                  <div className="ident-opt-text">
+                    <strong>Post Anonymously</strong>
+                    <small>Name and avatar hidden from fellowship</small>
+                  </div>
+                  {postIdentity === 'anonymous' && <Check size={14} className="ident-opt-check" />}
+                </button>
+
+                <button
+                  type="button"
+                  className={`ident-opt-btn${postIdentity === 'pseudo' ? ' active' : ''}`}
+                  onClick={() => {
+                    setPostIdentity('pseudo');
+                    setShowIdentityMenu(false);
+                    playSound('reaction');
+                  }}
+                >
+                  <Sparkles size={15} />
+                  <div className="ident-opt-text">
+                    <strong>Auto Pseudo Name</strong>
+                    <small>{pseudoProfile.name}</small>
+                  </div>
+                  {postIdentity === 'pseudo' && <Check size={14} className="ident-opt-check" />}
+                </button>
+
+                {postIdentity === 'pseudo' && (
+                  <button
+                    type="button"
+                    className="ident-reroll-action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPseudoProfile(generatePseudoIdentity());
+                      playSound('reaction');
+                    }}
+                  >
+                    <RefreshCw size={12} />
+                    <span>Generate New Pseudo Name</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

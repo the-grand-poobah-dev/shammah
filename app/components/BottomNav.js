@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, MessageCircle, Bell, Compass, Plus } from 'lucide-react';
+import { Home, MessageCircle, Bell, Compass, Plus, Building2 } from 'lucide-react';
 import { getTotalUnreadMessagesCount } from '../lib/inboxManager';
 import { getUnreadNotificationCount } from '../lib/notificationsManager';
 import { playSound } from '../lib/soundEffects';
@@ -36,14 +36,14 @@ export default function BottomNav() {
     if (!pathname) return;
 
     if (pathname.startsWith('/churches')) {
-      setActiveTab('home');
+      setActiveTab('churches');
     } else if (pathname.startsWith('/categories') || pathname.startsWith('/settings')) {
       setActiveTab('menu');
     } else if (pathname === '/') {
       if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         const tabParam = params.get('tab');
-        if (tabParam && ['home', 'messages', 'alerts', 'menu'].includes(tabParam)) {
+        if (tabParam && ['home', 'churches', 'messages', 'alerts', 'menu'].includes(tabParam)) {
           setActiveTab(tabParam);
         } else {
           setActiveTab('home');
@@ -99,7 +99,7 @@ export default function BottomNav() {
   return (
     <nav className="bottom-nav" aria-label="Main Navigation">
       <div className="bottom-nav-pill">
-        {/* Left Tab: Home */}
+        {/* Left Tab 1: Home */}
         <button
           type="button"
           className={`tab-btn${activeTab === 'home' ? ' active' : ''}`}
@@ -108,24 +108,23 @@ export default function BottomNav() {
           aria-current={activeTab === 'home' ? 'page' : undefined}
         >
           <span className="tab-icon-wrap">
-            <Home size={20} strokeWidth={activeTab === 'home' ? 2.4 : 1.8} className="tab-icon" />
+            <Home size={19} strokeWidth={activeTab === 'home' ? 2.4 : 1.8} className="tab-icon" />
           </span>
           <span className="tab-label">Home</span>
         </button>
 
-        {/* Left Tab: Messages */}
+        {/* Left Tab 2: Institutions */}
         <button
           type="button"
-          className={`tab-btn${activeTab === 'messages' ? ' active' : ''}`}
-          onClick={() => handleTabClick('messages', '/?tab=messages')}
-          aria-label="Messages"
-          aria-current={activeTab === 'messages' ? 'page' : undefined}
+          className={`tab-btn${activeTab === 'churches' ? ' active' : ''}`}
+          onClick={() => handleTabClick('churches', '/?tab=churches')}
+          aria-label="Institutions"
+          aria-current={activeTab === 'churches' ? 'page' : undefined}
         >
           <span className="tab-icon-wrap">
-            <MessageCircle size={20} strokeWidth={activeTab === 'messages' ? 2.4 : 1.8} className="tab-icon" />
-            {unreadMessages > 0 && <span className="tab-badge-num">{unreadMessages}</span>}
+            <Building2 size={19} strokeWidth={activeTab === 'churches' ? 2.4 : 1.8} className="tab-icon" />
           </span>
-          <span className="tab-label">Messages</span>
+          <span className="tab-label">Institutions</span>
         </button>
 
         {/* Center Dipped Circular Plus Action Button with Rotating Neon Glow Ring */}
@@ -144,7 +143,22 @@ export default function BottomNav() {
           </button>
         </div>
 
-        {/* Right Tab: Alerts / Notifications */}
+        {/* Right Tab 1: Messages */}
+        <button
+          type="button"
+          className={`tab-btn${activeTab === 'messages' ? ' active' : ''}`}
+          onClick={() => handleTabClick('messages', '/?tab=messages')}
+          aria-label="Messages"
+          aria-current={activeTab === 'messages' ? 'page' : undefined}
+        >
+          <span className="tab-icon-wrap">
+            <MessageCircle size={19} strokeWidth={activeTab === 'messages' ? 2.4 : 1.8} className="tab-icon" />
+            {unreadMessages > 0 && <span className="tab-badge-num">{unreadMessages}</span>}
+          </span>
+          <span className="tab-label">Messages</span>
+        </button>
+
+        {/* Right Tab 2: Alerts / Notifications */}
         <button
           type="button"
           className={`tab-btn${activeTab === 'alerts' ? ' active' : ''}`}
@@ -153,24 +167,10 @@ export default function BottomNav() {
           aria-current={activeTab === 'alerts' ? 'page' : undefined}
         >
           <span className="tab-icon-wrap">
-            <Bell size={20} strokeWidth={activeTab === 'alerts' ? 2.4 : 1.8} className="tab-icon" />
+            <Bell size={19} strokeWidth={activeTab === 'alerts' ? 2.4 : 1.8} className="tab-icon" />
             {unreadAlerts > 0 && <span className="tab-badge-num">{unreadAlerts}</span>}
           </span>
           <span className="tab-label">Alerts</span>
-        </button>
-
-        {/* Right Tab: Explore */}
-        <button
-          type="button"
-          className={`tab-btn${activeTab === 'menu' ? ' active' : ''}`}
-          onClick={() => handleTabClick('menu', '/?tab=menu')}
-          aria-label="Explore"
-          aria-current={activeTab === 'menu' ? 'page' : undefined}
-        >
-          <span className="tab-icon-wrap">
-            <Compass size={20} strokeWidth={activeTab === 'menu' ? 2.4 : 1.8} className="tab-icon" />
-          </span>
-          <span className="tab-label">Explore</span>
         </button>
       </div>
     </nav>

@@ -103,6 +103,8 @@ export default function PostCard({
   onVote,
   isAdmin = false,
   onTogglePin,
+  onSelectCategory,
+  onOpenDirectMessage,
 }) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(null);
@@ -110,6 +112,8 @@ export default function PostCard({
   const [textExpanded, setTextExpanded] = useState(false);
   const [showRepostModal, setShowRepostModal] = useState(false);
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
+  const [showAuthorModal, setShowAuthorModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [reposted, setReposted] = useState(false);
   const [repostCount, setRepostCount] = useState(0);
   const [visibility, setVisibility] = useState('public');
@@ -235,14 +239,25 @@ export default function PostCard({
         </div>
       )}
 
-      {/* Post Header with Author Link & Visibility Badge */}
+      {/* Post Header with Author Interaction, Category, Time, and Options Menu */}
       <div className="post-header">
-        <Link href={authorId ? `/profile/${authorId}` : '/profile'} className="post-author-avatar-link">
+        <button
+          type="button"
+          className="post-author-avatar-btn"
+          onClick={() => setShowAuthorModal(true)}
+          title={`View ${authorName}'s fellowship overview`}
+          aria-label={`View profile for ${authorName}`}
+        >
           <Avatar name={authorName} src={author?.avatar_url} userId={authorId} />
-        </Link>
+        </button>
 
         <div className="post-header-text">
-          <Link href={authorId ? `/profile/${authorId}` : '/profile'} className="post-author-link">
+          <button
+            type="button"
+            className="post-author-name-btn"
+            onClick={() => setShowAuthorModal(true)}
+            title={`View ${authorName}'s fellowship overview`}
+          >
             <MemberName
               name={authorName}
               badge={author?.badge}
@@ -250,9 +265,37 @@ export default function PostCard({
               role={author?.role}
               nameClassName="post-author"
             />
-          </Link>
+          </button>
+
           <div className="post-sub-badges-row">
-            <span className="category-chip">{cat.label}</span>
+            {/* Category Chip (Interactive) */}
+            <button
+              type="button"
+              className="category-chip category-chip-interactive"
+              onClick={() => {
+                playSound('reaction');
+                if (onSelectCategory) {
+                  onSelectCategory(post.category_id);
+                } else {
+                  window.dispatchEvent(
+                    new CustomEvent('shammah:select-category', { detail: post.category_id })
+                  );
+                }
+              }}
+              title={`View more posts in ${cat.label}`}
+            >
+              {cat.label}
+            </button>
+
+            {/* Posting Date / Time */}
+            <span
+              className="post-timestamp-pill"
+              title={post.created_at ? new Date(post.created_at).toLocaleString() : 'Recently posted'}
+            >
+              <Clock size={11} className="post-time-icon" />
+              <span>{timeAgo(post.created_at)}</span>
+            </span>
+
             {/* Visibility Badge */}
             <span
               className="post-visibility-pill"
@@ -290,17 +333,13 @@ export default function PostCard({
             </button>
           )}
 
-          {(isAuthor || isAdmin) && (
-            <button
-              type="button"
-              className="post-options-btn"
-              onClick={() => setShowVisibilityModal(true)}
-              title="Change post privacy & visibility"
-              aria-label="Post settings"
-            >
-              <MoreHorizontal size={17} />
-            </button>
-          )}
+          {/* Post Options Dropdown Menu for every post */}
+          <PostOptionsMenu
+            post={post}
+            authorId={authorId}
+            authorName={authorName}
+            onReportClick={() => setShowReportModal(true)}
+          />
         </div>
       </div>
 
@@ -424,6 +463,8 @@ export default function PostCard({
           session={session}
           onRequireSignIn={requireSignIn}
           onCountChange={setCommentCount}
+          postAuthorId={authorId}
+          postAuthorName={authorName}
         />
       )}
 
@@ -445,6 +486,33 @@ export default function PostCard({
           currentUser={session?.user}
           onClose={() => setShowVisibilityModal(false)}
           onUpdated={(newVis) => setVisibility(newVis)}
+        />
+      )}
+
+      {/* Author Overview Modal (Tap Avatar/Name) */}
+      {showAuthorModal && (
+        <AuthorOverviewModal
+          author={{
+            ...author,
+            id: authorId,
+            display_name: authorName,
+            avatar_url: author?.avatar_url,
+            role: author?.role,
+            badge: author?.badge,
+            badge_verified: author?.badge_verified,
+          }}
+          authorId={authorId}
+          currentUser={session?.user}
+          onClose={() => setShowAuthorModal(false)}
+          onOpenDirectMessage={onOpenDirectMessage}
+        />
+      )}
+
+      {/* Report Post Modal */}
+      {showReportModal && (
+        <ReportPostModal
+          post={post}
+          onClose={() => setShowReportModal(false)}
         />
       )}
     </article>

@@ -9,6 +9,7 @@ import Avatar from './Avatar';
 import BadgeIcon from './BadgeIcon';
 import MemberName from './MemberName';
 import LocationPicker from './LocationPicker';
+import VerificationBadgeModal from './VerificationBadgeModal';
 
 const COLS =
   'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, location_place_id, location_lat, location_lng, onboarding_completed_at, display_name_changed_at';
@@ -54,6 +55,7 @@ export default function ProfileSettings({ session }) {
   const [busyImg, setBusyImg] = useState(null); // 'avatar' | 'cover' | null
   const [toast, setToast] = useState(null);
   const [reqOpen, setReqOpen] = useState(false);
+  const [verifOpen, setVerifOpen] = useState(false);
   const toastTimer = useRef(null);
 
   const notify = useCallback((type, text) => {
@@ -380,6 +382,26 @@ export default function ProfileSettings({ session }) {
             Request a badge change
           </button>
         )}
+
+        {/* Ministry Verification Badge Subscription (Kes. 300 / mo with discounts) */}
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>Ministry Verification Badge</strong>
+              <p style={{ fontSize: '12.5px', color: 'var(--ink-muted)', margin: '2px 0 0' }}>
+                Official pastoral & leadership verification checkmark for Kes. 300 / mo (with quarterly, bi-annual & annual discounts).
+              </p>
+            </div>
+            <button
+              type="button"
+              className="st-btn st-btn-primary"
+              style={{ fontSize: '13px', padding: '7px 14px' }}
+              onClick={() => setVerifOpen(true)}
+            >
+              Get Verified (Kes. 300/mo)
+            </button>
+          </div>
+        </div>
       </section>
 
       {/* ---------- Account ---------- */}
@@ -425,6 +447,14 @@ export default function ProfileSettings({ session }) {
             notify('success', 'Request sent. We will get back to you.');
           }}
           onError={(m) => notify('error', m)}
+        />
+      )}
+
+      {verifOpen && (
+        <VerificationBadgeModal
+          session={session}
+          profile={profile}
+          onClose={() => setVerifOpen(false)}
         />
       )}
     </div>
