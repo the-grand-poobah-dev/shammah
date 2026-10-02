@@ -100,7 +100,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
           {/* Theme Selector */}
           <div className="status-theme-picker-section">
             <span className="status-field-label">Background Theme:</span>
-            <div className="status-theme-chips">
+            <div className="status-theme-chips no-scrollbar">
               {BG_THEMES.map((theme) => (
                 <button
                   key={theme.id}

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
+import MemberBadge from './MemberBadge';
 import PostCard from './PostCard';
 import {
   getProfileSettings,
@@ -214,6 +215,7 @@ export default function UserProfileView({
           <div className="profile-meta-section">
             <div className="profile-title-row">
               <h1 className="profile-display-name">{authorName}</h1>
+              {badge && <MemberBadge badgeId={badge} size="md" />}
               {verified && <VerifiedBadge badge={badge} role={role} size={18} />}
               {privacySettings.isLocked && (
                 <span className="profile-locked-badge" title="Content locked to non-followers">

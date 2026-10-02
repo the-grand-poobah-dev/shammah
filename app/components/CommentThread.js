@@ -6,6 +6,7 @@ import Avatar from './Avatar';
 import MemberName from './MemberName';
 import { detectMentionQuery, insertMention, splitMentions } from '../lib/mentions';
 import ReactionBar from './ReactionBar';
+import { playSound } from '../lib/soundEffects';
 
 export default function CommentThread({ postId, session, onRequireSignIn, onCountChange }) {
   const [state, setState] = useState('loading'); // loading | ready | error
@@ -152,6 +153,7 @@ export default function CommentThread({ postId, session, onRequireSignIn, onCoun
       onCountChange(next.length);
       return next;
     });
+    playSound('commented');
     setText('');
     setReplyTo(null);
     setMentionedIds([]);

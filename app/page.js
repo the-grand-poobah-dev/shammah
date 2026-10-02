@@ -15,6 +15,22 @@ import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin } 
 import TopNav, { TOP_NAV_SECTIONS } from './components/TopNav';
 import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
+import VideosView from './components/VideosView';
+import AudioView from './components/AudioView';
+import PollsView from './components/PollsView';
+import CoursesView from './components/CoursesView';
+import RssFeedsView from './components/RssFeedsView';
+import BibleReaderView from './components/BibleReaderView';
+import NotificationsView from './components/NotificationsView';
+import ExploreView from './components/ExploreView';
+import {
+  ChurchesToFollowCard,
+  PeopleToFollowCard,
+  TrendingReelsCard,
+  ExploreTabsBanner,
+} from './components/HomeHighlights';
+import { getHomefeedPostsWithRss } from './lib/rssManager';
+import { playSound } from './lib/soundEffects';
 
 const SECTIONS = TOP_NAV_SECTIONS;
 
@@ -55,7 +71,7 @@ export default function Feed() {
   // Category filter + compose state
   const [activeCategory, setActiveCategory] = useState(null); // null = all
   const [composeText, setComposeText] = useState('');
-  const [composeCategory, setComposeCategory] = useState('prayer');
+  const [composeCategory, setComposeCategory] = useState('');
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState('');
   const [mediaFile, setMediaFile] = useState(null);
@@ -448,6 +464,10 @@ export default function Feed() {
 
   async function handleCreatePost(e) {
     e.preventDefault();
+    if (!composeCategory) {
+      setPostError('Please select a category for your post from the dropdown before posting.');
+      return;
+    }
     const text = composeText.trim();
     if ((!text && !mediaFile) || !session) return;
     const cleanOptions = pollOptions.filter((o) => o.label.trim() || o.file);
@@ -553,7 +573,9 @@ export default function Feed() {
       }
     }
     setPosting(false);
+    playSound('postPublished');
     setComposeText('');
+    setComposeCategory('');
     setIsPoll(false);
     setIsPinnedAnnouncement(false);
     setPollOptions([{ label: '', file: null, preview: null }, { label: '', file: null, preview: null }]);
@@ -662,10 +684,27 @@ export default function Feed() {
     await supabase.auth.signOut();
   }
 
+  const [rssRefreshKey, setRssRefreshKey] = useState(0);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    function onRssUpdate() {
+      setRssRefreshKey((k) => k + 1);
+    }
+    window.addEventListener('shammah:rss-broadcast-updated', onRssUpdate);
+    window.addEventListener('shammah:rss-feeds-updated', onRssUpdate);
+    return () => {
+      window.removeEventListener('shammah:rss-broadcast-updated', onRssUpdate);
+      window.removeEventListener('shammah:rss-feeds-updated', onRssUpdate);
+    };
+  }, []);
+
   const headerName = profile?.display_name || session?.user?.email || 'Member';
+  const feedPostsWithRss = mounted ? getHomefeedPostsWithRss(posts, session?.user) : posts;
   const visiblePosts = searchTerm.trim()
-    ? posts.filter((p) => (p.text_content || '').toLowerCase().includes(searchTerm.trim().toLowerCase()))
-    : posts;
+    ? feedPostsWithRss.filter((p) => (p.text_content || '').toLowerCase().includes(searchTerm.trim().toLowerCase()))
+    : feedPostsWithRss;
 
   return (
     <div className="shell">
@@ -1092,38 +1131,51 @@ export default function Feed() {
       )}
 
       <main className="feed">
-        {tab === 'home' && section !== 'all' && section !== 'polls' && (
-          <div className="coming-soon">
-            <h2>{SECTIONS.find((s) => s.id === section)?.label} is on the way</h2>
-            <p>This part of Shammah is still being built. Real {section} content will show up here.</p>
-          </div>
+        {/* Videos Section */}
+        {tab === 'home' && section === 'videos' && (
+          <VideosView session={session} currentUser={profile} openAuth={openAuth} />
         )}
 
+        {/* Audio Section (Songs, Podcasts, Voice Notes) */}
+        {tab === 'home' && section === 'podcasts' && (
+          <AudioView session={session} currentUser={profile} openAuth={openAuth} />
+        )}
+
+        {/* Polls Section */}
         {tab === 'home' && section === 'polls' && (
-          <>
-            {Object.keys(pollOptionsByPost).length === 0 && (
-              <div className="empty-state">
-                <h2>No polls yet</h2>
-                <p>Switch to "All" and check "Make this a poll" when you post to start one.</p>
-              </div>
-            )}
-            {posts
-              .filter((p) => pollOptionsByPost[p.id])
-              .map((p) => (
-                <PostCard
-                  key={p.id}
-                  post={p}
-                  session={session}
-                  openAuth={openAuth}
-                  pollOptions={pollOptionsByPost[p.id]}
-                  pollCounts={pollCountsByPost[p.id] || {}}
-                  myVote={myVoteByPost[p.id]}
-                  onVote={(optionId) => handleVote(p.id, optionId)}
-                  isAdmin={isAdmin}
-                  onTogglePin={handleTogglePin}
-                />
-              ))}
-          </>
+          <PollsView
+            session={session}
+            currentUser={profile}
+            openAuth={openAuth}
+            feedPosts={posts}
+            pollOptionsByPost={pollOptionsByPost}
+            pollCountsByPost={pollCountsByPost}
+            myVoteByPost={myVoteByPost}
+            onVote={handleVote}
+            onFocusCompose={() => {
+              setSection('all');
+              setIsPoll(true);
+            }}
+          />
+        )}
+
+        {/* Courses & Discipleship Academy Section */}
+        {tab === 'home' && section === 'courses' && (
+          <CoursesView session={session} currentUser={profile} openAuth={openAuth} />
+        )}
+
+        {/* RSS Feeds Dedicated Section */}
+        {tab === 'home' && section === 'rss' && (
+          <RssFeedsView
+            session={session}
+            currentUser={profile}
+            openAuth={openAuth}
+          />
+        )}
+
+        {/* Holy Bible Reader Section */}
+        {tab === 'home' && section === 'bible' && (
+          <BibleReaderView session={session} currentUser={profile} openAuth={openAuth} />
         )}
 
         {tab === 'churches' && (
@@ -1157,11 +1209,27 @@ export default function Feed() {
           />
         )}
 
-        {(tab === 'alerts' || tab === 'menu') && (
-          <div className="coming-soon">
-            <h2>{tab === 'alerts' ? 'Notifications' : 'Menu'} is on the way</h2>
-            <p>This part of Shammah is still being built.</p>
-          </div>
+        {tab === 'alerts' && (
+          <NotificationsView
+            currentUser={profile}
+            openAuth={openAuth}
+          />
+        )}
+
+        {tab === 'menu' && (
+          <ExploreView
+            session={session}
+            profile={profile}
+            dark={dark}
+            setDark={setDark}
+            onSignOut={handleSignOut}
+            openAuth={openAuth}
+            onSelectCategory={(catId) => {
+              setActiveCategory(catId);
+              setTab('home');
+              setSection('all');
+            }}
+          />
         )}
 
         {/* 24-Hour Status Story Tray (Facebook/Instagram style) */}
@@ -1214,6 +1282,14 @@ export default function Feed() {
           />
         )}
 
+        {/* Dynamic Homefeed Widgets: Churches to follow & Channels Explore */}
+        {tab === 'home' && section === 'all' && !searchTerm && (
+          <>
+            <ChurchesToFollowCard />
+            <ExploreTabsBanner onSelectSection={(secId) => setSection(secId)} />
+          </>
+        )}
+
         {tab === 'home' && section === 'all' && visiblePosts.length === 0 && (
           <div className="empty-state">
             <h2>Nothing here yet</h2>
@@ -1243,11 +1319,11 @@ export default function Feed() {
           section === 'all' &&
           visiblePosts.map((p, i) => (
             <Fragment key={p.id}>
+              {i === 1 && !searchTerm && (
+                <TrendingReelsCard onSelectSection={(secId) => setSection(secId)} />
+              )}
               {i === 3 && !searchTerm && (
-                <div className="follow-card">
-                  <span className="mut-light">People to follow</span>
-                  <p className="mut">Following is coming soon — for now, browse posts by category above.</p>
-                </div>
+                <PeopleToFollowCard />
               )}
               <PostCard
                 post={p}

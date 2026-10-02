@@ -16,7 +16,6 @@ export const CATEGORY_STYLES = {
   hacks: { label: 'Ministry Hacks', accent: '#a94b46', soft: '#f3dfdd', text: '#833a36' },
   prayer: { label: 'Prayer Requests & Praise Reports', accent: '#b8842a', soft: '#f4e9d6', text: '#8a611c' },
   seasonal: { label: 'Seasonal Specials', accent: '#1e6b66', soft: '#dceeec', text: '#175450' },
-  faq: { label: 'FAQ for Parents/Volunteers', accent: '#a94b46', soft: '#f3dfdd', text: '#833a36' },
   field: { label: 'From the Mission Field', accent: '#b8842a', soft: '#f4e9d6', text: '#8a611c' },
 };
 

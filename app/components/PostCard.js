@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Repeat, Globe, Users, Church, Lock, MoreHorizontal } from 'lucide-react';
+import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
-import { categoryStyle } from '../lib/postDisplay';
+import { categoryStyle, timeAgo } from '../lib/postDisplay';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
 import ReactionBar from './ReactionBar';
@@ -11,12 +11,17 @@ import CommentThread from './CommentThread';
 import PinIcon from './PinIcon';
 import RepostModal from './RepostModal';
 import PostVisibilityModal from './PostVisibilityModal';
+import AuthorOverviewModal from './AuthorOverviewModal';
+import PostOptionsMenu from './PostOptionsMenu';
+import ReportPostModal from './ReportPostModal';
 import {
   isPostReposted,
   getPostRepostCount,
   toggleRepost,
   getPostVisibility,
 } from '../lib/postInteractions';
+import { playSound } from '../lib/soundEffects';
+import { Clock } from 'lucide-react';
 
 function PollBlock({ options, counts, myVote, canVote, onVote }) {
   const total = options.reduce((sum, o) => sum + (counts[o.id] || 0), 0);
@@ -171,9 +176,11 @@ export default function PostCard({
     );
     setReposted(res.reposted);
     setRepostCount(res.count);
+    playSound('reposted');
   }
 
   async function handleShare() {
+    playSound('reaction');
     const text = post.text_content || '';
     if (navigator.share) {
       try {
@@ -192,10 +199,10 @@ export default function PostCard({
     setTimeout(() => setShareMsg(''), 2000);
   }
 
-  // Text truncation logic for long posts (> 300 characters)
+  // Text truncation logic for long posts (> 200 characters)
   const fullText = post.text_content || '';
-  const isLongText = fullText.length > 300;
-  const renderedText = isLongText && !textExpanded ? `${fullText.slice(0, 300)}...` : fullText;
+  const isLongText = fullText.length > 200;
+  const renderedText = isLongText && !textExpanded ? `${fullText.slice(0, 200)}...` : fullText;
 
   // Visibility icon helper
   const VisIcon = visibility === 'followers' ? Users : visibility === 'church' ? Church : visibility === 'private' ? Lock : Globe;
@@ -249,13 +256,21 @@ export default function PostCard({
             {/* Visibility Badge */}
             <span
               className="post-visibility-pill"
-              title={`Visibility: ${visibility}`}
+              title={`Privacy & Visibility: ${visibility}`}
               onClick={() => {
                 if (isAuthor || isAdmin) setShowVisibilityModal(true);
               }}
             >
-              <VisIcon size={11} className="post-vis-icon" />
-              <span className="post-vis-label">{visibility}</span>
+              <VisIcon size={12} className="post-vis-icon" />
+              <span className="post-vis-label">
+                {visibility === 'followers'
+                  ? 'Followers'
+                  : visibility === 'church'
+                    ? 'Church'
+                    : visibility === 'private'
+                      ? 'Private'
+                      : 'Public'}
+              </span>
               {(isAuthor || isAdmin) && <span className="post-vis-edit-hint">▾</span>}
             </span>
           </div>
@@ -329,6 +344,28 @@ export default function PostCard({
         </div>
       )}
 
+      {/* RSS Source Attribution & Link */}
+      {post.rss_source && (
+        <div className="post-rss-attribution">
+          <span className="rss-source-badge">
+            <Rss size={11} className="rss-icon-orange" />
+            <span>{post.rss_source}</span>
+          </span>
+          {post.rss_link && (
+            <a
+              href={post.rss_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rss-source-link"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span>Original Article</span>
+              <ExternalLink size={11} />
+            </a>
+          )}
+        </div>
+      )}
+
       {/* Post Actions Bar with Reactions, Comments, Repost Counter, and Share */}
       <div className="post-actions">
         <ReactionBar
@@ -356,7 +393,8 @@ export default function PostCard({
           title={reposted ? 'You reposted this' : 'Repost to fellowship profile'}
         >
           <Repeat size={15} className={`action-icon repost-icon${reposted ? ' active' : ''}`} />
-          <span className="repost-count-label">{repostCount > 0 ? repostCount : 'Repost'}</span>
+          <span className="repost-label-text">Repost</span>
+          {repostCount > 0 && <span className="repost-count-badge">{repostCount}</span>}
         </button>
 
         <button type="button" className="action-btn" onClick={handleShare} title="Share post">

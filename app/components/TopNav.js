@@ -1,20 +1,32 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import {
+  Flame,
+  Video,
+  Headphones,
+  BarChart3,
+  GraduationCap,
+  Rss,
+  BookOpen,
+} from 'lucide-react';
 
 export const TOP_NAV_SECTIONS = [
-  { id: 'all', label: 'All' },
-  { id: 'videos', label: 'Videos' },
-  { id: 'podcasts', label: 'Audio' },
-  { id: 'polls', label: 'Polls' },
-  { id: 'courses', label: 'Courses' },
-  { id: 'bible', label: 'Bible' },
+  { id: 'all', label: 'All', icon: Flame },
+  { id: 'videos', label: 'Videos', icon: Video },
+  { id: 'podcasts', label: 'Audio', icon: Headphones },
+  { id: 'polls', label: 'Polls', icon: BarChart3 },
+  { id: 'courses', label: 'Courses', icon: GraduationCap },
+  { id: 'rss', label: 'RSS Feeds', icon: Rss },
+  { id: 'bible', label: 'Bible', icon: BookOpen },
 ];
 
 export default function TopNav({ activeSection = 'all', onSelectSection, isHome = false }) {
   const pathname = usePathname();
   const router = useRouter();
   const [currentSection, setCurrentSection] = useState(activeSection);
+  const scrollRef = useRef(null);
+  const dragRef = useRef({ active: false, startX: 0, startScroll: 0, moved: false });
 
   useEffect(() => {
     setCurrentSection(activeSection);
@@ -32,6 +44,11 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
   }, []);
 
   function handleSectionClick(secId) {
+    if (dragRef.current.moved) {
+      dragRef.current.moved = false;
+      return;
+    }
+
     setCurrentSection(secId);
 
     if (onSelectSection) {
@@ -58,20 +75,64 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
     }
   }
 
+  // Pointer drag to scroll horizontally with no visible scrollbar
+  function onPointerDown(e) {
+    if (!scrollRef.current) return;
+    dragRef.current = {
+      active: true,
+      startX: e.clientX,
+      startScroll: scrollRef.current.scrollLeft,
+      moved: false,
+    };
+  }
+
+  function onPointerMove(e) {
+    const d = dragRef.current;
+    if (!d.active || !scrollRef.current) return;
+    const dx = e.clientX - d.startX;
+    if (!d.moved && Math.abs(dx) > 4) {
+      d.moved = true;
+      scrollRef.current.setPointerCapture?.(e.pointerId);
+    }
+    if (d.moved) {
+      scrollRef.current.scrollLeft = d.startScroll - dx;
+    }
+  }
+
+  function onPointerUp() {
+    dragRef.current.active = false;
+  }
+
   return (
-    <nav className={`top-nav-wrapper${isHome ? ' top-nav-home' : ' top-nav-subpage'}`} aria-label="Content Type Navigation">
-      <div className="section-menu-inner">
+    <nav
+      className={`top-nav-wrapper${isHome ? ' top-nav-home' : ' top-nav-subpage'} no-scrollbar`}
+      aria-label="Content Type Navigation"
+    >
+      <div
+        ref={scrollRef}
+        className="section-menu-inner no-scrollbar"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        role="tablist"
+      >
         {TOP_NAV_SECTIONS.map((s) => {
+          const Icon = s.icon;
           const isActive = currentSection === s.id;
           return (
             <button
               key={s.id}
               type="button"
-              className={`section-item${isActive ? ' active' : ''}`}
+              role="tab"
+              aria-selected={isActive}
+              className={`section-item-stacked${isActive ? ' active' : ''}`}
               onClick={() => handleSectionClick(s.id)}
-              aria-pressed={isActive}
             >
-              {s.label}
+              <span className="top-nav-icon-wrap">
+                <Icon size={19} strokeWidth={isActive ? 2.3 : 1.8} className="top-nav-icon" />
+              </span>
+              <span className="top-nav-label-small">{s.label}</span>
             </button>
           );
         })}

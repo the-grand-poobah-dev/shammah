@@ -1,6 +1,9 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
+import FaithReactionPicker from './FaithReactionPicker';
+import { playSound } from '../lib/soundEffects';
 
 const FAITH_EMOJI_SET = [
   { emoji: '❤️', label: 'Love' },
@@ -19,6 +22,7 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
   const [counts, setCounts] = useState({}); // { emoji: n }
   const [myEmoji, setMyEmoji] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [showFullPicker, setShowFullPicker] = useState(false);
   const [floatingReaction, setFloatingReaction] = useState(null);
   const timerRef = useRef(null);
   const longPressedRef = useRef(false);
@@ -68,6 +72,7 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
     setMyEmoji(nextEmoji);
 
     if (nextEmoji) {
+      playSound('reaction');
       setFloatingReaction(nextEmoji);
       setTimeout(() => setFloatingReaction(null), 1200);
     }
@@ -98,6 +103,7 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
 
   function requireSignIn() {
     setPickerOpen(false);
+    setShowFullPicker(false);
     onRequireSignIn();
   }
 
@@ -125,6 +131,7 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
 
   function pick(emoji) {
     setPickerOpen(false);
+    setShowFullPicker(false);
     if (!session) return requireSignIn();
     setReaction(emoji);
   }
@@ -132,8 +139,10 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
   return (
     <div
       className={`reaction-wrap${size === 'sm' ? ' reaction-sm' : ''}`}
-      onMouseEnter={() => session && setPickerOpen(true)}
-      onMouseLeave={() => setPickerOpen(false)}
+      onMouseEnter={() => session && !showFullPicker && setPickerOpen(true)}
+      onMouseLeave={() => {
+        if (!showFullPicker) setPickerOpen(false);
+      }}
     >
       {/* Floating Animated Reaction */}
       {floatingReaction && (
@@ -142,7 +151,8 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
         </span>
       )}
 
-      {pickerOpen && (
+      {/* Quick Reaction Pill with More button */}
+      {pickerOpen && !showFullPicker && (
         <div className="reaction-picker faith-reaction-picker" role="menu">
           {FAITH_EMOJI_SET.map((item) => (
             <button
@@ -157,6 +167,32 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
               <span className="picker-emoji-char">{item.emoji}</span>
             </button>
           ))}
+          <button
+            type="button"
+            className="reaction-picker-btn reaction-more-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowFullPicker(true);
+            }}
+            title="Browse all faith reactions"
+            aria-label="More reactions"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Full Categorized Faith Reaction Sheet */}
+      {showFullPicker && (
+        <div className="reaction-full-sheet-container">
+          <FaithReactionPicker
+            currentEmoji={myEmoji}
+            onSelect={pick}
+            onClose={() => {
+              setShowFullPicker(false);
+              setPickerOpen(false);
+            }}
+          />
         </div>
       )}
 

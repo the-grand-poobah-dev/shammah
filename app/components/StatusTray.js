@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
+import MemberBadge from './MemberBadge';
 import { getActiveStatuses } from '../lib/statusManager';
 import StatusViewerModal from './StatusViewerModal';
 import StatusCreatorModal from './StatusCreatorModal';
@@ -15,6 +16,7 @@ export default function StatusTray({ currentUser }) {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const scrollRef = useRef(null);
+  const dragRef = useRef({ active: false, startX: 0, startScroll: 0, moved: false });
 
   function loadStatuses() {
     setStatuses(getActiveStatuses());
@@ -79,7 +81,40 @@ export default function StatusTray({ currentUser }) {
     });
   }
 
+  // Pointer drag-to-scroll handlers (no visible scrollbar)
+  function onPointerDown(e) {
+    if (!scrollRef.current) return;
+    dragRef.current = {
+      active: true,
+      startX: e.clientX,
+      startScroll: scrollRef.current.scrollLeft,
+      moved: false,
+    };
+  }
+
+  function onPointerMove(e) {
+    const d = dragRef.current;
+    if (!d.active || !scrollRef.current) return;
+    const dx = e.clientX - d.startX;
+    if (!d.moved && Math.abs(dx) > 4) {
+      d.moved = true;
+      scrollRef.current.setPointerCapture?.(e.pointerId);
+    }
+    if (d.moved) {
+      scrollRef.current.scrollLeft = d.startScroll - dx;
+      checkScroll();
+    }
+  }
+
+  function onPointerUp() {
+    dragRef.current.active = false;
+  }
+
   function handleOpenViewer(index) {
+    if (dragRef.current.moved) {
+      dragRef.current.moved = false;
+      return;
+    }
     setActiveStoryIndex(index);
     setViewerOpen(true);
   }
@@ -120,6 +155,10 @@ export default function StatusTray({ currentUser }) {
         ref={scrollRef}
         className="status-tray-scroll no-scrollbar"
         onScroll={checkScroll}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         role="list"
       >
         {/* Card 1: Add Story / Your Status */}
@@ -127,6 +166,10 @@ export default function StatusTray({ currentUser }) {
           role="listitem"
           className="status-card-item status-card-create"
           onClick={() => {
+            if (dragRef.current.moved) {
+              dragRef.current.moved = false;
+              return;
+            }
             if (hasMyStatus) {
               handleOpenViewer(myStatusIndex);
             } else {
@@ -137,7 +180,7 @@ export default function StatusTray({ currentUser }) {
         >
           <div className="status-create-thumb">
             <Avatar
-              name={currentUser?.name || 'You'}
+              name={currentUser?.name || currentUser?.display_name || 'You'}
               src={currentUser?.avatar_url}
               hasStatus={hasMyStatus}
               className="status-user-avatar"
@@ -192,7 +235,12 @@ export default function StatusTray({ currentUser }) {
 
               <div className="status-card-footer">
                 <div className="status-footer-name-row">
+                  {/* Clean input name shown */}
                   <span className="status-card-author-name">{status.userName}</span>
+                  {/* Title shown by member badge */}
+                  {status.userBadge && (
+                    <MemberBadge badgeId={status.userBadge} size="sm" />
+                  )}
                   {status.userVerified && (
                     <VerifiedBadge badge={status.userBadge} role={status.userRole} size={13} />
                   )}
