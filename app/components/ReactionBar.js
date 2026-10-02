@@ -2,14 +2,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 
-const EMOJI_SET = ['❤️', '🙏', '🙌', '😂', '😮', '😢'];
+const FAITH_EMOJI_SET = [
+  { emoji: '❤️', label: 'Love' },
+  { emoji: '🙏', label: 'Amen / Pray' },
+  { emoji: '🔥', label: 'Holy Fire' },
+  { emoji: '🙌', label: 'Praise' },
+  { emoji: '💡', label: 'Insight' },
+  { emoji: '🕊️', label: 'Peace' },
+  { emoji: '👏', label: 'Joy' },
+];
+
 const DEFAULT_EMOJI = '❤️';
-const LONG_PRESS_MS = 450;
+const LONG_PRESS_MS = 380;
 
 export default function ReactionBar({ targetType, targetId, session, onRequireSignIn, size = 'md' }) {
   const [counts, setCounts] = useState({}); // { emoji: n }
   const [myEmoji, setMyEmoji] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [floatingReaction, setFloatingReaction] = useState(null);
   const timerRef = useRef(null);
   const longPressedRef = useRef(false);
 
@@ -44,7 +54,6 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetType, targetId, session?.user?.id]);
 
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -57,13 +66,18 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
       return next;
     });
     setMyEmoji(nextEmoji);
+
+    if (nextEmoji) {
+      setFloatingReaction(nextEmoji);
+      setTimeout(() => setFloatingReaction(null), 1200);
+    }
   }
 
   async function setReaction(emoji) {
     const turningOff = myEmoji === emoji;
     const target = turningOff ? null : emoji;
     const prevEmoji = myEmoji;
-    applyLocal(target); // optimistic — feels instant even on a slow connection
+    applyLocal(target);
 
     if (turningOff) {
       const { error } = await supabase
@@ -72,7 +86,7 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
         .eq('target_type', targetType)
         .eq('target_id', targetId)
         .eq('user_id', session.user.id);
-      if (error) applyLocal(prevEmoji); // put it back if the server disagreed
+      if (error) applyLocal(prevEmoji);
     } else {
       const { error } = await supabase.from('reactions').upsert(
         { target_type: targetType, target_id: targetId, user_id: session.user.id, emoji },
@@ -89,7 +103,7 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
 
   function handleTap() {
     if (longPressedRef.current) {
-      longPressedRef.current = false; // the long-press already acted; ignore the tap that follows
+      longPressedRef.current = false;
       return;
     }
     if (!session) return requireSignIn();
@@ -97,7 +111,7 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
   }
 
   function startPress() {
-    if (!session) return; // don't even arm the timer — the tap handler will prompt sign-in
+    if (!session) return;
     longPressedRef.current = false;
     timerRef.current = setTimeout(() => {
       longPressedRef.current = true;
@@ -116,25 +130,36 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
   }
 
   return (
-    <div className={`reaction-wrap${size === 'sm' ? ' reaction-sm' : ''}`}>
-      {pickerOpen && (
-        <>
-          <div className="reaction-scrim" onClick={() => setPickerOpen(false)} />
-          <div className="reaction-picker" role="menu">
-            {EMOJI_SET.map((e) => (
-              <button
-                key={e}
-                type="button"
-                role="menuitem"
-                className={`reaction-picker-btn${myEmoji === e ? ' mine' : ''}`}
-                onClick={() => pick(e)}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        </>
+    <div
+      className={`reaction-wrap${size === 'sm' ? ' reaction-sm' : ''}`}
+      onMouseEnter={() => session && setPickerOpen(true)}
+      onMouseLeave={() => setPickerOpen(false)}
+    >
+      {/* Floating Animated Reaction */}
+      {floatingReaction && (
+        <span className="reaction-pop-burst" aria-hidden="true">
+          {floatingReaction}
+        </span>
       )}
+
+      {pickerOpen && (
+        <div className="reaction-picker faith-reaction-picker" role="menu">
+          {FAITH_EMOJI_SET.map((item) => (
+            <button
+              key={item.emoji}
+              type="button"
+              role="menuitem"
+              className={`reaction-picker-btn${myEmoji === item.emoji ? ' mine' : ''}`}
+              onClick={() => pick(item.emoji)}
+              title={item.label}
+              aria-label={item.label}
+            >
+              <span className="picker-emoji-char">{item.emoji}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <button
         type="button"
         className={`react-btn${myEmoji ? ' mine' : ''}`}
@@ -145,9 +170,10 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
         onContextMenu={(e) => e.preventDefault()}
         onClick={handleTap}
         aria-label={myEmoji ? 'Remove reaction' : 'React'}
-        title="Tap to like · hold for more reactions"
+        title="Tap to like · hover or hold for prayer & praise reactions"
       >
         <span className="react-face">{myEmoji || '🤍'}</span>
+        <span className="react-label">{myEmoji ? 'Reacted' : 'React'}</span>
         {total > 0 && <span className="react-count">{total}</span>}
       </button>
     </div>

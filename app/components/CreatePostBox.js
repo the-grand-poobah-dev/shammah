@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Image as ImageIcon,
   Video as VideoIcon,
@@ -14,12 +14,31 @@ import {
   Trash2,
   ChevronDown,
   Check,
+  Tag,
+  Search,
+  Globe,
+  Users,
+  Church,
+  Lock,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
 import { CATEGORY_STYLES, categoryStyle, initials } from '../lib/postDisplay';
+import { VISIBILITY_OPTIONS } from '../lib/postInteractions';
 
 const MAX_POLL_OPTIONS = 6;
+
+// High-frequency quick select categories
+const FEATURED_CATEGORIES = [
+  'prayer',
+  'stories',
+  'worship',
+  'lessons',
+  'events',
+  'teen',
+  'kids',
+  'resources',
+];
 
 export default function CreatePostBox({
   session,
@@ -47,12 +66,37 @@ export default function CreatePostBox({
   openAuth,
 }) {
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [visibility, setVisibility] = useState('public');
+  const [showVisMenu, setShowVisMenu] = useState(false);
   const photoInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const audioInputRef = useRef(null);
+  const categoryMenuRef = useRef(null);
+  const categoryTriggerRef = useRef(null);
 
   const headerName = profile?.display_name || session?.user?.email || 'Member';
   const cat = categoryStyle(composeCategory);
+
+  // Close category dropdown on click outside - never on mouse leave
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        categoryMenuRef.current &&
+        !categoryMenuRef.current.contains(event.target) &&
+        categoryTriggerRef.current &&
+        !categoryTriggerRef.current.contains(event.target)
+      ) {
+        setShowCategoryMenu(false);
+      }
+    }
+    if (showCategoryMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCategoryMenu]);
 
   function handleFileSelected(file) {
     if (!file) return;
@@ -123,37 +167,218 @@ export default function CreatePostBox({
     (!composeText.trim() && !mediaFile) ||
     (isPoll && pollOptions.filter((o) => o.label.trim() || o.file).length < 2);
 
+  // Filter categories in full popover
+  const filteredCategories = Object.entries(CATEGORY_STYLES).filter(([_, c]) =>
+    c.label.toLowerCase().includes(categorySearch.toLowerCase().trim())
+  );
+
   return (
-    <form className="compose compose-genz" onSubmit={onSubmit}>
-      {/* Top Header: Avatar + Author + Category Selector Pill + Admin Pin Toggle */}
+    <form className="compose compose-genz" onSubmit={(e) => onSubmit(e, visibility)}>
+      {/* Top Header: Avatar + Author + Admin Pin Toggle */}
       <div className="compose-header">
         <div className="compose-author-row">
           <Avatar name={headerName} src={profile?.avatar_url} className="avatar-sm" />
           <div className="compose-author-meta">
             <span className="compose-author-name">{headerName}</span>
-            <div className="compose-selector-wrap">
+            <span className="compose-author-sub">
+              {profile?.role === 'platform_admin'
+                ? 'Platform Administrator'
+                : profile?.role === 'church_admin'
+                  ? 'Church Administrator'
+                  : 'Fellowship Community'}
+            </span>
+          </div>
+        </div>
+
+        <div className="compose-header-right-actions">
+          {/* Post Visibility Selector */}
+          <div className="compose-vis-wrap">
+            <button
+              type="button"
+              className="compose-vis-btn"
+              onClick={() => setShowVisMenu((v) => !v)}
+              title="Select post visibility"
+            >
+              {visibility === 'followers' ? (
+                <Users size={13} />
+              ) : visibility === 'church' ? (
+                <Church size={13} />
+              ) : visibility === 'private' ? (
+                <Lock size={13} />
+              ) : (
+                <Globe size={13} />
+              )}
+              <span>{VISIBILITY_OPTIONS.find((v) => v.id === visibility)?.label || 'Public'}</span>
+              <ChevronDown size={11} />
+            </button>
+
+            {showVisMenu && (
+              <div className="compose-vis-dropdown" role="menu">
+                {VISIBILITY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`compose-vis-opt-btn${visibility === opt.id ? ' active' : ''}`}
+                    onClick={() => {
+                      setVisibility(opt.id);
+                      setShowVisMenu(false);
+                    }}
+                  >
+                    <span className="vis-opt-icon">{opt.icon}</span>
+                    <div className="vis-opt-details">
+                      <strong>{opt.label}</strong>
+                      <small>{opt.desc}</small>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Admin Pinned Announcement quick badge */}
+          {isAdmin && (
+            <button
+              type="button"
+              className={`compose-pin-badge${isPinnedAnnouncement ? ' active' : ''}`}
+              onClick={() => setIsPinnedAnnouncement((v) => !v)}
+              title={isPinnedAnnouncement ? 'Will be pinned to top of feed' : 'Click to pin as announcement'}
+            >
+              {isPinnedAnnouncement ? <Pin size={14} className="pin-active-svg" /> : <Pin size={14} />}
+              <span>{isPinnedAnnouncement ? 'Pinned Announcement' : 'Pin to top'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Prominent, Unmissable Category Selector Bar */}
+      <div className="compose-category-bar">
+        <div className="compose-cat-bar-header">
+          <div className="compose-cat-bar-title-wrap">
+            <Tag size={15} className="cat-bar-icon" />
+            <span className="compose-cat-bar-title">Select Category for this post:</span>
+            <span
+              className="compose-cat-selected-badge"
+              style={{
+                '--accent': cat.accent,
+                '--accent-soft': cat.soft,
+                '--accent-text': cat.text,
+              }}
+            >
+              <span className="cat-dot" />
+              <strong>{cat.label}</strong>
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="compose-cat-browse-all-btn"
+            onClick={() => setShowCategoryMenu(true)}
+            title="Browse all 16 categories"
+          >
+            <span>Browse all (16) ▾</span>
+          </button>
+        </div>
+
+        {/* Quick-select chips with clear active visual state */}
+        <div className="compose-cat-chips-scroll" role="radiogroup" aria-label="Quick Categories">
+          {FEATURED_CATEGORIES.map((id) => {
+            const itemStyle = categoryStyle(id);
+            const isSelected = composeCategory === id;
+            return (
               <button
+                key={id}
                 type="button"
-                className="compose-category-pill"
-                style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
-                onClick={() => setShowCategoryMenu((v) => !v)}
-                aria-expanded={showCategoryMenu}
+                role="radio"
+                aria-checked={isSelected}
+                className={`compose-cat-chip${isSelected ? ' is-selected' : ''}`}
+                style={{
+                  '--accent': itemStyle.accent,
+                  '--accent-soft': itemStyle.soft,
+                  '--accent-text': itemStyle.text,
+                }}
+                onClick={() => setComposeCategory(id)}
               >
                 <span className="cat-dot" />
-                <span className="cat-label">{cat.label}</span>
-                <ChevronDown size={13} className={`chevron-icon${showCategoryMenu ? ' open' : ''}`} />
+                <span className="chip-label">{itemStyle.label}</span>
+                {isSelected && <Check size={13} className="chip-check-icon" />}
               </button>
+            );
+          })}
+          <button
+            type="button"
+            className="compose-cat-chip compose-cat-more-chip"
+            onClick={() => setShowCategoryMenu(true)}
+          >
+            <span>+ More Categories</span>
+          </button>
+        </div>
 
-              {/* Floating category menu */}
-              {showCategoryMenu && (
-                <div className="category-popover" onMouseLeave={() => setShowCategoryMenu(false)}>
-                  <div className="category-popover-title">Post into:</div>
-                  <div className="category-popover-grid">
-                    {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
+        {/* Persistent, Foolproof Category Modal Dialog with Click-Outside Backdrop */}
+        {showCategoryMenu && (
+          <>
+            <div
+              className="category-modal-backdrop"
+              onClick={() => setShowCategoryMenu(false)}
+            />
+            <div
+              ref={categoryMenuRef}
+              className="category-popover category-modal-sheet"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Choose post category"
+            >
+              <div className="category-popover-header">
+                <div className="category-popover-title-row">
+                  <div className="category-popover-title">
+                    <Tag size={16} className="cat-popover-icon" />
+                    <span>Choose Post Category</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="category-popover-close"
+                    onClick={() => setShowCategoryMenu(false)}
+                    aria-label="Close category selector"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Instant search input */}
+                <div className="category-search-box">
+                  <Search size={15} className="category-search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search all categories (e.g. prayer, worship, lessons)..."
+                    value={categorySearch}
+                    onChange={(e) => setCategorySearch(e.target.value)}
+                    className="category-search-input"
+                    autoFocus
+                  />
+                  {categorySearch && (
+                    <button
+                      type="button"
+                      className="category-search-clear"
+                      onClick={() => setCategorySearch('')}
+                      aria-label="Clear search"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="category-popover-grid">
+                {filteredCategories.length === 0 ? (
+                  <div className="category-popover-empty">No category found matching &quot;{categorySearch}&quot;</div>
+                ) : (
+                  filteredCategories.map(([id, c]) => {
+                    const isCurrent = composeCategory === id;
+                    return (
                       <button
                         key={id}
                         type="button"
-                        className={`cat-popover-item${composeCategory === id ? ' active' : ''}`}
+                        className={`cat-popover-item${isCurrent ? ' active' : ''}`}
                         style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
                         onClick={() => {
                           setComposeCategory(id);
@@ -161,28 +386,19 @@ export default function CreatePostBox({
                         }}
                       >
                         <span className="cat-dot" />
-                        <span>{c.label}</span>
-                        {composeCategory === id && <Check size={13} className="cat-check" />}
+                        <span className="cat-popover-label">{c.label}</span>
+                        {isCurrent && <Check size={16} className="cat-check" />}
                       </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+                    );
+                  })
+                )}
+              </div>
 
-        {/* Admin Pinned Announcement quick badge */}
-        {isAdmin && (
-          <button
-            type="button"
-            className={`compose-pin-badge${isPinnedAnnouncement ? ' active' : ''}`}
-            onClick={() => setIsPinnedAnnouncement((v) => !v)}
-            title={isPinnedAnnouncement ? 'Will be pinned to top of feed' : 'Click to pin as announcement'}
-          >
-            {isPinnedAnnouncement ? <Pin size={14} className="pin-active-svg" /> : <Pin size={14} />}
-            <span>{isPinnedAnnouncement ? 'Pinned' : 'Pin to top'}</span>
-          </button>
+              <div className="category-popover-footer">
+                <span>Select the category that best fits your post so other church members can discover it.</span>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -197,9 +413,15 @@ export default function CreatePostBox({
               ? 'Ask your question to the church community…'
               : composeCategory === 'prayer'
                 ? 'Share a prayer request or praise report…'
-                : composeCategory === 'testimony'
+                : composeCategory === 'stories'
                   ? 'Tell the church what God has done in your life…'
-                  : 'What’s on your heart today? Share a word, scripture or encouragement…'
+                  : composeCategory === 'worship'
+                    ? 'Share a worship song, verse, or creative reflection…'
+                    : composeCategory === 'lessons'
+                      ? 'Share sermon notes, bible lesson, or study insight…'
+                      : composeCategory === 'events'
+                        ? 'Share details about an upcoming fellowship or service…'
+                        : `Post into ${cat.label}… What’s on your heart today?`
           }
           rows={3}
           maxLength={2000}

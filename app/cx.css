@@ -32,7 +32,7 @@ a.church-row:active {
 /* ---------- Sub-page header ---------- */
 .cx-topbar {
   position: sticky;
-  top: 0;
+  top: 48px;
   z-index: 20;
   background: var(--bg);
   border-bottom: 1px solid var(--border);

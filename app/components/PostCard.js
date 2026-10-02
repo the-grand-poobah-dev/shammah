@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Repeat, Globe, Users, Church, Lock, MoreHorizontal } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { categoryStyle } from '../lib/postDisplay';
 import Avatar from './Avatar';
@@ -7,6 +9,14 @@ import MemberName from './MemberName';
 import ReactionBar from './ReactionBar';
 import CommentThread from './CommentThread';
 import PinIcon from './PinIcon';
+import RepostModal from './RepostModal';
+import PostVisibilityModal from './PostVisibilityModal';
+import {
+  isPostReposted,
+  getPostRepostCount,
+  toggleRepost,
+  getPostVisibility,
+} from '../lib/postInteractions';
 
 function PollBlock({ options, counts, myVote, canVote, onVote }) {
   const total = options.reduce((sum, o) => sum + (counts[o.id] || 0), 0);
@@ -54,28 +64,21 @@ function PollBlock({ options, counts, myVote, canVote, onVote }) {
         const votes = counts[opt.id] || 0;
         const pct = total ? Math.round((votes / total) * 100) : 0;
         const mine = myVote === opt.id;
-        if (!hasVoted) {
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              className="poll-option-btn"
-              disabled={!canVote}
-              onClick={() => onVote(opt.id)}
-            >
-              {opt.label}
-            </button>
-          );
-        }
         return (
-          <div key={opt.id} className={`poll-result${mine ? ' mine' : ''}`}>
-            <div className="poll-result-bar" style={{ width: `${pct}%` }} />
-            <span className="poll-result-label">
+          <button
+            key={opt.id}
+            type="button"
+            className={`poll-option${mine ? ' mine' : ''}`}
+            disabled={!canVote || hasVoted}
+            onClick={() => onVote(opt.id)}
+          >
+            <span className="poll-bar" style={{ width: `${pct}%` }} />
+            <span className="poll-label">
               {opt.label}
               {mine && ' ✓'}
             </span>
-            <span className="poll-result-pct">{pct}%</span>
-          </div>
+            {hasVoted && <span className="poll-pct">{pct}%</span>}
+          </button>
         );
       })}
       <p className="poll-meta">
@@ -89,22 +92,53 @@ export default function PostCard({
   post,
   session,
   openAuth,
-  pollOptions,
-  pollCounts,
-  myVote,
+  pollOptions = null,
+  pollCounts = {},
+  myVote = null,
   onVote,
-  isAdmin,
+  isAdmin = false,
   onTogglePin,
 }) {
-  const [commentCount, setCommentCount] = useState(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentCount, setCommentCount] = useState(null);
   const [shareMsg, setShareMsg] = useState('');
+  const [textExpanded, setTextExpanded] = useState(false);
+  const [showRepostModal, setShowRepostModal] = useState(false);
+  const [showVisibilityModal, setShowVisibilityModal] = useState(false);
+  const [reposted, setReposted] = useState(false);
+  const [repostCount, setRepostCount] = useState(0);
+  const [visibility, setVisibility] = useState('public');
 
   const cat = categoryStyle(post.category_id);
-  // Supabase can hand back the joined profile as an object or a one-item list
-  const author = Array.isArray(post.profiles) ? post.profiles[0] : post.profiles;
-  const authorName = (author && author.display_name) || 'Someone';
+  const author = post.profiles;
+  const authorName = author?.name || author?.display_name || 'Member';
+  const authorId = post.author_id || post.user_id;
+  const isAuthor = session?.user?.id && session.user.id === authorId;
 
+  // Repost status & visible counter
+  useEffect(() => {
+    setReposted(isPostReposted(post.id, session?.user?.id));
+    setRepostCount(getPostRepostCount(post.id, post.reposts_count || 0));
+    setVisibility(getPostVisibility(post.id, post.visibility || 'public'));
+
+    function onRepostUpdated() {
+      setReposted(isPostReposted(post.id, session?.user?.id));
+      setRepostCount(getPostRepostCount(post.id, post.reposts_count || 0));
+    }
+    function onVisChanged(e) {
+      if (e.detail?.postId === post.id) {
+        setVisibility(e.detail.visibility);
+      }
+    }
+    window.addEventListener('shammah:reposts-updated', onRepostUpdated);
+    window.addEventListener('shammah:post-visibility-changed', onVisChanged);
+    return () => {
+      window.removeEventListener('shammah:reposts-updated', onRepostUpdated);
+      window.removeEventListener('shammah:post-visibility-changed', onVisChanged);
+    };
+  }, [post.id, session?.user?.id, post.reposts_count, post.visibility]);
+
+  // Load comment counts
   useEffect(() => {
     let cancelled = false;
     supabase.rpc('comment_counts', { p_post_ids: [post.id] }).then(({ data }) => {
@@ -119,13 +153,32 @@ export default function PostCard({
     openAuth('signin');
   }
 
+  function handleRepostClick() {
+    if (!session) return requireSignIn();
+    setShowRepostModal(true);
+  }
+
+  function handleConfirmRepost(quoteText) {
+    const res = toggleRepost(
+      post.id,
+      post,
+      {
+        id: session?.user?.id,
+        name: session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'You',
+        avatar_url: session?.user?.user_metadata?.avatar_url,
+      },
+      quoteText
+    );
+    setReposted(res.reposted);
+    setRepostCount(res.count);
+  }
+
   async function handleShare() {
     const text = post.text_content || '';
     if (navigator.share) {
       try {
         await navigator.share({ text, title: 'Shammah' });
       } catch (err) {
-        // AbortError just means the person closed the share sheet — nothing to show for that
         if (err && err.name !== 'AbortError') setShareMsg('Could not open the share sheet.');
       }
       return;
@@ -138,6 +191,14 @@ export default function PostCard({
     }
     setTimeout(() => setShareMsg(''), 2000);
   }
+
+  // Text truncation logic for long posts (> 300 characters)
+  const fullText = post.text_content || '';
+  const isLongText = fullText.length > 300;
+  const renderedText = isLongText && !textExpanded ? `${fullText.slice(0, 300)}...` : fullText;
+
+  // Visibility icon helper
+  const VisIcon = visibility === 'followers' ? Users : visibility === 'church' ? Church : visibility === 'private' ? Lock : Globe;
 
   return (
     <article
@@ -167,33 +228,95 @@ export default function PostCard({
         </div>
       )}
 
+      {/* Post Header with Author Link & Visibility Badge */}
       <div className="post-header">
-        <Avatar name={authorName} src={author?.avatar_url} />
+        <Link href={authorId ? `/profile/${authorId}` : '/profile'} className="post-author-avatar-link">
+          <Avatar name={authorName} src={author?.avatar_url} userId={authorId} />
+        </Link>
+
         <div className="post-header-text">
-          <MemberName name={authorName} badge={author?.badge} verified={author?.badge_verified} nameClassName="post-author" />
-          <span className="category-chip">{cat.label}</span>
+          <Link href={authorId ? `/profile/${authorId}` : '/profile'} className="post-author-link">
+            <MemberName
+              name={authorName}
+              badge={author?.badge}
+              verified={author?.badge_verified}
+              role={author?.role}
+              nameClassName="post-author"
+            />
+          </Link>
+          <div className="post-sub-badges-row">
+            <span className="category-chip">{cat.label}</span>
+            {/* Visibility Badge */}
+            <span
+              className="post-visibility-pill"
+              title={`Visibility: ${visibility}`}
+              onClick={() => {
+                if (isAuthor || isAdmin) setShowVisibilityModal(true);
+              }}
+            >
+              <VisIcon size={11} className="post-vis-icon" />
+              <span className="post-vis-label">{visibility}</span>
+              {(isAuthor || isAdmin) && <span className="post-vis-edit-hint">▾</span>}
+            </span>
+          </div>
         </div>
-        {!post.is_pinned && isAdmin && (
-          <button
-            type="button"
-            className="header-pin-btn"
-            onClick={() => onTogglePin?.(post)}
-            title="Pin this announcement to top of feed"
-            aria-label="Pin announcement to top"
-          >
-            <PinIcon className="pin-action-icon" />
-            <span>Pin</span>
-          </button>
-        )}
+
+        <div className="post-header-actions-right">
+          {!post.is_pinned && isAdmin && (
+            <button
+              type="button"
+              className="header-pin-btn"
+              onClick={() => onTogglePin?.(post)}
+              title="Pin this announcement to top of feed"
+              aria-label="Pin announcement to top"
+            >
+              <PinIcon className="pin-action-icon" />
+              <span>Pin</span>
+            </button>
+          )}
+
+          {(isAuthor || isAdmin) && (
+            <button
+              type="button"
+              className="post-options-btn"
+              onClick={() => setShowVisibilityModal(true)}
+              title="Change post privacy & visibility"
+              aria-label="Post settings"
+            >
+              <MoreHorizontal size={17} />
+            </button>
+          )}
+        </div>
       </div>
 
-      {post.text_content && <p className="post-text">{post.text_content}</p>}
-
-      {pollOptions && (
-        <PollBlock options={pollOptions} counts={pollCounts} myVote={myVote} canVote={!!session} onVote={onVote} />
+      {/* Post Body: Truncated with "Read more..." if text > 300 characters */}
+      {fullText && (
+        <div className="post-text-container">
+          <p className="post-text">{renderedText}</p>
+          {isLongText && (
+            <button
+              type="button"
+              className="post-read-more-btn"
+              onClick={() => setTextExpanded((exp) => !exp)}
+            >
+              {textExpanded ? 'Show less' : 'Read more...'}
+            </button>
+          )}
+        </div>
       )}
 
-      {/* Media: image / video / reel / audio / podcast */}
+      {/* Poll Options (remains visible regardless of text length) */}
+      {pollOptions && (
+        <PollBlock
+          options={pollOptions}
+          counts={pollCounts}
+          myVote={myVote}
+          canVote={!!session}
+          onVote={onVote}
+        />
+      )}
+
+      {/* Various media shared with long text posts remain visible in the card */}
       {post.media_url && post.media_type === 'image' && (
         <img className="post-media" src={post.media_url} alt="" loading="lazy" />
       )}
@@ -206,16 +329,41 @@ export default function PostCard({
         </div>
       )}
 
+      {/* Post Actions Bar with Reactions, Comments, Repost Counter, and Share */}
       <div className="post-actions">
-        <ReactionBar targetType="post" targetId={post.id} session={session} onRequireSignIn={requireSignIn} />
-        <button type="button" className="action-btn" onClick={() => setCommentsOpen((v) => !v)}>
+        <ReactionBar
+          targetType="post"
+          targetId={post.id}
+          session={session}
+          onRequireSignIn={requireSignIn}
+        />
+
+        <button
+          type="button"
+          className="action-btn"
+          onClick={() => setCommentsOpen((v) => !v)}
+          title="Join fellowship comments"
+        >
           <span className="action-icon">💬</span>
-          {commentCount != null && commentCount > 0 ? commentCount : 'Comment'}
+          <span>{commentCount != null && commentCount > 0 ? commentCount : 'Comment'}</span>
         </button>
-        <button type="button" className="action-btn" onClick={handleShare}>
+
+        {/* Retweet / Re-share (Fellowship Repost) with Visible Counter */}
+        <button
+          type="button"
+          className={`action-btn repost-btn${reposted ? ' is-reposted' : ''}`}
+          onClick={handleRepostClick}
+          title={reposted ? 'You reposted this' : 'Repost to fellowship profile'}
+        >
+          <Repeat size={15} className={`action-icon repost-icon${reposted ? ' active' : ''}`} />
+          <span className="repost-count-label">{repostCount > 0 ? repostCount : 'Repost'}</span>
+        </button>
+
+        <button type="button" className="action-btn" onClick={handleShare} title="Share post">
           <span className="action-icon">↗</span>
-          Share
+          <span>Share</span>
         </button>
+
         {isAdmin && (
           <button
             type="button"
@@ -228,6 +376,7 @@ export default function PostCard({
             <span>{post.is_pinned ? 'Pinned' : 'Pin'}</span>
           </button>
         )}
+
         {shareMsg && <span className="share-toast">{shareMsg}</span>}
       </div>
 
@@ -237,6 +386,27 @@ export default function PostCard({
           session={session}
           onRequireSignIn={requireSignIn}
           onCountChange={setCommentCount}
+        />
+      )}
+
+      {/* Repost Confirmation & Reflection Modal */}
+      {showRepostModal && (
+        <RepostModal
+          post={post}
+          currentUser={session?.user}
+          onClose={() => setShowRepostModal(false)}
+          onConfirm={handleConfirmRepost}
+        />
+      )}
+
+      {/* Post Privacy & Visibility Modal */}
+      {showVisibilityModal && (
+        <PostVisibilityModal
+          postId={post.id}
+          currentVisibility={visibility}
+          currentUser={session?.user}
+          onClose={() => setShowVisibilityModal(false)}
+          onUpdated={(newVis) => setVisibility(newVis)}
         />
       )}
     </article>
