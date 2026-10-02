@@ -277,7 +277,30 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
             <ArrowLeft size={20} />
           </button>
 
-          <div className="status-viewer-author-info">
+          <div
+            className="status-viewer-author-info cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.dispatchEvent(
+                new CustomEvent('shammah:open-profile', {
+                  detail: {
+                    author: {
+                      id: currentStatus.userId,
+                      display_name: currentStatus.userName,
+                      avatar_url: currentStatus.userAvatar,
+                      badge: currentStatus.userBadge,
+                      badge_verified: currentStatus.userVerified,
+                      role: currentStatus.userRole,
+                    },
+                    authorId: currentStatus.userId,
+                  },
+                })
+              );
+            }}
+            role="button"
+            tabIndex={0}
+            title={`View profile for ${currentStatus.userName}`}
+          >
             <Avatar
               name={currentStatus.userName}
               src={currentStatus.userAvatar}

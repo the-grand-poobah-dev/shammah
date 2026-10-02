@@ -226,6 +226,24 @@ export default function StatusTray({ currentUser }) {
                   src={status.userAvatar}
                   hasStatus={true}
                   className="status-user-avatar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.dispatchEvent(
+                      new CustomEvent('shammah:open-profile', {
+                        detail: {
+                          author: {
+                            id: status.userId,
+                            display_name: status.userName,
+                            avatar_url: status.userAvatar,
+                            badge: status.userBadge,
+                            badge_verified: status.userVerified,
+                            role: status.userRole,
+                          },
+                          authorId: status.userId,
+                        },
+                      })
+                    );
+                  }}
                 />
               </div>
 
@@ -234,7 +252,27 @@ export default function StatusTray({ currentUser }) {
               </div>
 
               <div className="status-card-footer">
-                <div className="status-footer-name-row">
+                <div
+                  className="status-footer-name-row cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.dispatchEvent(
+                      new CustomEvent('shammah:open-profile', {
+                        detail: {
+                          author: {
+                            id: status.userId,
+                            display_name: status.userName,
+                            avatar_url: status.userAvatar,
+                            badge: status.userBadge,
+                            badge_verified: status.userVerified,
+                            role: status.userRole,
+                          },
+                          authorId: status.userId,
+                        },
+                      })
+                    );
+                  }}
+                >
                   {/* Clean input name shown */}
                   <span className="status-card-author-name">{status.userName}</span>
                   {/* Title shown by member badge */}

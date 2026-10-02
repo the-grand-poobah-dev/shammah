@@ -176,8 +176,8 @@ export default function CreatePostBox({
         <div className="guest-prompt-left">
           <div className="avatar guest-avatar">🕊️</div>
           <div>
-            <h3 className="guest-prompt-title">Join the fellowship</h3>
-            <p className="guest-prompt-sub">Share testimonies, prayers, and connect with your church family.</p>
+            <h3 className="guest-prompt-title">Join the Christian Family</h3>
+            <p className="guest-prompt-sub">Share testimonies, prayers, and connect with your Christian family.</p>
           </div>
         </div>
         <div className="guest-prompt-actions">

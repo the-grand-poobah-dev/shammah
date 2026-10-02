@@ -418,7 +418,7 @@ export default function PostCard({
           type="button"
           className="action-btn"
           onClick={() => setCommentsOpen((v) => !v)}
-          title="Join fellowship comments"
+          title="Join Christian family comments"
         >
           <span className="action-icon">💬</span>
           <span>{commentCount != null && commentCount > 0 ? commentCount : 'Comment'}</span>

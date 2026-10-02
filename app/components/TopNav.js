@@ -9,6 +9,8 @@ import {
   GraduationCap,
   Rss,
   BookOpen,
+  Sparkles,
+  Gamepad2,
 } from 'lucide-react';
 
 export const TOP_NAV_SECTIONS = [
@@ -18,7 +20,9 @@ export const TOP_NAV_SECTIONS = [
   { id: 'polls', label: 'Polls', icon: BarChart3 },
   { id: 'courses', label: 'Courses', icon: GraduationCap },
   { id: 'rss', label: 'RSS Feeds', icon: Rss },
-  { id: 'bible', label: 'Bible', icon: BookOpen },
+  { id: 'bible', label: 'Bible & Notes', icon: BookOpen },
+  { id: 'challenges', label: 'Challenges', icon: Sparkles },
+  { id: 'games', label: 'Arcade', icon: Gamepad2 },
 ];
 
 export default function TopNav({ activeSection = 'all', onSelectSection, isHome = false }) {

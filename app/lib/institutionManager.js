@@ -30,6 +30,7 @@ export const SUBSCRIPTION_PLANS = [
     ],
     lockedFeatures: [
       'Verified institution badge',
+      'Anonymous Question Polls & Sermon Icebreaker Surveys',
       'Event scheduling & calendar',
       'Discipleship courses publishing',
       'In-app fundraising & giving',
@@ -43,12 +44,13 @@ export const SUBSCRIPTION_PLANS = [
     badgeColor: '#0ea5e9',
     popular: false,
     trialDays: 7,
-    description: 'Official verified status, custom branding, and event scheduling.',
+    description: 'Official verified status, custom branding, and interactive sermon icebreaker surveys.',
     features: [
       'Official Blue Verified Institution Badge',
+      'Anonymous Question Polls & Sermon Icebreaker Surveys',
       'Custom branding banner & high-res logo',
       'Event scheduling & public calendar feed',
-      'Priority placement in regional directory',
+      'Branch location selector & multi-campus listing',
       'Up to 3 Page Administrators',
       '7-day free trial on signup',
     ],
@@ -138,10 +140,12 @@ export const SAMPLE_INSTITUTIONS = [
   {
     id: 'inst-citam',
     name: 'CITAM Valley Road',
+    parentName: 'Christ Is The Answer Ministries (CITAM)',
+    branch: 'Valley Road (Main Sanctuary)',
     category: 'church',
     categoryLabel: 'Church',
     denomination: 'Pentecostal / CITAM',
-    location: 'Nairobi, Kenya',
+    location: 'Valley Road, Nairobi, Kenya',
     county: 'Nairobi',
     verified: true,
     logo_url: 'https://images.unsplash.com/photo-1548625361-195fe5795df5?w=200',
@@ -165,6 +169,8 @@ export const SAMPLE_INSTITUTIONS = [
   {
     id: 'inst-focus',
     name: 'FOCUS Kenya (Fellowship of Christian Unions)',
+    parentName: 'FOCUS Kenya',
+    branch: 'National Center (Kasarani)',
     category: 'missionary',
     categoryLabel: 'Missionary Organisation',
     denomination: 'Interdenominational Student Ministry',
@@ -186,6 +192,8 @@ export const SAMPLE_INSTITUTIONS = [
   {
     id: 'inst-uon-cu',
     name: 'University of Nairobi Christian Union (Main Campus)',
+    parentName: 'University of Nairobi CU',
+    branch: 'Main Campus (Taifa Hall)',
     category: 'cu',
     categoryLabel: 'University Christian Union',
     denomination: 'Campus Christian Union',
@@ -207,6 +215,8 @@ export const SAMPLE_INSTITUTIONS = [
   {
     id: 'inst-bsf',
     name: 'Bible Study Fellowship (BSF) Nairobi Central',
+    parentName: 'Bible Study Fellowship Global',
+    branch: 'Nairobi Central (Upper Hill)',
     category: 'fellowship',
     categoryLabel: 'Bible Study Fellowship',
     denomination: 'Global In-Depth Scripture Study',
@@ -227,6 +237,8 @@ export const SAMPLE_INSTITUTIONS = [
   {
     id: 'inst-mavuno',
     name: 'Mavuno Church Mashariki',
+    parentName: 'Mavuno Movement',
+    branch: 'Mashariki Campus (Donholm)',
     category: 'church',
     categoryLabel: 'Church',
     denomination: 'Evangelical / Mavuno Movement',
@@ -254,6 +266,8 @@ export const SAMPLE_INSTITUTIONS = [
   {
     id: 'inst-ku-cu',
     name: 'Kenyatta University Christian Union (KUCU)',
+    parentName: 'Kenyatta University CU',
+    branch: 'Main Campus (Bishop Square)',
     category: 'cu',
     categoryLabel: 'University Christian Union',
     denomination: 'Campus Christian Union',
@@ -274,6 +288,8 @@ export const SAMPLE_INSTITUTIONS = [
   {
     id: 'inst-world-vision',
     name: 'World Vision Kenya - Christian Ministry Hub',
+    parentName: 'World Vision International',
+    branch: 'Karen National Hub',
     category: 'missionary',
     categoryLabel: 'Missionary Relief Agency',
     denomination: 'Christian Humanitarian Organisation',
@@ -300,6 +316,8 @@ export const SAMPLE_INSTITUTIONS = [
   {
     id: 'inst-yfc',
     name: 'Youth For Christ Kenya (YFC)',
+    parentName: 'Youth For Christ',
+    branch: 'Ngong Road Youth Center',
     category: 'club',
     categoryLabel: 'Youth Ministry Club',
     denomination: 'Youth Evangelism Movement',

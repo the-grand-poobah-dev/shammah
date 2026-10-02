@@ -22,6 +22,8 @@ import PollsView from './components/PollsView';
 import CoursesView from './components/CoursesView';
 import RssFeedsView from './components/RssFeedsView';
 import BibleReaderView from './components/BibleReaderView';
+import FaithChallengesView from './components/FaithChallengesView';
+import FaithArcadeGamesView from './components/FaithArcadeGamesView';
 import NotificationsView from './components/NotificationsView';
 import ExploreView from './components/ExploreView';
 import InstitutionsView from './components/InstitutionsView';
@@ -35,6 +37,9 @@ import { getHomefeedPostsWithRss } from './lib/rssManager';
 import { playSound } from './lib/soundEffects';
 import { rankPostsWithAlgorithm } from './lib/feedAlgorithm';
 import { getBlockedUsers, getFollows } from './lib/profileManager';
+import AuthorOverviewModal from './components/AuthorOverviewModal';
+import InstitutionProfileModal from './components/InstitutionProfileModal';
+import { SAMPLE_INSTITUTIONS } from './lib/institutionManager';
 
 const SECTIONS = TOP_NAV_SECTIONS;
 
@@ -124,6 +129,10 @@ export default function Feed() {
     canModerate && (adminMode || profile?.role === 'platform_admin' || profile?.role === 'church_admin')
   );
 
+  // Profile and Institution brief dialog toast popups with neon glow borders
+  const [activeProfileModal, setActiveProfileModal] = useState(null); // { author, authorId }
+  const [activeInstitutionModal, setActiveInstitutionModal] = useState(null); // institution object
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -174,18 +183,50 @@ export default function Feed() {
     window.dispatchEvent(new CustomEvent('shammah:tab-changed', { detail: tab }));
   }, [tab]);
 
+  // Global modal event listeners for profile and institution popups with neon glow borders
+  useEffect(() => {
+    function handleOpenProfile(e) {
+      if (e.detail) {
+        setActiveProfileModal(e.detail);
+      }
+    }
+    function handleOpenInstProfile(e) {
+      if (e.detail) {
+        const instId = e.detail.institutionId;
+        const matched = SAMPLE_INSTITUTIONS.find((s) => s.id === instId);
+        setActiveInstitutionModal(
+          matched || {
+            id: instId || 'inst-custom',
+            name: e.detail.name || 'Christian Institution',
+            categoryLabel: 'Institution',
+            logo_url: e.detail.logo_url,
+            verified: true,
+            about: 'A faith-based Christian institution serving the kingdom of God and nurturing believers in truth and love.',
+            membersCount: 350,
+          }
+        );
+      }
+    }
+    window.addEventListener('shammah:open-profile', handleOpenProfile);
+    window.addEventListener('shammah:open-institution-profile', handleOpenInstProfile);
+    return () => {
+      window.removeEventListener('shammah:open-profile', handleOpenProfile);
+      window.removeEventListener('shammah:open-institution-profile', handleOpenInstProfile);
+    };
+  }, []);
+
   // Sync section state with global TopNav and URL params
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const sec = params.get('section');
-      if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible'].includes(sec)) {
+      if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss'].includes(sec)) {
         setSection(sec);
       }
     }
 
     function onSectionSet(e) {
-      if (e.detail && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible'].includes(e.detail)) {
+      if (e.detail && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss'].includes(e.detail)) {
         setSection(e.detail);
       }
     }
@@ -1240,6 +1281,16 @@ export default function Feed() {
           <BibleReaderView session={session} currentUser={profile} openAuth={openAuth} />
         )}
 
+        {/* Faith Challenges (TikTok-like creative video challenges) */}
+        {tab === 'home' && section === 'challenges' && (
+          <FaithChallengesView session={session} profile={profile} />
+        )}
+
+        {/* Faith Arcade Games (Kids, Teens & Youth offline HTML5 games) */}
+        {tab === 'home' && section === 'games' && (
+          <FaithArcadeGamesView />
+        )}
+
         {tab === 'churches' && (
           <InstitutionsView
             session={session}
@@ -1427,6 +1478,28 @@ export default function Feed() {
         onSubmit={handleCreatePost}
         openAuth={openAuth}
       />
+
+      {/* Brief Profile Dialog Box Toast Popup with Neon Glow Border */}
+      {activeProfileModal && (
+        <AuthorOverviewModal
+          author={activeProfileModal.author}
+          authorId={activeProfileModal.authorId}
+          currentUser={profile}
+          onClose={() => setActiveProfileModal(null)}
+          onOpenDirectMessage={() => {
+            setActiveProfileModal(null);
+            setTab('messages');
+          }}
+        />
+      )}
+
+      {/* Institution Profile Dialog Box Toast Popup with Neon Glow Border */}
+      {activeInstitutionModal && (
+        <InstitutionProfileModal
+          institution={activeInstitutionModal}
+          onClose={() => setActiveInstitutionModal(null)}
+        />
+      )}
     </div>
   );
 }

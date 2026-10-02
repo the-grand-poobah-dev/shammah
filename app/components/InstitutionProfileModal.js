@@ -26,6 +26,7 @@ import {
   getInstitutionSubscription,
   SUBSCRIPTION_PLANS,
 } from '../lib/institutionManager';
+import { getInstitutionBranch } from '../lib/churchConfig';
 import { playSound } from '../lib/soundEffects';
 
 export default function InstitutionProfileModal({
@@ -139,6 +140,13 @@ export default function InstitutionProfileModal({
               {planInfo.name}
             </span>
           </div>
+
+          {(institution.branch || getInstitutionBranch(institution.id)) && (
+            <div className="inst-modal-branch-chip">
+              <Building2 size={13} />
+              <span>Campus / Branch: <strong>{institution.branch || getInstitutionBranch(institution.id)}</strong></span>
+            </div>
+          )}
 
           <div className="inst-modal-meta-row">
             <span className="inst-type-badge">{institution.categoryLabel || 'Institution'}</span>

@@ -2,17 +2,18 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { DENOMINATIONS, DESCRIPTION_MAX, cleanWebsite } from '../lib/churchConfig';
+import { DENOMINATIONS, DESCRIPTION_MAX, cleanWebsite, getInstitutionBranch, saveInstitutionBranch } from '../lib/churchConfig';
 import { prepareImage } from '../lib/imageTools';
 import { initials } from '../lib/postDisplay';
 import LocationPicker from './LocationPicker';
 
-// One form for both "Start a church" (church = null) and "Edit church" (church = existing row).
+// One form for both "Start a church/institution" (church = null) and "Edit church" (church = existing row).
 export default function ChurchForm({ session, profile, church = null, onProfileChanged }) {
   const router = useRouter();
   const editing = !!church;
 
   const [name, setName] = useState(church?.name || '');
+  const [branchLocation, setBranchLocation] = useState(() => (church?.id ? getInstitutionBranch(church.id) || church?.branch_location || '' : ''));
   const [denomination, setDenomination] = useState(church?.denomination || '');
   const [description, setDescription] = useState(church?.description || '');
   const [website, setWebsite] = useState(church?.website || '');
@@ -113,6 +114,9 @@ export default function ChurchForm({ session, profile, church = null, onProfileC
         pictureFailed = true;
       }
 
+      // Save branch location locally so institutions with branches can be accessed & displayed seamlessly
+      saveInstitutionBranch(churchId, branchLocation);
+
       // 3. A brand-new church: make the creator a member, unless they already belong to another one
       if (!editing && !profile?.church_id) {
         const { error: joinErr } = await supabase.from('profiles').update({ church_id: churchId }).eq('id', session.user.id);
@@ -149,12 +153,29 @@ export default function ChurchForm({ session, profile, church = null, onProfileC
 
       {/* ---------- Details ---------- */}
       <label className="cx-field">
-        <span className="cx-label">Church name</span>
-        <input className="onb-input" type="text" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. Grace Chapel Nairobi" required />
+        <span className="cx-label">Church / Institution Name</span>
+        <input className="onb-input" type="text" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. CITAM, Mavuno, FOCUS, PCEA, UoN CU" required />
       </label>
 
       <label className="cx-field">
-        <span className="cx-label">Denomination <span className="onb-opt">(optional)</span></span>
+        <span className="cx-label">
+          Branch Location / Campus <span className="onb-opt">(for multi-branch institutions)</span>
+        </span>
+        <input
+          className="onb-input"
+          type="text"
+          value={branchLocation}
+          onChange={(e) => setBranchLocation(e.target.value)}
+          maxLength={80}
+          placeholder="e.g. Valley Road, Woodley, Main Campus, Karen Hub, Kisumu Branch…"
+        />
+        <span className="cx-field-hint" style={{ fontSize: '12px', color: 'var(--ink-muted)', marginTop: '4px', display: 'block' }}>
+          State your specific branch location so members can easily identify and join your local campus. This can be updated anytime in settings.
+        </span>
+      </label>
+
+      <label className="cx-field">
+        <span className="cx-label">Denomination / Category <span className="onb-opt">(optional)</span></span>
         <select className="onb-input" value={denomination} onChange={(e) => setDenomination(e.target.value)}>
           <option value="">Choose…</option>
           {DENOMINATIONS.map((d) => (

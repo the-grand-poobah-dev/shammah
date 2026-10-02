@@ -25,6 +25,9 @@ import {
   User,
   Sliders,
   Share2,
+  BookOpen,
+  Gamepad2,
+  Flame,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
@@ -149,6 +152,70 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
               <span>Sign In / Sign Up</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Service, Youth & Spiritual Engagement Tools */}
+      <div className="explore-section">
+        <div className="explore-section-header">
+          <Sparkles size={18} className="sec-icon" />
+          <h3>Service, Youth & Spiritual Tools</h3>
+        </div>
+
+        <div className="explore-tools-grid">
+          <Link
+            href="/?section=bible"
+            className="explore-tool-card tool-card-bible"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+              window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'bible' }));
+            }}
+          >
+            <div className="explore-tool-icon-wrap bible">
+              <BookOpen size={22} />
+            </div>
+            <div className="explore-tool-info">
+              <h4>Complete Offline NIV Bible &amp; Note Taker</h4>
+              <p>All 66 canonical books, multi-color verse highlighting, and sermon notebook for Sunday service &amp; mid-week fellowship.</p>
+              <span className="explore-tool-badge">📖 100% Offline Ready</span>
+            </div>
+          </Link>
+
+          <Link
+            href="/?section=games"
+            className="explore-tool-card tool-card-arcade"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+              window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'games' }));
+            }}
+          >
+            <div className="explore-tool-icon-wrap arcade">
+              <Gamepad2 size={22} />
+            </div>
+            <div className="explore-tool-info">
+              <h4>Faith Champions Arcade</h4>
+              <p>Offline HTML5 games for kids, teens, and youth: David vs Goliath sling challenge, Bible Champions quiz, and Noah’s Ark rescue.</p>
+              <span className="explore-tool-badge">🎮 Kids, Teens &amp; Youth</span>
+            </div>
+          </Link>
+
+          <Link
+            href="/?section=challenges"
+            className="explore-tool-card tool-card-challenges"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+              window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'challenges' }));
+            }}
+          >
+            <div className="explore-tool-icon-wrap challenges">
+              <Flame size={22} />
+            </div>
+            <div className="explore-tool-info">
+              <h4>Faith TikTok Challenges</h4>
+              <p>Short testimonies, acoustic worship covers, #ScriptureIn60s, and Sunday fit check challenges with campus CUs and youth ministries.</p>
+              <span className="explore-tool-badge">🔥 Trending Community</span>
+            </div>
+          </Link>
         </div>
       </div>
 

@@ -14,6 +14,10 @@ export default function Avatar({
   className = '',
   children,
   onClick,
+  isInstitution = false,
+  institutionId = null,
+  badge = null,
+  role = null,
 }) {
   const [activeStatus, setActiveStatus] = useState(hasStatus ?? false);
 
@@ -42,18 +46,48 @@ export default function Avatar({
       window.dispatchEvent(
         new CustomEvent('shammah:open-status', { detail: { userId, userName: name } })
       );
+      return;
+    }
+    if (isInstitution || institutionId) {
+      e.stopPropagation();
+      window.dispatchEvent(
+        new CustomEvent('shammah:open-institution-profile', {
+          detail: {
+            institutionId: institutionId || userId,
+            name,
+            logo_url: src,
+          },
+        })
+      );
+      return;
+    }
+    if (userId || name) {
+      e.stopPropagation();
+      window.dispatchEvent(
+        new CustomEvent('shammah:open-profile', {
+          detail: {
+            author: { id: userId, display_name: name, avatar_url: src, badge, role },
+            authorId: userId,
+          },
+        })
+      );
     }
   }
 
   const statusClass = activeStatus ? 'has-status' : 'no-status';
+  const isClickable = Boolean(onClick || activeStatus || userId || name || institutionId);
 
   return (
     <span
-      className={`avatar ${statusClass} ${className}`.trim()}
+      className={`avatar ${statusClass} ${isClickable ? 'cursor-pointer' : ''} ${className}`.trim()}
       onClick={handleClick}
-      role={activeStatus || onClick ? 'button' : undefined}
-      tabIndex={activeStatus || onClick ? 0 : undefined}
-      title={activeStatus ? `${name || 'Member'} has a 24-hour status (Tap to view)` : name}
+      role={isClickable ? 'button' : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      title={
+        activeStatus
+          ? `${name || 'Member'} has a 24-hour status (Tap to view)`
+          : `View profile for ${name || 'Member'}`
+      }
     >
       <span className="avatar-inner">
         {src ? <img src={src} alt="" className="avatar-img" /> : initials(name)}

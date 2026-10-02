@@ -7,7 +7,7 @@ import Avatar from '../../components/Avatar';
 import MemberName from '../../components/MemberName';
 import PageHeader from '../../components/PageHeader';
 import PostList from '../../components/PostList';
-import { CHURCH_FIELDS } from '../../lib/churchConfig';
+import { CHURCH_FIELDS, getInstitutionBranch } from '../../lib/churchConfig';
 import { initials } from '../../lib/postDisplay';
 import { useSession } from '../../lib/useSession';
 import {
@@ -18,6 +18,7 @@ import {
 import InstitutionSubscriptionModal from '../../components/InstitutionSubscriptionModal';
 import { Sparkles, Calendar, BookOpen, Coins, UserPlus, Lock, Check, Phone } from 'lucide-react';
 import VerifiedBadge from '../../components/VerifiedBadge';
+import IcebreakerPollsCard from '../../components/IcebreakerPollsCard';
 
 export default function ChurchPage() {
   const { id } = useParams();
@@ -50,6 +51,7 @@ export default function ChurchPage() {
 
   const TABS = [
     { id: 'posts', label: 'Posts' },
+    { id: 'icebreakers', label: 'Icebreaker Polls' },
     { id: 'events', label: 'Events' },
     { id: 'courses', label: 'Courses' },
     { id: 'fundraising', label: 'Giving & Projects' },
@@ -198,6 +200,11 @@ export default function ChurchPage() {
               {planInfo.name}
             </span>
           </div>
+          {(sampleMatch?.branch || getInstitutionBranch(id) || church.branch_location) && (
+            <p className="cx-branch-chip">
+              🏛️ Campus / Branch: <strong>{sampleMatch?.branch || getInstitutionBranch(id) || church.branch_location}</strong>
+            </p>
+          )}
           <p className="cx-hero-meta">
             {[church.denomination, church.location_label && `📍 ${church.location_label}`].filter(Boolean).join(' · ')}
           </p>
@@ -229,6 +236,19 @@ export default function ChurchPage() {
             emptyTitle="No posts from this church yet"
             emptyText="When members of this church post on Shammah, their posts appear here automatically."
           />
+        )}
+
+        {/* Anonymous Icebreaker Polls Tab */}
+        {tab === 'icebreakers' && (
+          <div className="cx-icebreakers-section">
+            <IcebreakerPollsCard
+              churchId={id}
+              churchName={church?.name || sampleMatch?.name}
+              canCreate={isOwner}
+              isStarterOrAbove={['starter', 'popular', 'advanced'].includes(currentSub.planId)}
+              onOpenUpgrade={() => setShowSubModal(true)}
+            />
+          </div>
         )}
 
         {/* Events Tab */}

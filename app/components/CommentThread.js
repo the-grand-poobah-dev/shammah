@@ -254,6 +254,7 @@ export default function CommentThread({
           <Avatar
             name={authorName}
             src={isAnonymous || isPseudo ? null : cAuthor?.avatar_url}
+            userId={isAnonymous || isPseudo ? null : comment.author_id}
             className="comment-avatar"
           />
           <div className="comment-body">
@@ -263,6 +264,8 @@ export default function CommentThread({
                   name={authorName}
                   badge={isAnonymous ? null : cAuthor?.badge}
                   verified={isAnonymous || isPseudo ? false : cAuthor?.badge_verified}
+                  userId={isAnonymous || isPseudo ? null : comment.author_id}
+                  author={cAuthor}
                   nameClassName="comment-author"
                 />
                 {isThisCommentAuthorThePostAuthor && (

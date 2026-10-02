@@ -32,3 +32,30 @@ export function cleanWebsite(raw) {
     return null; // null = invalid (different from '' = empty)
   }
 }
+
+const BRANCHES_STORAGE_KEY = 'shammah_church_branches_v1';
+
+export function getInstitutionBranch(churchId) {
+  if (typeof window === 'undefined' || !churchId) return null;
+  try {
+    const raw = localStorage.getItem(BRANCHES_STORAGE_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    return map[churchId] || null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveInstitutionBranch(churchId, branchName) {
+  if (typeof window === 'undefined' || !churchId) return;
+  try {
+    const raw = localStorage.getItem(BRANCHES_STORAGE_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    if (branchName && branchName.trim()) {
+      map[churchId] = branchName.trim();
+    } else {
+      delete map[churchId];
+    }
+    localStorage.setItem(BRANCHES_STORAGE_KEY, JSON.stringify(map));
+  } catch {}
+}

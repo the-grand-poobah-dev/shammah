@@ -208,7 +208,10 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
                         <h4>{inst.name}</h4>
                         {inst.verified && <VerifiedBadge badge="pastor" role="church_admin" size={15} />}
                       </div>
-                      <span className="rec-meta">{inst.location}</span>
+                      <div className="rec-branch-row">
+                        {inst.branch && <span className="rec-branch-chip">📍 {inst.branch}</span>}
+                        <span className="rec-meta">{inst.location}</span>
+                      </div>
                     </div>
                     <span className="rec-plan-pill" style={{ color: plan.badgeColor, borderColor: plan.badgeColor }}>
                       {plan.name}
@@ -295,6 +298,9 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
                           <h4>{inst.name}</h4>
                           {inst.verified && <VerifiedBadge badge="pastor" role="church_admin" size={15} />}
                         </div>
+                        {inst.branch && (
+                          <span className="dir-branch-pill">🏛️ Branch: <strong>{inst.branch}</strong></span>
+                        )}
                         <span className="dir-location-text">
                           <MapPin size={12} />
                           <span>{inst.location}</span>
