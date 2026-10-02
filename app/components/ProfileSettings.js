@@ -10,6 +10,11 @@ import BadgeIcon from './BadgeIcon';
 import MemberName from './MemberName';
 import LocationPicker from './LocationPicker';
 import VerificationBadgeModal from './VerificationBadgeModal';
+import { DownloadCloud } from 'lucide-react';
+import {
+  getAuthorOfflineDownloadPermission,
+  setAuthorOfflineDownloadPermission,
+} from '../lib/offlineSyncManager';
 
 const COLS =
   'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, location_place_id, location_lat, location_lng, onboarding_completed_at, display_name_changed_at';
@@ -50,6 +55,14 @@ export default function ProfileSettings({ session }) {
   const [about, setAbout] = useState('');
   const [dob, setDob] = useState('');
   const [location, setLocation] = useState(null);
+  const [allowOffline, setAllowOffline] = useState(() => getAuthorOfflineDownloadPermission(uid));
+
+  function handleToggleOffline() {
+    const next = !allowOffline;
+    setAllowOffline(next);
+    setAuthorOfflineDownloadPermission(uid, next);
+    notify('success', next ? 'Offline downloads enabled for your media (up to 30 days)' : 'Offline downloads restricted for your media');
+  }
 
   const [saving, setSaving] = useState(false);
   const [busyImg, setBusyImg] = useState(null); // 'avatar' | 'cover' | null
@@ -399,6 +412,35 @@ export default function ProfileSettings({ session }) {
               onClick={() => setVerifOpen(true)}
             >
               Get Verified (Kes. 300/mo)
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- Content & Offline Download Privacy ---------- */}
+      <section className="st-card st-rise" style={{ '--d': '270ms' }}>
+        <header className="st-card-head">
+          <span className="st-ico"><DownloadCloud size={18} /></span>
+          <div>
+            <h2 className="st-h">Content &amp; Offline Downloads</h2>
+            <p className="st-sub">Determine if other members can download your media for offline access up to 30 days.</p>
+          </div>
+        </header>
+        <div className="st-field">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
+            <div>
+              <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>Allow Offline Syncing (30-Day Access)</strong>
+              <p style={{ fontSize: '12px', color: 'var(--ink-muted)', margin: '2px 0 0' }}>
+                When enabled, followers and church members can download your video, audio, notes, and posts for up to 30 days of offline viewing.
+              </p>
+            </div>
+            <button
+              type="button"
+              className={`st-btn ${allowOffline ? 'st-btn-primary' : 'st-btn-ghost'}`}
+              style={{ flexShrink: 0, fontSize: '12px', padding: '6px 14px' }}
+              onClick={handleToggleOffline}
+            >
+              {allowOffline ? 'Downloads Allowed ✓' : 'Restricted ✕'}
             </button>
           </div>
         </div>

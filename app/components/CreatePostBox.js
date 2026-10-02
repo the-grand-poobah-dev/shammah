@@ -23,6 +23,8 @@ import {
   EyeOff,
   User,
   RefreshCw,
+  Bot,
+  DownloadCloud,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
@@ -73,6 +75,37 @@ export default function CreatePostBox({
   const [postIdentity, setPostIdentity] = useState('real'); // real | anonymous | pseudo
   const [pseudoProfile, setPseudoProfile] = useState(() => generatePseudoIdentity());
   const [showIdentityMenu, setShowIdentityMenu] = useState(false);
+  const [aiEnhancing, setAiEnhancing] = useState(false);
+  const [allowOfflineDownload, setAllowOfflineDownload] = useState(true);
+
+  async function handleAiEnhance() {
+    if (!composeText.trim()) {
+      playSound('reaction');
+      window.dispatchEvent(new CustomEvent('shammah:open-chatbot'));
+      return;
+    }
+    setAiEnhancing(true);
+    playSound('reaction');
+    try {
+      const res = await fetch('/api/gemini/enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: isPoll ? 'generate_poll' : 'polish_testimony',
+          text: composeText,
+        }),
+      });
+      const data = await res.json();
+      if (data.enhancedText) {
+        setComposeText(data.enhancedText);
+        playSound('badge');
+      }
+    } catch (err) {
+      console.error('Enhance error:', err);
+    } finally {
+      setAiEnhancing(false);
+    }
+  }
 
   const photoInputRef = useRef(null);
   const videoInputRef = useRef(null);
@@ -214,7 +247,7 @@ export default function CreatePostBox({
       return;
     }
     setCategoryError(false);
-    onSubmit(e, visibility, { identityMode: postIdentity, pseudoName: pseudoProfile.name });
+    onSubmit(e, visibility, { identityMode: postIdentity, pseudoName: pseudoProfile.name, allowOffline: allowOfflineDownload });
   }
 
   const CurrentVisIcon = VIS_ICONS[visibility] || Globe;
@@ -753,10 +786,34 @@ export default function CreatePostBox({
             <BarChart3 size={18} className="tool-icon tool-poll" />
             <span className="tool-label">Poll</span>
           </button>
+
+          {/* AI Scripture & Polish Tool Button */}
+          <button
+            type="button"
+            className={`tool-btn ai-tool-btn${aiEnhancing ? ' enhancing' : ''}`}
+            onClick={handleAiEnhance}
+            disabled={aiEnhancing}
+            title="Polish with relevant scripture references using Shammah AI"
+            aria-label="AI Polish"
+          >
+            <Bot size={18} className="tool-icon tool-ai" />
+            <span className="tool-label">{aiEnhancing ? 'Refining…' : 'AI Polish'}</span>
+          </button>
         </div>
 
-        {/* Post CTA + Char count */}
+        {/* Post CTA + Char count + Offline Toggle */}
         <div className="compose-cta-group">
+          {/* Offline Download Option for Author */}
+          <label className="compose-offline-pill" title="Allow 30-day offline download of this content">
+            <input
+              type="checkbox"
+              checked={allowOfflineDownload}
+              onChange={(e) => setAllowOfflineDownload(e.target.checked)}
+              className="compose-offline-chk"
+            />
+            <DownloadCloud size={13} className="text-cyan-400" />
+            <span>30-Day Offline</span>
+          </label>
           {composeText.length > 0 && (
             <span className={`char-counter${composeText.length > 1800 ? ' warn' : ''}`}>
               {composeText.length}/2000

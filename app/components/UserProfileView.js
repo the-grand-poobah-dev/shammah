@@ -23,11 +23,23 @@ import {
   Repeat,
   Shield,
   Check,
+  GraduationCap,
+  Award,
+  DownloadCloud,
+  Tv,
+  Flame,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
 import PostCard from './PostCard';
+import WatermarkShareModal from './WatermarkShareModal';
+import ProjectionModeModal from './ProjectionModeModal';
+import { COURSES_CATALOG } from './CoursesView';
+import {
+  setAuthorOfflineDownloadPermission,
+  getAuthorOfflineDownloadPermission,
+} from '../lib/offlineSyncManager';
 import {
   getProfileSettings,
   updateProfileSettings,
@@ -46,12 +58,16 @@ export default function UserProfileView({
   userPosts = [],
   onOpenAuth,
 }) {
-  const [activeTab, setActiveTab] = useState('all'); // all | videos | audio | polls | text | playlists
+  const [activeTab, setActiveTab] = useState('all'); // all | videos | audio | polls | text | playlists | courses
   const [layoutMode, setLayoutMode] = useState('magazine2'); // magazine1 | magazine2 | magazine3 | list
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [privacySettings, setPrivacySettings] = useState({ isLocked: false, inboxPermission: 'everyone' });
+  const [allowOffline, setAllowOffline] = useState(true);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [showWatermarkModal, setShowWatermarkModal] = useState(false);
+  const [watermarkData, setWatermarkData] = useState(null);
+  const [projectingCourse, setProjectingCourse] = useState(null);
   const [shareToast, setShareToast] = useState('');
 
   const isMe = currentUser?.id && targetProfile?.id === currentUser.id;
@@ -64,8 +80,14 @@ export default function UserProfileView({
     if (targetProfile?.id) {
       setIsFollowingUser(isFollowing(targetProfile.id));
       setPrivacySettings(getProfileSettings(targetProfile.id));
+      setAllowOffline(getAuthorOfflineDownloadPermission(targetProfile.id));
     }
   }, [targetProfile?.id]);
+
+  // Compute completed & enrolled courses for this profile
+  const completedCourses = COURSES_CATALOG.filter(
+    (c) => c.id === 'course-foundations' || c.id === 'course-intercession'
+  );
 
   function handleFollowToggle() {
     if (!session) {
@@ -82,24 +104,45 @@ export default function UserProfileView({
     setPrivacySettings((prev) => ({ ...prev, isLocked: nextLocked }));
   }
 
+  function handleOfflinePermissionToggle() {
+    const next = !allowOffline;
+    setAllowOffline(next);
+    setAuthorOfflineDownloadPermission(targetProfile?.id, next);
+  }
+
   function handleInboxPermissionChange(newPerm) {
     updateProfileSettings(targetProfile?.id, { inboxPermission: newPerm });
     setPrivacySettings((prev) => ({ ...prev, inboxPermission: newPerm }));
   }
 
-  async function handleShareProfile() {
-    const url = typeof window !== 'undefined' ? window.location.href : '';
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: `${authorName} on Shammah`, url });
-      } catch {}
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareToast('Profile link copied to clipboard!');
-      setTimeout(() => setShareToast(''), 2500);
-    } catch {}
+  function handleShareProfile() {
+    setWatermarkData({
+      title: `${authorName}'s Profile & Ministry`,
+      textContent: targetProfile?.about || `${authorName} is a fellowship member at ${targetProfile?.church_name || 'Shammah Global Community'}.`,
+      authorName,
+      churchName: targetProfile?.church_name || 'Shammah Global Community',
+      category: 'Profile Overview',
+    });
+    setShowWatermarkModal(true);
+  }
+
+  function handleShareCertificate(course) {
+    setWatermarkData({
+      title: `Official Certificate: ${course.certificateTitle}`,
+      textContent: `This certifies that ${authorName} has successfully completed all coursework, biblical modules, and assessments for "${course.title}".\n\nIssued by: ${course.instructor} (${course.churchName})\nVerification Credential: SHAMMAH-CERT-${course.id.toUpperCase()}-2026`,
+      authorName,
+      churchName: course.churchName,
+      category: 'Certificate Credential',
+      courseInfo: {
+        title: course.title,
+        badgeName: course.badgeName,
+      },
+    });
+    setShowWatermarkModal(true);
+  }
+
+  function handleProjectCertificate(course) {
+    setProjectingCourse(course);
   }
 
   // Check if profile content is locked to viewer
@@ -360,6 +403,17 @@ export default function UserProfileView({
                 <Disc size={14} />
                 <span>Playlists ({playlists.length})</span>
               </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'courses'}
+                className={`profile-media-tab${activeTab === 'courses' ? ' active' : ''}`}
+                onClick={() => setActiveTab('courses')}
+              >
+                <GraduationCap size={14} />
+                <span>Courses &amp; Badges ({completedCourses.length})</span>
+              </button>
             </div>
 
             {/* Layout Mode Switcher (Magazine 1x, 2x, 3x, and List Rich) */}
@@ -430,8 +484,66 @@ export default function UserProfileView({
             </div>
           )}
 
+          {/* Tab: Completed Courses & Discipleship Badges */}
+          {activeTab === 'courses' && (
+            <div className="profile-courses-section">
+              <div className="profile-courses-header">
+                <div>
+                  <h3 className="profile-section-heading">Discipleship Credentials &amp; Earned Badges</h3>
+                  <p className="profile-section-sub">
+                    Completed kingdom curriculum, discipleship credentials, and ministry badges earned by {authorName}.
+                  </p>
+                </div>
+              </div>
+
+              <div className="profile-courses-grid">
+                {completedCourses.map((course) => (
+                  <div key={course.id} className="profile-course-card neon-glow-card">
+                    <div className="profile-course-badge-icon">
+                      <span>{course.badgeIcon || '🎓'}</span>
+                    </div>
+
+                    <div className="profile-course-info">
+                      <span className="profile-cert-chip">
+                        <Award size={12} className="text-amber-400" />
+                        <span>VERIFIED CREDENTIAL</span>
+                      </span>
+                      <h4 className="profile-course-title">{course.title}</h4>
+                      <p className="profile-cert-title">{course.certificateTitle}</p>
+                      <span className="profile-course-inst">
+                        Issued by: <strong>{course.instructor}</strong> ({course.churchName})
+                      </span>
+                    </div>
+
+                    <div className="profile-course-actions">
+                      <button
+                        type="button"
+                        className="profile-cert-btn share"
+                        onClick={() => handleShareCertificate(course)}
+                        title="Share certificate with official watermark"
+                      >
+                        <Share2 size={14} />
+                        <span>Share Watermarked</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="profile-cert-btn project"
+                        onClick={() => handleProjectCertificate(course)}
+                        title="Project certificate & course on sanctuary screen"
+                      >
+                        <Tv size={14} />
+                        <span>Project</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Posts Display: Grid or List depending on layoutMode */}
-          {activeTab !== 'playlists' && sortedPosts.length === 0 && (
+          {activeTab !== 'playlists' && activeTab !== 'courses' && sortedPosts.length === 0 && (
             <div className="profile-empty-posts">
               <FileText size={32} className="profile-empty-icon" />
               <h3>No posts shared under this tab</h3>
@@ -439,7 +551,7 @@ export default function UserProfileView({
             </div>
           )}
 
-          {activeTab !== 'playlists' && sortedPosts.length > 0 && (
+          {activeTab !== 'playlists' && activeTab !== 'courses' && sortedPosts.length > 0 && (
             <div className={`profile-posts-container layout-${layoutMode}`}>
               {sortedPosts.map((post) => {
                 // If 3x Instagram visual grid mode:
@@ -563,6 +675,21 @@ export default function UserProfileView({
             </div>
 
             <div className="profile-privacy-section" style={{ marginTop: 18 }}>
+              <h4>Offline Content &amp; Media Downloads Access</h4>
+              <p className="visibility-desc">
+                Allow church members and followers to download your media, audio sermons, and posts for offline viewing (stored up to 30 days):
+              </p>
+              <button
+                type="button"
+                className={`profile-privacy-toggle-btn${allowOffline ? ' on' : ''}`}
+                onClick={handleOfflinePermissionToggle}
+              >
+                <DownloadCloud size={16} />
+                <span>{allowOffline ? 'Offline Downloads Allowed (Up to 30 Days)' : 'Offline Downloads Restricted'}</span>
+              </button>
+            </div>
+
+            <div className="profile-privacy-section" style={{ marginTop: 18 }}>
               <h4>Official Ministry Verification Badge</h4>
               <p className="visibility-desc">
                 Request an official blue verification checkmark &amp; pastoral badge (Pastor, Worship Leader, Elder).
@@ -602,6 +729,28 @@ export default function UserProfileView({
           onClose={() => setShowVerificationModal(false)}
         />
       )}
+
+      {/* Watermarked Share Modal */}
+      {showWatermarkModal && watermarkData && (
+        <WatermarkShareModal
+          contentData={watermarkData}
+          onClose={() => {
+            setShowWatermarkModal(false);
+            setWatermarkData(null);
+          }}
+        />
+      )}
+
+      {/* Projection Mode Modal */}
+      {projectingCourse && (
+        <ProjectionModeModal
+          type="course"
+          data={projectingCourse}
+          onClose={() => setProjectingCourse(null)}
+        />
+      )}
+
+      {shareToast && <div className="video-toast-pill">{shareToast}</div>}
     </div>
   );
 }

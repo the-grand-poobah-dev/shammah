@@ -14,6 +14,10 @@ import {
   PenSquare,
   BarChart3,
   X,
+  Bot,
+  Flame,
+  DownloadCloud,
+  Tv,
 } from 'lucide-react';
 import { getTotalUnreadMessagesCount } from '../lib/inboxManager';
 import { getUnreadNotificationCount } from '../lib/notificationsManager';
@@ -174,6 +178,24 @@ export default function BottomNav() {
     }
   }
 
+  function handleOpenChatbot() {
+    setMenuOpen(false);
+    playSound('reaction');
+    window.dispatchEvent(new CustomEvent('shammah:open-chatbot'));
+  }
+
+  function handleOpenOfflineLibrary() {
+    setMenuOpen(false);
+    playSound('reaction');
+    window.dispatchEvent(new CustomEvent('shammah:open-offline-library'));
+  }
+
+  function handleOpenProjection() {
+    setMenuOpen(false);
+    playSound('reaction');
+    window.dispatchEvent(new CustomEvent('shammah:open-projection', { detail: { type: 'course' } }));
+  }
+
   return (
     <>
       {/* Floating Circular Plus Action Button on Bottom Left above Bottom Nav */}
@@ -193,6 +215,27 @@ export default function BottomNav() {
               </button>
             </div>
 
+            {/* Circular Pop-Up Shammah AI Chatbot Trigger */}
+            <div
+              className="circular-bot-popup-hero"
+              onClick={handleOpenChatbot}
+              role="button"
+              tabIndex={0}
+              title="Open Shammah AI Chatbot"
+            >
+              <div className="circular-bot-ring-pulse">
+                <Flame size={22} className="text-amber-400" />
+                <span className="bot-active-dot" />
+              </div>
+              <div className="circular-bot-hero-text">
+                <div className="circular-bot-title-line">
+                  <strong>Shammah AI Chatbot</strong>
+                  <span className="live-sparkle-pill">AI Companion</span>
+                </div>
+                <small>Pastoral counsel, study outlines &amp; prayer</small>
+              </div>
+            </div>
+
             <button
               type="button"
               className="quick-action-item"
@@ -205,6 +248,36 @@ export default function BottomNav() {
               <div className="quick-action-text">
                 <strong>Create Post / Testimony</strong>
                 <small>Post to feed or anonymously</small>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="quick-action-item"
+              onClick={handleOpenProjection}
+              role="menuitem"
+            >
+              <span className="quick-action-icon projection">
+                <Tv size={16} />
+              </span>
+              <div className="quick-action-text">
+                <strong>Sanctuary Screen Projection</strong>
+                <small>Project courses, polls &amp; scriptures</small>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="quick-action-item"
+              onClick={handleOpenOfflineLibrary}
+              role="menuitem"
+            >
+              <span className="quick-action-icon offline">
+                <DownloadCloud size={16} />
+              </span>
+              <div className="quick-action-text">
+                <strong>Offline Library &amp; Sync</strong>
+                <small>30-day downloaded feeds &amp; audio</small>
               </div>
             </button>
 

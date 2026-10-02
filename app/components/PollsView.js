@@ -1,7 +1,21 @@
 'use client';
 import { useState } from 'react';
-import { BarChart3, Check, Plus, Sparkles, Filter, Users, Globe } from 'lucide-react';
+import {
+  BarChart3,
+  Check,
+  Plus,
+  Sparkles,
+  Filter,
+  Users,
+  Globe,
+  Tv,
+  Share2,
+  Bot,
+} from 'lucide-react';
 import PostCard from './PostCard';
+import ProjectionModeModal from './ProjectionModeModal';
+import WatermarkShareModal from './WatermarkShareModal';
+import { playSound } from '../lib/soundEffects';
 
 const SAMPLE_POLLS = [
   {
@@ -65,6 +79,8 @@ export default function PollsView({
   onFocusCompose,
 }) {
   const [filter, setFilter] = useState('all'); // all | active | voted
+  const [projectingPoll, setProjectingPoll] = useState(null);
+  const [watermarkShareData, setWatermarkShareData] = useState(null);
 
   // Combine feed polls with sample polls
   const feedPollPosts = feedPosts.filter((p) => pollOptionsByPost[p.id] && pollOptionsByPost[p.id].length > 0);
@@ -81,8 +97,56 @@ export default function PollsView({
     return true;
   });
 
+  function handleProjectPoll(poll) {
+    playSound('reaction');
+    const options = poll.options || pollOptionsByPost[poll.id] || [];
+    const counts = poll.counts || pollCountsByPost[poll.id] || {};
+    setProjectingPoll({
+      ...poll,
+      options,
+      counts,
+      churchName: poll.profiles?.name ? `${poll.profiles.name}'s Church` : 'Shammah Fellowship',
+    });
+  }
+
+  function handleSharePollWatermarked(poll) {
+    playSound('reaction');
+    const options = poll.options || pollOptionsByPost[poll.id] || [];
+    setWatermarkShareData({
+      title: 'Interactive Fellowship Poll',
+      textContent: poll.text_content,
+      authorName: poll.profiles?.name || poll.profiles?.display_name || 'Church Admin',
+      churchName: 'Shammah Global Fellowship',
+      category: 'Fellowship Poll',
+      pollOptions: options,
+    });
+  }
+
   return (
     <div className="section-feed-view polls-view-container">
+      {/* Projection Hero Card for Sanctuary Service Polls */}
+      <div className="polls-projection-hero-banner">
+        <div className="polls-proj-left">
+          <div className="courses-badge-tag">
+            <Tv size={14} className="text-amber-400" />
+            <span>Interactive Sanctuary Service Hub</span>
+          </div>
+          <h3>Project Live Polls on Stage &amp; Sanctuary Screens</h3>
+          <p>
+            Engage congregants live during services or fellowship. Project real-time animated vote charts and an on-screen QR code for members to vote with their phones.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="polls-launch-stage-btn"
+          onClick={() => handleProjectPoll(allPolls[0])}
+        >
+          <Tv size={16} />
+          <span>Project Live Poll to Sanctuary</span>
+        </button>
+      </div>
+
       {/* Polls sub-navigation & create action */}
       <div className="polls-subnav-row">
         <div className="video-subnav-bar no-scrollbar" role="tablist">
@@ -119,15 +183,29 @@ export default function PollsView({
           </button>
         </div>
 
-        <button
-          type="button"
-          className="create-poll-shortcut-btn"
-          onClick={onFocusCompose}
-          title="Create a new poll for the church"
-        >
-          <Plus size={15} />
-          <span>New Poll</span>
-        </button>
+        <div className="polls-top-action-group">
+          <button
+            type="button"
+            className="ai-poll-shortcut-btn"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('shammah:open-chatbot'));
+            }}
+            title="Ask Shammah AI to generate poll questions"
+          >
+            <Bot size={15} />
+            <span>AI Poll Generator</span>
+          </button>
+
+          <button
+            type="button"
+            className="create-poll-shortcut-btn"
+            onClick={onFocusCompose}
+            title="Create a new poll for the church"
+          >
+            <Plus size={15} />
+            <span>New Poll</span>
+          </button>
+        </div>
       </div>
 
       {/* Poll Cards list */}
@@ -148,20 +226,61 @@ export default function PollsView({
             const myVote = myVoteByPost[poll.id] || null;
 
             return (
-              <PostCard
-                key={poll.id}
-                post={poll}
-                session={session}
-                openAuth={openAuth}
-                pollOptions={options}
-                pollCounts={counts}
-                myVote={myVote}
-                onVote={(optId) => onVote(poll.id, optId)}
-              />
+              <div key={poll.id} className="poll-card-wrapper-with-stage">
+                <PostCard
+                  post={poll}
+                  session={session}
+                  openAuth={openAuth}
+                  pollOptions={options}
+                  pollCounts={counts}
+                  myVote={myVote}
+                  onVote={(optId) => onVote(poll.id, optId)}
+                />
+
+                {/* Stage Projection & Watermark Share shortcuts bar */}
+                <div className="poll-stage-action-bar">
+                  <button
+                    type="button"
+                    className="poll-stage-action-pill"
+                    onClick={() => handleProjectPoll(poll)}
+                    title="Project this poll on stage / sanctuary screen"
+                  >
+                    <Tv size={14} className="text-amber-400" />
+                    <span>Project to Screen</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="poll-stage-action-pill"
+                    onClick={() => handleSharePollWatermarked(poll)}
+                    title="Share watermarked poll card outside app"
+                  >
+                    <Share2 size={14} className="text-cyan-400" />
+                    <span>Share Watermarked</span>
+                  </button>
+                </div>
+              </div>
             );
           })
         )}
       </div>
+
+      {/* Projection Mode Modal */}
+      {projectingPoll && (
+        <ProjectionModeModal
+          type="poll"
+          data={projectingPoll}
+          onClose={() => setProjectingPoll(null)}
+        />
+      )}
+
+      {/* Watermarked Share Modal */}
+      {watermarkShareData && (
+        <WatermarkShareModal
+          contentData={watermarkShareData}
+          onClose={() => setWatermarkShareData(null)}
+        />
+      )}
     </div>
   );
 }

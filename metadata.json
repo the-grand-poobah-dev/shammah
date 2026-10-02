@@ -1,4 +1,7 @@
 {
   "name": "Shammah",
-  "description": "A shared feed for your church community."
+  "description": "A shared feed for your church community.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

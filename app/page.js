@@ -39,6 +39,10 @@ import { rankPostsWithAlgorithm } from './lib/feedAlgorithm';
 import { getBlockedUsers, getFollows } from './lib/profileManager';
 import AuthorOverviewModal from './components/AuthorOverviewModal';
 import InstitutionProfileModal from './components/InstitutionProfileModal';
+import ShammahChatbotModal from './components/ShammahChatbotModal';
+import OfflineLibraryModal from './components/OfflineLibraryModal';
+import ProjectionModeModal from './components/ProjectionModeModal';
+import WatermarkShareModal from './components/WatermarkShareModal';
 import { SAMPLE_INSTITUTIONS } from './lib/institutionManager';
 
 const SECTIONS = TOP_NAV_SECTIONS;
@@ -132,6 +136,10 @@ export default function Feed() {
   // Profile and Institution brief dialog toast popups with neon glow borders
   const [activeProfileModal, setActiveProfileModal] = useState(null); // { author, authorId }
   const [activeInstitutionModal, setActiveInstitutionModal] = useState(null); // institution object
+  const [showChatbot, setShowChatbot] = useState(false);
+  const [showOfflineLibrary, setShowOfflineLibrary] = useState(false);
+  const [projectionData, setProjectionData] = useState(null);
+  const [watermarkShareData, setWatermarkShareData] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -354,12 +362,29 @@ export default function Feed() {
       }
     }
 
+    function onOpenChatbot() {
+      setShowChatbot(true);
+    }
+    function onOpenOffline() {
+      setShowOfflineLibrary(true);
+    }
+    function onOpenProjection(e) {
+      setProjectionData(e.detail || { type: 'course' });
+    }
+    function onOpenWatermark(e) {
+      setWatermarkShareData(e.detail);
+    }
+
     window.addEventListener('shammah:open-create-post', handleOpenCreateModal);
     window.addEventListener('shammah:open-auth', handleAuthEvent);
     window.addEventListener('shammah:feed-algorithm-updated', handleAlgUpdate);
     window.addEventListener('shammah:blocks-updated', handleAlgUpdate);
     window.addEventListener('shammah:follows-updated', handleAlgUpdate);
     window.addEventListener('shammah:select-category', handleSelectCat);
+    window.addEventListener('shammah:open-chatbot', onOpenChatbot);
+    window.addEventListener('shammah:open-offline-library', onOpenOffline);
+    window.addEventListener('shammah:open-projection', onOpenProjection);
+    window.addEventListener('shammah:open-watermark-share', onOpenWatermark);
 
     return () => {
       window.removeEventListener('shammah:open-create-post', handleOpenCreateModal);
@@ -368,6 +393,10 @@ export default function Feed() {
       window.removeEventListener('shammah:blocks-updated', handleAlgUpdate);
       window.removeEventListener('shammah:follows-updated', handleAlgUpdate);
       window.removeEventListener('shammah:select-category', handleSelectCat);
+      window.removeEventListener('shammah:open-chatbot', onOpenChatbot);
+      window.removeEventListener('shammah:open-offline-library', onOpenOffline);
+      window.removeEventListener('shammah:open-projection', onOpenProjection);
+      window.removeEventListener('shammah:open-watermark-share', onOpenWatermark);
     };
   }, [activeCategory]);
 
@@ -1498,6 +1527,42 @@ export default function Feed() {
         <InstitutionProfileModal
           institution={activeInstitutionModal}
           onClose={() => setActiveInstitutionModal(null)}
+        />
+      )}
+
+      {/* Shammah AI Pastoral Chatbot Circular Pop-Up Modal */}
+      {showChatbot && (
+        <ShammahChatbotModal
+          onClose={() => setShowChatbot(false)}
+          onShareContent={(data) => setWatermarkShareData(data)}
+          onPopulateCompose={(text) => {
+            setComposeText(text);
+            setShowCreateModal(true);
+          }}
+        />
+      )}
+
+      {/* Offline Synced Library Modal (30-day storage) */}
+      {showOfflineLibrary && (
+        <OfflineLibraryModal
+          onClose={() => setShowOfflineLibrary(false)}
+        />
+      )}
+
+      {/* Sanctuary & Fellowship Projection Mode Modal */}
+      {projectionData && (
+        <ProjectionModeModal
+          type={projectionData.type || 'course'}
+          data={projectionData.data || projectionData}
+          onClose={() => setProjectionData(null)}
+        />
+      )}
+
+      {/* Official Watermark Share Modal */}
+      {watermarkShareData && (
+        <WatermarkShareModal
+          contentData={watermarkShareData}
+          onClose={() => setWatermarkShareData(null)}
         />
       )}
     </div>

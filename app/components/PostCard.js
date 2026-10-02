@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink } from 'lucide-react';
+import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { categoryStyle, timeAgo } from '../lib/postDisplay';
 import Avatar from './Avatar';
@@ -14,12 +14,19 @@ import PostVisibilityModal from './PostVisibilityModal';
 import AuthorOverviewModal from './AuthorOverviewModal';
 import PostOptionsMenu from './PostOptionsMenu';
 import ReportPostModal from './ReportPostModal';
+import WatermarkShareModal from './WatermarkShareModal';
+import ProjectionModeModal from './ProjectionModeModal';
 import {
   isPostReposted,
   getPostRepostCount,
   toggleRepost,
   getPostVisibility,
 } from '../lib/postInteractions';
+import {
+  saveOfflineItem,
+  isItemSavedOffline,
+  canDownloadOffline,
+} from '../lib/offlineSyncManager';
 import { playSound } from '../lib/soundEffects';
 import { Clock } from 'lucide-react';
 
@@ -114,6 +121,9 @@ export default function PostCard({
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [showAuthorModal, setShowAuthorModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showWatermarkModal, setShowWatermarkModal] = useState(false);
+  const [showProjectionModal, setShowProjectionModal] = useState(false);
+  const [isSavedOffline, setIsSavedOffline] = useState(() => isItemSavedOffline(post.id));
   const [reposted, setReposted] = useState(false);
   const [repostCount, setRepostCount] = useState(0);
   const [visibility, setVisibility] = useState('public');
@@ -183,24 +193,32 @@ export default function PostCard({
     playSound('reposted');
   }
 
-  async function handleShare() {
+  function handleShare() {
     playSound('reaction');
-    const text = post.text_content || '';
-    if (navigator.share) {
-      try {
-        await navigator.share({ text, title: 'Shammah' });
-      } catch (err) {
-        if (err && err.name !== 'AbortError') setShareMsg('Could not open the share sheet.');
-      }
+    setShowWatermarkModal(true);
+  }
+
+  function handleSaveOffline() {
+    playSound('reaction');
+    const authorId = post.user_id || post.profiles?.id;
+    if (!canDownloadOffline(authorId, post)) {
+      setShareMsg('Author has restricted offline downloads for this content.');
+      setTimeout(() => setShareMsg(''), 2500);
       return;
     }
-    try {
-      await navigator.clipboard.writeText(text);
-      setShareMsg('Copied to clipboard');
-    } catch {
-      setShareMsg('Could not copy — try selecting the text manually.');
+    const res = saveOfflineItem(post, post.media_type || 'post');
+    if (res.success) {
+      setIsSavedOffline(true);
+      setShareMsg('Saved offline for 30 days ✓');
+    } else {
+      setShareMsg(res.reason || 'Could not save offline');
     }
-    setTimeout(() => setShareMsg(''), 2000);
+    setTimeout(() => setShareMsg(''), 2500);
+  }
+
+  function handleProject() {
+    playSound('reaction');
+    setShowProjectionModal(true);
   }
 
   // Text truncation logic for long posts (> 200 characters)
@@ -436,10 +454,41 @@ export default function PostCard({
           {repostCount > 0 && <span className="repost-count-badge">{repostCount}</span>}
         </button>
 
-        <button type="button" className="action-btn" onClick={handleShare} title="Share post">
+        <button
+          type="button"
+          className="action-btn share-btn"
+          onClick={handleShare}
+          title="Share with official Shammah watermark"
+        >
           <span className="action-icon">↗</span>
           <span>Share</span>
         </button>
+
+        {/* Offline Download button (30 days) */}
+        <button
+          type="button"
+          className={`action-btn offline-download-btn${isSavedOffline ? ' saved' : ''}`}
+          onClick={handleSaveOffline}
+          title={isSavedOffline ? 'Saved offline for 30 days' : 'Download for 30-day offline access'}
+          aria-label="Save offline"
+        >
+          {isSavedOffline ? <Check size={14} className="text-emerald-400" /> : <DownloadCloud size={14} />}
+          <span>{isSavedOffline ? 'Saved' : 'Offline'}</span>
+        </button>
+
+        {/* Sanctuary Projection Screen button for Polls & Announcements */}
+        {((pollOptions && pollOptions.length > 0) || post.poll_options_count > 0 || post.is_pinned) && (
+          <button
+            type="button"
+            className="action-btn project-btn"
+            onClick={handleProject}
+            title="Project this on sanctuary or classroom screen"
+            aria-label="Project on screen"
+          >
+            <Tv size={14} className="text-amber-400" />
+            <span>Project</span>
+          </button>
+        )}
 
         {isAdmin && (
           <button
@@ -513,6 +562,36 @@ export default function PostCard({
         <ReportPostModal
           post={post}
           onClose={() => setShowReportModal(false)}
+        />
+      )}
+
+      {/* Watermarked Share Modal */}
+      {showWatermarkModal && (
+        <WatermarkShareModal
+          contentData={{
+            title: 'Fellowship Post',
+            textContent: post.text_content,
+            authorName,
+            churchName: author?.church_name || 'Shammah Global Community',
+            category: cat.text || 'Fellowship',
+            mediaUrl: post.media_url,
+            pollOptions,
+          }}
+          onClose={() => setShowWatermarkModal(false)}
+        />
+      )}
+
+      {/* Projection Mode Modal */}
+      {showProjectionModal && (
+        <ProjectionModeModal
+          type={isPollPost ? 'poll' : 'course'}
+          data={{
+            ...post,
+            options: pollOptions,
+            counts: pollCounts,
+            churchName: author?.church_name || 'Shammah Fellowship',
+          }}
+          onClose={() => setShowProjectionModal(false)}
         />
       )}
     </article>
