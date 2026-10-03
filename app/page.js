@@ -974,19 +974,6 @@ export default function Feed() {
     <div className="shell">
       <div className="sticky-header">
         <header className="topbar">
-          <button
-            type="button"
-            className="icon-btn search-trigger-btn"
-            aria-label="Search posts, churches, and members"
-            title="Search posts, churches & members (/)"
-            onClick={() => {
-              playSound('reaction');
-              window.dispatchEvent(new CustomEvent('shammah:open-search', { detail: { query: searchTerm || '' } }));
-            }}
-          >
-            <Search size={18} className="icon" />
-          </button>
-
           <div className="brand">
             <div className="brand-text-wrap">
               <h1 className="brand-mark">Shammah</h1>
@@ -1209,6 +1196,36 @@ export default function Feed() {
                 }
               }}
             />
+
+            {/* Search Input Bar Widget panning across screen directly below top navigation bar */}
+            <div className="header-search-widget-wrap">
+              <div
+                className="header-search-bar-widget"
+                role="search"
+                tabIndex={0}
+                onClick={() => {
+                  playSound('reaction');
+                  window.dispatchEvent(new CustomEvent('shammah:open-search', { detail: { query: '' } }));
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    playSound('reaction');
+                    window.dispatchEvent(new CustomEvent('shammah:open-search', { detail: { query: '' } }));
+                  }
+                }}
+                aria-label="Search scriptures, sermons, topics, and churches"
+                title="Search scriptures, sermons, topics, and churches (Press / or ⌘K)"
+              >
+                <Search size={16} className="search-bar-widget-icon" />
+                <span className="search-bar-widget-placeholder">
+                  Search sermons, scriptures, topics, members...
+                </span>
+                <span className="search-bar-widget-badge">
+                  <kbd className="search-kbd">⌘K</kbd>
+                </span>
+              </div>
+            </div>
           </div>
         )}
       </div>

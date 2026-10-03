@@ -8,9 +8,8 @@ import {
   Sparkles,
   MessageCircle,
   ExternalLink,
-  Download,
-  Flame,
   Globe,
+  Share,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 
@@ -21,16 +20,17 @@ export default function ShareMenuModal({
   onLinkCopied,
 }) {
   const [copied, setCopied] = useState(false);
+  const [activeItem, setActiveItem] = useState(null);
 
-  const postTitle = post?.title || post?.text_content?.slice(0, 60) || 'Fellowship update on Shammah';
-  const authorName = post?.profiles?.name || post?.profiles?.display_name || 'Shammah Disciple';
+  const authorName = post?.profiles?.name || post?.profiles?.display_name || post?.author_name || 'Shammah Member';
+  const postSnippet = post?.text_content ? post.text_content.slice(0, 140) : 'Check out this fellowship post';
   const shareUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/?post=${post?.id || ''}`
     : `https://shammah.faith/?post=${post?.id || ''}`;
-  const shareText = `"${post?.text_content?.slice(0, 140) || 'Check out this faith reflection'}" — shared by ${authorName} on Shammah: ${shareUrl}`;
+  const shareText = `"${postSnippet}" — shared by ${authorName} on Shammah: ${shareUrl}`;
 
   async function handleCopyLink() {
-    playSound('reaction');
+    playSound('share');
     try {
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(shareUrl);
@@ -39,29 +39,50 @@ export default function ShareMenuModal({
     setCopied(true);
     onLinkCopied?.();
     setTimeout(() => {
+      setCopied(false);
       onClose();
-    }, 350);
+    }, 900);
   }
 
   function handleShareWhatsApp() {
     playSound('reaction');
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    const url = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
     onClose();
   }
 
   function handleShareTwitter() {
     playSound('reaction');
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
     onClose();
   }
 
+  function handleShareFacebook() {
+    playSound('reaction');
+    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+    onClose();
+  }
+
+  function handleOpenWatermarkCard() {
+    playSound('reaction');
+    onClose();
+    onOpenWatermark?.();
+  }
+
   async function handleNativeShare() {
-    if (navigator.share) {
+    playSound('reaction');
+    if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          title: postTitle,
+          title: `Fellowship post by ${authorName}`,
           text: shareText,
           url: shareUrl,
         });
@@ -76,143 +97,143 @@ export default function ShareMenuModal({
     }
   }
 
+  const SHARE_OPTIONS = [
+    {
+      id: 'copy',
+      title: copied ? 'Link Copied to Clipboard!' : 'Copy Direct Link',
+      desc: 'Instant URL to this post with link preview',
+      icon: copied ? Check : Copy,
+      color: '#06b6d4', // Cyan
+      badge: copied ? 'Copied ✓' : 'Direct Link',
+      action: handleCopyLink,
+    },
+    {
+      id: 'whatsapp',
+      title: 'Share to WhatsApp',
+      desc: 'Send to church groups, Bible study & prayer partners',
+      icon: MessageCircle,
+      color: '#10b981', // Emerald Green
+      badge: 'WhatsApp',
+      action: handleShareWhatsApp,
+    },
+    {
+      id: 'twitter',
+      title: 'Share to X / Twitter',
+      desc: 'Post scripture, quote & testimony to public feed',
+      icon: ExternalLink,
+      color: '#0ea5e9', // Sky Blue
+      badge: 'Twitter',
+      action: handleShareTwitter,
+    },
+    {
+      id: 'facebook',
+      title: 'Share to Facebook',
+      desc: 'Share blessing with friends, family & church community',
+      icon: Globe,
+      color: '#3b82f6', // Royal Blue
+      badge: 'Facebook',
+      action: handleShareFacebook,
+    },
+    {
+      id: 'watermark',
+      title: 'Official Watermarked Card',
+      desc: 'Generate branded high-res card with flame logo & quote',
+      icon: Sparkles,
+      color: '#f59e0b', // Sanctuary Amber
+      badge: 'Branded PNG',
+      action: handleOpenWatermarkCard,
+    },
+  ];
+
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    SHARE_OPTIONS.push({
+      id: 'native',
+      title: 'System Share Sheet...',
+      desc: 'Open standard device sharing options & contacts',
+      icon: Share,
+      color: '#8b5cf6', // Kingdom Purple
+      badge: 'Device Options',
+      action: handleNativeShare,
+    });
+  }
+
   return (
-    <div className="author-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+    <div className="share-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="Share Post">
       <div
-        className="inst-profile-modal-card neon-glow-modal max-w-sm w-full"
+        className="share-modal-card neon-glow-modal"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '420px' }}
       >
         {/* Header */}
-        <div className="inst-modal-header">
-          <div className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400">
+        <div className="share-modal-header">
+          <div className="share-modal-title-row">
+            <span className="share-modal-icon-badge">
               <Share2 size={18} />
             </span>
-            <div>
-              <h3 className="text-base font-bold text-white">Share Fellowship Post</h3>
-              <p className="text-xs text-gray-400">Spread the Gospel and bless others</p>
+            <div className="share-modal-title-text">
+              <h3>Share Fellowship Post</h3>
+              <p>Spread Gospel encouragement and edify the church</p>
             </div>
           </div>
           <button
             type="button"
-            className="inst-modal-close"
+            className="share-modal-close-btn"
             onClick={onClose}
-            aria-label="Close"
+            aria-label="Close share menu"
           >
-            <X size={18} />
+            <X size={17} />
           </button>
         </div>
 
-        {/* Options Stack */}
-        <div className="p-4 space-y-2 text-sm">
-          {/* Quick Copy Link */}
-          <button
-            type="button"
-            onClick={handleCopyLink}
-            className="w-full p-3 rounded-xl bg-white/[0.04] border border-cyan-500/30 hover:bg-cyan-950/30 hover:border-cyan-500 flex items-center justify-between text-left transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <span className="p-2 rounded-lg bg-cyan-500/20 text-cyan-300 group-hover:scale-110 transition-transform">
-                {copied ? <Check size={16} /> : <Copy size={16} />}
-              </span>
-              <div>
-                <strong className="block text-white text-xs font-semibold">
-                  Copy Direct Link
-                </strong>
-                <span className="text-[11px] text-gray-400">
-                  Copies link with automatic 2s confirmation
+        {/* Share Options List */}
+        <div className="share-menu-options-list no-scrollbar">
+          {SHARE_OPTIONS.map((opt) => {
+            const Icon = opt.icon;
+            const isHovered = activeItem === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                className={`share-menu-item-card${isHovered ? ' is-active' : ''}`}
+                style={{
+                  '--item-accent': opt.color,
+                  borderColor: isHovered ? opt.color : undefined,
+                }}
+                onMouseEnter={() => setActiveItem(opt.id)}
+                onMouseLeave={() => setActiveItem(null)}
+                onClick={opt.action}
+              >
+                <span
+                  className="share-menu-icon-wrap"
+                  style={{ '--item-accent': opt.color }}
+                >
+                  <Icon size={17} strokeWidth={2.2} />
                 </span>
-              </div>
-            </div>
-            <span className="text-[11px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">
-              {copied ? 'Copied!' : 'Copy'}
-            </span>
-          </button>
 
-          {/* WhatsApp */}
-          <button
-            type="button"
-            onClick={handleShareWhatsApp}
-            className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/10 hover:border-emerald-500 hover:bg-emerald-950/30 flex items-center gap-3 text-left transition-all group"
-          >
-            <span className="p-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-base">
-              💬
-            </span>
-            <div>
-              <strong className="block text-white text-xs font-semibold">
-                Share to WhatsApp
-              </strong>
-              <span className="text-[11px] text-gray-400">
-                Send to fellowship church groups &amp; family
-              </span>
-            </div>
-          </button>
+                <div className="share-menu-text-wrap">
+                  <div className="share-menu-title-row">
+                    <strong>{opt.title}</strong>
+                    <span
+                      className="share-menu-chip"
+                      style={{
+                        color: isHovered ? opt.color : undefined,
+                        borderColor: isHovered ? opt.color : undefined,
+                      }}
+                    >
+                      {opt.badge}
+                    </span>
+                  </div>
+                  <small>{opt.desc}</small>
+                </div>
 
-          {/* Twitter / X */}
-          <button
-            type="button"
-            onClick={handleShareTwitter}
-            className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/10 hover:border-sky-500 hover:bg-sky-950/30 flex items-center gap-3 text-left transition-all group"
-          >
-            <span className="p-2 rounded-lg bg-sky-500/20 text-sky-300 text-base">
-              𝕏
-            </span>
-            <div>
-              <strong className="block text-white text-xs font-semibold">
-                Share to X / Twitter
-              </strong>
-              <span className="text-[11px] text-gray-400">
-                Post testimony &amp; scripture to public timeline
-              </span>
-            </div>
-          </button>
-
-          {/* Official Watermark Card */}
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onOpenWatermark?.();
-            }}
-            className="w-full p-3 rounded-xl bg-white/[0.04] border border-amber-500/30 hover:border-amber-400 hover:bg-amber-950/30 flex items-center gap-3 text-left transition-all group"
-          >
-            <span className="p-2 rounded-lg bg-amber-500/20 text-amber-300">
-              <Sparkles size={16} />
-            </span>
-            <div>
-              <strong className="block text-white text-xs font-semibold flex items-center gap-1.5">
-                <span>Official Watermarked Card</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
-                  PNG
+                <span
+                  className={`item-color-picker-box${isHovered ? ' active-picker' : ''}`}
+                  style={{ '--picker-color': opt.color }}
+                >
+                  <span className="picker-box-swatch" />
                 </span>
-              </strong>
-              <span className="text-[11px] text-gray-400">
-                Generate branded card with flame logo &amp; link
-              </span>
-            </div>
-          </button>
-
-          {/* Native Web Share API if available */}
-          {typeof navigator !== 'undefined' && navigator.share && (
-            <button
-              type="button"
-              onClick={handleNativeShare}
-              className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/10 hover:border-purple-500 hover:bg-purple-950/30 flex items-center gap-3 text-left transition-all group"
-            >
-              <span className="p-2 rounded-lg bg-purple-500/20 text-purple-300">
-                <Globe size={16} />
-              </span>
-              <div>
-                <strong className="block text-white text-xs font-semibold">
-                  More Share Options...
-                </strong>
-                <span className="text-[11px] text-gray-400">
-                  Open device system sharing dialog
-                </span>
-              </div>
-            </button>
-          )}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

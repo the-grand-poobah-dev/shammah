@@ -37,6 +37,7 @@ export const MORE_DROPDOWN_ITEMS = [
     desc: 'Capture points & view scriptures',
     icon: FileText,
     isSermonNote: true,
+    color: '#f59e0b', // Sanctuary Amber
   },
   {
     id: 'category-topics',
@@ -44,6 +45,7 @@ export const MORE_DROPDOWN_ITEMS = [
     desc: 'Browse topics & filter home feed',
     icon: Compass,
     isCategories: true,
+    color: '#0d9488', // Emerald Teal
   },
   {
     id: 'challenges',
@@ -51,6 +53,7 @@ export const MORE_DROPDOWN_ITEMS = [
     desc: 'Daily devotion & video challenges',
     icon: Sparkles,
     isSection: true,
+    color: '#8b5cf6', // Kingdom Purple
   },
   {
     id: 'games',
@@ -58,6 +61,7 @@ export const MORE_DROPDOWN_ITEMS = [
     desc: 'Bible trivia & scripture arcade',
     icon: Gamepad2,
     isSection: true,
+    color: '#06b6d4', // Radiant Cyan
   },
 ];
 
@@ -66,20 +70,21 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
   const router = useRouter();
   const [currentSection, setCurrentSection] = useState(activeSection);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [dropdownPos, setDropdownPos] = useState({ top: 60, right: 16 });
+  const [dropdownPos, setDropdownPos] = useState({ top: 60, right: 12 });
   const moreRef = useRef(null);
 
   useEffect(() => {
     setCurrentSection(activeSection);
   }, [activeSection]);
 
-  // Keep dropdown accurately positioned under the "More" button without breaking layout
+  // Keep dropdown accurately positioned sticky to the right of the screen
   useEffect(() => {
     if (moreOpen && moreRef.current) {
       function updatePos() {
         if (!moreRef.current) return;
         const rect = moreRef.current.getBoundingClientRect();
-        const rightOffset = Math.max(8, window.innerWidth - rect.right);
+        // Stick safely to right of viewport so it is never overlapped by bottom-left plus menu
+        const rightOffset = Math.max(12, Math.min(24, window.innerWidth - rect.right));
         setDropdownPos({
           top: rect.bottom + 8,
           right: rightOffset,
@@ -311,21 +316,28 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                             type="button"
                             role="menuitem"
                             className={`top-nav-more-item${isItemActive ? ' is-active' : ''}`}
+                            style={{
+                              '--item-accent': item.color,
+                              borderColor: isItemActive ? item.color : undefined,
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleMoreItemClick(item);
                             }}
                           >
-                            <div className={`top-nav-more-icon-box ${item.id}`}>
+                            <div className={`top-nav-more-icon-box ${item.id}`} style={{ '--item-accent': item.color }}>
                               <ItemIcon size={17} strokeWidth={2} />
                             </div>
                             <div className="top-nav-more-text">
                               <span className="top-nav-more-title">
                                 <span>{item.label}</span>
-                                {isItemActive && <Check size={14} className="text-teal" />}
+                                {isItemActive && <Check size={14} style={{ color: item.color }} />}
                               </span>
                               <span className="top-nav-more-desc">{item.desc}</span>
                             </div>
+                            <span className="item-color-picker-box" style={{ '--picker-color': item.color }}>
+                              <span className="picker-box-swatch" />
+                            </span>
                           </button>
                         );
                       })}

@@ -28,6 +28,7 @@ export default function BottomNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [highlightColor] = useState('#06b6d4');
   const [activeHighlightId, setActiveHighlightId] = useState(null);
+  const [hoveredActionId, setHoveredActionId] = useState(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isContentHovered, setIsContentHovered] = useState(false);
   const menuRef = useRef(null);
@@ -248,7 +249,21 @@ export default function BottomNav() {
     <>
       {/* Floating Action Buttons Wrap on Bottom Left */}
       <div className="floating-left-actions-wrap" ref={menuRef}>
-        {/* Floating Circular Plus Action Button Container (Placed Above Move-to-Top) */}
+        {/* Move to Top Icon (Placed Above the Plus Icon) */}
+        <button
+          type="button"
+          className={`floating-scroll-top-btn${isScrollTopVisible ? ' is-visible' : ''}`}
+          onClick={handleScrollToTop}
+          aria-label="Scroll back to top"
+          title="Scroll to top of feed"
+        >
+          <span className="floating-neon-ring" aria-hidden="true" />
+          <span className="floating-scroll-top-inner">
+            <ChevronUp size={20} strokeWidth={2.8} />
+          </span>
+        </button>
+
+        {/* Floating Circular Plus Action Button Container (Placed Directly Above Bottom Nav Bar) */}
         <div className="floating-plus-btn-container">
           {/* Quick Actions Speed-Dial Menu */}
           {menuOpen && (
@@ -306,7 +321,7 @@ export default function BottomNav() {
                         className={`quick-action-item explore-channel-card${isItemActive ? ' item-active' : ''}`}
                         style={{
                           '--sec-color': effectiveColor,
-                          borderColor: isItemActive ? effectiveColor : undefined,
+                          borderColor: effectiveColor,
                         }}
                         onClick={() => {
                           setActiveHighlightId(item.id);
@@ -321,6 +336,9 @@ export default function BottomNav() {
                           <strong>{item.label}</strong>
                           <small>{item.desc}</small>
                         </div>
+                        <span className="item-color-picker-box" style={{ '--picker-color': effectiveColor, borderColor: effectiveColor }}>
+                          <span className="picker-box-swatch" style={{ background: effectiveColor }} />
+                        </span>
                       </button>
                     </div>
                   );
@@ -345,20 +363,6 @@ export default function BottomNav() {
             </span>
           </button>
         </div>
-
-        {/* Move to Top Icon (Placed Below the Plus Icon) */}
-        <button
-          type="button"
-          className={`floating-scroll-top-btn${isScrollTopVisible ? ' is-visible' : ''}`}
-          onClick={handleScrollToTop}
-          aria-label="Scroll back to top"
-          title="Scroll to top of feed"
-        >
-          <span className="floating-neon-ring" aria-hidden="true" />
-          <span className="floating-scroll-top-inner">
-            <ChevronUp size={20} strokeWidth={2.8} />
-          </span>
-        </button>
       </div>
 
       <nav className="bottom-nav" aria-label="Main Navigation">

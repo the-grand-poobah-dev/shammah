@@ -569,51 +569,56 @@ export default function PostCard({
                 <span>{post.church_name || post.churches?.name || author?.church_name}</span>
               </button>
             )}
-
-            {/* Visibility Badge */}
-            <span
-              className="post-visibility-pill"
-              title={`Privacy & Visibility: ${visibility}`}
-              onClick={() => {
-                if (isAuthor || isAdmin) setShowVisibilityModal(true);
-              }}
-            >
-              <VisIcon size={12} className="post-vis-icon" />
-              <span className="post-vis-label">
-                {visibility === 'followers'
-                  ? 'Followers'
-                  : visibility === 'church'
-                    ? 'Church'
-                    : visibility === 'private'
-                      ? 'Private'
-                      : 'Public'}
-              </span>
-              {(isAuthor || isAdmin) && <span className="post-vis-edit-hint">▾</span>}
-            </span>
           </div>
         </div>
 
+        {/* Top-Right Column: Post Options Menu on top, Privacy State Pill directly below it (no overlap) */}
         <div className="post-header-actions-right">
-          {!post.is_pinned && isAdmin && (
-            <button
-              type="button"
-              className="header-pin-btn"
-              onClick={() => onTogglePin?.(post)}
-              title="Pin this announcement to top of feed"
-              aria-label="Pin announcement to top"
-            >
-              <PinIcon className="pin-action-icon" />
-              <span>Pin</span>
-            </button>
-          )}
+          <div className="post-header-top-controls">
+            {!post.is_pinned && isAdmin && (
+              <button
+                type="button"
+                className="header-pin-btn"
+                onClick={() => onTogglePin?.(post)}
+                title="Pin this announcement to top of feed"
+                aria-label="Pin announcement to top"
+              >
+                <PinIcon className="pin-action-icon" />
+                <span>Pin</span>
+              </button>
+            )}
 
-          {/* Post Options Dropdown Menu for every post */}
-          <PostOptionsMenu
-            post={post}
-            authorId={authorId}
-            authorName={authorName}
-            onReportClick={() => setShowReportModal(true)}
-          />
+            {/* Post Options Dropdown Menu for every post */}
+            <PostOptionsMenu
+              post={post}
+              authorId={authorId}
+              authorName={authorName}
+              onReportClick={() => setShowReportModal(true)}
+              onProjectClick={handleProject}
+            />
+          </div>
+
+          {/* Privacy & Visibility State Badge on top right, opposite author name */}
+          <span
+            className="post-visibility-pill top-right-vis-pill"
+            title={`Privacy & Visibility: ${visibility}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isAuthor || isAdmin) setShowVisibilityModal(true);
+            }}
+          >
+            <VisIcon size={11} className="post-vis-icon" />
+            <span className="post-vis-label">
+              {visibility === 'followers'
+                ? 'Followers'
+                : visibility === 'church'
+                  ? 'Church'
+                  : visibility === 'private'
+                    ? 'Only Me'
+                    : 'Public'}
+            </span>
+            {(isAuthor || isAdmin) && <span className="post-vis-edit-hint">▾</span>}
+          </span>
         </div>
       </div>
 
@@ -757,20 +762,6 @@ export default function PostCard({
           {isSavedOffline ? <Check size={14} className="text-emerald-400" /> : <DownloadCloud size={14} />}
           <span className="action-label offline-label">{isSavedOffline ? 'Saved' : 'Offline'}</span>
         </button>
-
-        {/* Sanctuary Projection Screen button for Polls & Announcements */}
-        {(isPollPost || post.is_pinned) && (
-          <button
-            type="button"
-            className="action-btn project-btn"
-            onClick={handleProject}
-            title="Project this on sanctuary or classroom screen"
-            aria-label="Project on screen"
-          >
-            <Tv size={14} className="text-amber-400" />
-            <span className="action-label project-label">Project</span>
-          </button>
-        )}
 
         {isAdmin && (
           <button

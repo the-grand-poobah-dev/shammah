@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Search,
   X,
@@ -14,12 +15,37 @@ import {
   MapPin,
   Check,
   TrendingUp,
+  History,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import { playSound } from '../lib/soundEffects';
 import { timeAgo } from '../lib/postDisplay';
+
+const RECENT_SEARCHES_KEY = 'shammah_recent_searches_v1';
+
+// Animation variants for smooth stagger-in of search results
+const resultsContainerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.04,
+      delayChildren: 0.02,
+    },
+  },
+};
+
+const resultItemVariants = {
+  hidden: { opacity: 0, y: 8, scale: 0.98 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] },
+  },
+};
 
 // Seed / fallback directories for rich, reliable offline & online search results
 const FALLBACK_CHURCHES = [
@@ -205,7 +231,55 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
   const [livePosts, setLivePosts] = useState([]);
   const [liveChurches, setLiveChurches] = useState([]);
   const [liveMembers, setLiveMembers] = useState([]);
+  const [recentSearches, setRecentSearches] = useState([]);
   const inputRef = useRef(null);
+
+  // Load recent searches from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setRecentSearches(parsed.slice(0, 5));
+          }
+        }
+      } catch {}
+    }
+  }, [isOpen]);
+
+  function saveRecentSearch(term) {
+    const clean = (term || '').trim();
+    if (!clean || clean.length < 2) return;
+    setRecentSearches((prev) => {
+      const filtered = prev.filter((s) => s.toLowerCase() !== clean.toLowerCase());
+      const updated = [clean, ...filtered].slice(0, 5);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
+  }
+
+  function clearRecentSearches(e) {
+    if (e) e.stopPropagation();
+    playSound('offline_remove');
+    setRecentSearches([]);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(RECENT_SEARCHES_KEY);
+      } catch {}
+    }
+  }
+
+  function handleSelectRecent(term) {
+    playSound('reaction');
+    setQuery(term);
+    saveRecentSearch(term);
+  }
 
   // Sync initial query when opened
   useEffect(() => {
@@ -359,6 +433,7 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
     (activeTab === 'all' || activeTab === 'members' ? filteredMembers.length : 0);
 
   function handleSelectPost(postId) {
+    if (query.trim()) saveRecentSearch(query);
     playSound('reaction');
     onClose();
     if (typeof window !== 'undefined') {
@@ -378,6 +453,7 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
   }
 
   function handleSelectChurch(church) {
+    saveRecentSearch(church.name);
     playSound('reaction');
     onClose();
     window.dispatchEvent(
@@ -399,6 +475,7 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
   }
 
   function handleSelectMember(member) {
+    saveRecentSearch(member.display_name || member.name);
     playSound('reaction');
     onClose();
     window.dispatchEvent(
@@ -418,6 +495,7 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
 
   function handleTagClick(tag) {
     playSound('reaction');
+    saveRecentSearch(tag);
     setQuery(tag);
     setActiveTab('posts');
   }
@@ -437,6 +515,11 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
             placeholder="Search posts, sermons, churches, pastors &amp; members..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && query.trim()) {
+                saveRecentSearch(query);
+              }
+            }}
             aria-label="Search posts, churches, and members"
           />
           {query && (
@@ -501,9 +584,43 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
             </div>
           )}
 
-          {/* If no query, show trending faith tags & suggested discovery */}
+          {/* If no query, show recent searches, trending faith tags & suggested discovery */}
           {!query.trim() && (
             <div className="global-search-suggestions">
+              {/* Recent Searches Section */}
+              {recentSearches.length > 0 && (
+                <div className="search-recent-section">
+                  <div className="search-section-label search-between-label">
+                    <div className="search-label-left">
+                      <Clock size={13} className="text-teal" />
+                      <span>Recent Searches</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="search-clear-recent-btn"
+                      onClick={clearRecentSearches}
+                      title="Clear recent search history"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="search-recent-chips-row no-scrollbar">
+                    {recentSearches.map((term) => (
+                      <button
+                        key={term}
+                        type="button"
+                        className="search-recent-chip"
+                        onClick={() => handleSelectRecent(term)}
+                        title={`Search for "${term}"`}
+                      >
+                        <Clock size={12} className="chip-clock-icon text-teal" />
+                        <span>{term}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="search-section-label">
                 <TrendingUp size={13} className="text-amber-400" />
                 <span>Popular Faith Topics &amp; Tags</span>
@@ -582,7 +699,7 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
             </div>
           )}
 
-          {/* Results list when query is present */}
+          {/* Results list when query is present with smooth stagger animation */}
           {query.trim() && (
             <div className="global-search-results-list">
               {totalResultsCount === 0 && !isLoading && (
@@ -594,14 +711,21 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
 
               {/* Churches Section */}
               {(activeTab === 'all' || activeTab === 'churches') && filteredChurches.length > 0 && (
-                <div className="search-results-group">
+                <motion.div
+                  className="search-results-group"
+                  variants={resultsContainerVariants}
+                  initial="hidden"
+                  animate="show"
+                  key={`churches-${query}-${activeTab}`}
+                >
                   <div className="search-section-label">
                     <Church size={13} className="text-emerald-400" />
                     <span>Churches &amp; Fellowships ({filteredChurches.length})</span>
                   </div>
                   {filteredChurches.map((c) => (
-                    <div
+                    <motion.div
                       key={c.id}
+                      variants={resultItemVariants}
                       className="search-result-item church-item"
                       onClick={() => handleSelectChurch(c)}
                       role="button"
@@ -625,21 +749,28 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                         </span>
                       </div>
                       <ArrowRight size={15} className="search-action-arrow" />
-                    </div>
+                    </motion.div>
                   ))}
-                </div>
+                </motion.div>
               )}
 
               {/* Members Section */}
               {(activeTab === 'all' || activeTab === 'members') && filteredMembers.length > 0 && (
-                <div className="search-results-group">
+                <motion.div
+                  className="search-results-group"
+                  variants={resultsContainerVariants}
+                  initial="hidden"
+                  animate="show"
+                  key={`members-${query}-${activeTab}`}
+                >
                   <div className="search-section-label">
                     <Users size={13} className="text-cyan-400" />
                     <span>Pastors &amp; Members ({filteredMembers.length})</span>
                   </div>
                   {filteredMembers.map((m) => (
-                    <div
+                    <motion.div
                       key={m.id}
+                      variants={resultItemVariants}
                       className="search-result-item member-item"
                       onClick={() => handleSelectMember(m)}
                       role="button"
@@ -654,14 +785,20 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                         <span className="search-sub-row">{m.church_name || m.church || 'Fellowship Believer'}</span>
                       </div>
                       <ArrowRight size={15} className="search-action-arrow" />
-                    </div>
+                    </motion.div>
                   ))}
-                </div>
+                </motion.div>
               )}
 
               {/* Posts Section */}
               {(activeTab === 'all' || activeTab === 'posts') && filteredPosts.length > 0 && (
-                <div className="search-results-group">
+                <motion.div
+                  className="search-results-group"
+                  variants={resultsContainerVariants}
+                  initial="hidden"
+                  animate="show"
+                  key={`posts-${query}-${activeTab}`}
+                >
                   <div className="search-section-label">
                     <FileText size={13} className="text-rose-400" />
                     <span>Shared Posts &amp; Testimonies ({filteredPosts.length})</span>
@@ -669,8 +806,9 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                   {filteredPosts.map((p) => {
                     const authorName = p.profiles?.display_name || 'Fellowship Member';
                     return (
-                      <div
+                      <motion.div
                         key={p.id}
+                        variants={resultItemVariants}
                         className="search-result-item post-item"
                         onClick={() => handleSelectPost(p.id)}
                         role="button"
@@ -690,10 +828,10 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                           <p className="search-post-snippet">{p.text_content}</p>
                         </div>
                         <ArrowRight size={15} className="search-action-arrow" />
-                      </div>
+                      </motion.div>
                     );
                   })}
-                </div>
+                </motion.div>
               )}
             </div>
           )}
