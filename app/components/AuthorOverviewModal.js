@@ -112,8 +112,16 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
   }
 
   return (
-    <div className="author-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="author-modal-card neon-glow-modal" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="author-modal-backdrop toast-backdrop-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="author-modal-card toast-popup-box multicolored-glow-shadow"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button type="button" className="author-modal-close" onClick={onClose} aria-label="Close">
           <X size={18} />
         </button>
@@ -131,10 +139,26 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
             </div>
             <span className="author-modal-role">{role}</span>
             {author?.church_name && (
-              <span className="author-modal-church">
+              <button
+                type="button"
+                className="author-modal-church author-church-clickable"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                  window.dispatchEvent(
+                    new CustomEvent('shammah:open-institution-profile', {
+                      detail: {
+                        institutionId: author?.church_id,
+                        name: author.church_name,
+                      },
+                    })
+                  );
+                }}
+                title={`View ${author.church_name} overview`}
+              >
                 <Church size={12} />
                 <span>{author.church_name}</span>
-              </span>
+              </button>
             )}
           </div>
         </div>

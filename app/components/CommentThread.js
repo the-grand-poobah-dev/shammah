@@ -14,6 +14,7 @@ import {
   setAuthorCommentReaction,
 } from '../lib/commentPinManager';
 import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousManager';
+import { logActivity } from '../lib/activityLogManager';
 import { Pin, Sparkles, User, RefreshCw, EyeOff } from 'lucide-react';
 
 export default function CommentThread({
@@ -212,6 +213,16 @@ export default function CommentThread({
       const next = [...prev, withProfile];
       onCountChange(next.length);
       return next;
+    });
+    logActivity({
+      type: 'comment',
+      icon: '💬',
+      title: 'Commented on Fellowship Post',
+      targetTitle: postAuthorName ? `Post by ${postAuthorName}` : 'Fellowship Post',
+      snippet: clean,
+      authorName: postAuthorName || '',
+      visibility: identityMode === 'anonymous' ? 'anonymous' : 'public',
+      meta: { postId, parentId: replyTo?.id },
     });
     playSound('commented');
     setText('');

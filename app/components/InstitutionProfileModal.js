@@ -82,8 +82,16 @@ export default function InstitutionProfileModal({
   const planInfo = SUBSCRIPTION_PLANS.find((p) => p.id === sub.planId) || SUBSCRIPTION_PLANS[0];
 
   return (
-    <div className="vis-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="vis-modal-card neon-glow-modal inst-profile-modal-card" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="institution-modal-backdrop toast-backdrop-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="inst-profile-modal-card toast-popup-box multicolored-glow-shadow"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Cover Header */}
         <div
           className="inst-modal-cover"

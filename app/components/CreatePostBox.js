@@ -25,6 +25,7 @@ import {
   RefreshCw,
   Bot,
   DownloadCloud,
+  Clock,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
@@ -77,6 +78,17 @@ export default function CreatePostBox({
   const [showIdentityMenu, setShowIdentityMenu] = useState(false);
   const [aiEnhancing, setAiEnhancing] = useState(false);
   const [allowOfflineDownload, setAllowOfflineDownload] = useState(true);
+  const [previewTestVote, setPreviewTestVote] = useState(null);
+  const [previewSimulateResults, setPreviewSimulateResults] = useState(false);
+  const [pollDuration, setPollDuration] = useState('24h'); // '1h' | '24h' | '3d' | '7d'
+  const [revealResultsAfterVoting, setRevealResultsAfterVoting] = useState(true);
+
+  // Keep preview vote index valid when poll options are added or removed
+  useEffect(() => {
+    if (previewTestVote !== null && previewTestVote >= pollOptions.length) {
+      setPreviewTestVote(null);
+    }
+  }, [pollOptions.length, previewTestVote]);
 
   async function handleAiEnhance() {
     if (!composeText.trim()) {
@@ -247,7 +259,25 @@ export default function CreatePostBox({
       return;
     }
     setCategoryError(false);
-    onSubmit(e, visibility, { identityMode: postIdentity, pseudoName: pseudoProfile.name, allowOffline: allowOfflineDownload });
+    const durationMs =
+      pollDuration === '1h'
+        ? 1000 * 60 * 60
+        : pollDuration === '3d'
+          ? 1000 * 60 * 60 * 24 * 3
+          : pollDuration === '7d'
+            ? 1000 * 60 * 60 * 24 * 7
+            : 1000 * 60 * 60 * 24; // 24h default
+
+    const pollExpiresAt = isPoll ? new Date(Date.now() + durationMs).toISOString() : null;
+
+    onSubmit(e, visibility, {
+      identityMode: postIdentity,
+      pseudoName: pseudoProfile.name,
+      allowOffline: allowOfflineDownload,
+      pollDuration: isPoll ? pollDuration : null,
+      pollExpiresAt,
+      revealResultsAfterVoting: isPoll ? revealResultsAfterVoting : false,
+    });
   }
 
   const CurrentVisIcon = VIS_ICONS[visibility] || Globe;
@@ -705,6 +735,325 @@ export default function CreatePostBox({
               <span>Add Option</span>
             </button>
           )}
+
+          {/* Poll Settings: Expiration Duration & Reveal Results Toggle */}
+          <div className="poll-settings-panel">
+            <div className="poll-setting-group">
+              <label className="poll-setting-label">
+                <Clock size={13} className="text-teal-400" />
+                <span>Poll Duration / Expiration:</span>
+              </label>
+              <div className="poll-duration-pills" role="radiogroup" aria-label="Poll expiration duration">
+                {[
+                  { id: '1h', label: '1 Hour', title: '1 Hour · Quick Pulse' },
+                  { id: '24h', label: '24 Hours', title: '24 Hours · 1 Day (Default)' },
+                  { id: '3d', label: '3 Days', title: '3 Days · Weekend Fellowship' },
+                  { id: '7d', label: '1 Week', title: '1 Week · Full Week Survey' },
+                ].map((dur) => (
+                  <button
+                    key={dur.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={pollDuration === dur.id}
+                    className={`poll-duration-pill${pollDuration === dur.id ? ' active' : ''}`}
+                    onClick={() => {
+                      setPollDuration(dur.id);
+                      playSound('reaction');
+                    }}
+                    title={dur.title}
+                  >
+                    {dur.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="poll-setting-toggle-row">
+              <label className="poll-toggle-label" title="Keep live results private from participants until they vote">
+                <input
+                  type="checkbox"
+                  checked={revealResultsAfterVoting}
+                  onChange={(e) => {
+                    setRevealResultsAfterVoting(e.target.checked);
+                    playSound('reaction');
+                  }}
+                  className="poll-toggle-checkbox"
+                />
+                <div className="poll-toggle-text">
+                  <div className="poll-toggle-heading">
+                    <EyeOff size={13} className="text-teal-400" />
+                    <strong>Reveal results only after voting</strong>
+                  </div>
+                  <small>Keeps live percentages and vote counts private until each member participates</small>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Dynamic Real-Time Poll Card Preview */}
+          <div className="compose-poll-preview-wrapper" aria-label="Dynamic Poll Card Preview">
+            <div className="poll-preview-top-bar">
+              <div className="poll-preview-indicator">
+                <span className="poll-preview-live-dot" />
+                <span className="poll-preview-title">Dynamic Poll Card Preview</span>
+                <span className="poll-preview-badge">Live Feed Look</span>
+                <span className="poll-preview-duration-badge" title="Selected poll expiration">
+                  <Clock size={10} />
+                  <span>Closes in {pollDuration === '1h' ? '1 hour' : pollDuration === '24h' ? '24 hours' : pollDuration === '3d' ? '3 days' : '1 week'}</span>
+                </span>
+              </div>
+              <div className="poll-preview-controls">
+                {previewTestVote !== null && (
+                  <button
+                    type="button"
+                    className="poll-preview-control-btn reset"
+                    onClick={() => {
+                      setPreviewTestVote(null);
+                      playSound('reaction');
+                    }}
+                    title="Clear test vote"
+                  >
+                    <RefreshCw size={11} />
+                    <span>Reset Vote</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`poll-preview-control-btn${previewSimulateResults ? ' active' : ''}`}
+                  onClick={() => {
+                    setPreviewSimulateResults((v) => !v);
+                    playSound('reaction');
+                  }}
+                  title="Toggle percentage bars simulation"
+                >
+                  <BarChart3 size={11} />
+                  <span>{previewSimulateResults ? 'Results Active' : 'Simulate Results'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="poll-preview-card-frame">
+              {/* Simulated Feed Post Header */}
+              <div className="post-header">
+                <Avatar
+                  name={currentIdentityName}
+                  src={currentIdentityAvatar}
+                  className="avatar-sm"
+                />
+                <div className="post-header-text">
+                  <div className="post-header-top">
+                    <span className="author-name">{currentIdentityName}</span>
+                    {cat && (
+                      <span
+                        className="cat-pill"
+                        style={{
+                          '--cat-accent': cat.accent,
+                          '--cat-soft': cat.soft,
+                          '--cat-text': cat.text,
+                        }}
+                      >
+                        {cat.label}
+                      </span>
+                    )}
+                    <span className="post-vis-badge">
+                      <CurrentVisIcon size={11} />
+                      <span>{VISIBILITY_OPTIONS.find((v) => v.id === visibility)?.label || 'Public'}</span>
+                    </span>
+                  </div>
+                  <div className="post-header-meta">
+                    <span className="post-author-role">
+                      {postIdentity === 'anonymous'
+                        ? 'Posting Anonymously 🕵️'
+                        : postIdentity === 'pseudo'
+                          ? 'Pseudonym Protected 🎲'
+                          : profile?.role === 'platform_admin'
+                            ? 'Platform Administrator'
+                            : profile?.role === 'church_admin'
+                              ? 'Church Administrator'
+                              : 'Fellowship Community'}
+                    </span>
+                    <span className="post-dot">·</span>
+                    <span className="post-time-ago">Just now · Live Feed Preview</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Poll Question Content */}
+              <div className="post-text-container">
+                {composeText.trim() ? (
+                  <p className="post-text poll-preview-question">{composeText}</p>
+                ) : (
+                  <p className="post-text poll-preview-question placeholder">
+                    Ask your question in the text box above (e.g. &ldquo;Which scripture gives you peace during difficult trials?&rdquo;)…
+                  </p>
+                )}
+              </div>
+
+              {/* Dynamic Poll Options Render */}
+              {pollOptions.some((o) => o.preview || o.file) ? (
+                /* Grid View for Image Polls */
+                <div className="poll">
+                  <div className="poll-grid">
+                    {pollOptions.map((opt, idx) => {
+                      const isSelected = previewTestVote === idx;
+                      const canSeeResults = !revealResultsAfterVoting || previewTestVote !== null || previewSimulateResults;
+                      const isShownVoted = canSeeResults && (previewTestVote !== null || previewSimulateResults);
+                      const totalOpts = pollOptions.length || 1;
+                      const pct = isShownVoted
+                        ? (previewTestVote === idx
+                            ? (previewSimulateResults ? Math.round(100 / totalOpts + 20) : 100)
+                            : (previewSimulateResults ? Math.max(5, Math.round(80 / (totalOpts - 1))) : 0))
+                        : 0;
+
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          className={`poll-image-card${isSelected ? ' mine' : ''}`}
+                          onClick={() => {
+                            setPreviewTestVote((prev) => (prev === idx ? null : idx));
+                            playSound('reaction');
+                          }}
+                          title={`Click to test vote for: ${opt.label || `Option ${idx + 1}`}`}
+                        >
+                          {opt.preview ? (
+                            <img src={opt.preview} alt={opt.label || `Option ${idx + 1}`} />
+                          ) : (
+                            <div className="poll-image-placeholder">
+                              <ImageIcon size={22} className="opacity-40" />
+                              <span>No image attached</span>
+                            </div>
+                          )}
+                          <span className="poll-image-meta">
+                            <span className="poll-img-label-text">
+                              {opt.label.trim() ? opt.label : <span className="opacity-60">Option {idx + 1}</span>}
+                              {isSelected && ' ✓'}
+                            </span>
+                            {isShownVoted && <span className="poll-img-pct">{pct}%</span>}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="poll-preview-meta-row">
+                    <p className="poll-meta">
+                      <span>{previewTestVote !== null || previewSimulateResults ? '1 vote recorded' : '0 votes recorded'} · anonymous poll</span>
+                      <span className="poll-meta-duration-pill">⏱️ Closes in {pollDuration === '1h' ? '1 hour' : pollDuration === '24h' ? '24 hours' : pollDuration === '3d' ? '3 days' : '1 week'}</span>
+                    </p>
+                    <span className="poll-test-hint">
+                      {revealResultsAfterVoting && previewTestVote === null && !previewSimulateResults
+                        ? '🔒 Results hidden until you vote (Click option to test)'
+                        : previewTestVote !== null
+                          ? '✓ Results revealed after voting'
+                          : 'Tap any card to test vote'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                /* List View for Text Polls */
+                <div className="poll">
+                  {pollOptions.map((opt, idx) => {
+                    const isSelected = previewTestVote === idx;
+                    const canSeeResults = !revealResultsAfterVoting || previewTestVote !== null || previewSimulateResults;
+                    const isShownVoted = canSeeResults && (previewTestVote !== null || previewSimulateResults);
+                    const totalOpts = pollOptions.length || 1;
+                    const pct = isShownVoted
+                      ? (previewTestVote === idx
+                          ? (previewSimulateResults ? Math.round(100 / totalOpts + 25) : 100)
+                          : (previewSimulateResults ? Math.max(5, Math.round(75 / Math.max(1, totalOpts - 1))) : 0))
+                      : 0;
+
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        className={`poll-option${isSelected ? ' mine' : ''}`}
+                        onClick={() => {
+                          setPreviewTestVote((prev) => (prev === idx ? null : idx));
+                          playSound('reaction');
+                        }}
+                        title={`Click to test vote for: ${opt.label || `Option ${idx + 1}`}`}
+                      >
+                        {isShownVoted && (
+                          <span
+                            className="poll-bar"
+                            style={{
+                              width: `${pct}%`,
+                              ...(cat ? { background: `color-mix(in srgb, ${cat.accent} 22%, transparent)` } : {})
+                            }}
+                          />
+                        )}
+                        <span className="poll-label">
+                          <span className={`poll-radio-indicator${isSelected ? ' checked' : ''}`}>
+                            {isSelected ? <Check size={11} /> : idx + 1}
+                          </span>
+                          <span className="poll-label-text">
+                            {opt.label.trim() ? (
+                              opt.label
+                            ) : (
+                              <span className="poll-opt-placeholder-text">Option {idx + 1} (typing…)</span>
+                            )}
+                          </span>
+                          {isSelected && <span className="poll-voted-tag">Your Vote ✓</span>}
+                        </span>
+                        {isShownVoted && <span className="poll-pct">{pct}%</span>}
+                      </button>
+                    );
+                  })}
+                  <div className="poll-preview-meta-row">
+                    <p className="poll-meta">
+                      <span>{previewTestVote !== null || previewSimulateResults ? '1 vote recorded' : '0 votes recorded'} · anonymous poll</span>
+                      <span className="poll-meta-duration-pill">⏱️ Closes in {pollDuration === '1h' ? '1 hour' : pollDuration === '24h' ? '24 hours' : pollDuration === '3d' ? '3 days' : '1 week'}</span>
+                    </p>
+                    <span className="poll-test-hint">
+                      {revealResultsAfterVoting && previewTestVote === null && !previewSimulateResults
+                        ? '🔒 Results hidden until you vote (Click option to test)'
+                        : previewTestVote !== null
+                          ? '✓ Results revealed after voting'
+                          : 'Tap an option to test interaction'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Feed Card Actions Mockup */}
+              <div className="post-actions-preview">
+                <div className="post-action-preview-pill">
+                  <span>❤️ Amen · 0</span>
+                </div>
+                <div className="post-action-preview-pill">
+                  <span>💬 Comment · 0</span>
+                </div>
+                <div className="post-action-preview-pill">
+                  <span>↗ Share</span>
+                </div>
+                <div className="post-action-preview-pill">
+                  <span>📺 Sanctuary Screen</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Validation & Posting Readiness Guidance */}
+            <div className="poll-preview-guidance">
+              <div className="poll-preview-guidance-left">
+                <Sparkles size={13} className="text-amber-400" />
+                <span>
+                  {pollOptions.filter((o) => o.label.trim() || o.file).length < 2 ? (
+                    <strong className="text-amber-500">
+                      Add at least {2 - pollOptions.filter((o) => o.label.trim() || o.file).length} more option{2 - pollOptions.filter((o) => o.label.trim() || o.file).length > 1 ? 's' : ''} to publish.
+                    </strong>
+                  ) : (
+                    <strong className="text-emerald-500">
+                      Ready to post! Fellowship members can vote anonymously once shared.
+                    </strong>
+                  )}
+                </span>
+              </div>
+              <span className="poll-preview-count-pill">
+                {pollOptions.filter((o) => o.label.trim() || o.file).length} valid / {pollOptions.length} total options
+              </span>
+            </div>
+          </div>
         </div>
       )}
 

@@ -321,7 +321,10 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       </div>
 
       {/* Main Chapter Reader Card */}
-      <article className="post-card bible-chapter-card">
+      <article
+        className="post-card bible-chapter-card article-reading-target"
+        data-article-title={`${currentBook.name} ${selectedChapter}`}
+      >
         <div className="bible-chapter-header">
           <div>
             <h3 className="chapter-heading">

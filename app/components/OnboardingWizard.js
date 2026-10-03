@@ -158,7 +158,7 @@ export default function OnboardingWizard({ session, profile, onDone, onSignOut }
   return (
     <div className="onb-overlay">
       {/* No close button, no click-outside, no Escape: this step is mandatory. */}
-      <div className="onb-panel" role="dialog" aria-modal="true" aria-labelledby="onb-title">
+      <div className="onb-panel multicolored-glow-shadow" role="dialog" aria-modal="true" aria-labelledby="onb-title">
         <div className="onb-top">
           <div className="onb-progress" aria-label={`Step ${step + 1} of ${STEPS.length}`}>
             {STEPS.map((label, i) => (

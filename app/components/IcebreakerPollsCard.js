@@ -174,6 +174,56 @@ export default function IcebreakerPollsCard({
             ))}
           </div>
 
+          {/* Dynamic Real-time Icebreaker Poll Preview */}
+          <div className="icebreaker-preview-box">
+            <div className="poll-preview-top-bar">
+              <div className="poll-preview-indicator">
+                <span className="poll-preview-live-dot" />
+                <span className="poll-preview-title">Dynamic Poll Preview</span>
+                <span className="poll-preview-badge">Live Look</span>
+              </div>
+            </div>
+            <div className="icebreaker-poll-item preview-mode">
+              <div className="poll-item-header">
+                <div className="poll-item-tags">
+                  <span className="poll-category-chip">{category}</span>
+                  <span className="poll-church-chip">{churchName || 'Christian Fellowship'}</span>
+                  <span className="poll-target-chip">{targetGroup}</span>
+                </div>
+                <span className="poll-status-live">
+                  <span className="live-dot" /> Live Preview
+                </span>
+              </div>
+
+              <h4 className="poll-question-text">
+                {question.trim() ? question : 'Your question will appear here as you type…'}
+              </h4>
+
+              <div className="poll-options-stack">
+                {options.map((opt, i) => (
+                  <div key={i} className="poll-option-row">
+                    <div className="poll-option-content">
+                      <span className="poll-option-label">
+                        <span>{opt.trim() ? opt : `Option ${i + 1} (typing…)`}</span>
+                      </span>
+                      <span className="poll-option-stats">
+                        <small>Tap to vote</small>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="poll-item-footer">
+                <span className="poll-total-votes">
+                  <Users size={12} />
+                  <span>0 anonymous responses</span>
+                </span>
+                <span className="poll-hint">Responses are 100% anonymous &amp; secure</span>
+              </div>
+            </div>
+          </div>
+
           <div className="creator-actions">
             <button
               type="button"

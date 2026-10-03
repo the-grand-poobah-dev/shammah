@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check } from 'lucide-react';
+import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check, Eye, EyeOff, BookOpen, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { categoryStyle, timeAgo } from '../lib/postDisplay';
 import Avatar from './Avatar';
@@ -12,6 +12,7 @@ import PinIcon from './PinIcon';
 import RepostModal from './RepostModal';
 import PostVisibilityModal from './PostVisibilityModal';
 import AuthorOverviewModal from './AuthorOverviewModal';
+import InstitutionProfileModal from './InstitutionProfileModal';
 import PostOptionsMenu from './PostOptionsMenu';
 import ReportPostModal from './ReportPostModal';
 import WatermarkShareModal from './WatermarkShareModal';
@@ -30,14 +31,71 @@ import {
 import { playSound } from '../lib/soundEffects';
 import { Clock } from 'lucide-react';
 
-function PollBlock({ options, counts, myVote, canVote, onVote }) {
+function PollBlock({
+  options,
+  counts,
+  myVote,
+  canVote,
+  onVote,
+  pollExpiresAt = null,
+  pollDuration = null,
+  revealResultsAfterVoting = false,
+}) {
+  const [revealOnlyAfterVote, setRevealOnlyAfterVote] = useState(revealResultsAfterVoting ?? false);
   const total = options.reduce((sum, o) => sum + (counts[o.id] || 0), 0);
   const hasVoted = myVote != null;
   const hasImages = options.some((o) => o.image_url);
 
+  // Check if poll is expired
+  const isExpired = pollExpiresAt ? new Date(pollExpiresAt).getTime() < Date.now() : false;
+  const canSeeResults = !revealOnlyAfterVote || hasVoted || isExpired;
+
+  function formatTimeRemaining(isoDate) {
+    if (!isoDate) {
+      if (pollDuration === '1h') return '1h remaining';
+      if (pollDuration === '3d') return '3d remaining';
+      if (pollDuration === '7d') return '7d remaining';
+      return '24h remaining';
+    }
+    const diff = new Date(isoDate).getTime() - Date.now();
+    if (diff <= 0) return 'Closed';
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+    if (days >= 1) return `${days}d ${hours % 24}h left`;
+    const minutes = Math.floor(diff / (1000 * 60));
+    if (hours >= 1) return `${hours}h ${minutes % 60}m left`;
+    return `${Math.max(1, minutes)}m left`;
+  }
+
   if (hasImages) {
     return (
       <div className="poll">
+        {/* Poll Header Bar: Expiration Countdown & Reveal Results Toggle */}
+        <div className="poll-card-meta-bar">
+          <div className="poll-status-tag-group">
+            {isExpired ? (
+              <span className="poll-badge-closed">
+                <span>🏁 Poll Closed · Final Results</span>
+              </span>
+            ) : (
+              <span className="poll-badge-active" title={pollExpiresAt || 'Active Poll'}>
+                <Clock size={11} />
+                <span>{formatTimeRemaining(pollExpiresAt)}</span>
+              </span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className={`poll-reveal-toggle-btn${revealOnlyAfterVote ? ' is-active' : ''}`}
+            onClick={() => setRevealOnlyAfterVote((v) => !v)}
+            title={revealOnlyAfterVote ? 'Results hidden before vote. Click to preview' : 'Results visible. Click to hide before voting'}
+          >
+            {revealOnlyAfterVote ? <EyeOff size={11} /> : <Eye size={11} />}
+            <span>{revealOnlyAfterVote ? 'Results hidden until vote: ON' : 'Results: Revealed'}</span>
+          </button>
+        </div>
+
         <div className="poll-grid">
           {options.map((opt) => {
             const votes = counts[opt.id] || 0;
@@ -47,9 +105,10 @@ function PollBlock({ options, counts, myVote, canVote, onVote }) {
               <button
                 key={opt.id}
                 type="button"
-                className={`poll-image-card${mine ? ' mine' : ''}`}
-                disabled={!canVote || hasVoted}
+                className={`poll-image-card${mine ? ' mine' : ''}${isExpired ? ' expired' : ''}`}
+                disabled={!canVote || hasVoted || isExpired}
                 onClick={() => onVote(opt.id)}
+                title={isExpired ? 'Poll is closed' : `Vote for ${opt.label || ''}`}
               >
                 {opt.image_url && <img src={opt.image_url} alt={opt.label || ''} />}
                 <span className="poll-image-meta">
@@ -57,21 +116,54 @@ function PollBlock({ options, counts, myVote, canVote, onVote }) {
                     {opt.label}
                     {mine && ' ✓'}
                   </span>
-                  {hasVoted && <span>{pct}%</span>}
+                  {canSeeResults && <span>{pct}%</span>}
                 </span>
               </button>
             );
           })}
         </div>
-        <p className="poll-meta">
-          {total} vote{total !== 1 ? 's' : ''} · anonymous poll
-        </p>
+        <div className="poll-footer-row">
+          <p className="poll-meta">
+            {total} vote{total !== 1 ? 's' : ''} · anonymous poll
+          </p>
+          {!canSeeResults && !isExpired && (
+            <span className="poll-hidden-hint">
+              🔒 Results hidden until you vote
+            </span>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="poll">
+      {/* Poll Header Bar: Expiration Countdown & Reveal Results Toggle */}
+      <div className="poll-card-meta-bar">
+        <div className="poll-status-tag-group">
+          {isExpired ? (
+            <span className="poll-badge-closed">
+              <span>🏁 Poll Closed · Final Results</span>
+            </span>
+          ) : (
+            <span className="poll-badge-active" title={pollExpiresAt || 'Active Poll'}>
+              <Clock size={11} />
+              <span>{formatTimeRemaining(pollExpiresAt)}</span>
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className={`poll-reveal-toggle-btn${revealOnlyAfterVote ? ' is-active' : ''}`}
+          onClick={() => setRevealOnlyAfterVote((v) => !v)}
+          title={revealOnlyAfterVote ? 'Results hidden before vote. Click to preview' : 'Results visible. Click to hide before voting'}
+        >
+          {revealOnlyAfterVote ? <EyeOff size={11} /> : <Eye size={11} />}
+          <span>{revealOnlyAfterVote ? 'Results hidden until vote: ON' : 'Results: Revealed'}</span>
+        </button>
+      </div>
+
       {options.map((opt) => {
         const votes = counts[opt.id] || 0;
         const pct = total ? Math.round((votes / total) * 100) : 0;
@@ -80,22 +172,35 @@ function PollBlock({ options, counts, myVote, canVote, onVote }) {
           <button
             key={opt.id}
             type="button"
-            className={`poll-option${mine ? ' mine' : ''}`}
-            disabled={!canVote || hasVoted}
+            className={`poll-option${mine ? ' mine' : ''}${isExpired ? ' expired' : ''}`}
+            disabled={!canVote || hasVoted || isExpired}
             onClick={() => onVote(opt.id)}
+            title={isExpired ? 'Poll is closed' : `Vote for ${opt.label || ''}`}
           >
-            <span className="poll-bar" style={{ width: `${pct}%` }} />
+            {canSeeResults && <span className="poll-bar" style={{ width: `${pct}%` }} />}
             <span className="poll-label">
-              {opt.label}
-              {mine && ' ✓'}
+              <span className={`poll-radio-indicator${mine ? ' checked' : ''}`}>
+                {mine ? '✓' : ''}
+              </span>
+              <span>
+                {opt.label}
+                {mine && ' (Your vote)'}
+              </span>
             </span>
-            {hasVoted && <span className="poll-pct">{pct}%</span>}
+            {canSeeResults && <span className="poll-pct">{pct}%</span>}
           </button>
         );
       })}
-      <p className="poll-meta">
-        {total} vote{total !== 1 ? 's' : ''} · anonymous poll
-      </p>
+      <div className="poll-footer-row">
+        <p className="poll-meta">
+          {total} vote{total !== 1 ? 's' : ''} · anonymous poll
+        </p>
+        {!canSeeResults && !isExpired && (
+          <span className="poll-hidden-hint">
+            🔒 Results hidden until you vote
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -120,6 +225,7 @@ export default function PostCard({
   const [showRepostModal, setShowRepostModal] = useState(false);
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [showAuthorModal, setShowAuthorModal] = useState(false);
+  const [showInstitutionModal, setShowInstitutionModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showWatermarkModal, setShowWatermarkModal] = useState(false);
   const [showProjectionModal, setShowProjectionModal] = useState(false);
@@ -231,7 +337,8 @@ export default function PostCard({
 
   return (
     <article
-      className={`post-card${post.is_pinned ? ' is-pinned' : ''}`}
+      className={`post-card${post.is_pinned ? ' is-pinned' : ''}${textExpanded ? ' is-expanded article-reading-target' : ''}`}
+      data-article-title={`${authorName}'s Post`}
       style={{ '--accent': cat.accent, '--accent-soft': cat.soft, '--accent-text': cat.text }}
     >
       {post.is_pinned && (
@@ -314,6 +421,22 @@ export default function PostCard({
               <span>{timeAgo(post.created_at)}</span>
             </span>
 
+            {/* Church / Institution Badge */}
+            {(post.church_name || post.churches?.name || author?.church_name) && (
+              <button
+                type="button"
+                className="post-church-pill"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowInstitutionModal(true);
+                }}
+                title={`View ${post.church_name || post.churches?.name || author?.church_name} overview`}
+              >
+                <Church size={11} className="post-church-icon" />
+                <span>{post.church_name || post.churches?.name || author?.church_name}</span>
+              </button>
+            )}
+
             {/* Visibility Badge */}
             <span
               className="post-visibility-pill"
@@ -385,6 +508,9 @@ export default function PostCard({
           myVote={myVote}
           canVote={!!session}
           onVote={onVote}
+          pollExpiresAt={post.poll_expires_at || post.expires_at}
+          pollDuration={post.poll_duration}
+          revealResultsAfterVoting={post.reveal_results_after_voting}
         />
       )}
 
@@ -549,11 +675,29 @@ export default function PostCard({
             role: author?.role,
             badge: author?.badge,
             badge_verified: author?.badge_verified,
+            church_name: post.church_name || post.churches?.name || author?.church_name,
+            church_id: post.church_id || author?.church_id,
           }}
           authorId={authorId}
           currentUser={session?.user}
           onClose={() => setShowAuthorModal(false)}
           onOpenDirectMessage={onOpenDirectMessage}
+        />
+      )}
+
+      {/* Institution Profile Modal Toast (Tap Church) */}
+      {showInstitutionModal && (
+        <InstitutionProfileModal
+          institution={{
+            id: post.church_id || author?.church_id || 'inst-1',
+            name: post.church_name || post.churches?.name || author?.church_name || 'Fellowship Church',
+            categoryLabel: 'Church / Institution',
+            about: 'A Christ-centered fellowship dedicated to worshipping God, preaching the gospel, and serving the community.',
+            cover_url: null,
+            logo_url: null,
+            verified: true,
+          }}
+          onClose={() => setShowInstitutionModal(false)}
         />
       )}
 

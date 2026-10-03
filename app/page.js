@@ -43,6 +43,8 @@ import ShammahChatbotModal from './components/ShammahChatbotModal';
 import OfflineLibraryModal from './components/OfflineLibraryModal';
 import ProjectionModeModal from './components/ProjectionModeModal';
 import WatermarkShareModal from './components/WatermarkShareModal';
+import ActivityLogModal from './components/ActivityLogModal';
+import { logActivity } from './lib/activityLogManager';
 import { SAMPLE_INSTITUTIONS } from './lib/institutionManager';
 
 const SECTIONS = TOP_NAV_SECTIONS;
@@ -140,6 +142,15 @@ export default function Feed() {
   const [showOfflineLibrary, setShowOfflineLibrary] = useState(false);
   const [projectionData, setProjectionData] = useState(null);
   const [watermarkShareData, setWatermarkShareData] = useState(null);
+  const [showActivityLogModal, setShowActivityLogModal] = useState(false);
+
+  useEffect(() => {
+    function onOpenActivityLog() {
+      setShowActivityLogModal(true);
+    }
+    window.addEventListener('shammah:open-activity-log', onOpenActivityLog);
+    return () => window.removeEventListener('shammah:open-activity-log', onOpenActivityLog);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -537,6 +548,14 @@ export default function Feed() {
       );
     if (error) return;
     setMyVoteByPost((v) => ({ ...v, [postId]: optionId }));
+    logActivity({
+      type: 'poll_vote',
+      icon: '📊',
+      title: 'Voted in Community Poll',
+      snippet: 'Cast anonymous ballot on poll option',
+      visibility: 'anonymous',
+      meta: { postId, optionId },
+    });
     const { data: results } = await supabase.rpc('poll_results', { p_post_ids: [postId] });
     const counts = {};
     (results || []).forEach((r) => {
@@ -636,6 +655,9 @@ export default function Feed() {
 
     const isPinnedToSave = isAdmin ? isPinnedAnnouncement : false;
     const pinnedAtToSave = isPinnedToSave ? new Date().toISOString() : null;
+    const pollDurationToSave = identityMeta?.pollDuration || '24h';
+    const pollExpiresAtToSave = identityMeta?.pollExpiresAt || null;
+    const revealResultsAfterVotingToSave = identityMeta?.revealResultsAfterVoting ?? false;
 
     const { data: inserted, error } = await supabase
       .from('posts')
@@ -648,6 +670,9 @@ export default function Feed() {
         media_type,
         is_pinned: isPinnedToSave,
         pinned_at: pinnedAtToSave,
+        poll_duration: pollDurationToSave,
+        poll_expires_at: pollExpiresAtToSave,
+        reveal_results_after_voting: revealResultsAfterVotingToSave,
       })
       .select('id')
       .single();
@@ -672,6 +697,9 @@ export default function Feed() {
         church_id: profile?.church_id ?? null,
         is_pinned: isPinnedToSave,
         pinned_at: pinnedAtToSave,
+        poll_duration: pollDurationToSave,
+        poll_expires_at: pollExpiresAtToSave,
+        reveal_results_after_voting: revealResultsAfterVotingToSave,
         is_anonymous: isAnon,
         is_pseudo: isPseudo,
         profiles: {
@@ -697,6 +725,15 @@ export default function Feed() {
     }
     setPosting(false);
     playSound('postPublished');
+    logActivity({
+      type: 'post',
+      icon: isPoll ? '📊' : '✍️',
+      title: isPoll ? 'Created Community Poll' : 'Published Fellowship Post',
+      targetTitle: composeCategory ? `${categoryStyle(composeCategory)?.label || composeCategory} Category` : 'Fellowship Post',
+      snippet: text || (isPoll ? 'Interactive church poll question' : 'Shared media in fellowship'),
+      visibility: visibility || 'public',
+      meta: { category: composeCategory, isPoll },
+    });
     setComposeText('');
     setComposeCategory('');
     setIsPoll(false);
@@ -948,6 +985,18 @@ export default function Feed() {
                         <span>View profile</span>
                       </button>
 
+                      <button
+                        type="button"
+                        className="dropdown-item"
+                        onClick={() => {
+                          setShowActivityLogModal(true);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <ShieldCheck size={16} className="dropdown-item-icon text-teal-400" />
+                        <span>Activity Log &amp; Transparency</span>
+                      </button>
+
                       {/* Admin Mode Toggle: ONLY for members/admins who own a church page or are approved to moderate/administer */}
                       {canModerate && (
                         <>
@@ -1107,7 +1156,7 @@ export default function Feed() {
       {/* ========== Auth Panel ========== */}
       {showAuth && (
         <div className="auth-overlay" onClick={() => setShowAuth(false)}>
-          <div className="auth-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="auth-panel multicolored-glow-shadow" onClick={(e) => e.stopPropagation()}>
             <button className="auth-close" onClick={() => setShowAuth(false)} aria-label="Close">
               ×
             </button>
@@ -1565,6 +1614,12 @@ export default function Feed() {
           onClose={() => setWatermarkShareData(null)}
         />
       )}
+
+      {/* Engagement Activity Log & Transparency Modal */}
+      <ActivityLogModal
+        isOpen={showActivityLogModal}
+        onClose={() => setShowActivityLogModal(false)}
+      />
     </div>
   );
 }

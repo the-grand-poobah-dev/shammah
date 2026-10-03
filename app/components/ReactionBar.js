@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import FaithReactionPicker from './FaithReactionPicker';
 import { playSound } from '../lib/soundEffects';
+import { logActivity } from '../lib/activityLogManager';
 
 const FAITH_EMOJI_SET = [
   { emoji: '❤️', label: 'Love' },
@@ -97,7 +98,17 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
         { target_type: targetType, target_id: targetId, user_id: session.user.id, emoji },
         { onConflict: 'target_type,target_id,user_id' }
       );
-      if (error) applyLocal(prevEmoji);
+      if (error) {
+        applyLocal(prevEmoji);
+      } else {
+        logActivity({
+          type: 'reaction',
+          icon: emoji,
+          title: `Reacted with ${emoji}`,
+          snippet: `Expressed faith reaction on ${targetType}`,
+          meta: { emoji, targetType, targetId },
+        });
+      }
     }
   }
 

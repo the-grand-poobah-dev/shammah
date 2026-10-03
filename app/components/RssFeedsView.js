@@ -100,7 +100,7 @@ function RssItemCard({ item, feed, session, currentUser, openAuth, isDeveloper }
   };
 
   return (
-    <article className="post-card rss-mixed-card">
+    <article className="post-card rss-mixed-card article-reading-target" data-article-title={item.title || 'Article'}>
       {/* Source header with publication chip and original link */}
       <div className="rss-card-source-row">
         <div className="rss-source-badge">

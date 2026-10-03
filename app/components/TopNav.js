@@ -121,6 +121,9 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
         onPointerCancel={onPointerUp}
         role="tablist"
       >
+        {/* Double-broken rotating neon glow snake (thinner) */}
+        <span className="top-nav-snake-glow" aria-hidden="true" />
+
         {TOP_NAV_SECTIONS.map((s) => {
           const Icon = s.icon;
           const isActive = currentSection === s.id;
@@ -129,6 +132,7 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
               key={s.id}
               type="button"
               role="tab"
+              data-section={s.id}
               aria-selected={isActive}
               className={`section-item-stacked${isActive ? ' active' : ''}`}
               onClick={() => handleSectionClick(s.id)}

@@ -50,6 +50,8 @@ import {
 import { getStoredReposts } from '../lib/postInteractions';
 import { categoryStyle } from '../lib/postDisplay';
 import VerificationBadgeModal from './VerificationBadgeModal';
+import ActivityLog from './ActivityLog';
+import { ShieldCheck as ShieldCheckIcon } from 'lucide-react';
 
 export default function UserProfileView({
   targetProfile,
@@ -414,10 +416,23 @@ export default function UserProfileView({
                 <GraduationCap size={14} />
                 <span>Courses &amp; Badges ({completedCourses.length})</span>
               </button>
+
+              {isMe && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'activity'}
+                  className={`profile-media-tab${activeTab === 'activity' ? ' active' : ''}`}
+                  onClick={() => setActiveTab('activity')}
+                >
+                  <ShieldCheckIcon size={14} />
+                  <span>Activity Log</span>
+                </button>
+              )}
             </div>
 
             {/* Layout Mode Switcher (Magazine 1x, 2x, 3x, and List Rich) */}
-            {activeTab !== 'playlists' && (
+            {activeTab !== 'playlists' && activeTab !== 'activity' && (
               <div className="profile-layout-switcher" aria-label="Layout View Modes">
                 <button
                   type="button"
@@ -608,6 +623,13 @@ export default function UserProfileView({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Activity Log Tab Content */}
+          {activeTab === 'activity' && isMe && (
+            <div className="profile-activity-tab-content">
+              <ActivityLog />
             </div>
           )}
         </>

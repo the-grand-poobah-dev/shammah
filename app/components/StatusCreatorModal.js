@@ -46,7 +46,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
 
   return (
     <div className="status-creator-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="status-creator-card" onClick={(e) => e.stopPropagation()}>
+      <div className="status-creator-card multicolored-glow-shadow" onClick={(e) => e.stopPropagation()}>
         <div className="status-creator-header">
           <div className="status-creator-title-row">
             <Sparkles size={16} className="status-creator-sparkle" />
