@@ -12,7 +12,7 @@ import OnboardingWizard from './components/OnboardingWizard';
 import { uploadPostMedia } from './lib/mediaUpload';
 import { sortPostsWithPinned, isUserAdmin, getSampleFeedPosts } from './lib/pinnedPosts';
 import PinIcon from './components/PinIcon';
-import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX } from 'lucide-react';
+import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX, DownloadCloud } from 'lucide-react';
 import TopNav, { TOP_NAV_SECTIONS } from './components/TopNav';
 import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
@@ -47,6 +47,7 @@ import WatermarkShareModal from './components/WatermarkShareModal';
 import ActivityLogModal from './components/ActivityLogModal';
 import { logActivity } from './lib/activityLogManager';
 import { SAMPLE_INSTITUTIONS } from './lib/institutionManager';
+import { getOfflineItems } from './lib/offlineSyncManager';
 
 const SECTIONS = TOP_NAV_SECTIONS;
 
@@ -145,6 +146,17 @@ export default function Feed() {
   const [projectionData, setProjectionData] = useState(null);
   const [watermarkShareData, setWatermarkShareData] = useState(null);
   const [showActivityLogModal, setShowActivityLogModal] = useState(false);
+
+  const [offlineCount, setOfflineCount] = useState(0);
+
+  useEffect(() => {
+    setOfflineCount(getOfflineItems().length);
+    function onOfflineUpdate() {
+      setOfflineCount(getOfflineItems().length);
+    }
+    window.addEventListener('shammah:offline-updated', onOfflineUpdate);
+    return () => window.removeEventListener('shammah:offline-updated', onOfflineUpdate);
+  }, []);
 
   useEffect(() => {
     function onOpenActivityLog() {
@@ -648,7 +660,12 @@ export default function Feed() {
               if (upErr) throw upErr;
               image_url = supabase.storage.from('poll-images').getPublicUrl(path).data.publicUrl;
             }
-            return { label: opt.label.trim(), image_url, position };
+            return {
+              label: opt.label.trim(),
+              image_url,
+              position,
+              is_correct: identityMeta?.isQuiz ? identityMeta?.correctOptionIdx === position : Boolean(opt.is_correct),
+            };
           })
         );
       } catch (upErr) {
@@ -727,6 +744,9 @@ export default function Feed() {
         reveal_results_after_voting: revealResultsAfterVotingToSave,
         is_anonymous: isAnon,
         is_pseudo: isPseudo,
+        is_quiz: Boolean(identityMeta?.isQuiz),
+        quiz_explanation: identityMeta?.quizExplanation || null,
+        correct_option_idx: identityMeta?.correctOptionIdx ?? null,
         profiles: {
           display_name: displayName,
           avatar_url: isAnon || isPseudo ? null : profile?.avatar_url || null,
@@ -736,6 +756,20 @@ export default function Feed() {
         },
       };
       setPosts((prev) => sortPostsWithPinned([newPost, ...prev]));
+
+      if (isPoll && optionsToInsert.length > 0) {
+        const generatedOpts = optionsToInsert.map((o, idx) => ({
+          id: `opt-${newPost.id}-${idx}`,
+          label: o.label,
+          image_url: o.image_url,
+          is_correct: o.is_correct ?? false,
+          position: idx,
+        }));
+        setPollOptionsByPost((prev) => ({
+          ...prev,
+          [newPost.id]: generatedOpts,
+        }));
+      }
     }
 
     if (isPoll && inserted?.id) {
@@ -974,6 +1008,25 @@ export default function Feed() {
                   ) : (
                     <VolumeX size={18} className="sound-toggle-icon sound-icon-muted text-gray-400" />
                   )}
+                </button>
+
+                {/* Small status icon in top navigation bar to inform users when content is cached & available offline */}
+                <button
+                  type="button"
+                  className={`topbar-toggle-btn offline-cache-toggle-btn${offlineCount > 0 ? ' is-cached' : ''}`}
+                  title={
+                    offlineCount > 0
+                      ? `✓ ${offlineCount} item${offlineCount > 1 ? 's' : ''} cached & available for offline viewing (30-day cache). Click to open library.`
+                      : 'Offline Library: Save feeds & chapters for offline viewing'
+                  }
+                  aria-label="Offline Cached Content Status"
+                  onClick={() => {
+                    playSound('reaction');
+                    setShowOfflineLibrary(true);
+                  }}
+                >
+                  <DownloadCloud size={17} className={offlineCount > 0 ? 'text-emerald-400' : 'text-gray-400'} />
+                  {offlineCount > 0 && <span className="topbar-offline-dot" />}
                 </button>
               </div>
 

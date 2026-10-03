@@ -16,9 +16,15 @@ import {
   SAMPLE_INSTITUTIONS,
 } from '../../lib/institutionManager';
 import InstitutionSubscriptionModal from '../../components/InstitutionSubscriptionModal';
-import { Sparkles, Calendar, BookOpen, Coins, UserPlus, Lock, Check, Phone } from 'lucide-react';
+import { Sparkles, Calendar, BookOpen, Coins, UserPlus, Lock, Check, Phone, DownloadCloud, WifiOff } from 'lucide-react';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import IcebreakerPollsCard from '../../components/IcebreakerPollsCard';
+import {
+  saveOfflineChurchFeed,
+  isChurchFeedSavedOffline,
+  removeOfflineChurchFeed,
+} from '../../lib/offlineSyncManager';
+import { playSound } from '../../lib/soundEffects';
 
 export default function ChurchPage() {
   const { id } = useParams();
@@ -45,9 +51,58 @@ export default function ChurchPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState(false);
 
+  // Offline Church Feed state
+  const [isFeedOffline, setIsFeedOffline] = useState(false);
+  const [feedDownloading, setFeedDownloading] = useState(false);
+  const [feedToast, setFeedToast] = useState('');
+
   const sampleMatch = SAMPLE_INSTITUTIONS.find((s) => s.id === id);
   const currentSub = getInstitutionSubscription(id);
   const planInfo = SUBSCRIPTION_PLANS.find((p) => p.id === currentSub.planId) || SUBSCRIPTION_PLANS[0];
+
+  useEffect(() => {
+    setIsFeedOffline(isChurchFeedSavedOffline(id));
+    function onOfflineUpdate(e) {
+      if (!e.detail || e.detail.type === 'church_feed') {
+        setIsFeedOffline(isChurchFeedSavedOffline(id));
+      }
+    }
+    window.addEventListener('shammah:offline-updated', onOfflineUpdate);
+    return () => window.removeEventListener('shammah:offline-updated', onOfflineUpdate);
+  }, [id]);
+
+  async function handleToggleOfflineChurchFeed() {
+    playSound('reaction');
+    if (isFeedOffline) {
+      removeOfflineChurchFeed(id);
+      setIsFeedOffline(false);
+      setFeedToast('Church feed removed from offline storage');
+      setTimeout(() => setFeedToast(''), 3000);
+    } else {
+      setFeedDownloading(true);
+      try {
+        const { data: posts } = await supabase
+          .from('posts')
+          .select('id, text_content, media_url, media_type, category_id, created_at, profiles(display_name, avatar_url, badge, badge_verified, role)')
+          .eq('church_id', id)
+          .order('created_at', { ascending: false })
+          .limit(25);
+
+        saveOfflineChurchFeed(church || sampleMatch || { id, name: 'Church' }, posts || []);
+        setIsFeedOffline(true);
+        playSound('badge');
+        setFeedToast(`✓ ${(church?.name || sampleMatch?.name || 'Church')} feed saved for offline reading (30-day cache)`);
+      } catch {
+        saveOfflineChurchFeed(church || sampleMatch || { id, name: 'Church' }, []);
+        setIsFeedOffline(true);
+        playSound('badge');
+        setFeedToast(`✓ ${(church?.name || sampleMatch?.name || 'Church')} feed saved offline!`);
+      } finally {
+        setFeedDownloading(false);
+        setTimeout(() => setFeedToast(''), 3500);
+      }
+    }
+  }
 
   const TABS = [
     { id: 'posts', label: 'Posts' },
@@ -180,6 +235,28 @@ export default function ChurchPage() {
                 <Link href={`/churches/${id}/edit`} className="cx-btn cx-btn-ghost">Edit</Link>
               </>
             )}
+            {/* Download Church Feed for Offline */}
+            <button
+              type="button"
+              className={`cx-btn cx-btn-offline${isFeedOffline ? ' is-downloaded' : ''}`}
+              onClick={handleToggleOfflineChurchFeed}
+              disabled={feedDownloading}
+              title={isFeedOffline ? 'Church feed is cached offline for 30 days. Click to remove' : 'Download this church feed and posts to access without internet'}
+            >
+              {feedDownloading ? (
+                <span>Caching…</span>
+              ) : isFeedOffline ? (
+                <>
+                  <Check size={14} className="text-emerald-400" />
+                  <span>Feed Saved Offline</span>
+                </>
+              ) : (
+                <>
+                  <DownloadCloud size={14} />
+                  <span>Download for Offline</span>
+                </>
+              )}
+            </button>
             {isMember ? (
               <button type="button" className="cx-btn cx-btn-ghost" onClick={handleLeave} disabled={busy}>Joined ✓</button>
             ) : (
@@ -189,6 +266,12 @@ export default function ChurchPage() {
             )}
           </div>
         </div>
+        {feedToast && (
+          <div className="church-feed-toast-banner">
+            <WifiOff size={13} className="text-cyan-400" />
+            <span>{feedToast}</span>
+          </div>
+        )}
 
         <div className="cx-hero-text">
           <div className="cx-title-row">

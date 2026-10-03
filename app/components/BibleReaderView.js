@@ -20,6 +20,7 @@ import {
   Copy,
   ChevronRight,
   Filter,
+  DownloadCloud,
 } from 'lucide-react';
 import {
   BIBLE_BOOKS,
@@ -31,12 +32,19 @@ import {
   getVerseHighlights,
   toggleVerseHighlight,
 } from '../lib/bibleManager';
+import {
+  saveOfflineBibleChapter,
+  isBibleChapterSavedOffline,
+  removeOfflineBibleChapter,
+  getOfflineBibleChapter,
+} from '../lib/offlineSyncManager';
 import { playSound } from '../lib/soundEffects';
 
 export default function BibleReaderView({ session, currentUser, openAuth }) {
   const [selectedBookId, setSelectedBookId] = useState('PSA');
   const [selectedChapter, setSelectedChapter] = useState(23);
   const [translation, setTranslation] = useState('NIV');
+  const [isChapterOffline, setIsChapterOffline] = useState(false);
   const [testamentFilter, setTestamentFilter] = useState('ALL'); // ALL, OT, NT
   const [searchQuery, setSearchQuery] = useState('');
   const [highlights, setHighlights] = useState({});
@@ -100,6 +108,33 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   function showToast(msg) {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(''), 2500);
+  }
+
+  // Sync offline cached status for currently viewed chapter
+  useEffect(() => {
+    setIsChapterOffline(isBibleChapterSavedOffline(currentBook.name, selectedChapter, translation));
+
+    function onOfflineUpdate(e) {
+      if (!e.detail || e.detail.type === 'bible_chapter') {
+        setIsChapterOffline(isBibleChapterSavedOffline(currentBook.name, selectedChapter, translation));
+      }
+    }
+    window.addEventListener('shammah:offline-updated', onOfflineUpdate);
+    return () => window.removeEventListener('shammah:offline-updated', onOfflineUpdate);
+  }, [currentBook.name, selectedChapter, translation]);
+
+  function handleToggleOfflineChapter() {
+    playSound('reaction');
+    if (isChapterOffline) {
+      removeOfflineBibleChapter(currentBook.name, selectedChapter, translation);
+      setIsChapterOffline(false);
+      showToast(`${currentBook.name} ${selectedChapter} removed from offline cache`);
+    } else {
+      saveOfflineBibleChapter(currentBook.id, currentBook.name, selectedChapter, verses, translation);
+      setIsChapterOffline(true);
+      playSound('badge');
+      showToast(`✓ ${currentBook.name} ${selectedChapter} saved for offline reading (30-day cache)`);
+    }
   }
 
   function handleHighlight(vNum) {
@@ -327,15 +362,43 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       >
         <div className="bible-chapter-header">
           <div>
-            <h3 className="chapter-heading">
-              {currentBook.name} {selectedChapter}
-            </h3>
+            <div className="chapter-heading-row">
+              <h3 className="chapter-heading">
+                {currentBook.name} {selectedChapter}
+              </h3>
+              {isChapterOffline && (
+                <span className="chapter-offline-pill" title="Saved locally in offline storage">
+                  <WifiOff size={11} />
+                  <span>Available Offline</span>
+                </span>
+              )}
+            </div>
             <span className="chapter-subheading">
               {currentBook.genre} · {translation} Translation
             </span>
           </div>
 
           <div className="bible-header-actions">
+            {/* Download for Offline Button */}
+            <button
+              type="button"
+              className={`chapter-offline-download-btn${isChapterOffline ? ' is-downloaded' : ''}`}
+              onClick={handleToggleOfflineChapter}
+              title={isChapterOffline ? 'Click to remove from offline cache' : 'Download this chapter to access without internet'}
+            >
+              {isChapterOffline ? (
+                <>
+                  <Check size={13} className="text-emerald-400" />
+                  <span>Saved Offline</span>
+                </>
+              ) : (
+                <>
+                  <DownloadCloud size={13} />
+                  <span>Download Offline</span>
+                </>
+              )}
+            </button>
+
             {/* Highlighter Color Picker */}
             <div className="bible-color-picker">
               <span className="color-picker-label">

@@ -32,6 +32,7 @@ export default function BottomNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [highlightColor, setHighlightColor] = useState('#06b6d4');
   const [activeHighlightId, setActiveHighlightId] = useState(null);
+  const [itemCustomColors, setItemCustomColors] = useState({});
   const menuRef = useRef(null);
 
   const QUICK_ACTIONS = [
@@ -338,26 +339,54 @@ export default function BottomNav() {
               {QUICK_ACTIONS.map((item) => {
                 const Icon = item.icon;
                 const isItemActive = activeHighlightId === item.id;
+                const effectiveColor = itemCustomColors[item.id] || (isItemActive ? highlightColor : item.color);
                 return (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    className={`quick-action-item explore-channel-card${isItemActive ? ' item-active' : ''}`}
-                    style={{ '--sec-color': item.color }}
-                    onClick={() => {
-                      setActiveHighlightId(item.id);
-                      item.action();
-                    }}
-                    role="menuitem"
+                    className={`quick-action-row-wrap${isItemActive ? ' is-active-row' : ''}`}
                   >
-                    <span className="channel-icon-wrap" style={{ '--sec-color': item.color }}>
-                      <Icon size={17} />
-                    </span>
-                    <div className="channel-meta">
-                      <strong>{item.label}</strong>
-                      <small>{item.desc}</small>
-                    </div>
-                  </button>
+                    <button
+                      type="button"
+                      className={`quick-action-item explore-channel-card${isItemActive ? ' item-active' : ''}`}
+                      style={{
+                        '--sec-color': effectiveColor,
+                        borderColor: isItemActive ? effectiveColor : undefined,
+                      }}
+                      onClick={() => {
+                        setActiveHighlightId(item.id);
+                        item.action();
+                      }}
+                      role="menuitem"
+                    >
+                      <span className="channel-icon-wrap" style={{ '--sec-color': effectiveColor }}>
+                        <Icon size={17} />
+                      </span>
+                      <div className="channel-meta">
+                        <strong>{item.label}</strong>
+                        <small>{item.desc}</small>
+                      </div>
+
+                      {/* Different-color picker box for highlighted item (matching Explore Channels widget) */}
+                      <button
+                        type="button"
+                        className={`item-color-picker-box${isItemActive ? ' active-picker' : ''}`}
+                        style={{ '--picker-color': effectiveColor }}
+                        title={`Change color for ${item.label} (Current: ${effectiveColor})`}
+                        aria-label={`Color box for ${item.label}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playSound('reaction');
+                          setActiveHighlightId(item.id);
+                          const idx = COLOR_PALETTE.findIndex((c) => c.color === effectiveColor);
+                          const next = COLOR_PALETTE[(idx + 1) % COLOR_PALETTE.length].color;
+                          setItemCustomColors((prev) => ({ ...prev, [item.id]: next }));
+                          setHighlightColor(next);
+                        }}
+                      >
+                        <span className="picker-box-swatch" style={{ backgroundColor: effectiveColor }} />
+                      </button>
+                    </button>
+                  </div>
                 );
               })}
             </div>

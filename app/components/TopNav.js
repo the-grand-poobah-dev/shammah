@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { motion } from 'motion/react';
 import {
   Flame,
   Video,
@@ -11,8 +12,10 @@ import {
   BookOpen,
   Sparkles,
   Gamepad2,
+  DownloadCloud,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
+import { getOfflineItems } from '../lib/offlineSyncManager';
 
 export const TOP_NAV_SECTIONS = [
   { id: 'all', label: 'All', icon: Flame },
@@ -47,6 +50,34 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
     window.addEventListener('shammah:section-changed', handleSectionEvent);
     return () => window.removeEventListener('shammah:section-changed', handleSectionEvent);
   }, []);
+
+  // Offline cached content status tracking
+  const [offlineCount, setOfflineCount] = useState(0);
+  const [recentCachedNotice, setRecentCachedNotice] = useState(false);
+
+  useEffect(() => {
+    setOfflineCount(getOfflineItems().length);
+
+    function onOfflineUpdate(e) {
+      setOfflineCount(getOfflineItems().length);
+      if (e.detail?.action === 'save') {
+        setRecentCachedNotice(true);
+        setTimeout(() => setRecentCachedNotice(false), 4000);
+      }
+    }
+    window.addEventListener('shammah:offline-updated', onOfflineUpdate);
+    return () => window.removeEventListener('shammah:offline-updated', onOfflineUpdate);
+  }, []);
+
+  function handleOpenOfflineLibrary(e) {
+    if (dragRef.current.moved) {
+      dragRef.current.moved = false;
+      return;
+    }
+    e?.stopPropagation();
+    playSound('reaction');
+    window.dispatchEvent(new CustomEvent('shammah:open-offline-library'));
+  }
 
   function handleSectionClick(secId) {
     if (dragRef.current.moved) {
@@ -115,35 +146,92 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
       aria-label="Content Type Navigation"
     >
       <div className="section-menu">
-        <div
-          ref={scrollRef}
-          className="section-menu-inner no-scrollbar"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          role="tablist"
-        >
-          {TOP_NAV_SECTIONS.map((s) => {
-            const Icon = s.icon;
-            const isActive = currentSection === s.id;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                role="tab"
-                data-section={s.id}
-                aria-selected={isActive}
-                className={`section-item-stacked${isActive ? ' active' : ''}`}
-                onClick={() => handleSectionClick(s.id)}
+        <div className="section-menu-pill">
+          {/* Rotating neon ring open at two places on the outline of the top bar navigation widget */}
+          <span className="top-nav-snake-glow" aria-hidden="true" />
+
+          <div
+            ref={scrollRef}
+            className="section-menu-inner no-scrollbar"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            role="tablist"
+          >
+            {TOP_NAV_SECTIONS.map((s) => {
+              const Icon = s.icon;
+              const isActive = currentSection === s.id;
+              return (
+                <motion.button
+                  key={s.id}
+                  type="button"
+                  role="tab"
+                  data-section={s.id}
+                  aria-selected={isActive}
+                  className={`section-item-stacked${isActive ? ' active' : ''}`}
+                  onClick={() => handleSectionClick(s.id)}
+                  whileTap={{ scale: 0.92 }}
+                  animate={isActive ? { scale: [0.96, 1.07, 1], y: [1, -2, 0] } : { scale: 1, y: 0 }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 480,
+                    damping: 24,
+                    mass: 0.6,
+                  }}
+                >
+                  <motion.span
+                    className="top-nav-icon-wrap"
+                    animate={isActive ? { scale: [1, 1.18, 1], rotate: [0, -5, 5, 0] } : { scale: 1, rotate: 0 }}
+                    transition={{ type: 'spring', stiffness: 450, damping: 20 }}
+                  >
+                    <Icon size={19} strokeWidth={isActive ? 2.3 : 1.8} className="top-nav-icon" />
+                  </motion.span>
+                  <span className="top-nav-label-small">{s.label}</span>
+                </motion.button>
+              );
+            })}
+
+            {/* Small status icon informing users when content is successfully cached & available for offline viewing */}
+            <motion.button
+              type="button"
+              role="button"
+              className={`section-item-stacked top-nav-offline-status-btn${offlineCount > 0 ? ' is-cached' : ''}${recentCachedNotice ? ' is-just-cached' : ''}`}
+              onClick={handleOpenOfflineLibrary}
+              whileTap={{ scale: 0.92 }}
+              animate={recentCachedNotice ? { scale: [1, 1.15, 1], y: [0, -3, 0] } : { scale: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+              title={
+                offlineCount > 0
+                  ? `✓ ${offlineCount} item${offlineCount > 1 ? 's' : ''} cached & available for offline viewing (30-day storage). Tap to view offline library.`
+                  : 'Offline Library: Download feeds & chapters to view anytime without internet'
+              }
+              aria-label="Offline Cached Content Status"
+            >
+              <motion.span
+                className="top-nav-icon-wrap offline-icon-wrap"
+                animate={recentCachedNotice ? { rotate: [0, -12, 12, 0], scale: [1, 1.25, 1] } : { rotate: 0 }}
+                transition={{ duration: 0.4 }}
               >
-                <span className="top-nav-icon-wrap">
-                  <Icon size={19} strokeWidth={isActive ? 2.3 : 1.8} className="top-nav-icon" />
-                </span>
-                <span className="top-nav-label-small">{s.label}</span>
-              </button>
-            );
-          })}
+                <DownloadCloud
+                  size={19}
+                  strokeWidth={offlineCount > 0 ? 2.3 : 1.8}
+                  className={`top-nav-icon${offlineCount > 0 ? ' text-emerald-400' : ' text-slate-400'}`}
+                />
+                {offlineCount > 0 && (
+                  <span className="top-nav-offline-badge" title={`${offlineCount} items cached`}>
+                    {offlineCount}
+                  </span>
+                )}
+                {recentCachedNotice && (
+                  <span className="top-nav-offline-ping-dot" />
+                )}
+              </motion.span>
+              <span className="top-nav-label-small">
+                {recentCachedNotice ? 'Cached!' : offlineCount > 0 ? 'Offline ✓' : 'Offline'}
+              </span>
+            </motion.button>
+          </div>
         </div>
       </div>
     </nav>

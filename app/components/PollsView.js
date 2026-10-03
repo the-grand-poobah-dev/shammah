@@ -67,6 +67,32 @@ const SAMPLE_POLLS = [
     ],
     counts: { 'opt-w-1': 74, 'opt-w-2': 31, 'opt-w-3': 18 },
   },
+  {
+    id: 'poll-methuselah-quiz',
+    text_content: 'Bible Trivia Quiz: According to Genesis 5:27, who was the oldest man recorded in scripture, living a total of 969 years? Test your biblical knowledge!',
+    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+    category_id: 'lessons',
+    likes_count: 67,
+    comments_count: 31,
+    reposts_count: 24,
+    is_quiz: true,
+    quiz_explanation: 'Genesis 5:27 affirms: "Altogether, Methuselah lived a total of 969 years, and then he died."',
+    profiles: {
+      name: 'Pastor David Mwangi',
+      display_name: 'Pastor David Mwangi',
+      avatar_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
+      badge: 'pastor',
+      badge_verified: true,
+      role: 'church_admin',
+    },
+    options: [
+      { id: 'opt-q-1', label: 'Enoch', is_correct: false },
+      { id: 'opt-q-2', label: 'Methuselah', is_correct: true },
+      { id: 'opt-q-3', label: 'Noah', is_correct: false },
+      { id: 'opt-q-4', label: 'Adam', is_correct: false },
+    ],
+    counts: { 'opt-q-1': 14, 'opt-q-2': 188, 'opt-q-3': 22, 'opt-q-4': 9 },
+  },
 ];
 
 export default function PollsView({
@@ -95,6 +121,8 @@ export default function PollsView({
 
   const displayedPolls = allPolls.filter((p) => {
     const hasVoted = myVoteByPost[p.id] != null;
+    const isQuizPoll = Boolean(p.is_quiz || p.poll_type === 'quiz' || (p.options && p.options.some((o) => o.is_correct)) || (pollOptionsByPost[p.id] && pollOptionsByPost[p.id].some((o) => o.is_correct)));
+    if (filter === 'quiz') return isQuizPoll;
     if (filter === 'voted') return hasVoted;
     if (filter === 'active') return !hasVoted;
     return true;
@@ -160,7 +188,18 @@ export default function PollsView({
             className={`video-subnav-pill${filter === 'all' ? ' active' : ''}`}
             onClick={() => setFilter('all')}
           >
-            <span>All Polls ({allPolls.length})</span>
+            <span>All ({allPolls.length})</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={filter === 'quiz'}
+            className={`video-subnav-pill quiz-pill${filter === 'quiz' ? ' active' : ''}`}
+            onClick={() => setFilter('quiz')}
+          >
+            <Sparkles size={13} className="text-amber-400" />
+            <span>🎯 Bible Quizzes</span>
           </button>
 
           <button
@@ -170,7 +209,6 @@ export default function PollsView({
             className={`video-subnav-pill${filter === 'active' ? ' active' : ''}`}
             onClick={() => setFilter('active')}
           >
-            <Sparkles size={13} />
             <span>Open for Voting</span>
           </button>
 

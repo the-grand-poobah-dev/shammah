@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check, Eye, EyeOff, BookOpen, AlertCircle } from 'lucide-react';
+import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check, Eye, EyeOff, BookOpen, AlertCircle, Sparkles } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { categoryStyle, timeAgo } from '../lib/postDisplay';
 import Avatar from './Avatar';
@@ -43,11 +43,18 @@ function PollBlock({
   pollDuration = null,
   revealResultsAfterVoting = false,
   onOpenAnalytics = null,
+  isQuiz = false,
+  quizExplanation = null,
 }) {
   const [revealOnlyAfterVote, setRevealOnlyAfterVote] = useState(revealResultsAfterVoting ?? false);
   const total = options.reduce((sum, o) => sum + (counts[o.id] || 0), 0);
   const hasVoted = myVote != null;
   const hasImages = options.some((o) => o.image_url);
+
+  // Quiz scoring calculations
+  const correctOpt = options.find((o) => o.is_correct);
+  const myOpt = options.find((o) => o.id === myVote);
+  const isMyVoteCorrect = myOpt ? Boolean(myOpt.is_correct) : false;
 
   // Check if poll is expired
   const isExpired = pollExpiresAt ? new Date(pollExpiresAt).getTime() < Date.now() : false;
@@ -159,6 +166,17 @@ function PollBlock({
       {/* Poll Header Bar: Expiration Countdown & Reveal Results Toggle */}
       <div className="poll-card-meta-bar">
         <div className="poll-status-tag-group">
+          {isQuiz && (
+            <span className="poll-badge-quiz">
+              <Sparkles size={11} />
+              <span>🎯 Quiz Mode</span>
+            </span>
+          )}
+          {isQuiz && hasVoted && (
+            <span className={`poll-badge-quiz-score ${isMyVoteCorrect ? 'pass' : 'fail'}`}>
+              {isMyVoteCorrect ? 'Score: 100/100 · Correct 🏆' : 'Score: 0/100 · Incorrect'}
+            </span>
+          )}
           {isExpired ? (
             <span className="poll-badge-closed">
               <span>🏁 Poll Closed · Final Results</span>
@@ -186,11 +204,20 @@ function PollBlock({
         const votes = counts[opt.id] || 0;
         const pct = total ? Math.round((votes / total) * 100) : 0;
         const mine = myVote === opt.id;
+        const isOptCorrect = Boolean(opt.is_correct);
+        const quizClass = isQuiz && hasVoted
+          ? isOptCorrect
+            ? ' is-quiz-correct'
+            : mine
+              ? ' is-quiz-wrong'
+              : ''
+          : '';
+
         return (
           <button
             key={opt.id}
             type="button"
-            className={`poll-option${mine ? ' mine' : ''}${isExpired ? ' expired' : ''}`}
+            className={`poll-option${mine ? ' mine' : ''}${isExpired ? ' expired' : ''}${quizClass}`}
             disabled={!canVote || hasVoted || isExpired}
             onClick={() => onVote(opt.id)}
             title={isExpired ? 'Poll is closed' : `Vote for ${opt.label || ''}`}
@@ -202,13 +229,45 @@ function PollBlock({
               </span>
               <span>
                 {opt.label}
-                {mine && ' (Your vote)'}
+                {mine && !isQuiz && ' (Your vote)'}
               </span>
+              {isQuiz && hasVoted && isOptCorrect && (
+                <span className="quiz-correct-tag">⭐ Correct Answer</span>
+              )}
+              {isQuiz && hasVoted && mine && !isOptCorrect && (
+                <span className="quiz-wrong-tag">❌ Your Pick</span>
+              )}
             </span>
             {canSeeResults && <span className="poll-pct">{pct}%</span>}
           </button>
         );
       })}
+
+      {/* Quiz Instant Scoring and Scripture Feedback Card */}
+      {isQuiz && hasVoted && (
+        <div className={`poll-quiz-feedback-card ${isMyVoteCorrect ? 'correct' : 'incorrect'}`}>
+          <div className="quiz-feedback-header">
+            {isMyVoteCorrect ? (
+              <>
+                <span className="quiz-feedback-badge pass">Score: 100/100 · Correct! 🏆</span>
+                <span className="quiz-feedback-msg">Praise God, you knew the scripture truth! (+100 XP)</span>
+              </>
+            ) : (
+              <>
+                <span className="quiz-feedback-badge fail">Score: 0/100 · Incorrect</span>
+                <span className="quiz-feedback-msg">
+                  Not quite! The correct answer was <strong>{correctOpt?.label || 'Option'}</strong>.
+                </span>
+              </>
+            )}
+          </div>
+          {quizExplanation && (
+            <div className="quiz-feedback-scripture">
+              <strong>📖 Scripture Note:</strong> {quizExplanation}
+            </div>
+          )}
+        </div>
+      )}
       <div className="poll-footer-row">
         <p className="poll-meta">
           {total} vote{total !== 1 ? 's' : ''} · anonymous poll
@@ -566,11 +625,24 @@ export default function PostCard({
           counts={pollCounts}
           myVote={myVote}
           canVote={!!session}
-          onVote={onVote}
+          onVote={(optId) => {
+            const isQuizPost = Boolean(post.is_quiz || post.poll_type === 'quiz' || pollOptions.some((o) => o.is_correct));
+            if (isQuizPost) {
+              const votedOpt = pollOptions.find((o) => o.id === optId);
+              if (votedOpt?.is_correct) {
+                playSound('badge');
+              } else {
+                playSound('reaction');
+              }
+            }
+            onVote(optId);
+          }}
           pollExpiresAt={post.poll_expires_at || post.expires_at}
           pollDuration={post.poll_duration}
           revealResultsAfterVoting={post.reveal_results_after_voting}
           onOpenAnalytics={() => setShowPollAnalytics(true)}
+          isQuiz={Boolean(post.is_quiz || post.poll_type === 'quiz' || pollOptions.some((o) => o.is_correct))}
+          quizExplanation={post.quiz_explanation || post.explanation}
         />
       )}
 

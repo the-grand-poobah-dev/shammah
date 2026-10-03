@@ -82,6 +82,9 @@ export default function CreatePostBox({
   const [previewSimulateResults, setPreviewSimulateResults] = useState(false);
   const [pollDuration, setPollDuration] = useState('24h'); // '1h' | '24h' | '3d' | '7d'
   const [revealResultsAfterVoting, setRevealResultsAfterVoting] = useState(true);
+  const [isQuizMode, setIsQuizMode] = useState(false);
+  const [correctOptionIdx, setCorrectOptionIdx] = useState(0);
+  const [quizExplanation, setQuizExplanation] = useState('');
 
   // Keep preview vote index valid when poll options are added or removed
   useEffect(() => {
@@ -277,6 +280,9 @@ export default function CreatePostBox({
       pollDuration: isPoll ? pollDuration : null,
       pollExpiresAt,
       revealResultsAfterVoting: isPoll ? revealResultsAfterVoting : false,
+      isQuiz: isPoll ? isQuizMode : false,
+      correctOptionIdx: isPoll && isQuizMode ? correctOptionIdx : null,
+      quizExplanation: isPoll && isQuizMode ? quizExplanation : '',
     });
   }
 
@@ -667,13 +673,47 @@ export default function CreatePostBox({
       {isPoll && (
         <div className="compose-poll-builder">
           <div className="poll-builder-header">
-            <span className="poll-builder-title">Poll Options</span>
-            <span className="poll-builder-sub">Add 2 to {MAX_POLL_OPTIONS} options. Photo options supported!</span>
+            <div className="poll-builder-header-left">
+              <span className="poll-builder-title">{isQuizMode ? '🎯 Church & Bible Quiz Mode' : 'Poll Options'}</span>
+              <span className="poll-builder-sub">
+                {isQuizMode
+                  ? 'Set the correct answer by clicking "Mark Correct" on an option. Participants will receive instant scoring upon voting!'
+                  : `Add 2 to ${MAX_POLL_OPTIONS} options. Photo options supported!`}
+              </span>
+            </div>
+
+            {/* Poll vs Quiz Mode Toggle */}
+            <div className="poll-mode-toggle-group">
+              <button
+                type="button"
+                className={`poll-mode-tab-btn${!isQuizMode ? ' active' : ''}`}
+                onClick={() => {
+                  setIsQuizMode(false);
+                  playSound('reaction');
+                }}
+                title="Community survey without right or wrong answers"
+              >
+                <BarChart3 size={13} />
+                <span>Survey</span>
+              </button>
+              <button
+                type="button"
+                className={`poll-mode-tab-btn quiz-btn${isQuizMode ? ' active' : ''}`}
+                onClick={() => {
+                  setIsQuizMode(true);
+                  playSound('badge');
+                }}
+                title="Quiz mode with correct answer, instant feedback and scoring"
+              >
+                <Sparkles size={13} />
+                <span>Quiz Mode 🎯</span>
+              </button>
+            </div>
           </div>
 
           <div className="poll-builder-list">
             {pollOptions.map((opt, idx) => (
-              <div key={idx} className="poll-builder-option-row">
+              <div key={idx} className={`poll-builder-option-row${isQuizMode && correctOptionIdx === idx ? ' is-correct-answer' : ''}`}>
                 <span className="poll-opt-index">{idx + 1}</span>
                 <input
                   type="text"
@@ -697,6 +737,28 @@ export default function CreatePostBox({
                     }}
                   />
                 </label>
+
+                {/* Quiz Mode: Set Correct Answer Button */}
+                {isQuizMode && (
+                  <button
+                    type="button"
+                    className={`poll-correct-answer-pill${correctOptionIdx === idx ? ' selected' : ''}`}
+                    onClick={() => {
+                      setCorrectOptionIdx(idx);
+                      playSound('badge');
+                    }}
+                    title={correctOptionIdx === idx ? 'Marked as the correct answer' : 'Click to mark as correct answer'}
+                  >
+                    {correctOptionIdx === idx ? (
+                      <>
+                        <Check size={12} className="text-emerald-400" />
+                        <span>Correct ✓</span>
+                      </>
+                    ) : (
+                      <span>Mark Correct</span>
+                    )}
+                  </button>
+                )}
 
                 {opt.preview && (
                   <div className="poll-opt-preview-thumb">
@@ -724,6 +786,24 @@ export default function CreatePostBox({
               </div>
             ))}
           </div>
+
+          {/* Optional Quiz Scripture Reference & Explanation */}
+          {isQuizMode && (
+            <div className="poll-quiz-explanation-box">
+              <label className="poll-quiz-exp-label">
+                <Sparkles size={13} className="text-amber-400" />
+                <span>Scripture Reference &amp; Explanation (Revealed instantly to voters):</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Genesis 5:27 teaches that Methuselah lived 969 years..."
+                value={quizExplanation}
+                onChange={(e) => setQuizExplanation(e.target.value)}
+                className="poll-quiz-exp-input"
+                maxLength={200}
+              />
+            </div>
+          )}
 
           {pollOptions.length < MAX_POLL_OPTIONS && (
             <button
@@ -967,10 +1047,26 @@ export default function CreatePostBox({
                       <button
                         key={idx}
                         type="button"
-                        className={`poll-option${isSelected ? ' mine' : ''}`}
+                        className={`poll-option${isSelected ? ' mine' : ''}${
+                          isQuizMode && previewTestVote !== null
+                            ? idx === correctOptionIdx
+                              ? ' is-quiz-correct'
+                              : isSelected
+                                ? ' is-quiz-wrong'
+                                : ''
+                            : ''
+                        }`}
                         onClick={() => {
                           setPreviewTestVote((prev) => (prev === idx ? null : idx));
-                          playSound('reaction');
+                          if (isQuizMode) {
+                            if (idx === correctOptionIdx) {
+                              playSound('badge');
+                            } else {
+                              playSound('reaction');
+                            }
+                          } else {
+                            playSound('reaction');
+                          }
                         }}
                         title={`Click to test vote for: ${opt.label || `Option ${idx + 1}`}`}
                       >
@@ -994,12 +1090,44 @@ export default function CreatePostBox({
                               <span className="poll-opt-placeholder-text">Option {idx + 1} (typing…)</span>
                             )}
                           </span>
-                          {isSelected && <span className="poll-voted-tag">Your Vote ✓</span>}
+                          {isQuizMode && previewTestVote !== null && idx === correctOptionIdx && (
+                            <span className="quiz-correct-tag">⭐ Correct Answer</span>
+                          )}
+                          {isQuizMode && previewTestVote !== null && isSelected && idx !== correctOptionIdx && (
+                            <span className="quiz-wrong-tag">❌ Your Pick</span>
+                          )}
+                          {!isQuizMode && isSelected && <span className="poll-voted-tag">Your Vote ✓</span>}
                         </span>
                         {isShownVoted && <span className="poll-pct">{pct}%</span>}
                       </button>
                     );
                   })}
+
+                  {/* Instant Quiz Scoring & Explanation Feedback Banner */}
+                  {isQuizMode && previewTestVote !== null && (
+                    <div className={`poll-quiz-feedback-card ${previewTestVote === correctOptionIdx ? 'correct' : 'incorrect'}`}>
+                      <div className="quiz-feedback-header">
+                        {previewTestVote === correctOptionIdx ? (
+                          <>
+                            <span className="quiz-feedback-badge pass">Score: 100/100 · Correct! 🏆</span>
+                            <span className="quiz-feedback-msg">Praise God, you selected the right scripture answer!</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="quiz-feedback-badge fail">Score: 0/100 · Keep Studying! ✍️</span>
+                            <span className="quiz-feedback-msg">
+                              Not quite! The correct answer was <strong>Option {correctOptionIdx + 1}: {pollOptions[correctOptionIdx]?.label || `Option ${correctOptionIdx + 1}`}</strong>
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      {quizExplanation && (
+                        <div className="quiz-feedback-scripture">
+                          <strong>📖 Scripture Note:</strong> {quizExplanation}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="poll-preview-meta-row">
                     <p className="poll-meta">
                       <span>{previewTestVote !== null || previewSimulateResults ? '1 vote recorded' : '0 votes recorded'} · anonymous poll</span>

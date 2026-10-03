@@ -185,3 +185,196 @@ export function getRemainingDays(idOrItem) {
 
   return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
 }
+
+// -------------------------------------------------------------
+// Offline Church Feeds Management (specific church posts & info)
+// -------------------------------------------------------------
+const OFFLINE_CHURCH_FEEDS_KEY = 'shammah_offline_church_feeds_v2';
+
+export function getOfflineChurchFeeds() {
+  const feeds = safeGet(OFFLINE_CHURCH_FEEDS_KEY, []);
+  const now = Date.now();
+  const valid = feeds.filter((f) => {
+    const expiresAt = f.expiresAt || (f.downloadedAt + THIRTY_DAYS_MS);
+    return expiresAt > now;
+  });
+  if (valid.length !== feeds.length) {
+    safeSet(OFFLINE_CHURCH_FEEDS_KEY, valid);
+  }
+  return valid;
+}
+
+export function saveOfflineChurchFeed(church, posts = []) {
+  if (!church || !church.id) return { success: false, reason: 'Invalid church record' };
+
+  const now = Date.now();
+  const expiresAt = now + THIRTY_DAYS_MS;
+
+  const feedEntry = {
+    id: `church-feed-${church.id}`,
+    churchId: church.id,
+    type: 'church_feed',
+    title: `${church.name || 'Church'} Feed`,
+    churchName: church.name || 'Church',
+    branch: church.branch || '',
+    avatar_url: church.avatar_url || null,
+    banner_url: church.banner_url || null,
+    description: church.description || '',
+    postsCount: posts.length,
+    posts: posts.slice(0, 30), // cache up to 30 recent church posts
+    downloadedAt: now,
+    expiresAt,
+  };
+
+  const feeds = getOfflineChurchFeeds();
+  const existingIdx = feeds.findIndex((f) => f.churchId === church.id);
+  if (existingIdx >= 0) {
+    feeds[existingIdx] = feedEntry;
+  } else {
+    feeds.unshift(feedEntry);
+  }
+
+  safeSet(OFFLINE_CHURCH_FEEDS_KEY, feeds);
+
+  // Also register in general offline items list for unified visibility in the library
+  saveOfflineItem({
+    id: `church-feed-${church.id}`,
+    title: `${church.name} Offline Feed (${posts.length} posts)`,
+    text_content: church.description || `Cached offline feed for ${church.name}`,
+    media_url: church.avatar_url || null,
+    media_type: 'church_feed',
+    category_id: 'church',
+    profiles: { name: church.name, avatar_url: church.avatar_url },
+    churchFeedData: feedEntry,
+  }, 'church_feed');
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('shammah:offline-updated', {
+      detail: { id: church.id, type: 'church_feed', action: 'save' },
+    }));
+  }
+
+  return { success: true, count: posts.length };
+}
+
+export function getOfflineChurchFeed(churchId) {
+  if (!churchId) return null;
+  const feeds = getOfflineChurchFeeds();
+  return feeds.find((f) => f.churchId === churchId) || null;
+}
+
+export function removeOfflineChurchFeed(churchId) {
+  if (!churchId) return;
+  const feeds = safeGet(OFFLINE_CHURCH_FEEDS_KEY, []);
+  const filtered = feeds.filter((f) => f.churchId !== churchId);
+  safeSet(OFFLINE_CHURCH_FEEDS_KEY, filtered);
+  removeOfflineItem(`church-feed-${churchId}`);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('shammah:offline-updated', {
+      detail: { id: churchId, type: 'church_feed', action: 'remove' },
+    }));
+  }
+}
+
+export function isChurchFeedSavedOffline(churchId) {
+  if (!churchId) return false;
+  const feed = getOfflineChurchFeed(churchId);
+  return Boolean(feed);
+}
+
+// -------------------------------------------------------------
+// Offline Bible Chapters Management (scripture verses cached)
+// -------------------------------------------------------------
+const OFFLINE_BIBLE_CHAPTERS_KEY = 'shammah_offline_bible_chapters_v2';
+
+export function getOfflineBibleChapters() {
+  const chapters = safeGet(OFFLINE_BIBLE_CHAPTERS_KEY, []);
+  const now = Date.now();
+  const valid = chapters.filter((c) => {
+    const expiresAt = c.expiresAt || (c.downloadedAt + THIRTY_DAYS_MS);
+    return expiresAt > now;
+  });
+  if (valid.length !== chapters.length) {
+    safeSet(OFFLINE_BIBLE_CHAPTERS_KEY, valid);
+  }
+  return valid;
+}
+
+export function saveOfflineBibleChapter(bookId, bookName, chapterNum, verses = [], translation = 'NIV') {
+  if (!bookName || !chapterNum) return { success: false, reason: 'Invalid chapter reference' };
+
+  const key = `${bookName}-${chapterNum}-${translation}`;
+  const now = Date.now();
+  const expiresAt = now + THIRTY_DAYS_MS;
+
+  const chapterEntry = {
+    id: `bible-${key}`,
+    key,
+    bookId,
+    bookName,
+    chapterNum,
+    translation,
+    type: 'bible_chapter',
+    title: `${bookName} Chapter ${chapterNum} (${translation})`,
+    versesCount: verses.length,
+    verses,
+    previewText: verses.slice(0, 3).map((v) => `${v.num}. ${v.text}`).join(' '),
+    downloadedAt: now,
+    expiresAt,
+  };
+
+  const chapters = getOfflineBibleChapters();
+  const existingIdx = chapters.findIndex((c) => c.key === key);
+  if (existingIdx >= 0) {
+    chapters[existingIdx] = chapterEntry;
+  } else {
+    chapters.unshift(chapterEntry);
+  }
+
+  safeSet(OFFLINE_BIBLE_CHAPTERS_KEY, chapters);
+
+  // Also register in general offline items list
+  saveOfflineItem({
+    id: `bible-${key}`,
+    title: `${bookName} ${chapterNum} (${translation})`,
+    text_content: chapterEntry.previewText,
+    media_type: 'bible_chapter',
+    category_id: 'bible',
+    profiles: { name: `Holy Bible (${translation})` },
+    bibleChapterData: chapterEntry,
+  }, 'bible_chapter');
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('shammah:offline-updated', {
+      detail: { key, type: 'bible_chapter', action: 'save' },
+    }));
+  }
+
+  return { success: true, versesCount: verses.length };
+}
+
+export function getOfflineBibleChapter(bookName, chapterNum, translation = 'NIV') {
+  const key = `${bookName}-${chapterNum}-${translation}`;
+  const chapters = getOfflineBibleChapters();
+  return chapters.find((c) => c.key === key) || null;
+}
+
+export function removeOfflineBibleChapter(bookName, chapterNum, translation = 'NIV') {
+  const key = `${bookName}-${chapterNum}-${translation}`;
+  const chapters = safeGet(OFFLINE_BIBLE_CHAPTERS_KEY, []);
+  const filtered = chapters.filter((c) => c.key !== key);
+  safeSet(OFFLINE_BIBLE_CHAPTERS_KEY, filtered);
+  removeOfflineItem(`bible-${key}`);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('shammah:offline-updated', {
+      detail: { key, type: 'bible_chapter', action: 'remove' },
+    }));
+  }
+}
+
+export function isBibleChapterSavedOffline(bookName, chapterNum, translation = 'NIV') {
+  const chapter = getOfflineBibleChapter(bookName, chapterNum, translation);
+  return Boolean(chapter);
+}
