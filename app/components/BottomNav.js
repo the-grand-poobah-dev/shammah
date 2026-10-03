@@ -30,7 +30,77 @@ export default function BottomNav() {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [highlightColor, setHighlightColor] = useState('#06b6d4');
+  const [activeHighlightId, setActiveHighlightId] = useState(null);
   const menuRef = useRef(null);
+
+  const QUICK_ACTIONS = [
+    {
+      id: 'post',
+      label: 'Create Post / Testimony',
+      desc: 'Post to feed or anonymously',
+      icon: PenSquare,
+      color: '#0ea5e9', // Sky Cyan
+      action: handleCreatePost,
+    },
+    {
+      id: 'projection',
+      label: 'Sanctuary Screen Projection',
+      desc: 'Project courses, polls & scriptures',
+      icon: Tv,
+      color: '#f59e0b', // Sanctuary Gold
+      action: handleOpenProjection,
+    },
+    {
+      id: 'offline',
+      label: 'Offline Library & Sync',
+      desc: '30-day downloaded feeds & audio',
+      icon: DownloadCloud,
+      color: '#10b981', // Emerald Growth
+      action: handleOpenOfflineLibrary,
+    },
+    {
+      id: 'note',
+      label: 'Take Sermon Note',
+      desc: 'Capture points with complete NIV Bible',
+      icon: FileText,
+      color: '#8b5cf6', // Discipleship Violet
+      action: handleTakeSermonNote,
+    },
+    {
+      id: 'challenge',
+      label: 'Join Faith Challenge',
+      desc: '#ScriptureIn60s, Worship Covers',
+      icon: Sparkles,
+      color: '#ec4899', // Radiant Rose
+      action: handleOpenChallenges,
+    },
+    {
+      id: 'arcade',
+      label: 'Faith Champions Arcade',
+      desc: 'Kids, Teens & Youth Offline Games',
+      icon: Gamepad2,
+      color: '#06b6d4', // Neon Cyan
+      action: handleOpenArcade,
+    },
+    {
+      id: 'poll',
+      label: 'Question Surveys & Polls',
+      desc: 'Sermon & fellowship icebreakers',
+      icon: BarChart3,
+      color: '#14b8a6', // Turquoise Mint
+      action: handleOpenPolls,
+    },
+  ];
+
+  const COLOR_PALETTE = [
+    { id: 'cyan', color: '#06b6d4', label: 'Cyan' },
+    { id: 'emerald', color: '#10b981', label: 'Emerald' },
+    { id: 'amber', color: '#f59e0b', label: 'Amber' },
+    { id: 'rose', color: '#ec4899', label: 'Rose' },
+    { id: 'purple', color: '#8b5cf6', label: 'Violet' },
+    { id: 'blue', color: '#0ea5e9', label: 'Sky' },
+  ];
 
   function syncBadges() {
     setUnreadMessages(getTotalUnreadMessagesCount());
@@ -204,7 +274,10 @@ export default function BottomNav() {
         {menuOpen && (
           <div className="floating-quick-menu neon-glow-modal" role="menu">
             <div className="floating-quick-header">
-              <span>Quick Fellowship Actions</span>
+              <div className="floating-quick-title-wrap">
+                <Sparkles size={15} style={{ color: highlightColor }} />
+                <span>Quick Fellowship Actions</span>
+              </div>
               <button
                 type="button"
                 className="floating-menu-close"
@@ -215,9 +288,33 @@ export default function BottomNav() {
               </button>
             </div>
 
+            {/* Color Picker Box Palette Row (matches Explore Channels Widget style) */}
+            <div className="plus-color-picker-bar">
+              <span className="plus-color-picker-label">Theme Accent:</span>
+              <div className="plus-color-swatches">
+                {COLOR_PALETTE.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`plus-color-swatch-box${highlightColor === c.color ? ' active' : ''}`}
+                    style={{ '--swatch-color': c.color }}
+                    onClick={() => {
+                      playSound('reaction');
+                      setHighlightColor(c.color);
+                    }}
+                    title={`Highlight in ${c.label}`}
+                    aria-label={`Highlight in ${c.label}`}
+                  >
+                    <span className="swatch-color-dot" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Circular Pop-Up Shammah AI Chatbot Trigger */}
             <div
               className="circular-bot-popup-hero"
+              style={{ '--sec-color': highlightColor }}
               onClick={handleOpenChatbot}
               role="button"
               tabIndex={0}
@@ -236,110 +333,34 @@ export default function BottomNav() {
               </div>
             </div>
 
-            <button
-              type="button"
-              className="quick-action-item"
-              onClick={handleCreatePost}
-              role="menuitem"
-            >
-              <span className="quick-action-icon post">
-                <PenSquare size={16} />
-              </span>
-              <div className="quick-action-text">
-                <strong>Create Post / Testimony</strong>
-                <small>Post to feed or anonymously</small>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className="quick-action-item"
-              onClick={handleOpenProjection}
-              role="menuitem"
-            >
-              <span className="quick-action-icon projection">
-                <Tv size={16} />
-              </span>
-              <div className="quick-action-text">
-                <strong>Sanctuary Screen Projection</strong>
-                <small>Project courses, polls &amp; scriptures</small>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className="quick-action-item"
-              onClick={handleOpenOfflineLibrary}
-              role="menuitem"
-            >
-              <span className="quick-action-icon offline">
-                <DownloadCloud size={16} />
-              </span>
-              <div className="quick-action-text">
-                <strong>Offline Library &amp; Sync</strong>
-                <small>30-day downloaded feeds &amp; audio</small>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className="quick-action-item"
-              onClick={handleTakeSermonNote}
-              role="menuitem"
-            >
-              <span className="quick-action-icon note">
-                <FileText size={16} />
-              </span>
-              <div className="quick-action-text">
-                <strong>Take Sermon Note</strong>
-                <small>Capture points with complete NIV Bible</small>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className="quick-action-item"
-              onClick={handleOpenChallenges}
-              role="menuitem"
-            >
-              <span className="quick-action-icon challenge">
-                <Sparkles size={16} />
-              </span>
-              <div className="quick-action-text">
-                <strong>Join Faith Challenge</strong>
-                <small>#ScriptureIn60s, Worship Covers</small>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className="quick-action-item"
-              onClick={handleOpenArcade}
-              role="menuitem"
-            >
-              <span className="quick-action-icon arcade">
-                <Gamepad2 size={16} />
-              </span>
-              <div className="quick-action-text">
-                <strong>Faith Champions Arcade</strong>
-                <small>Kids, Teens &amp; Youth Offline Games</small>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className="quick-action-item"
-              onClick={handleOpenPolls}
-              role="menuitem"
-            >
-              <span className="quick-action-icon poll">
-                <BarChart3 size={16} />
-              </span>
-              <div className="quick-action-text">
-                <strong>Question Surveys &amp; Polls</strong>
-                <small>Sermon &amp; fellowship icebreakers</small>
-              </div>
-            </button>
+            {/* Quick Actions with Different-Color Picker Boxes (Explore Channels Widget style) */}
+            <div className="floating-quick-actions-list">
+              {QUICK_ACTIONS.map((item) => {
+                const Icon = item.icon;
+                const isItemActive = activeHighlightId === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`quick-action-item explore-channel-card${isItemActive ? ' item-active' : ''}`}
+                    style={{ '--sec-color': item.color }}
+                    onClick={() => {
+                      setActiveHighlightId(item.id);
+                      item.action();
+                    }}
+                    role="menuitem"
+                  >
+                    <span className="channel-icon-wrap" style={{ '--sec-color': item.color }}>
+                      <Icon size={17} />
+                    </span>
+                    <div className="channel-meta">
+                      <strong>{item.label}</strong>
+                      <small>{item.desc}</small>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 

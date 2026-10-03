@@ -10,6 +10,7 @@ import {
   Lock,
   MessageSquare,
   Users,
+  TrendingUp,
 } from 'lucide-react';
 import {
   getIcebreakerPolls,
@@ -19,6 +20,7 @@ import {
   createIcebreakerPoll,
 } from '../lib/icebreakerPolls';
 import { playSound } from '../lib/soundEffects';
+import PollAnalyticsModal from './PollAnalyticsModal';
 
 export default function IcebreakerPollsCard({
   churchId = null,
@@ -30,6 +32,7 @@ export default function IcebreakerPollsCard({
   const [polls, setPolls] = useState([]);
   const [userVotes, setUserVotes] = useState({});
   const [creating, setCreating] = useState(false);
+  const [selectedAnalyticsPoll, setSelectedAnalyticsPoll] = useState(null);
   const [question, setQuestion] = useState('');
   const [category, setCategory] = useState('Sunday Sermon Icebreaker');
   const [targetGroup, setTargetGroup] = useState('All Congregation');
@@ -313,6 +316,18 @@ export default function IcebreakerPollsCard({
                     <Users size={12} />
                     <span>{totalVotes.toLocaleString()} anonymous responses</span>
                   </span>
+                  <button
+                    type="button"
+                    className="poll-analytics-btn"
+                    onClick={() => {
+                      playSound('reaction');
+                      setSelectedAnalyticsPoll(poll);
+                    }}
+                    title="View voting pattern progression over time"
+                  >
+                    <TrendingUp size={12} />
+                    <span>Poll Analytics</span>
+                  </button>
                   {!hasVoted && (
                     <span className="poll-hint">Tap any option above to cast your anonymous vote</span>
                   )}
@@ -322,6 +337,19 @@ export default function IcebreakerPollsCard({
           })
         )}
       </div>
+
+      {/* Poll Analytics Modal View */}
+      {selectedAnalyticsPoll && (
+        <PollAnalyticsModal
+          poll={selectedAnalyticsPoll}
+          pollOptions={selectedAnalyticsPoll.options}
+          pollCounts={selectedAnalyticsPoll.options?.reduce((acc, o) => {
+            acc[o.id] = o.votes || 0;
+            return acc;
+          }, {})}
+          onClose={() => setSelectedAnalyticsPoll(null)}
+        />
+      )}
     </div>
   );
 }

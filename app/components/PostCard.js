@@ -17,6 +17,8 @@ import PostOptionsMenu from './PostOptionsMenu';
 import ReportPostModal from './ReportPostModal';
 import WatermarkShareModal from './WatermarkShareModal';
 import ProjectionModeModal from './ProjectionModeModal';
+import ShareMenuModal from './ShareMenuModal';
+import PollAnalyticsModal from './PollAnalyticsModal';
 import {
   isPostReposted,
   getPostRepostCount,
@@ -29,7 +31,7 @@ import {
   canDownloadOffline,
 } from '../lib/offlineSyncManager';
 import { playSound } from '../lib/soundEffects';
-import { Clock } from 'lucide-react';
+import { Clock, TrendingUp } from 'lucide-react';
 
 function PollBlock({
   options,
@@ -40,6 +42,7 @@ function PollBlock({
   pollExpiresAt = null,
   pollDuration = null,
   revealResultsAfterVoting = false,
+  onOpenAnalytics = null,
 }) {
   const [revealOnlyAfterVote, setRevealOnlyAfterVote] = useState(revealResultsAfterVoting ?? false);
   const total = options.reduce((sum, o) => sum + (counts[o.id] || 0), 0);
@@ -126,6 +129,21 @@ function PollBlock({
           <p className="poll-meta">
             {total} vote{total !== 1 ? 's' : ''} · anonymous poll
           </p>
+          {onOpenAnalytics && (
+            <button
+              type="button"
+              className="poll-analytics-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                playSound('reaction');
+                onOpenAnalytics();
+              }}
+              title="View voting pattern trends over time"
+            >
+              <TrendingUp size={12} />
+              <span>Poll Analytics</span>
+            </button>
+          )}
           {!canSeeResults && !isExpired && (
             <span className="poll-hidden-hint">
               🔒 Results hidden until you vote
@@ -195,6 +213,21 @@ function PollBlock({
         <p className="poll-meta">
           {total} vote{total !== 1 ? 's' : ''} · anonymous poll
         </p>
+        {onOpenAnalytics && (
+          <button
+            type="button"
+            className="poll-analytics-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              playSound('reaction');
+              onOpenAnalytics();
+            }}
+            title="View voting pattern trends over time"
+          >
+            <TrendingUp size={12} />
+            <span>Poll Analytics</span>
+          </button>
+        )}
         {!canSeeResults && !isExpired && (
           <span className="poll-hidden-hint">
             🔒 Results hidden until you vote
@@ -229,10 +262,20 @@ export default function PostCard({
   const [showReportModal, setShowReportModal] = useState(false);
   const [showWatermarkModal, setShowWatermarkModal] = useState(false);
   const [showProjectionModal, setShowProjectionModal] = useState(false);
-  const [isSavedOffline, setIsSavedOffline] = useState(() => isItemSavedOffline(post.id));
-  const [reposted, setReposted] = useState(false);
-  const [repostCount, setRepostCount] = useState(0);
-  const [visibility, setVisibility] = useState('public');
+  const [sharePopping, setSharePopping] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [showLinkCopiedToast, setShowLinkCopiedToast] = useState(false);
+  const [showPollAnalytics, setShowPollAnalytics] = useState(false);
+  const [isSavedOffline, setIsSavedOffline] = useState(() => (post?.id ? isItemSavedOffline(post.id) : false));
+  const [reposted, setReposted] = useState(() => (post?.id ? isPostReposted(post.id, session?.user?.id) : false));
+  const [repostCount, setRepostCount] = useState(() => (post?.id ? getPostRepostCount(post.id, post.reposts_count || 0) : 0));
+  const [visibility, setVisibility] = useState(() => (post?.id ? getPostVisibility(post.id, post.visibility || 'public') : 'public'));
+
+  const isPollPost = Boolean(
+    (pollOptions && pollOptions.length > 0) ||
+    (post?.poll_options_count && post.poll_options_count > 0) ||
+    post?.media_type === 'poll'
+  );
 
   const cat = categoryStyle(post.category_id);
   const author = post.profiles;
@@ -242,9 +285,7 @@ export default function PostCard({
 
   // Repost status & visible counter
   useEffect(() => {
-    setReposted(isPostReposted(post.id, session?.user?.id));
-    setRepostCount(getPostRepostCount(post.id, post.reposts_count || 0));
-    setVisibility(getPostVisibility(post.id, post.visibility || 'public'));
+    if (!post?.id) return;
 
     function onRepostUpdated() {
       setReposted(isPostReposted(post.id, session?.user?.id));
@@ -261,7 +302,7 @@ export default function PostCard({
       window.removeEventListener('shammah:reposts-updated', onRepostUpdated);
       window.removeEventListener('shammah:post-visibility-changed', onVisChanged);
     };
-  }, [post.id, session?.user?.id, post.reposts_count, post.visibility]);
+  }, [post.id, session?.user?.id]);
 
   // Load comment counts
   useEffect(() => {
@@ -300,13 +341,30 @@ export default function PostCard({
   }
 
   function handleShare() {
-    playSound('reaction');
-    setShowWatermarkModal(true);
+    playSound('share');
+    setSharePopping(true);
+    setTimeout(() => setSharePopping(false), 350);
+    setShowShareMenu(true);
+  }
+
+  function handleLinkCopied() {
+    playSound('bookmark');
+    setShowLinkCopiedToast(true);
+    setTimeout(() => {
+      setShowLinkCopiedToast(false);
+    }, 2000);
   }
 
   function handleSaveOffline() {
-    playSound('reaction');
     const authorId = post.user_id || post.profiles?.id;
+    if (isSavedOffline) {
+      removeOfflineItem(post.id);
+      setIsSavedOffline(false);
+      playSound('offline_remove');
+      setShareMsg('Removed from offline downloads');
+      setTimeout(() => setShareMsg(''), 2200);
+      return;
+    }
     if (!canDownloadOffline(authorId, post)) {
       setShareMsg('Author has restricted offline downloads for this content.');
       setTimeout(() => setShareMsg(''), 2500);
@@ -315,6 +373,7 @@ export default function PostCard({
     const res = saveOfflineItem(post, post.media_type || 'post');
     if (res.success) {
       setIsSavedOffline(true);
+      playSound('offline_save');
       setShareMsg('Saved offline for 30 days ✓');
     } else {
       setShareMsg(res.reason || 'Could not save offline');
@@ -323,7 +382,7 @@ export default function PostCard({
   }
 
   function handleProject() {
-    playSound('reaction');
+    playSound('project');
     setShowProjectionModal(true);
   }
 
@@ -511,6 +570,7 @@ export default function PostCard({
           pollExpiresAt={post.poll_expires_at || post.expires_at}
           pollDuration={post.poll_duration}
           revealResultsAfterVoting={post.reveal_results_after_voting}
+          onOpenAnalytics={() => setShowPollAnalytics(true)}
         />
       )}
 
@@ -560,12 +620,19 @@ export default function PostCard({
 
         <button
           type="button"
-          className="action-btn"
-          onClick={() => setCommentsOpen((v) => !v)}
+          className="action-btn comment-btn"
+          onClick={() => {
+            setCommentsOpen((v) => !v);
+            playSound('comment');
+          }}
           title="Join Christian family comments"
+          aria-label="Comments"
         >
           <span className="action-icon">💬</span>
-          <span>{commentCount != null && commentCount > 0 ? commentCount : 'Comment'}</span>
+          <span className="action-label comment-label">Comment</span>
+          {commentCount != null && commentCount > 0 && (
+            <span className="action-count-badge comment-count-badge">{commentCount}</span>
+          )}
         </button>
 
         {/* Retweet / Re-share (Fellowship Repost) with Visible Counter */}
@@ -574,20 +641,22 @@ export default function PostCard({
           className={`action-btn repost-btn${reposted ? ' is-reposted' : ''}`}
           onClick={handleRepostClick}
           title={reposted ? 'You reposted this' : 'Repost to fellowship profile'}
+          aria-label="Repost"
         >
           <Repeat size={15} className={`action-icon repost-icon${reposted ? ' active' : ''}`} />
-          <span className="repost-label-text">Repost</span>
-          {repostCount > 0 && <span className="repost-count-badge">{repostCount}</span>}
+          <span className="action-label repost-label">Repost</span>
+          {repostCount > 0 && <span className="action-count-badge repost-count-badge">{repostCount}</span>}
         </button>
 
         <button
           type="button"
-          className="action-btn share-btn"
+          className={`action-btn share-btn${sharePopping ? ' share-btn-popping' : ''}`}
           onClick={handleShare}
-          title="Share with official Shammah watermark"
+          title="Share with official Shammah options"
+          aria-label="Share"
         >
           <span className="action-icon">↗</span>
-          <span>Share</span>
+          <span className="action-label share-label">Share</span>
         </button>
 
         {/* Offline Download button (30 days) */}
@@ -599,11 +668,11 @@ export default function PostCard({
           aria-label="Save offline"
         >
           {isSavedOffline ? <Check size={14} className="text-emerald-400" /> : <DownloadCloud size={14} />}
-          <span>{isSavedOffline ? 'Saved' : 'Offline'}</span>
+          <span className="action-label offline-label">{isSavedOffline ? 'Saved' : 'Offline'}</span>
         </button>
 
         {/* Sanctuary Projection Screen button for Polls & Announcements */}
-        {((pollOptions && pollOptions.length > 0) || post.poll_options_count > 0 || post.is_pinned) && (
+        {(isPollPost || post.is_pinned) && (
           <button
             type="button"
             className="action-btn project-btn"
@@ -612,7 +681,7 @@ export default function PostCard({
             aria-label="Project on screen"
           >
             <Tv size={14} className="text-amber-400" />
-            <span>Project</span>
+            <span className="action-label project-label">Project</span>
           </button>
         )}
 
@@ -625,7 +694,7 @@ export default function PostCard({
             aria-label={post.is_pinned ? 'Unpin post' : 'Pin post'}
           >
             <PinIcon className="action-icon pin-action-icon" />
-            <span>{post.is_pinned ? 'Pinned' : 'Pin'}</span>
+            <span className="action-label pin-label">{post.is_pinned ? 'Pinned' : 'Pin'}</span>
           </button>
         )}
 
@@ -736,6 +805,34 @@ export default function PostCard({
             churchName: author?.church_name || 'Shammah Fellowship',
           }}
           onClose={() => setShowProjectionModal(false)}
+        />
+      )}
+
+      {/* Share Options Menu Popup */}
+      {showShareMenu && (
+        <ShareMenuModal
+          post={post}
+          onClose={() => setShowShareMenu(false)}
+          onOpenWatermark={() => setShowWatermarkModal(true)}
+          onLinkCopied={handleLinkCopied}
+        />
+      )}
+
+      {/* Temporary Link Copied Confirmation Toast Overlay (fades out after 2 seconds) */}
+      {showLinkCopiedToast && (
+        <div className="link-copied-toast-overlay" role="status" aria-live="polite">
+          <Check size={16} className="link-copied-toast-icon" />
+          <span>Link Copied</span>
+        </div>
+      )}
+
+      {/* Poll Analytics Summary View with Recharts Line Chart */}
+      {showPollAnalytics && (
+        <PollAnalyticsModal
+          poll={post}
+          pollOptions={pollOptions}
+          pollCounts={pollCounts}
+          onClose={() => setShowPollAnalytics(false)}
         />
       )}
     </article>

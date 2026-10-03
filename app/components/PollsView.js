@@ -11,10 +11,12 @@ import {
   Tv,
   Share2,
   Bot,
+  TrendingUp,
 } from 'lucide-react';
 import PostCard from './PostCard';
 import ProjectionModeModal from './ProjectionModeModal';
 import WatermarkShareModal from './WatermarkShareModal';
+import PollAnalyticsModal from './PollAnalyticsModal';
 import { playSound } from '../lib/soundEffects';
 
 const SAMPLE_POLLS = [
@@ -81,6 +83,7 @@ export default function PollsView({
   const [filter, setFilter] = useState('all'); // all | active | voted
   const [projectingPoll, setProjectingPoll] = useState(null);
   const [watermarkShareData, setWatermarkShareData] = useState(null);
+  const [analyticsPoll, setAnalyticsPoll] = useState(null);
 
   // Combine feed polls with sample polls
   const feedPollPosts = feedPosts.filter((p) => pollOptionsByPost[p.id] && pollOptionsByPost[p.id].length > 0);
@@ -258,6 +261,19 @@ export default function PollsView({
                     <Share2 size={14} className="text-cyan-400" />
                     <span>Share Watermarked</span>
                   </button>
+
+                  <button
+                    type="button"
+                    className="poll-stage-action-pill"
+                    onClick={() => {
+                      playSound('reaction');
+                      setAnalyticsPoll(poll);
+                    }}
+                    title="View poll voting trends & patterns line chart"
+                  >
+                    <TrendingUp size={14} className="text-emerald-400" />
+                    <span>Poll Analytics</span>
+                  </button>
                 </div>
               </div>
             );
@@ -279,6 +295,16 @@ export default function PollsView({
         <WatermarkShareModal
           contentData={watermarkShareData}
           onClose={() => setWatermarkShareData(null)}
+        />
+      )}
+
+      {/* Poll Analytics Modal */}
+      {analyticsPoll && (
+        <PollAnalyticsModal
+          poll={analyticsPoll}
+          pollOptions={analyticsPoll.options || pollOptionsByPost[analyticsPoll.id]}
+          pollCounts={analyticsPoll.counts || pollCountsByPost[analyticsPoll.id]}
+          onClose={() => setAnalyticsPoll(null)}
         />
       )}
     </div>

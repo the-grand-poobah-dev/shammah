@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   getActivityLog,
   clearActivityLog,
@@ -20,6 +20,9 @@ import {
   Eye,
   CheckCircle2,
   Share2,
+  Calendar,
+  RotateCcw,
+  ArrowRight,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 
@@ -62,6 +65,11 @@ export default function ActivityLog({ onSelectPost = null, onClose = null }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState({ total: 0, posts: 0, reactions: 0, comments: 0, pollVotes: 0 });
 
+  // Date Range Filtering States
+  const [datePreset, setDatePreset] = useState('all'); // all | today | week | month | custom
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
   function reload() {
     setActivities(getActivityLog());
     setStats(getActivityStats());
@@ -77,18 +85,64 @@ export default function ActivityLog({ onSelectPost = null, onClose = null }) {
     return () => window.removeEventListener('shammah:activity-updated', onActivityUpdate);
   }, []);
 
-  const filteredList = activities.filter((item) => {
-    if (filterType !== 'all' && item.type !== filterType) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = item.title?.toLowerCase().includes(q);
-      const matchSnippet = item.snippet?.toLowerCase().includes(q);
-      const matchTarget = item.targetTitle?.toLowerCase().includes(q);
-      const matchAuthor = item.authorName?.toLowerCase().includes(q);
-      return matchTitle || matchSnippet || matchTarget || matchAuthor;
-    }
-    return true;
-  });
+  // Filter activities by Type, Search Query, and Date Range
+  const filteredList = useMemo(() => {
+    return activities.filter((item) => {
+      // 1. Type filter
+      if (filterType !== 'all' && item.type !== filterType) return false;
+
+      // 2. Search query filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = item.title?.toLowerCase().includes(q);
+        const matchSnippet = item.snippet?.toLowerCase().includes(q);
+        const matchTarget = item.targetTitle?.toLowerCase().includes(q);
+        const matchAuthor = item.authorName?.toLowerCase().includes(q);
+        if (!matchTitle && !matchSnippet && !matchTarget && !matchAuthor) return false;
+      }
+
+      // 3. Date range filter
+      if (datePreset !== 'all') {
+        const itemDate = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+        const now = Date.now();
+
+        if (datePreset === 'today') {
+          const startOfDay = new Date();
+          startOfDay.setHours(0, 0, 0, 0);
+          if (itemDate < startOfDay.getTime()) return false;
+        } else if (datePreset === 'week') {
+          const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+          if (itemDate < sevenDaysAgo) return false;
+        } else if (datePreset === 'month') {
+          const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+          if (itemDate < thirtyDaysAgo) return false;
+        } else if (datePreset === 'custom') {
+          if (startDate) {
+            const startMs = new Date(startDate + 'T00:00:00').getTime();
+            if (itemDate < startMs) return false;
+          }
+          if (endDate) {
+            const endMs = new Date(endDate + 'T23:59:59.999').getTime();
+            if (itemDate > endMs) return false;
+          }
+        }
+      }
+
+      return true;
+    });
+  }, [activities, filterType, searchQuery, datePreset, startDate, endDate]);
+
+  function handleDatePresetChange(preset) {
+    playSound('reaction');
+    setDatePreset(preset);
+  }
+
+  function handleResetDateFilter() {
+    playSound('reaction');
+    setDatePreset('all');
+    setStartDate('');
+    setEndDate('');
+  }
 
   function handleClear() {
     if (confirm('Are you sure you want to clear your local activity history?')) {
@@ -104,6 +158,8 @@ export default function ActivityLog({ onSelectPost = null, onClose = null }) {
     playSound('reaction');
     reload();
   }
+
+  const isDateFiltered = datePreset !== 'all' || startDate || endDate;
 
   return (
     <div className="activity-log-container">
@@ -152,6 +208,7 @@ export default function ActivityLog({ onSelectPost = null, onClose = null }) {
 
       {/* Search & Filter Toolbar */}
       <div className="activity-filter-toolbar">
+        {/* Search Bar */}
         <div className="activity-search-box">
           <Search size={14} className="search-icon" />
           <input
@@ -172,6 +229,7 @@ export default function ActivityLog({ onSelectPost = null, onClose = null }) {
           )}
         </div>
 
+        {/* Action Type Filter Chips */}
         <div className="activity-filter-chips">
           <button
             type="button"
@@ -210,16 +268,116 @@ export default function ActivityLog({ onSelectPost = null, onClose = null }) {
           </button>
         </div>
 
+        {/* Filter by Date Range Picker */}
+        <div className="activity-date-filter-section">
+          <div className="date-filter-header">
+            <div className="date-filter-title-wrap">
+              <Calendar size={14} className="text-teal-400" />
+              <span className="date-filter-title">Filter by Date Range</span>
+            </div>
+            {isDateFiltered && (
+              <button
+                type="button"
+                className="date-filter-reset-btn"
+                onClick={handleResetDateFilter}
+                title="Reset date filter to All Time"
+              >
+                <RotateCcw size={11} />
+                <span>Reset Date</span>
+              </button>
+            )}
+          </div>
+
+          <div className="date-filter-presets">
+            <button
+              type="button"
+              className={`date-preset-btn${datePreset === 'all' ? ' active' : ''}`}
+              onClick={() => handleDatePresetChange('all')}
+            >
+              All Time
+            </button>
+            <button
+              type="button"
+              className={`date-preset-btn${datePreset === 'today' ? ' active' : ''}`}
+              onClick={() => handleDatePresetChange('today')}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              className={`date-preset-btn${datePreset === 'week' ? ' active' : ''}`}
+              onClick={() => handleDatePresetChange('week')}
+            >
+              Past 7 Days
+            </button>
+            <button
+              type="button"
+              className={`date-preset-btn${datePreset === 'month' ? ' active' : ''}`}
+              onClick={() => handleDatePresetChange('month')}
+            >
+              Past 30 Days
+            </button>
+            <button
+              type="button"
+              className={`date-preset-btn${datePreset === 'custom' ? ' active' : ''}`}
+              onClick={() => handleDatePresetChange('custom')}
+            >
+              Custom Range
+            </button>
+          </div>
+
+          {/* Custom Date Range Picker inputs */}
+          {datePreset === 'custom' && (
+            <div className="date-custom-range-row">
+              <div className="date-input-wrap">
+                <label className="date-input-label">Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="activity-date-input"
+                />
+              </div>
+              <span className="date-range-sep">
+                <ArrowRight size={14} />
+              </span>
+              <div className="date-input-wrap">
+                <label className="date-input-label">End Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="activity-date-input"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Active Date Filter Summary Bar */}
+          {isDateFiltered && (
+            <div className="date-filter-status-banner">
+              <span>
+                Filtered by date: <strong>{datePreset === 'custom' ? `${startDate || 'Start'} to ${endDate || 'Now'}` : datePreset === 'today' ? 'Today' : datePreset === 'week' ? 'Past 7 Days' : 'Past 30 Days'}</strong>
+              </span>
+              <span className="date-filtered-count-badge">
+                {filteredList.length} action{filteredList.length !== 1 ? 's' : ''} found
+              </span>
+            </div>
+          )}
+        </div>
+
         {activities.length > 0 && (
-          <button
-            type="button"
-            className="activity-clear-btn"
-            onClick={handleClear}
-            title="Clear all stored activity logs"
-          >
-            <Trash2 size={13} />
-            <span>Clear Log</span>
-          </button>
+          <div className="activity-toolbar-bottom-actions">
+            <button
+              type="button"
+              className="activity-clear-btn"
+              onClick={handleClear}
+              title="Clear all stored activity logs"
+            >
+              <Trash2 size={13} />
+              <span>Clear History</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -228,12 +386,21 @@ export default function ActivityLog({ onSelectPost = null, onClose = null }) {
         {filteredList.length === 0 ? (
           <div className="activity-empty-state">
             <Clock size={36} className="empty-icon" />
-            <h4>No activity recorded</h4>
+            <h4>No activity recorded in this range</h4>
             <p>
-              {searchQuery
-                ? `No actions match "${searchQuery}". Try a different search term.`
+              {isDateFiltered || searchQuery
+                ? 'No actions match your current search and date filters. Try adjusting the date range or search terms.'
                 : 'Interact with fellowship posts, vote on polls, or share reflections to see your activity timeline.'}
             </p>
+            {isDateFiltered && (
+              <button
+                type="button"
+                className="date-filter-reset-empty-btn"
+                onClick={handleResetDateFilter}
+              >
+                Reset Date Filters
+              </button>
+            )}
           </div>
         ) : (
           <div className="activity-timeline-feed">

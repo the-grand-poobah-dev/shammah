@@ -15,12 +15,14 @@ import {
   Headphones,
   BarChart3,
   GraduationCap,
+  Coins,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import { playSound } from '../lib/soundEffects';
 import InstitutionProfileModal from './InstitutionProfileModal';
 import AuthorOverviewModal from './AuthorOverviewModal';
+import MpesaPaymentModal, { COMMUNITY_PROJECTS } from './MpesaPaymentModal';
 
 const SAMPLE_CHURCHES = [
   {
@@ -500,6 +502,118 @@ export function ExploreTabsBanner({ onSelectSection }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+export function CommunityProjectsGivingCard({ currentUser }) {
+  const [selectedProjectId, setSelectedProjectId] = useState('community-food-drive');
+  const [showModal, setShowModal] = useState(false);
+
+  const activeProj =
+    COMMUNITY_PROJECTS.find((p) => p.id === selectedProjectId) || COMMUNITY_PROJECTS[0];
+  const percent = Math.min(100, Math.round((activeProj.raisedKes / activeProj.targetKes) * 100));
+
+  return (
+    <div className="home-community-giving-card neon-glow-card">
+      <div className="giving-card-header">
+        <div className="giving-card-badge">
+          <Coins size={14} className="text-emerald-400" />
+          <span>Kingdom Giving · Safaricom M-Pesa</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            playSound('reaction');
+            setShowModal(true);
+          }}
+          className="giving-card-view-all-btn"
+        >
+          <span>All 5 Projects →</span>
+        </button>
+      </div>
+
+      <div className="giving-card-body">
+        {/* Project Selector Pills */}
+        <div className="giving-project-selector-row no-scrollbar">
+          {COMMUNITY_PROJECTS.map((proj) => {
+            const isSelected = selectedProjectId === proj.id;
+            return (
+              <button
+                key={proj.id}
+                type="button"
+                className={`giving-proj-chip${isSelected ? ' active' : ''}`}
+                onClick={() => {
+                  playSound('reaction');
+                  setSelectedProjectId(proj.id);
+                }}
+              >
+                <span className="giving-proj-icon">{proj.icon}</span>
+                <span className="giving-proj-name">{proj.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Active Project Highlight Banner */}
+        <div className="giving-active-project-detail">
+          <div className="giving-detail-header">
+            <div>
+              <h4 className="giving-detail-title">{activeProj.name}</h4>
+              <p className="giving-detail-desc">{activeProj.description}</p>
+            </div>
+            <span className="giving-detail-tag">{activeProj.tag}</span>
+          </div>
+
+          <div className="giving-progress-wrap">
+            <div className="giving-progress-meta">
+              <span>KES {activeProj.raisedKes.toLocaleString()} raised of KES {activeProj.targetKes.toLocaleString()}</span>
+              <strong>{percent}%</strong>
+            </div>
+            <div className="giving-progress-bar">
+              <div className="giving-progress-fill" style={{ width: `${percent}%` }} />
+            </div>
+          </div>
+
+          <div className="giving-actions-row">
+            <div className="giving-preset-pills">
+              {[250, 500, 1000].map((amt) => (
+                <button
+                  key={amt}
+                  type="button"
+                  className="giving-preset-btn"
+                  onClick={() => {
+                    playSound('reaction');
+                    setShowModal(true);
+                  }}
+                >
+                  KES {amt}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              className="giving-cta-btn"
+              onClick={() => {
+                playSound('reaction');
+                setShowModal(true);
+              }}
+            >
+              <Heart size={14} />
+              <span>Sow via M-Pesa</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {showModal && (
+        <MpesaPaymentModal
+          defaultProjectId={selectedProjectId}
+          currentUser={currentUser}
+          onClose={() => setShowModal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -73,7 +73,15 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
     setMyEmoji(nextEmoji);
 
     if (nextEmoji) {
-      playSound('reaction');
+      if (nextEmoji === '🙏') {
+        playSound('reaction_amen');
+      } else if (nextEmoji === '🔥') {
+        playSound('reaction_fire');
+      } else if (nextEmoji === '🙌') {
+        playSound('reaction_praise');
+      } else {
+        playSound('reaction');
+      }
       setFloatingReaction(nextEmoji);
       setTimeout(() => setFloatingReaction(null), 1200);
     }
@@ -220,7 +228,7 @@ export default function ReactionBar({ targetType, targetId, session, onRequireSi
         title="Tap to like · hover or hold for prayer & praise reactions"
       >
         <span className="react-face">{myEmoji || '🤍'}</span>
-        <span className="react-label">{myEmoji ? 'Reacted' : 'React'}</span>
+        <span className="react-label action-label-text">{myEmoji ? 'Reacted' : 'React'}</span>
         {total > 0 && <span className="react-count">{total}</span>}
       </button>
     </div>

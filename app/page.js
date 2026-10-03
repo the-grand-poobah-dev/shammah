@@ -12,7 +12,7 @@ import OnboardingWizard from './components/OnboardingWizard';
 import { uploadPostMedia } from './lib/mediaUpload';
 import { sortPostsWithPinned, isUserAdmin, getSampleFeedPosts } from './lib/pinnedPosts';
 import PinIcon from './components/PinIcon';
-import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin } from 'lucide-react';
+import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX } from 'lucide-react';
 import TopNav, { TOP_NAV_SECTIONS } from './components/TopNav';
 import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
@@ -32,9 +32,10 @@ import {
   PeopleToFollowCard,
   TrendingReelsCard,
   ExploreTabsBanner,
+  CommunityProjectsGivingCard,
 } from './components/HomeHighlights';
 import { getHomefeedPostsWithRss } from './lib/rssManager';
-import { playSound } from './lib/soundEffects';
+import { playSound, isSoundEnabled, setSoundEnabled } from './lib/soundEffects';
 import { rankPostsWithAlgorithm } from './lib/feedAlgorithm';
 import { getBlockedUsers, getFollows } from './lib/profileManager';
 import AuthorOverviewModal from './components/AuthorOverviewModal';
@@ -107,6 +108,7 @@ export default function Feed() {
   const [tab, setTab] = useState('home'); // home | messages | alerts | churches | menu
   const [section, setSection] = useState('all'); // all | videos | podcasts | courses | polls | bible
   const [dark, setDark] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -257,11 +259,34 @@ export default function Feed() {
     window.dispatchEvent(new CustomEvent('shammah:section-changed', { detail: section }));
   }, [section]);
 
-  // Remember the person's light/dark choice on this device
+  // Remember the person's light/dark choice on this device and sync sound profile
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem('shammah-theme') : null;
     if (saved === 'dark') setDark(true);
+    setSoundOn(isSoundEnabled());
+
+    function handleSoundToggled(e) {
+      if (typeof e.detail === 'boolean') {
+        setSoundOn(e.detail);
+      }
+    }
+    window.addEventListener('shammah:sound-toggled', handleSoundToggled);
+    return () => window.removeEventListener('shammah:sound-toggled', handleSoundToggled);
   }, []);
+
+  function handleToggleTheme() {
+    setDark((prev) => {
+      const next = !prev;
+      playSound('themeToggle');
+      return next;
+    });
+  }
+
+  function handleToggleSound() {
+    const next = !soundOn;
+    setSoundOn(next);
+    setSoundEnabled(next);
+  }
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -916,13 +941,41 @@ export default function Feed() {
 
           {!searchOpen && (
             <div className="topbar-right">
-              <button
-                className="theme-switch"
-                role="switch"
-                aria-checked={dark}
-                aria-label="Toggle dark mode"
-                onClick={() => setDark((d) => !d)}
-              />
+              <div className="topbar-toggle-group">
+                {/* Sun icon for light mode / Moon icon for dark mode toggle at same location */}
+                <button
+                  type="button"
+                  className={`topbar-toggle-btn theme-toggle-btn ${dark ? 'is-dark' : 'is-light'}`}
+                  role="switch"
+                  aria-checked={dark}
+                  aria-label={dark ? 'Light mode (tap to switch to light mode)' : 'Dark mode (tap to switch to dark mode)'}
+                  title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                  onClick={handleToggleTheme}
+                >
+                  {dark ? (
+                    <Moon size={18} className="theme-toggle-icon moon-icon text-amber-300" />
+                  ) : (
+                    <Sun size={18} className="theme-toggle-icon sun-icon text-amber-500" />
+                  )}
+                </button>
+
+                {/* Sound profile on/off toggle beside it */}
+                <button
+                  type="button"
+                  className={`topbar-toggle-btn sound-toggle-btn ${soundOn ? 'sound-on' : 'sound-off'}`}
+                  role="switch"
+                  aria-checked={soundOn}
+                  aria-label={soundOn ? 'Sound alerts on (tap to mute)' : 'Sound alerts muted (tap to enable)'}
+                  title={soundOn ? 'Mute sound alerts' : 'Enable sound alerts'}
+                  onClick={handleToggleSound}
+                >
+                  {soundOn ? (
+                    <Volume2 size={18} className="sound-toggle-icon sound-icon-active text-emerald-400" />
+                  ) : (
+                    <VolumeX size={18} className="sound-toggle-icon sound-icon-muted text-gray-400" />
+                  )}
+                </button>
+              </div>
 
               {session ? (
                 <div className="avatar-menu" ref={avatarMenuRef}>
@@ -1502,6 +1555,9 @@ export default function Feed() {
             <Fragment key={p.id}>
               {i === 1 && !searchTerm && (
                 <TrendingReelsCard onSelectSection={(secId) => setSection(secId)} />
+              )}
+              {i === 2 && !searchTerm && (
+                <CommunityProjectsGivingCard currentUser={profile} />
               )}
               {i === 3 && !searchTerm && (
                 <PeopleToFollowCard />

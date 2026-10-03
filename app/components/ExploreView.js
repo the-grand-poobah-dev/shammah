@@ -28,16 +28,20 @@ import {
   BookOpen,
   Gamepad2,
   Flame,
+  Phone,
+  Coins,
+  Loader2,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import { CATEGORY_STYLES } from '../lib/postDisplay';
 import { isSoundEnabled, setSoundEnabled, playSound } from '../lib/soundEffects';
+import MpesaPaymentModal, { COMMUNITY_PROJECTS } from './MpesaPaymentModal';
 
 const DONATION_TIERS = [
-  { id: 'tier-5', amount: 5, title: 'Seed of Faith', desc: 'Sponsors 100 Gospel push alerts & cloud hosting', icon: Coffee },
-  { id: 'tier-15', amount: 15, title: 'Kingdom Builder', desc: 'Supplies 1 month of sermon audio & media bandwidth', icon: Gift },
-  { id: 'tier-50', amount: 50, title: 'Mission Sponsor', desc: 'Funds discipleship courses and church outreach', icon: Heart },
+  { id: 'tier-250', amountKes: 250, title: 'Seed of Faith', desc: 'Sponsors 100 Gospel push alerts & cloud hosting', icon: Coffee },
+  { id: 'tier-1000', amountKes: 1000, title: 'Kingdom Builder', desc: 'Supplies 1 month of sermon audio & media bandwidth', icon: Gift },
+  { id: 'tier-5000', amountKes: 5000, title: 'Mission Sponsor', desc: 'Funds discipleship courses and community outreach', icon: Heart },
 ];
 
 const FAITH_FAQS = [
@@ -66,10 +70,14 @@ const FAITH_FAQS = [
 export default function ExploreView({ session, profile, dark, setDark, onSignOut, openAuth, onSelectCategory }) {
   const router = useRouter();
   const [soundOn, setSoundOn] = useState(true);
-  const [selectedTier, setSelectedTier] = useState('tier-15');
+  const [selectedProjectId, setSelectedProjectId] = useState('general-shammah');
+  const [selectedTier, setSelectedTier] = useState('tier-1000');
   const [customAmount, setCustomAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('card');
-  const [donated, setDonated] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [status, setStatus] = useState('idle'); // idle | sending | waiting_pin | success | error
+  const [errorMsg, setErrorMsg] = useState('');
+  const [receiptCode, setReceiptCode] = useState('');
+  const [showMpesaModal, setShowMpesaModal] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState(0);
 
   useEffect(() => {
@@ -83,11 +91,61 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
     if (next) playSound('alert');
   }
 
-  function handleDonate(e) {
+  const activeAmount = customAmount
+    ? Number(customAmount)
+    : DONATION_TIERS.find((t) => t.id === selectedTier)?.amountKes || 1000;
+
+  const currentProject =
+    COMMUNITY_PROJECTS.find((p) => p.id === selectedProjectId) || COMMUNITY_PROJECTS[0];
+
+  async function handleDonate(e) {
     e.preventDefault();
-    setDonated(true);
-    playSound('postPublished');
-    setTimeout(() => setDonated(false), 5000);
+    setErrorMsg('');
+
+    if (!activeAmount || activeAmount < 1) {
+      setErrorMsg('Please enter an amount of at least KES 1.');
+      return;
+    }
+
+    const cleanPhone = phone.trim().replace(/\s+/g, '');
+    if (!cleanPhone) {
+      setErrorMsg('Please enter your Safaricom M-Pesa number.');
+      return;
+    }
+
+    setStatus('sending');
+    playSound('reaction');
+
+    try {
+      const res = await fetch('/api/mpesa/donate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: cleanPhone,
+          amount: activeAmount,
+          projectId: currentProject.id,
+          projectName: currentProject.name,
+          donorName: profile?.name || 'A Believer in Christ',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to initiate M-Pesa payment.');
+      }
+
+      setReceiptCode(data.receiptNumber || 'NL' + Math.floor(10000000 + Math.random() * 90000000) + 'X');
+      setStatus('waiting_pin');
+      playSound('alert');
+
+      setTimeout(() => {
+        setStatus('success');
+        playSound('postPublished');
+      }, 4000);
+    } catch (err) {
+      setStatus('error');
+      setErrorMsg(err.message || 'Payment initiation failed.');
+    }
   }
 
   function handleCategoryClick(catId) {
@@ -97,8 +155,6 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
       router.push(`/?category=${catId}`);
     }
   }
-
-  const activeAmount = customAmount ? Number(customAmount) : DONATION_TIERS.find((t) => t.id === selectedTier)?.amount || 15;
 
   return (
     <div className="explore-shell">
@@ -303,33 +359,71 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
         </div>
       </div>
 
-      {/* Fundraising & Developer Blessing Center */}
+      {/* Fundraising & M-Pesa Community Projects Center */}
       <div className="explore-section">
         <div className="explore-donate-card">
           <div className="donate-header">
             <div className="donate-badge">
-              <Heart size={14} className="donate-heart-icon" />
-              <span>Kingdom Tech Ministry Fund</span>
+              <Coins size={14} className="text-emerald-400" />
+              <span>Lipa Na M-Pesa · Kingdom &amp; Community Giving</span>
             </div>
-            <h3>Support Shammah &amp; Developers</h3>
+            <h3>Support Shammah &amp; Community Projects</h3>
             <p>
-              Shammah is built with dedication by Julius Thandi to connect churches and believers worldwide.
-              Your support powers cloud media servers, encrypted messaging, and missionary outreach.
+              Donate directly via Safaricom M-Pesa to power gospel servers, sponsor school CU students,
+              and feed needy families through community outreach initiatives.
             </p>
           </div>
 
-          {/* Progress Goal */}
-          <div className="donate-goal-wrap">
-            <div className="donate-goal-meta">
-              <span>Goal: $10,000 Annual Server &amp; Gospel Outreach</span>
-              <strong>$4,850 Raised (48%)</strong>
-            </div>
-            <div className="donate-progress-bar">
-              <div className="donate-progress-fill" style={{ width: '48%' }} />
+          {/* Project Selector Chips */}
+          <div className="mb-4">
+            <label className="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-2">
+              Select Ministry Project to Support
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {COMMUNITY_PROJECTS.slice(0, 4).map((p) => {
+                const isSelected = selectedProjectId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedProjectId(p.id);
+                      playSound('reaction');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all flex items-start gap-2.5 ${
+                      isSelected
+                        ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm shadow-emerald-500/10'
+                        : 'bg-white/[0.03] border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    <span className="text-base shrink-0 p-1 rounded-lg bg-white/5">{p.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <strong className="text-xs text-white truncate">{p.name}</strong>
+                      </div>
+                      <p className="text-[11px] text-gray-400 truncate mt-0.5">{p.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Tiers */}
+          {/* Progress Goal for Selected Project */}
+          <div className="donate-goal-wrap">
+            <div className="donate-goal-meta">
+              <span>Goal: KES {currentProject.targetKes.toLocaleString()} · {currentProject.name}</span>
+              <strong>KES {currentProject.raisedKes.toLocaleString()} Raised ({Math.round((currentProject.raisedKes / currentProject.targetKes) * 100)}%)</strong>
+            </div>
+            <div className="donate-progress-bar">
+              <div
+                className="donate-progress-fill"
+                style={{ width: `${Math.min(100, Math.round((currentProject.raisedKes / currentProject.targetKes) * 100))}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Preset KES Tiers */}
           <div className="donate-tiers-grid">
             {DONATION_TIERS.map((tier) => {
               const Icon = tier.icon;
@@ -342,10 +436,11 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
                   onClick={() => {
                     setSelectedTier(tier.id);
                     setCustomAmount('');
+                    playSound('reaction');
                   }}
                 >
                   <Icon size={18} className="tier-icon" />
-                  <span className="tier-amount">${tier.amount}</span>
+                  <span className="tier-amount">KES {tier.amountKes.toLocaleString()}</span>
                   <strong className="tier-title">{tier.title}</strong>
                   <p className="tier-desc">{tier.desc}</p>
                 </button>
@@ -353,49 +448,96 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
             })}
           </div>
 
-          {/* Custom Amount & Payment Method */}
+          {/* Custom Amount & Phone Form */}
           <form className="donate-form" onSubmit={handleDonate}>
-            <div className="donate-input-row">
-              <span className="currency-prefix">$</span>
-              <input
-                type="number"
-                min="1"
-                placeholder="Or enter custom blessing amount…"
-                value={customAmount}
-                onChange={(e) => setCustomAmount(e.target.value)}
-                className="donate-amount-input"
-              />
+            <div className="space-y-3">
+              <div className="donate-input-row">
+                <span className="currency-prefix text-xs font-bold">KES</span>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Or enter custom KES blessing amount…"
+                  value={customAmount}
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                  className="donate-amount-input"
+                />
+              </div>
+
+              {/* Safaricom Phone Number */}
+              <div className="relative">
+                <span className="absolute left-3.5 top-3 text-emerald-400">
+                  <Phone size={16} />
+                </span>
+                <input
+                  type="tel"
+                  required
+                  placeholder="Safaricom phone: 07XXXXXXXX or 2547XXXXXXXX"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-black/40 border border-white/15 rounded-xl text-white placeholder-gray-500 text-sm font-medium focus:outline-none focus:border-emerald-500"
+                />
+              </div>
             </div>
 
-            <div className="donate-methods-row">
-              {['card', 'mpesa', 'crypto', 'paypal'].map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  className={`donate-method-chip${paymentMethod === m ? ' active' : ''}`}
-                  onClick={() => setPaymentMethod(m)}
-                >
-                  {m === 'card' && 'Credit Card / Apple Pay'}
-                  {m === 'mpesa' && 'M-Pesa / Mobile'}
-                  {m === 'crypto' && 'Crypto (USDT/BTC)'}
-                  {m === 'paypal' && 'PayPal'}
-                </button>
-              ))}
-            </div>
+            {errorMsg && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
+                {errorMsg}
+              </div>
+            )}
 
-            <button type="submit" className="donate-submit-btn">
-              <Heart size={16} />
-              <span>Bless Shammah with ${activeAmount}</span>
+            {/* M-Pesa STK Submit Button */}
+            <button
+              type="submit"
+              disabled={status === 'sending'}
+              className="donate-submit-btn w-full flex items-center justify-center gap-2 cursor-pointer bg-gradient-to-r from-emerald-500 to-teal-500 text-black font-extrabold"
+            >
+              {status === 'sending' ? (
+                <>
+                  <Loader2 size={16} className="animate-spin text-black" />
+                  <span>Sending STK Prompt to Phone...</span>
+                </>
+              ) : (
+                <>
+                  <Coins size={16} />
+                  <span>Sow via M-Pesa (KES {activeAmount.toLocaleString()})</span>
+                </>
+              )}
             </button>
 
-            {donated && (
-              <div className="donate-success-banner">
-                <Check size={18} />
+            {status === 'waiting_pin' && (
+              <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin text-amber-400 shrink-0" />
                 <span>
-                  Thank you abundantly! &ldquo;God is able to bless you abundantly, so that in all things you will abound.&rdquo; — 2 Cor 9:8
+                  Check your phone screen and enter your M-Pesa PIN for KES {activeAmount.toLocaleString()} to complete your donation!
                 </span>
               </div>
             )}
+
+            {status === 'success' && (
+              <div className="donate-success-banner">
+                <Check size={18} className="text-emerald-400" />
+                <div>
+                  <strong className="block text-white">Payment Confirmed · Receipt: {receiptCode}</strong>
+                  <span>
+                    Thank you for blessing <strong>{currentProject.name}</strong>! &ldquo;God loves a cheerful giver.&rdquo; — 2 Cor 9:7
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                <ShieldCheck size={12} className="text-emerald-400" />
+                <span>Daraja M-Pesa Express Gateway</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowMpesaModal(true)}
+                className="text-[11px] text-emerald-400 hover:underline font-semibold cursor-pointer"
+              >
+                View all community projects →
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -438,6 +580,15 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
           Lead Engineer: <strong>Julius Thandi</strong> · Nairobi, Kenya
         </p>
       </div>
+
+      {/* M-Pesa Payment & Community Projects Modal */}
+      {showMpesaModal && (
+        <MpesaPaymentModal
+          currentUser={profile}
+          defaultProjectId={selectedProjectId}
+          onClose={() => setShowMpesaModal(false)}
+        />
+      )}
     </div>
   );
 }

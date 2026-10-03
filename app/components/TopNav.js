@@ -12,6 +12,7 @@ import {
   Sparkles,
   Gamepad2,
 } from 'lucide-react';
+import { playSound } from '../lib/soundEffects';
 
 export const TOP_NAV_SECTIONS = [
   { id: 'all', label: 'All', icon: Flame },
@@ -53,6 +54,7 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
       return;
     }
 
+    playSound('reaction');
     setCurrentSection(secId);
 
     if (onSelectSection) {
@@ -112,38 +114,37 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
       className={`top-nav-wrapper${isHome ? ' top-nav-home' : ' top-nav-subpage'} no-scrollbar`}
       aria-label="Content Type Navigation"
     >
-      <div
-        ref={scrollRef}
-        className="section-menu-inner no-scrollbar"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        role="tablist"
-      >
-        {/* Double-broken rotating neon glow snake (thinner) */}
-        <span className="top-nav-snake-glow" aria-hidden="true" />
-
-        {TOP_NAV_SECTIONS.map((s) => {
-          const Icon = s.icon;
-          const isActive = currentSection === s.id;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              role="tab"
-              data-section={s.id}
-              aria-selected={isActive}
-              className={`section-item-stacked${isActive ? ' active' : ''}`}
-              onClick={() => handleSectionClick(s.id)}
-            >
-              <span className="top-nav-icon-wrap">
-                <Icon size={19} strokeWidth={isActive ? 2.3 : 1.8} className="top-nav-icon" />
-              </span>
-              <span className="top-nav-label-small">{s.label}</span>
-            </button>
-          );
-        })}
+      <div className="section-menu">
+        <div
+          ref={scrollRef}
+          className="section-menu-inner no-scrollbar"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          role="tablist"
+        >
+          {TOP_NAV_SECTIONS.map((s) => {
+            const Icon = s.icon;
+            const isActive = currentSection === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                role="tab"
+                data-section={s.id}
+                aria-selected={isActive}
+                className={`section-item-stacked${isActive ? ' active' : ''}`}
+                onClick={() => handleSectionClick(s.id)}
+              >
+                <span className="top-nav-icon-wrap">
+                  <Icon size={19} strokeWidth={isActive ? 2.3 : 1.8} className="top-nav-icon" />
+                </span>
+                <span className="top-nav-label-small">{s.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
