@@ -12,7 +12,7 @@ import OnboardingWizard from './components/OnboardingWizard';
 import { uploadPostMedia } from './lib/mediaUpload';
 import { sortPostsWithPinned, isUserAdmin, getSampleFeedPosts } from './lib/pinnedPosts';
 import PinIcon from './components/PinIcon';
-import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX, DownloadCloud } from 'lucide-react';
+import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX, DownloadCloud, X } from 'lucide-react';
 import TopNav, { TOP_NAV_SECTIONS } from './components/TopNav';
 import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
@@ -248,23 +248,41 @@ export default function Feed() {
     };
   }, []);
 
-  // Sync section state with global TopNav and URL params
+  // Sync section and category state with global TopNav and URL params
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const sec = params.get('section');
-      if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss'].includes(sec)) {
-        setSection(sec);
+    function syncUrlParams() {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const sec = params.get('section');
+        if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss'].includes(sec)) {
+          setSection(sec);
+        }
+        const cat = params.get('category');
+        if (cat) {
+          setActiveCategory(cat === 'all' ? null : cat);
+        } else if (params.has('category')) {
+          setActiveCategory(null);
+        }
       }
     }
 
+    syncUrlParams();
+
     function onSectionSet(e) {
       if (e.detail && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss'].includes(e.detail)) {
+        setTab('home');
         setSection(e.detail);
+        if (typeof window !== 'undefined') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
       }
     }
     window.addEventListener('shammah:set-section', onSectionSet);
-    return () => window.removeEventListener('shammah:set-section', onSectionSet);
+    window.addEventListener('popstate', syncUrlParams);
+    return () => {
+      window.removeEventListener('shammah:set-section', onSectionSet);
+      window.removeEventListener('popstate', syncUrlParams);
+    };
   }, []);
 
   useEffect(() => {
@@ -383,6 +401,25 @@ export default function Feed() {
     if (tab === 'churches' && session) loadChurches();
   }, [tab, session?.user?.id]);
 
+  function handleFilterCategory(catId) {
+    const target = !catId || catId === 'all' ? null : catId;
+    setActiveCategory(target);
+    setTab('home');
+    setSection('all');
+    loadPosts(target);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (target) {
+        url.searchParams.set('category', target);
+      } else {
+        url.searchParams.delete('category');
+      }
+      url.searchParams.delete('section');
+      window.history.pushState({}, '', url.toString());
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
   // Reload the feed when the category changes or when someone signs in/out
   // (posts are only readable by signed-in users, so the feed must refetch after login)
   useEffect(() => {
@@ -404,9 +441,8 @@ export default function Feed() {
       loadPosts(activeCategory);
     }
     function handleSelectCat(e) {
-      if (e.detail) {
-        setActiveCategory(e.detail);
-        loadPosts(e.detail);
+      if (e.detail !== undefined) {
+        handleFilterCategory(e.detail);
       }
     }
 
@@ -1004,7 +1040,7 @@ export default function Feed() {
                   onClick={handleToggleSound}
                 >
                   {soundOn ? (
-                    <Volume2 size={18} className="sound-toggle-icon sound-icon-active text-emerald-400" />
+                    <Volume2 size={18} className="sound-toggle-icon sound-icon-active text-rose-500" />
                   ) : (
                     <VolumeX size={18} className="sound-toggle-icon sound-icon-muted text-gray-400" />
                   )}
@@ -1182,38 +1218,14 @@ export default function Feed() {
             <TopNav
               isHome={true}
               activeSection={section}
-              onSelectSection={(sec) => setSection(sec)}
+              onSelectSection={(sec) => {
+                setTab('home');
+                setSection(sec);
+                if (typeof window !== 'undefined') {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+              }}
             />
-
-            {section === 'all' && (
-              <nav
-                className="category-bar"
-                aria-label="Browse by category"
-                ref={categoryBarRef}
-                onPointerDown={categoryPointerDown}
-                onPointerMove={categoryPointerMove}
-                onPointerUp={categoryPointerUp}
-                onPointerCancel={categoryPointerUp}
-                onWheel={stopTicker}
-              >
-                <button
-                  className={`filter-chip${activeCategory === null ? ' active' : ''}`}
-                  onClick={categoryChipClick(() => setActiveCategory(null))}
-                >
-                  All
-                </button>
-                {Object.entries(CATEGORY_STYLES).map(([id, c]) => (
-                  <button
-                    key={id}
-                    className={`filter-chip${activeCategory === id ? ' active' : ''}`}
-                    style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
-                    onClick={categoryChipClick(() => setActiveCategory(id))}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </nav>
-            )}
           </div>
         )}
       </div>
@@ -1541,6 +1553,44 @@ export default function Feed() {
           </div>
         )}
 
+        {/* Active Category Filter Banner */}
+        {tab === 'home' && section === 'all' && activeCategory && (
+          <div className="active-category-banner">
+            <div className="active-category-info">
+              <span
+                className="active-category-dot"
+                style={{ backgroundColor: CATEGORY_STYLES[activeCategory]?.accent || 'var(--teal)' }}
+              />
+              <span className="active-category-text">
+                Topic: <strong>{CATEGORY_STYLES[activeCategory]?.label || activeCategory}</strong>
+              </span>
+            </div>
+            <div className="active-category-actions">
+              <Link href="/categories" className="active-category-switch-link">
+                All Topics
+              </Link>
+              <button
+                type="button"
+                className="active-category-clear-btn"
+                onClick={() => {
+                  setActiveCategory(null);
+                  loadPosts(null);
+                  if (typeof window !== 'undefined') {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('category');
+                    window.history.replaceState({}, '', url.toString());
+                  }
+                }}
+                aria-label="Clear category filter"
+                title="Show all posts"
+              >
+                <X size={13} />
+                <span>Show all</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {tab === 'home' && section === 'all' && (
           <CreatePostBox
             session={session}
@@ -1625,10 +1675,7 @@ export default function Feed() {
                 onVote={(optionId) => handleVote(p.id, optionId)}
                 isAdmin={isAdmin}
                 onTogglePin={handleTogglePin}
-                onSelectCategory={(catId) => {
-                  setActiveCategory(catId);
-                  loadPosts(catId);
-                }}
+                onSelectCategory={handleFilterCategory}
                 onOpenDirectMessage={() => {
                   setTab('messages');
                 }}

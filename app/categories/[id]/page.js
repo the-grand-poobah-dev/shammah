@@ -39,6 +39,11 @@ export default function CategoryPage() {
           <div>
             <h2 className="cx-cat-hero-title">{cat.label}</h2>
             <p className="cx-cat-hero-blurb">{info.blurb}</p>
+            <div style={{ marginTop: '10px' }}>
+              <Link href={`/?category=${id}`} className="signin-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '6px 14px' }}>
+                View on Home Feed →
+              </Link>
+            </div>
           </div>
         </section>
 

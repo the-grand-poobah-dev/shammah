@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader';
 import { categoryInfo } from '../lib/categoryInfo';
 import { CATEGORY_STYLES } from '../lib/postDisplay';
 import { useSession } from '../lib/useSession';
+import { ArrowLeft, Compass, Sparkles } from 'lucide-react';
 
 export default function CategoriesPage() {
   const { session, loading } = useSession();
@@ -28,17 +29,25 @@ export default function CategoriesPage() {
 
   return (
     <div className="shell">
-      <PageHeader title="Browse categories" />
+      <PageHeader title="Category Topics" backHref="/" />
       <main className="feed">
-        <p className="cx-intro">Every post on Shammah lives in a category. Pick one to see everything shared there.</p>
+        <div className="cx-topics-intro-card">
+          <div className="cx-topics-intro-header">
+            <Compass size={22} className="text-teal" />
+            <h2 className="cx-topics-intro-title">Explore by Category</h2>
+          </div>
+          <p className="cx-intro">
+            Every post on Shammah belongs to a category topic. Pick any category below to immediately discover and filter matching content on your home feed.
+          </p>
+        </div>
 
         <input
           className="cx-search"
           type="search"
-          placeholder="Search categories…"
+          placeholder="Search topics (prayer, testimony, worship, youth...)…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search categories"
+          aria-label="Search category topics"
         />
 
         {!loading && !session && (
@@ -53,16 +62,23 @@ export default function CategoriesPage() {
             return (
               <Link
                 key={id}
-                href={`/categories/${id}`}
+                href={`/?category=${id}`}
                 className="cx-cat-card"
                 style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
+                title={`Filter home feed by ${c.label}`}
               >
-                <span className="cx-cat-emoji" aria-hidden="true">{categoryInfo(id).emoji}</span>
+                <div className="cx-cat-header-row">
+                  <span className="cx-cat-emoji" aria-hidden="true">{categoryInfo(id).emoji}</span>
+                  {n !== undefined && (
+                    <span className="cx-cat-count">{n} post{n !== 1 ? 's' : ''}</span>
+                  )}
+                </div>
                 <span className="cx-cat-name">{c.label}</span>
                 <span className="cx-cat-blurb">{categoryInfo(id).blurb}</span>
-                {n !== undefined && (
-                  <span className="cx-cat-count">{n} post{n !== 1 ? 's' : ''}</span>
-                )}
+                <span className="cx-cat-feed-action">
+                  <span>View on Home Feed</span>
+                  <span aria-hidden="true">→</span>
+                </span>
               </Link>
             );
           })}

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Flame,
   Video,
@@ -12,10 +12,12 @@ import {
   BookOpen,
   Sparkles,
   Gamepad2,
-  DownloadCloud,
+  MoreHorizontal,
+  Compass,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
-import { getOfflineItems } from '../lib/offlineSyncManager';
 
 export const TOP_NAV_SECTIONS = [
   { id: 'all', label: 'All', icon: Flame },
@@ -23,18 +25,40 @@ export const TOP_NAV_SECTIONS = [
   { id: 'podcasts', label: 'Audio', icon: Headphones },
   { id: 'polls', label: 'Polls', icon: BarChart3 },
   { id: 'courses', label: 'Courses', icon: GraduationCap },
-  { id: 'rss', label: 'RSS Feeds', icon: Rss },
-  { id: 'bible', label: 'Bible & Notes', icon: BookOpen },
-  { id: 'challenges', label: 'Challenges', icon: Sparkles },
-  { id: 'games', label: 'Arcade', icon: Gamepad2 },
+  { id: 'rss', label: 'RSS', icon: Rss },
+  { id: 'bible', label: 'Bible', icon: BookOpen },
+];
+
+export const MORE_DROPDOWN_ITEMS = [
+  {
+    id: 'category-topics',
+    label: 'Category Topics',
+    desc: 'Browse topics & filter home feed',
+    icon: Compass,
+    isCategories: true,
+  },
+  {
+    id: 'challenges',
+    label: 'Faith Challenges',
+    desc: 'Daily devotion & video challenges',
+    icon: Sparkles,
+    isSection: true,
+  },
+  {
+    id: 'games',
+    label: 'Arcade Games',
+    desc: 'Bible trivia & scripture arcade',
+    icon: Gamepad2,
+    isSection: true,
+  },
 ];
 
 export default function TopNav({ activeSection = 'all', onSelectSection, isHome = false }) {
   const pathname = usePathname();
   const router = useRouter();
   const [currentSection, setCurrentSection] = useState(activeSection);
-  const scrollRef = useRef(null);
-  const dragRef = useRef({ active: false, startX: 0, startScroll: 0, moved: false });
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
 
   useEffect(() => {
     setCurrentSection(activeSection);
@@ -51,40 +75,38 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
     return () => window.removeEventListener('shammah:section-changed', handleSectionEvent);
   }, []);
 
-  // Offline cached content status tracking
-  const [offlineCount, setOfflineCount] = useState(0);
-  const [recentCachedNotice, setRecentCachedNotice] = useState(false);
-
+  // Reliable outside-click and escape listener
   useEffect(() => {
-    setOfflineCount(getOfflineItems().length);
+    if (!moreOpen) return;
 
-    function onOfflineUpdate(e) {
-      setOfflineCount(getOfflineItems().length);
-      if (e.detail?.action === 'save') {
-        setRecentCachedNotice(true);
-        setTimeout(() => setRecentCachedNotice(false), 4000);
+    function handleOutsideClick(e) {
+      if (moreRef.current && !moreRef.current.contains(e.target)) {
+        setMoreOpen(false);
       }
     }
-    window.addEventListener('shammah:offline-updated', onOfflineUpdate);
-    return () => window.removeEventListener('shammah:offline-updated', onOfflineUpdate);
-  }, []);
 
-  function handleOpenOfflineLibrary(e) {
-    if (dragRef.current.moved) {
-      dragRef.current.moved = false;
-      return;
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        setMoreOpen(false);
+      }
     }
-    e?.stopPropagation();
-    playSound('reaction');
-    window.dispatchEvent(new CustomEvent('shammah:open-offline-library'));
-  }
+
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleOutsideClick);
+      document.addEventListener('touchend', handleOutsideClick);
+      document.addEventListener('keydown', handleKeyDown);
+    }, 15);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleOutsideClick);
+      document.removeEventListener('touchend', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [moreOpen]);
 
   function handleSectionClick(secId) {
-    if (dragRef.current.moved) {
-      dragRef.current.moved = false;
-      return;
-    }
-
+    setMoreOpen(false);
     playSound('reaction');
     setCurrentSection(secId);
 
@@ -96,7 +118,6 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
     window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: secId }));
 
     if (pathname === '/') {
-      // On homepage: update URL query without full reload
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
         if (secId === 'all') {
@@ -107,38 +128,25 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
         window.history.replaceState({}, '', url.toString());
       }
     } else {
-      // On other pages: navigate to homepage with section param
       router.push(secId === 'all' ? '/' : `/?section=${secId}`);
     }
   }
 
-  // Pointer drag to scroll horizontally with no visible scrollbar
-  function onPointerDown(e) {
-    if (!scrollRef.current) return;
-    dragRef.current = {
-      active: true,
-      startX: e.clientX,
-      startScroll: scrollRef.current.scrollLeft,
-      moved: false,
-    };
-  }
+  function handleMoreItemClick(item) {
+    playSound('reaction');
+    setMoreOpen(false);
 
-  function onPointerMove(e) {
-    const d = dragRef.current;
-    if (!d.active || !scrollRef.current) return;
-    const dx = e.clientX - d.startX;
-    if (!d.moved && Math.abs(dx) > 4) {
-      d.moved = true;
-      scrollRef.current.setPointerCapture?.(e.pointerId);
+    if (item.isCategories) {
+      router.push('/categories');
+      return;
     }
-    if (d.moved) {
-      scrollRef.current.scrollLeft = d.startScroll - dx;
+
+    if (item.isSection) {
+      handleSectionClick(item.id);
     }
   }
 
-  function onPointerUp() {
-    dragRef.current.active = false;
-  }
+  const isMoreActive = currentSection === 'challenges' || currentSection === 'games';
 
   return (
     <nav
@@ -147,18 +155,10 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
     >
       <div className="section-menu">
         <div className="section-menu-pill">
-          {/* Rotating neon ring open at two places on the outline of the top bar navigation widget */}
+          {/* Subtle perimeter glow accent */}
           <span className="top-nav-snake-glow" aria-hidden="true" />
 
-          <div
-            ref={scrollRef}
-            className="section-menu-inner no-scrollbar"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            role="tablist"
-          >
+          <div className="section-menu-inner" role="tablist">
             {TOP_NAV_SECTIONS.map((s) => {
               const Icon = s.icon;
               const isActive = currentSection === s.id;
@@ -179,58 +179,104 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                     damping: 24,
                     mass: 0.6,
                   }}
+                  title={s.label}
                 >
                   <motion.span
                     className="top-nav-icon-wrap"
                     animate={isActive ? { scale: [1, 1.18, 1], rotate: [0, -5, 5, 0] } : { scale: 1, rotate: 0 }}
                     transition={{ type: 'spring', stiffness: 450, damping: 20 }}
                   >
-                    <Icon size={19} strokeWidth={isActive ? 2.3 : 1.8} className="top-nav-icon" />
+                    <Icon size={18} strokeWidth={isActive ? 2.3 : 1.8} className="top-nav-icon" />
                   </motion.span>
                   <span className="top-nav-label-small">{s.label}</span>
                 </motion.button>
               );
             })}
 
-            {/* Small status icon informing users when content is successfully cached & available for offline viewing */}
-            <motion.button
-              type="button"
-              role="button"
-              className={`section-item-stacked top-nav-offline-status-btn${offlineCount > 0 ? ' is-cached' : ''}${recentCachedNotice ? ' is-just-cached' : ''}`}
-              onClick={handleOpenOfflineLibrary}
-              whileTap={{ scale: 0.92 }}
-              animate={recentCachedNotice ? { scale: [1, 1.15, 1], y: [0, -3, 0] } : { scale: 1, y: 0 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-              title={
-                offlineCount > 0
-                  ? `✓ ${offlineCount} item${offlineCount > 1 ? 's' : ''} cached & available for offline viewing (30-day storage). Tap to view offline library.`
-                  : 'Offline Library: Download feeds & chapters to view anytime without internet'
-              }
-              aria-label="Offline Cached Content Status"
-            >
-              <motion.span
-                className="top-nav-icon-wrap offline-icon-wrap"
-                animate={recentCachedNotice ? { rotate: [0, -12, 12, 0], scale: [1, 1.25, 1] } : { rotate: 0 }}
-                transition={{ duration: 0.4 }}
+            {/* More Tab with Dropdown Menu containing Category Topics, Challenges & Arcade */}
+            <div className="top-nav-more-container" ref={moreRef}>
+              <motion.button
+                type="button"
+                role="button"
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                aria-label="More options including category topics, challenges, and arcade"
+                className={`section-item-stacked top-nav-more-btn${isMoreActive ? ' active' : ''}${moreOpen ? ' is-open' : ''}`}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  playSound('reaction');
+                  setMoreOpen((prev) => !prev);
+                }}
+                whileTap={{ scale: 0.92 }}
+                title="More: Topics, Challenges & Arcade"
               >
-                <DownloadCloud
-                  size={19}
-                  strokeWidth={offlineCount > 0 ? 2.3 : 1.8}
-                  className={`top-nav-icon${offlineCount > 0 ? ' text-emerald-400' : ' text-slate-400'}`}
-                />
-                {offlineCount > 0 && (
-                  <span className="top-nav-offline-badge" title={`${offlineCount} items cached`}>
-                    {offlineCount}
-                  </span>
+                <motion.span
+                  className="top-nav-icon-wrap"
+                  animate={isMoreActive || moreOpen ? { scale: [1, 1.14, 1] } : { scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 450, damping: 20 }}
+                >
+                  {isMoreActive ? (
+                    currentSection === 'challenges' ? (
+                      <Sparkles size={18} strokeWidth={2.3} className="top-nav-icon" />
+                    ) : (
+                      <Gamepad2 size={18} strokeWidth={2.3} className="top-nav-icon" />
+                    )
+                  ) : (
+                    <MoreHorizontal size={18} strokeWidth={moreOpen ? 2.3 : 1.8} className="top-nav-icon" />
+                  )}
+                </motion.span>
+                <span className="top-nav-label-small flex-center-gap">
+                  <span>{isMoreActive ? (currentSection === 'challenges' ? 'Chall.' : 'Arcade') : 'More'}</span>
+                  <ChevronDown size={10} className={`top-nav-chevron-icon${moreOpen ? ' rotated' : ''}`} />
+                </span>
+              </motion.button>
+
+              <AnimatePresence>
+                {moreOpen && (
+                  <motion.div
+                    className="top-nav-more-dropdown"
+                    role="menu"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                    transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <div className="top-nav-more-header">Explore &amp; Topics</div>
+
+                    {MORE_DROPDOWN_ITEMS.map((item) => {
+                      const ItemIcon = item.icon;
+                      const isItemActive = currentSection === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="menuitem"
+                          className={`top-nav-more-item${isItemActive ? ' is-active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoreItemClick(item);
+                          }}
+                        >
+                          <div className={`top-nav-more-icon-box ${item.id}`}>
+                            <ItemIcon size={17} strokeWidth={2} />
+                          </div>
+                          <div className="top-nav-more-text">
+                            <span className="top-nav-more-title">
+                              <span>{item.label}</span>
+                              {isItemActive && <Check size={14} className="text-teal" />}
+                            </span>
+                            <span className="top-nav-more-desc">{item.desc}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </motion.div>
                 )}
-                {recentCachedNotice && (
-                  <span className="top-nav-offline-ping-dot" />
-                )}
-              </motion.span>
-              <span className="top-nav-label-small">
-                {recentCachedNotice ? 'Cached!' : offlineCount > 0 ? 'Offline ✓' : 'Offline'}
-              </span>
-            </motion.button>
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>

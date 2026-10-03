@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import PostCard from './PostCard';
 import { sortPostsWithPinned, isUserAdmin } from '../lib/pinnedPosts';
@@ -139,6 +140,7 @@ export default function PostList({ session, profile, filter, onRequireSignIn, em
       onVote={(optionId) => handleVote(p.id, optionId)}
       isAdmin={isAdmin}
       onTogglePin={handleTogglePin}
+      onSelectCategory={(catId) => router.push(`/?category=${catId}`)}
     />
   ));
 }

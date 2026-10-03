@@ -149,6 +149,48 @@ a.church-row:active {
   font-weight: 600;
   color: var(--accent-text);
 }
+.cx-topics-intro-card {
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+.cx-topics-intro-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cx-topics-intro-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.cx-cat-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.cx-cat-feed-action {
+  margin-top: auto;
+  padding-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--teal);
+  transition: gap 0.15s ease;
+}
+.cx-cat-card:hover .cx-cat-feed-action {
+  gap: 7px;
+}
 .cx-cat-hero {
   display: flex;
   align-items: center;

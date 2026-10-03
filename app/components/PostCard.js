@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check, Eye, EyeOff, BookOpen, AlertCircle, Sparkles } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { categoryStyle, timeAgo } from '../lib/postDisplay';
@@ -310,6 +311,7 @@ export default function PostCard({
   onSelectCategory,
   onOpenDirectMessage,
 }) {
+  const router = useRouter();
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(null);
   const [shareMsg, setShareMsg] = useState('');
@@ -515,17 +517,30 @@ export default function PostCard({
             <button
               type="button"
               className="category-chip category-chip-interactive"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 playSound('reaction');
-                if (onSelectCategory) {
-                  onSelectCategory(post.category_id);
-                } else {
+                if (post.category_id) {
+                  if (onSelectCategory) {
+                    onSelectCategory(post.category_id);
+                  }
                   window.dispatchEvent(
                     new CustomEvent('shammah:select-category', { detail: post.category_id })
                   );
+                  if (typeof window !== 'undefined') {
+                    if (window.location.pathname === '/') {
+                      const url = new URL(window.location.href);
+                      url.searchParams.set('category', post.category_id);
+                      url.searchParams.delete('section');
+                      window.history.pushState({}, '', url.toString());
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    } else {
+                      router.push(`/?category=${post.category_id}`);
+                    }
+                  }
                 }
               }}
-              title={`View more posts in ${cat.label}`}
+              title={`Filter homepage feed by ${cat.label}`}
             >
               {cat.label}
             </button>

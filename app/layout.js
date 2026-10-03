@@ -22,6 +22,10 @@ const workSans = Work_Sans({
 export const metadata = {
   title: 'Shammah',
   description: 'A shared feed for your church community.',
+  openGraph: {
+    title: 'Shammah',
+    description: 'A shared feed for your church community.',
+  },
 };
 
 export const viewport = {

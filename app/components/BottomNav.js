@@ -289,29 +289,6 @@ export default function BottomNav() {
               </button>
             </div>
 
-            {/* Color Picker Box Palette Row (matches Explore Channels Widget style) */}
-            <div className="plus-color-picker-bar">
-              <span className="plus-color-picker-label">Theme Accent:</span>
-              <div className="plus-color-swatches">
-                {COLOR_PALETTE.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={`plus-color-swatch-box${highlightColor === c.color ? ' active' : ''}`}
-                    style={{ '--swatch-color': c.color }}
-                    onClick={() => {
-                      playSound('reaction');
-                      setHighlightColor(c.color);
-                    }}
-                    title={`Highlight in ${c.label}`}
-                    aria-label={`Highlight in ${c.label}`}
-                  >
-                    <span className="swatch-color-dot" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Circular Pop-Up Shammah AI Chatbot Trigger */}
             <div
               className="circular-bot-popup-hero"
@@ -365,26 +342,6 @@ export default function BottomNav() {
                         <strong>{item.label}</strong>
                         <small>{item.desc}</small>
                       </div>
-
-                      {/* Different-color picker box for highlighted item (matching Explore Channels widget) */}
-                      <button
-                        type="button"
-                        className={`item-color-picker-box${isItemActive ? ' active-picker' : ''}`}
-                        style={{ '--picker-color': effectiveColor }}
-                        title={`Change color for ${item.label} (Current: ${effectiveColor})`}
-                        aria-label={`Color box for ${item.label}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          playSound('reaction');
-                          setActiveHighlightId(item.id);
-                          const idx = COLOR_PALETTE.findIndex((c) => c.color === effectiveColor);
-                          const next = COLOR_PALETTE[(idx + 1) % COLOR_PALETTE.length].color;
-                          setItemCustomColors((prev) => ({ ...prev, [item.id]: next }));
-                          setHighlightColor(next);
-                        }}
-                      >
-                        <span className="picker-box-swatch" style={{ backgroundColor: effectiveColor }} />
-                      </button>
                     </button>
                   </div>
                 );
