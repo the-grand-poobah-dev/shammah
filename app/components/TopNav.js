@@ -16,6 +16,7 @@ import {
   Compass,
   ChevronDown,
   Check,
+  FileText,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 
@@ -30,6 +31,13 @@ export const TOP_NAV_SECTIONS = [
 ];
 
 export const MORE_DROPDOWN_ITEMS = [
+  {
+    id: 'sermon-note',
+    label: 'Take Sermon Note',
+    desc: 'Capture points & view scriptures',
+    icon: FileText,
+    isSermonNote: true,
+  },
   {
     id: 'category-topics',
     label: 'Category Topics',
@@ -58,11 +66,34 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
   const router = useRouter();
   const [currentSection, setCurrentSection] = useState(activeSection);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState({ top: 60, right: 16 });
   const moreRef = useRef(null);
 
   useEffect(() => {
     setCurrentSection(activeSection);
   }, [activeSection]);
+
+  // Keep dropdown accurately positioned under the "More" button without breaking layout
+  useEffect(() => {
+    if (moreOpen && moreRef.current) {
+      function updatePos() {
+        if (!moreRef.current) return;
+        const rect = moreRef.current.getBoundingClientRect();
+        const rightOffset = Math.max(8, window.innerWidth - rect.right);
+        setDropdownPos({
+          top: rect.bottom + 8,
+          right: rightOffset,
+        });
+      }
+      updatePos();
+      window.addEventListener('scroll', updatePos, { passive: true });
+      window.addEventListener('resize', updatePos, { passive: true });
+      return () => {
+        window.removeEventListener('scroll', updatePos);
+        window.removeEventListener('resize', updatePos);
+      };
+    }
+  }, [moreOpen]);
 
   // Sync with global custom event
   useEffect(() => {
@@ -92,15 +123,13 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
     }
 
     const timer = setTimeout(() => {
-      document.addEventListener('click', handleOutsideClick);
-      document.addEventListener('touchend', handleOutsideClick);
+      document.addEventListener('pointerdown', handleOutsideClick);
       document.addEventListener('keydown', handleKeyDown);
-    }, 15);
+    }, 50);
 
     return () => {
       clearTimeout(timer);
-      document.removeEventListener('click', handleOutsideClick);
-      document.removeEventListener('touchend', handleOutsideClick);
+      document.removeEventListener('pointerdown', handleOutsideClick);
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [moreOpen]);
@@ -115,6 +144,7 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
     }
 
     // Dispatch global event for listeners
+    window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
     window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: secId }));
 
     if (pathname === '/') {
@@ -135,6 +165,22 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
   function handleMoreItemClick(item) {
     playSound('reaction');
     setMoreOpen(false);
+
+    if (item.isSermonNote) {
+      if (pathname === '/') {
+        window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+        window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'bible' }));
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('shammah:open-sermon-note'));
+        }, 80);
+        if (typeof window !== 'undefined') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } else {
+        router.push('/?section=bible&note=1');
+      }
+      return;
+    }
 
     if (item.isCategories) {
       router.push('/categories');
@@ -174,17 +220,15 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                   whileTap={{ scale: 0.92 }}
                   animate={isActive ? { scale: [0.96, 1.07, 1], y: [1, -2, 0] } : { scale: 1, y: 0 }}
                   transition={{
-                    type: 'spring',
-                    stiffness: 480,
-                    damping: 24,
-                    mass: 0.6,
+                    duration: 0.28,
+                    ease: [0.25, 1, 0.5, 1],
                   }}
                   title={s.label}
                 >
                   <motion.span
                     className="top-nav-icon-wrap"
                     animate={isActive ? { scale: [1, 1.18, 1], rotate: [0, -5, 5, 0] } : { scale: 1, rotate: 0 }}
-                    transition={{ type: 'spring', stiffness: 450, damping: 20 }}
+                    transition={{ duration: 0.32, ease: 'easeInOut' }}
                   >
                     <Icon size={18} strokeWidth={isActive ? 2.3 : 1.8} className="top-nav-icon" />
                   </motion.span>
@@ -214,7 +258,7 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                 <motion.span
                   className="top-nav-icon-wrap"
                   animate={isMoreActive || moreOpen ? { scale: [1, 1.14, 1] } : { scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 450, damping: 20 }}
+                  transition={{ duration: 0.28, ease: 'easeInOut' }}
                 >
                   {isMoreActive ? (
                     currentSection === 'challenges' ? (
@@ -234,46 +278,59 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
 
               <AnimatePresence>
                 {moreOpen && (
-                  <motion.div
-                    className="top-nav-more-dropdown"
-                    role="menu"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    initial={{ opacity: 0, y: -6, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -6, scale: 0.96 }}
-                    transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                  >
-                    <div className="top-nav-more-header">Explore &amp; Topics</div>
+                  <>
+                    <div
+                      className="top-nav-more-backdrop"
+                      onClick={() => setMoreOpen(false)}
+                      aria-hidden="true"
+                    />
+                    <motion.div
+                      className="top-nav-more-dropdown neon-glow-modal"
+                      role="menu"
+                      style={{
+                        position: 'fixed',
+                        top: dropdownPos.top,
+                        right: dropdownPos.right,
+                        zIndex: 999999,
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                      initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      <div className="top-nav-more-header">Explore &amp; Topics</div>
 
-                    {MORE_DROPDOWN_ITEMS.map((item) => {
-                      const ItemIcon = item.icon;
-                      const isItemActive = currentSection === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="menuitem"
-                          className={`top-nav-more-item${isItemActive ? ' is-active' : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMoreItemClick(item);
-                          }}
-                        >
-                          <div className={`top-nav-more-icon-box ${item.id}`}>
-                            <ItemIcon size={17} strokeWidth={2} />
-                          </div>
-                          <div className="top-nav-more-text">
-                            <span className="top-nav-more-title">
-                              <span>{item.label}</span>
-                              {isItemActive && <Check size={14} className="text-teal" />}
-                            </span>
-                            <span className="top-nav-more-desc">{item.desc}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </motion.div>
+                      {MORE_DROPDOWN_ITEMS.map((item) => {
+                        const ItemIcon = item.icon;
+                        const isItemActive = currentSection === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            role="menuitem"
+                            className={`top-nav-more-item${isItemActive ? ' is-active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoreItemClick(item);
+                            }}
+                          >
+                            <div className={`top-nav-more-icon-box ${item.id}`}>
+                              <ItemIcon size={17} strokeWidth={2} />
+                            </div>
+                            <div className="top-nav-more-text">
+                              <span className="top-nav-more-title">
+                                <span>{item.label}</span>
+                                {isItemActive && <Check size={14} className="text-teal" />}
+                              </span>
+                              <span className="top-nav-more-desc">{item.desc}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  </>
                 )}
               </AnimatePresence>
             </div>

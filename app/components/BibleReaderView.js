@@ -79,14 +79,22 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     function onHighlightsUpdated(e) {
       if (e.detail) setHighlights(e.detail);
     }
+    function onOpenSermonNote() {
+      setShowNotesDrawer(true);
+      handleOpenNewNote();
+      const el = document.getElementById('sermon-notes-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
 
     window.addEventListener('shammah:notes-updated', onNotesUpdated);
     window.addEventListener('shammah:highlights-updated', onHighlightsUpdated);
+    window.addEventListener('shammah:open-sermon-note', onOpenSermonNote);
     return () => {
       window.removeEventListener('shammah:notes-updated', onNotesUpdated);
       window.removeEventListener('shammah:highlights-updated', onHighlightsUpdated);
+      window.removeEventListener('shammah:open-sermon-note', onOpenSermonNote);
     };
-  }, []);
+  }, [currentBook?.name, selectedChapter]);
 
   const verses = useMemo(
     () => getChapterVerses(currentBook.name, selectedChapter, translation),

@@ -4,6 +4,7 @@ import './cx.css'; // categories + churches pages
 import BottomNav from './components/BottomNav';
 import TopNavGlobal from './components/TopNavGlobal';
 import ScrollProgressIndicator from './components/ScrollProgressIndicator';
+import AppClientInit from './components/AppClientInit';
 
 const fraunces = Fraunces({
   subsets: ['latin'],
@@ -39,6 +40,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${workSans.variable}`}>
       <body>
+        <AppClientInit />
         <ScrollProgressIndicator />
         <TopNavGlobal />
         {children}

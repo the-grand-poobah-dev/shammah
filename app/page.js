@@ -12,7 +12,7 @@ import OnboardingWizard from './components/OnboardingWizard';
 import { uploadPostMedia } from './lib/mediaUpload';
 import { sortPostsWithPinned, isUserAdmin, getSampleFeedPosts } from './lib/pinnedPosts';
 import PinIcon from './components/PinIcon';
-import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX, DownloadCloud, X } from 'lucide-react';
+import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX, DownloadCloud, X, Search } from 'lucide-react';
 import TopNav, { TOP_NAV_SECTIONS } from './components/TopNav';
 import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
@@ -974,77 +974,61 @@ export default function Feed() {
     <div className="shell">
       <div className="sticky-header">
         <header className="topbar">
-          {session && !searchOpen && (
-            <button className="icon-btn" aria-label="Search" onClick={() => setSearchOpen(true)}>
-              <svg viewBox="0 0 24 24" className="icon"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
-            </button>
-          )}
+          <button
+            type="button"
+            className="icon-btn search-trigger-btn"
+            aria-label="Search posts, churches, and members"
+            title="Search posts, churches & members (/)"
+            onClick={() => {
+              playSound('reaction');
+              window.dispatchEvent(new CustomEvent('shammah:open-search', { detail: { query: searchTerm || '' } }));
+            }}
+          >
+            <Search size={18} className="icon" />
+          </button>
 
-          {searchOpen ? (
-            <div className="search-row">
-              <input
-                autoFocus
-                className="search-input"
-                placeholder="Search posts…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          <div className="brand">
+            <div className="brand-text-wrap">
+              <h1 className="brand-mark">Shammah</h1>
+              <span className="brand-subtext">The Lord is Here</span>
+            </div>
+          </div>
+
+          <div className="topbar-right">
+            <div className="topbar-toggle-group">
+              {/* Sun icon for light mode / Moon icon for dark mode toggle at same location */}
               <button
-                className="icon-btn"
-                aria-label="Close search"
-                onClick={() => {
-                  setSearchOpen(false);
-                  setSearchTerm('');
-                }}
+                type="button"
+                className={`topbar-toggle-btn theme-toggle-btn ${dark ? 'is-dark' : 'is-light'}`}
+                role="switch"
+                aria-checked={dark}
+                aria-label={dark ? 'Light mode (tap to switch to light mode)' : 'Dark mode (tap to switch to dark mode)'}
+                title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                onClick={handleToggleTheme}
               >
-                ✕
+                {dark ? (
+                  <Moon size={18} className="theme-toggle-icon moon-icon text-amber-300" />
+                ) : (
+                  <Sun size={18} className="theme-toggle-icon sun-icon text-amber-500" />
+                )}
               </button>
-            </div>
-          ) : (
-            <div className="brand">
-              <div className="brand-text-wrap">
-                <h1 className="brand-mark">Shammah</h1>
-                <span className="brand-subtext">The Lord is Here</span>
-              </div>
-            </div>
-          )}
 
-          {!searchOpen && (
-            <div className="topbar-right">
-              <div className="topbar-toggle-group">
-                {/* Sun icon for light mode / Moon icon for dark mode toggle at same location */}
-                <button
-                  type="button"
-                  className={`topbar-toggle-btn theme-toggle-btn ${dark ? 'is-dark' : 'is-light'}`}
-                  role="switch"
-                  aria-checked={dark}
-                  aria-label={dark ? 'Light mode (tap to switch to light mode)' : 'Dark mode (tap to switch to dark mode)'}
-                  title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                  onClick={handleToggleTheme}
-                >
-                  {dark ? (
-                    <Moon size={18} className="theme-toggle-icon moon-icon text-amber-300" />
-                  ) : (
-                    <Sun size={18} className="theme-toggle-icon sun-icon text-amber-500" />
-                  )}
-                </button>
-
-                {/* Sound profile on/off toggle beside it */}
-                <button
-                  type="button"
-                  className={`topbar-toggle-btn sound-toggle-btn ${soundOn ? 'sound-on' : 'sound-off'}`}
-                  role="switch"
-                  aria-checked={soundOn}
-                  aria-label={soundOn ? 'Sound alerts on (tap to mute)' : 'Sound alerts muted (tap to enable)'}
-                  title={soundOn ? 'Mute sound alerts' : 'Enable sound alerts'}
-                  onClick={handleToggleSound}
-                >
-                  {soundOn ? (
-                    <Volume2 size={18} className="sound-toggle-icon sound-icon-active text-rose-500" />
-                  ) : (
-                    <VolumeX size={18} className="sound-toggle-icon sound-icon-muted text-gray-400" />
-                  )}
-                </button>
+              {/* Sound profile on/off toggle beside it */}
+              <button
+                type="button"
+                className={`topbar-toggle-btn sound-toggle-btn ${soundOn ? 'sound-on' : 'sound-off'}`}
+                role="switch"
+                aria-checked={soundOn}
+                aria-label={soundOn ? 'Sound alerts on (tap to mute)' : 'Sound alerts muted (tap to enable)'}
+                title={soundOn ? 'Mute sound alerts' : 'Enable sound alerts'}
+                onClick={handleToggleSound}
+              >
+                {soundOn ? (
+                  <Volume2 size={18} className="sound-toggle-icon sound-icon-active text-amber-600 dark:text-amber-400" />
+                ) : (
+                  <VolumeX size={18} className="sound-toggle-icon sound-icon-muted text-gray-400" />
+                )}
+              </button>
 
                 {/* Small status icon in top navigation bar to inform users when content is cached & available offline */}
                 <button
@@ -1210,7 +1194,6 @@ export default function Feed() {
                 </div>
               )}
             </div>
-          )}
         </header>
 
         {tab === 'home' && (
