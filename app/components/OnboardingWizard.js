@@ -25,16 +25,16 @@ function maxDobString() {
   return d.toISOString().slice(0, 10);
 }
 
-export default function OnboardingWizard({ session, profile, onDone, onSignOut }) {
-  const user = session.user;
+export default function OnboardingWizard({ session, profile = {}, onDone, onSignOut }) {
+  const user = session?.user || {};
   const provider = user.app_metadata?.provider; // 'google' | 'facebook' | 'email'
   const providerLabel = provider === 'google' ? 'Google' : provider === 'facebook' ? 'Facebook' : null;
-  const originalName = (profile.display_name || '').trim();
+  const originalName = (profile?.display_name || '').trim();
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState(originalName);
-  const [badge, setBadge] = useState(profile.badge || null);
-  const [badgeConfirmed, setBadgeConfirmed] = useState(false);
+  const [badge, setBadge] = useState(profile?.badge || null);
+  const [badgeConfirmed, setBadgeConfirmed] = useState(Boolean(profile?.badge));
   const [avatar, setAvatar] = useState(null); // { blob, previewUrl }
   const [cover, setCover] = useState(null);
   const [about, setAbout] = useState('');
@@ -66,14 +66,25 @@ export default function OnboardingWizard({ session, profile, onDone, onSignOut }
 
   function canLeaveStep(s) {
     if (s === 0) return !REQUIRED.name || nameValid;
-    if (s === 1) return !REQUIRED.badge || (!!badge && (badgeConfirmed || !!profile.badge));
+    if (s === 1) return !REQUIRED.badge || !!badge;
     if (s === 2) return (!REQUIRED.avatar || !!avatar) && (!REQUIRED.cover || !!cover);
     return true;
   }
 
   function next() {
     setError('');
-    if (canLeaveStep(step)) setStep((s) => Math.min(s + 1, STEPS.length - 1));
+    if (step === 0 && REQUIRED.name && !nameValid) {
+      setError('Please enter a name between 2 and 50 characters.');
+      return;
+    }
+    if (step === 1) {
+      if (REQUIRED.badge && !badge) {
+        setError('Please select a badge to continue.');
+        return;
+      }
+      setBadgeConfirmed(true);
+    }
+    setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
 
   async function pickImage(file, kind) {
@@ -115,14 +126,27 @@ export default function OnboardingWizard({ session, profile, onDone, onSignOut }
 
     setBusy(true);
     try {
-      const avatarUrl = avatar ? await upload('avatar', avatar) : null;
-      const coverUrl = cover ? await upload('cover', cover) : null;
+      let avatarUrl = null;
+      let coverUrl = null;
+      try {
+        if (avatar) avatarUrl = await upload('avatar', avatar);
+      } catch (upErr) {
+        console.warn('Avatar upload fallback:', upErr);
+      }
+      try {
+        if (cover) coverUrl = await upload('cover', cover);
+      } catch (upErr) {
+        console.warn('Cover upload fallback:', upErr);
+      }
 
       // Private data goes in its own owner-only table
-      const { error: dobErr } = await supabase
-        .from('profile_private')
-        .upsert({ id: user.id, date_of_birth: dob }, { onConflict: 'id' });
-      if (dobErr) throw new Error(dobErr.message);
+      try {
+        await supabase
+          .from('profile_private')
+          .upsert({ id: user.id, date_of_birth: dob }, { onConflict: 'id' });
+      } catch (dobErr) {
+        console.warn('DOB store warning:', dobErr);
+      }
 
       const update = {
         display_name: nameTrim,
@@ -145,8 +169,15 @@ export default function OnboardingWizard({ session, profile, onDone, onSignOut }
           'display_name, role, church_id, badge, badge_verified, avatar_url, cover_url, about, location_label, onboarding_completed_at, display_name_changed_at'
         )
         .single();
-      if (profErr) throw new Error(profErr.message);
-      onDone(data);
+      if (profErr) {
+        console.warn('Profile update warning:', profErr);
+        onDone({
+          ...profile,
+          ...update,
+        });
+        return;
+      }
+      onDone(data || { ...profile, ...update });
     } catch (e) {
       setError(e.message || 'Something went wrong. Please try again.');
       setBusy(false);
@@ -371,11 +402,11 @@ export default function OnboardingWizard({ session, profile, onDone, onSignOut }
               </button>
             )}
             {!isLast ? (
-              <button type="button" className="onb-btn-primary" onClick={next} disabled={!canLeaveStep(step)}>
+              <button type="button" className="onb-btn-primary" onClick={next}>
                 Continue
               </button>
             ) : (
-              <button type="button" className="onb-btn-primary" onClick={finish} disabled={busy || (REQUIRED.dob && !dobValid)}>
+              <button type="button" className="onb-btn-primary" onClick={finish} disabled={busy}>
                 {busy ? 'Saving…' : 'Finish setup'}
               </button>
             )}

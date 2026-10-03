@@ -10,8 +10,51 @@ import {
   ExternalLink,
   Globe,
   Share,
+  FileText,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
+
+async function copyToClipboard(text) {
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (err) {
+    // fallback below
+  }
+  try {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const successful = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return successful;
+  } catch (e) {
+    return false;
+  }
+}
+
+function openSafeUrl(url) {
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch {
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }
+}
 
 export default function ShareMenuModal({
   post,
@@ -19,56 +62,77 @@ export default function ShareMenuModal({
   onOpenWatermark,
   onLinkCopied,
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedText, setCopiedText] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const [activeItem, setActiveItem] = useState(null);
 
   const authorName = post?.profiles?.name || post?.profiles?.display_name || post?.author_name || 'Shammah Member';
-  const postSnippet = post?.text_content ? post.text_content.slice(0, 140) : 'Check out this fellowship post';
+  const postSnippet = post?.text_content ? post.text_content.slice(0, 160) : 'Check out this fellowship publication';
   const shareUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/?post=${post?.id || ''}`
     : `https://shammah.faith/?post=${post?.id || ''}`;
-  const shareText = `"${postSnippet}" — shared by ${authorName} on Shammah: ${shareUrl}`;
+  const shareText = `"${postSnippet}" — ${authorName} on Shammah: ${shareUrl}`;
+
+  function triggerToast(msg, duration = 1500) {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage('');
+    }, duration);
+  }
 
   async function handleCopyLink() {
     playSound('share');
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareUrl);
-      }
-    } catch {}
-    setCopied(true);
+    const success = await copyToClipboard(shareUrl);
+    setCopiedLink(true);
+    triggerToast('Post link copied to clipboard ✓');
     onLinkCopied?.();
     setTimeout(() => {
-      setCopied(false);
+      setCopiedLink(false);
       onClose();
-    }, 900);
+    }, 1100);
+  }
+
+  async function handleCopyText() {
+    playSound('share');
+    const content = post?.text_content || shareText;
+    await copyToClipboard(content);
+    setCopiedText(true);
+    triggerToast('Post content copied to clipboard ✓');
+    setTimeout(() => {
+      setCopiedText(false);
+      onClose();
+    }, 1100);
   }
 
   function handleShareWhatsApp() {
     playSound('reaction');
-    const url = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-    if (typeof window !== 'undefined') {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-    onClose();
+    triggerToast('Opening WhatsApp...');
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+    openSafeUrl(waUrl);
+    setTimeout(() => {
+      onClose();
+    }, 700);
   }
 
   function handleShareTwitter() {
     playSound('reaction');
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
-    if (typeof window !== 'undefined') {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-    onClose();
+    triggerToast('Opening X / Twitter...');
+    const twUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+    openSafeUrl(twUrl);
+    setTimeout(() => {
+      onClose();
+    }, 700);
   }
 
   function handleShareFacebook() {
     playSound('reaction');
-    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
-    if (typeof window !== 'undefined') {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-    onClose();
+    triggerToast('Opening Facebook...');
+    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+    openSafeUrl(fbUrl);
+    setTimeout(() => {
+      onClose();
+    }, 700);
   }
 
   function handleOpenWatermarkCard() {
@@ -100,19 +164,28 @@ export default function ShareMenuModal({
   const SHARE_OPTIONS = [
     {
       id: 'copy',
-      title: copied ? 'Link Copied to Clipboard!' : 'Copy Direct Link',
-      desc: 'Instant URL to this post with link preview',
-      icon: copied ? Check : Copy,
+      title: copiedLink ? 'Link Copied to Clipboard!' : 'Copy Direct Link',
+      desc: 'Instant web URL with preview and author reference',
+      icon: copiedLink ? Check : Copy,
       color: '#06b6d4', // Cyan
-      badge: copied ? 'Copied ✓' : 'Direct Link',
+      badge: copiedLink ? 'Copied ✓' : 'Direct Link',
       action: handleCopyLink,
+    },
+    {
+      id: 'copy-text',
+      title: copiedText ? 'Text Copied to Clipboard!' : 'Copy Post Content',
+      desc: 'Copy full scripture, devotion, or sermon text',
+      icon: copiedText ? Check : FileText,
+      color: '#10b981', // Emerald
+      badge: copiedText ? 'Copied ✓' : 'Text / Bible',
+      action: handleCopyText,
     },
     {
       id: 'whatsapp',
       title: 'Share to WhatsApp',
       desc: 'Send to church groups, Bible study & prayer partners',
       icon: MessageCircle,
-      color: '#10b981', // Emerald Green
+      color: '#22c55e', // Green
       badge: 'WhatsApp',
       action: handleShareWhatsApp,
     },
@@ -122,7 +195,7 @@ export default function ShareMenuModal({
       desc: 'Post scripture, quote & testimony to public feed',
       icon: ExternalLink,
       color: '#0ea5e9', // Sky Blue
-      badge: 'Twitter',
+      badge: 'X / Twitter',
       action: handleShareTwitter,
     },
     {
@@ -158,7 +231,13 @@ export default function ShareMenuModal({
   }
 
   return (
-    <div className="share-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="Share Post">
+    <div
+      className="share-modal-backdrop"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Share Post"
+    >
       <div
         className="share-modal-card neon-glow-modal"
         onClick={(e) => e.stopPropagation()}
@@ -184,19 +263,26 @@ export default function ShareMenuModal({
           </button>
         </div>
 
-        {/* Share Options List */}
+        {/* In-Modal Feedback Toast */}
+        {toastMessage && (
+          <div className="share-modal-toast-banner">
+            <Check size={16} className="text-emerald-400 flex-shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* Share Options List with outline card shadows only on highlighted items */}
         <div className="share-menu-options-list no-scrollbar">
           {SHARE_OPTIONS.map((opt) => {
             const Icon = opt.icon;
-            const isHovered = activeItem === opt.id;
+            const isHighlighted = activeItem === opt.id;
             return (
               <button
                 key={opt.id}
                 type="button"
-                className={`share-menu-item-card${isHovered ? ' is-active' : ''}`}
+                className={`share-menu-item-card${isHighlighted ? ' is-highlighted is-active' : ''}`}
                 style={{
                   '--item-accent': opt.color,
-                  borderColor: isHovered ? opt.color : undefined,
                 }}
                 onMouseEnter={() => setActiveItem(opt.id)}
                 onMouseLeave={() => setActiveItem(null)}
@@ -212,13 +298,7 @@ export default function ShareMenuModal({
                 <div className="share-menu-text-wrap">
                   <div className="share-menu-title-row">
                     <strong>{opt.title}</strong>
-                    <span
-                      className="share-menu-chip"
-                      style={{
-                        color: isHovered ? opt.color : undefined,
-                        borderColor: isHovered ? opt.color : undefined,
-                      }}
-                    >
+                    <span className="share-menu-chip">
                       {opt.badge}
                     </span>
                   </div>
@@ -226,10 +306,10 @@ export default function ShareMenuModal({
                 </div>
 
                 <span
-                  className={`item-color-picker-box${isHovered ? ' active-picker' : ''}`}
+                  className={`item-color-picker-box${isHighlighted ? ' active-picker' : ''}`}
                   style={{ '--picker-color': opt.color }}
                 >
-                  <span className="picker-box-swatch" />
+                  <span className="picker-box-swatch" style={{ background: opt.color }} />
                 </span>
               </button>
             );

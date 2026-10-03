@@ -43,6 +43,24 @@ export default function ProjectionModeModal({
     return () => clearInterval(timer);
   }, []);
 
+  // Prevent background scroll & eliminate screen glitch
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  // Listen to fullscreen changes to sync state accurately
+  useEffect(() => {
+    function onFsChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    }
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
   function formatTimer(secs) {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -52,14 +70,18 @@ export default function ProjectionModeModal({
   // Keyboard navigation for presentation
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+      if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') {
         e.preventDefault();
         handleNextSlide();
       } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
         e.preventDefault();
         handlePrevSlide();
       } else if (e.key === 'f' || e.key === 'F') {
-        toggleFullscreen();
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          toggleFullscreen();
+        }
       } else if (e.key === 'Escape') {
         if (!document.fullscreenElement) {
           onClose();
@@ -68,15 +90,16 @@ export default function ProjectionModeModal({
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentSlideIndex]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSlideIndex, slides.length]);
 
   function toggleFullscreen() {
     playSound('reaction');
     if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen().catch(() => {});
+      containerRef.current?.requestFullscreen?.().catch(() => {});
       setIsFullscreen(true);
     } else {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen?.().catch(() => {});
       setIsFullscreen(false);
     }
   }
@@ -179,26 +202,30 @@ export default function ProjectionModeModal({
         {/* Stage Presenter Controls */}
         <div className="projection-ctrl-col">
           <div className="projection-timer" title="Elapsed service time">
-            <Clock size={14} />
+            <Clock size={13} />
             <span>{formatTimer(elapsedTime)}</span>
           </div>
 
           <button
             type="button"
-            className="projection-btn icon"
+            className={`projection-btn icon${showQrCode ? ' active-toggle' : ''}`}
             onClick={() => setShowQrCode(!showQrCode)}
-            title="Toggle Live Mobile QR Code"
+            title={showQrCode ? 'Hide Live Audience QR' : 'Show Live Audience QR'}
+            aria-label="Toggle QR Code"
           >
-            <QrCode size={16} />
+            <QrCode size={15} />
+            <span className="btn-label-desktop">QR</span>
           </button>
 
           <button
             type="button"
-            className="projection-btn icon"
+            className={`projection-btn icon${showPresenterNotes ? ' active-toggle' : ''}`}
             onClick={() => setShowPresenterNotes(!showPresenterNotes)}
             title="Toggle Presenter Notes"
+            aria-label="Toggle Presenter Notes"
           >
-            {showPresenterNotes ? <EyeOff size={16} /> : <Eye size={16} />}
+            {showPresenterNotes ? <EyeOff size={15} /> : <Eye size={15} />}
+            <span className="btn-label-desktop">Notes</span>
           </button>
 
           <button
@@ -206,8 +233,9 @@ export default function ProjectionModeModal({
             className="projection-btn icon"
             onClick={() => setThemeMode(themeMode === 'sanctuary' ? 'high-contrast' : 'sanctuary')}
             title="Switch Projector Contrast"
+            aria-label="Switch Theme"
           >
-            <Sparkles size={16} />
+            <Sparkles size={15} />
           </button>
 
           <button
@@ -215,8 +243,9 @@ export default function ProjectionModeModal({
             className="projection-btn icon fullscreen-btn"
             onClick={toggleFullscreen}
             title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen (F)'}
+            aria-label="Toggle Fullscreen"
           >
-            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
           </button>
 
           <button
@@ -224,8 +253,9 @@ export default function ProjectionModeModal({
             className="projection-btn exit-btn"
             onClick={onClose}
             title="Exit Projection Mode (Esc)"
+            aria-label="Exit Projection Mode"
           >
-            <X size={16} />
+            <X size={15} />
             <span>Exit</span>
           </button>
         </div>
@@ -333,7 +363,7 @@ export default function ProjectionModeModal({
           </div>
         )}
 
-        {/* Live Audience QR Code Badge (Bottom Right Floating) */}
+        {/* Live Audience QR Code Badge (Docked Non-Overlapping) */}
         {showQrCode && (
           <aside className="projection-qr-overlay" role="complementary" aria-label="Audience Live Sync">
             <div className="qr-box-inner">
@@ -371,6 +401,15 @@ export default function ProjectionModeModal({
                 <span>Join &amp; vote live</span>
                 <span className="qr-link-badge">shammah.faith</span>
               </div>
+              <button
+                type="button"
+                className="qr-dismiss-btn"
+                onClick={() => setShowQrCode(false)}
+                title="Dismiss QR overlay"
+                aria-label="Dismiss QR code"
+              >
+                <X size={14} />
+              </button>
             </div>
           </aside>
         )}
@@ -400,9 +439,10 @@ export default function ProjectionModeModal({
           className="stage-nav-btn prev"
           onClick={handlePrevSlide}
           disabled={currentSlideIndex === 0}
+          aria-label="Previous Slide"
         >
-          <ChevronLeft size={24} />
-          <span>Previous Slide</span>
+          <ChevronLeft size={20} />
+          <span className="stage-nav-text">Previous</span>
         </button>
 
         {/* Slide Progress Indicator Dots */}
@@ -414,6 +454,7 @@ export default function ProjectionModeModal({
               className={`stage-dot${i === currentSlideIndex ? ' active' : ''}`}
               onClick={() => setCurrentSlideIndex(i)}
               title={`Go to slide ${i + 1}`}
+              aria-label={`Slide ${i + 1}`}
             />
           ))}
         </div>
@@ -423,9 +464,10 @@ export default function ProjectionModeModal({
           className="stage-nav-btn next"
           onClick={handleNextSlide}
           disabled={currentSlideIndex === slides.length - 1}
+          aria-label="Next Slide"
         >
-          <span>Next Slide</span>
-          <ChevronRight size={24} />
+          <span className="stage-nav-text">Next</span>
+          <ChevronRight size={20} />
         </button>
       </footer>
     </div>

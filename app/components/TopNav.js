@@ -318,7 +318,6 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                             className={`top-nav-more-item${isItemActive ? ' is-active' : ''}`}
                             style={{
                               '--item-accent': item.color,
-                              borderColor: isItemActive ? item.color : undefined,
                             }}
                             onClick={(e) => {
                               e.stopPropagation();

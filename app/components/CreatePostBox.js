@@ -70,6 +70,9 @@ export default function CreatePostBox({
 }) {
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
+  const [hoveredCat, setHoveredCat] = useState(null);
+  const [hoveredIdent, setHoveredIdent] = useState(null);
+  const [hoveredVis, setHoveredVis] = useState(null);
   const [visibility, setVisibility] = useState('public');
   const [showVisMenu, setShowVisMenu] = useState(false);
   const [categoryError, setCategoryError] = useState(false);
@@ -299,10 +302,16 @@ export default function CreatePostBox({
               type="button"
               className="compose-identity-toggle-btn"
               onClick={() => setShowIdentityMenu((v) => !v)}
-              title="Click to post anonymously or with an auto-generated pseudo name"
+              title="Click to post anonymously, with a pseudonym, or as yourself"
             >
-              <span className="compose-author-name">{currentIdentityName}</span>
-              <ChevronDown size={12} className="identity-chevron" />
+              <MemberName
+                name={currentIdentityName}
+                badge={postIdentity === 'real' ? profile?.badge : null}
+                verified={postIdentity === 'real' ? profile?.badge_verified : false}
+                role={postIdentity === 'real' ? profile?.role : null}
+                nameClassName="compose-author-name post-author"
+              />
+              <ChevronDown size={13} className="identity-chevron" />
             </button>
             <span className="compose-author-sub">
               {postIdentity === 'anonymous'
@@ -318,73 +327,85 @@ export default function CreatePostBox({
 
             {/* Identity Dropdown Menu */}
             {showIdentityMenu && (
-              <div className="compose-identity-dropdown" role="menu">
-                <button
-                  type="button"
-                  className={`ident-opt-btn${postIdentity === 'real' ? ' active' : ''}`}
-                  onClick={() => {
-                    setPostIdentity('real');
-                    setShowIdentityMenu(false);
-                    playSound('reaction');
-                  }}
-                >
-                  <User size={15} />
-                  <div className="ident-opt-text">
-                    <strong>Post as Yourself</strong>
-                    <small>{headerName}</small>
-                  </div>
-                  {postIdentity === 'real' && <Check size={14} className="ident-opt-check" />}
-                </button>
-
-                <button
-                  type="button"
-                  className={`ident-opt-btn${postIdentity === 'anonymous' ? ' active' : ''}`}
-                  onClick={() => {
-                    setPostIdentity('anonymous');
-                    setShowIdentityMenu(false);
-                    playSound('reaction');
-                  }}
-                >
-                  <EyeOff size={15} />
-                  <div className="ident-opt-text">
-                    <strong>Post Anonymously</strong>
-                    <small>Name and avatar hidden from fellowship</small>
-                  </div>
-                  {postIdentity === 'anonymous' && <Check size={14} className="ident-opt-check" />}
-                </button>
-
-                <button
-                  type="button"
-                  className={`ident-opt-btn${postIdentity === 'pseudo' ? ' active' : ''}`}
-                  onClick={() => {
-                    setPostIdentity('pseudo');
-                    setShowIdentityMenu(false);
-                    playSound('reaction');
-                  }}
-                >
-                  <Sparkles size={15} />
-                  <div className="ident-opt-text">
-                    <strong>Auto Pseudo Name</strong>
-                    <small>{pseudoProfile.name}</small>
-                  </div>
-                  {postIdentity === 'pseudo' && <Check size={14} className="ident-opt-check" />}
-                </button>
-
-                {postIdentity === 'pseudo' && (
+              <>
+                <div className="dropdown-fixed-backdrop" onClick={() => setShowIdentityMenu(false)} />
+                <div className="compose-identity-dropdown neon-glow-modal" role="menu">
                   <button
                     type="button"
-                    className="ident-reroll-action-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPseudoProfile(generatePseudoIdentity());
+                    className={`ident-opt-btn${(postIdentity === 'real' || hoveredIdent === 'real') ? ' active is-highlighted' : ''}`}
+                    style={{ '--item-accent': 'var(--teal)' }}
+                    onMouseEnter={() => setHoveredIdent('real')}
+                    onMouseLeave={() => setHoveredIdent(null)}
+                    onClick={() => {
+                      setPostIdentity('real');
+                      setShowIdentityMenu(false);
                       playSound('reaction');
                     }}
                   >
-                    <RefreshCw size={12} />
-                    <span>Generate New Pseudo Name</span>
+                    <User size={15} />
+                    <div className="ident-opt-text">
+                      <strong>Post as Yourself</strong>
+                      <small>{headerName}</small>
+                    </div>
+                    {postIdentity === 'real' && <Check size={14} className="ident-opt-check" />}
                   </button>
-                )}
-              </div>
+
+                  <button
+                    type="button"
+                    className={`ident-opt-btn${(postIdentity === 'anonymous' || hoveredIdent === 'anonymous') ? ' active is-highlighted' : ''}`}
+                    style={{ '--item-accent': '#8b5cf6' }}
+                    onMouseEnter={() => setHoveredIdent('anonymous')}
+                    onMouseLeave={() => setHoveredIdent(null)}
+                    onClick={() => {
+                      setPostIdentity('anonymous');
+                      setShowIdentityMenu(false);
+                      playSound('reaction');
+                    }}
+                  >
+                    <EyeOff size={15} />
+                    <div className="ident-opt-text">
+                      <strong>Post Anonymously</strong>
+                      <small>Name and avatar hidden from fellowship</small>
+                    </div>
+                    {postIdentity === 'anonymous' && <Check size={14} className="ident-opt-check" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`ident-opt-btn${(postIdentity === 'pseudo' || hoveredIdent === 'pseudo') ? ' active is-highlighted' : ''}`}
+                    style={{ '--item-accent': '#f59e0b' }}
+                    onMouseEnter={() => setHoveredIdent('pseudo')}
+                    onMouseLeave={() => setHoveredIdent(null)}
+                    onClick={() => {
+                      setPostIdentity('pseudo');
+                      setShowIdentityMenu(false);
+                      playSound('reaction');
+                    }}
+                  >
+                    <Sparkles size={15} />
+                    <div className="ident-opt-text">
+                      <strong>Auto Pseudo Name</strong>
+                      <small>{pseudoProfile.name}</small>
+                    </div>
+                    {postIdentity === 'pseudo' && <Check size={14} className="ident-opt-check" />}
+                  </button>
+
+                  {postIdentity === 'pseudo' && (
+                    <button
+                      type="button"
+                      className="ident-reroll-action-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPseudoProfile(generatePseudoIdentity());
+                        playSound('reaction');
+                      }}
+                    >
+                      <RefreshCw size={12} />
+                      <span>Generate New Pseudo Name</span>
+                    </button>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -405,33 +426,49 @@ export default function CreatePostBox({
             </button>
 
             {showVisMenu && (
-              <div className="compose-vis-dropdown" role="menu">
-                {VISIBILITY_OPTIONS.map((opt) => {
-                  const OptIcon = VIS_ICONS[opt.id] || Globe;
-                  const isActive = visibility === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      className={`compose-vis-opt-btn${isActive ? ' active' : ''}`}
-                      onClick={() => {
-                        setVisibility(opt.id);
-                        setShowVisMenu(false);
-                        playSound('reaction');
-                      }}
-                    >
-                      <span className="vis-opt-icon">
-                        <OptIcon size={15} />
-                      </span>
-                      <div className="vis-opt-details">
-                        <strong>{opt.label}</strong>
-                        <small>{opt.desc}</small>
-                      </div>
-                      {isActive && <Check size={14} className="vis-opt-check" />}
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                <div className="dropdown-fixed-backdrop" onClick={() => setShowVisMenu(false)} />
+                <div className="compose-vis-dropdown neon-glow-modal" role="menu">
+                  {VISIBILITY_OPTIONS.map((opt) => {
+                    const OptIcon = VIS_ICONS[opt.id] || Globe;
+                    const isActive = visibility === opt.id;
+                    const isHovered = hoveredVis === opt.id;
+                    const isHighlighted = isActive || isHovered;
+                    const accentColor =
+                      opt.id === 'public'
+                        ? 'var(--teal)'
+                        : opt.id === 'church'
+                          ? 'var(--gold)'
+                          : opt.id === 'followers'
+                            ? '#8b5cf6'
+                            : '#ec4899';
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={`compose-vis-opt-btn${isHighlighted ? ' active is-highlighted' : ''}`}
+                        style={{ '--item-accent': accentColor }}
+                        onMouseEnter={() => setHoveredVis(opt.id)}
+                        onMouseLeave={() => setHoveredVis(null)}
+                        onClick={() => {
+                          setVisibility(opt.id);
+                          setShowVisMenu(false);
+                          playSound('reaction');
+                        }}
+                      >
+                        <span className="vis-opt-icon">
+                          <OptIcon size={15} />
+                        </span>
+                        <div className="vis-opt-details">
+                          <strong>{opt.label}</strong>
+                          <small>{opt.desc}</small>
+                        </div>
+                        {isActive && <Check size={14} className="vis-opt-check" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
 
@@ -484,7 +521,7 @@ export default function CreatePostBox({
               ) : (
                 <>
                   <AlertCircle size={14} className="cat-alert-icon" />
-                  <span className="cat-trigger-placeholder">Select a category (Required to post)</span>
+                  <span className="cat-trigger-placeholder">Select a category</span>
                   <ChevronDown size={14} className="cat-chevron" />
                 </>
               )}
@@ -498,17 +535,17 @@ export default function CreatePostBox({
             <div className="category-modal-backdrop" onClick={() => setShowCategoryMenu(false)} />
             <div
               ref={categoryMenuRef}
-              className="category-popover category-modal-sheet"
+              className="category-popover neon-glow-modal category-modal-sheet"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
-              aria-label="Choose post category"
+              aria-label="Select a category"
             >
               <div className="category-popover-header">
                 <div className="category-popover-title-row">
                   <div className="category-popover-title">
                     <Tag size={16} className="cat-popover-icon" />
-                    <span>Select Post Category (Required)</span>
+                    <span>Select a category</span>
                   </div>
                   <button
                     type="button"
@@ -544,18 +581,27 @@ export default function CreatePostBox({
                 </div>
               </div>
 
-              <div className="category-popover-grid">
+              <div className="category-popover-grid no-scrollbar">
                 {filteredCategories.length === 0 ? (
                   <div className="category-popover-empty">No category found matching &quot;{categorySearch}&quot;</div>
                 ) : (
                   filteredCategories.map(([id, c]) => {
                     const isCurrent = composeCategory === id;
+                    const isHovered = hoveredCat === id;
+                    const isHighlighted = isCurrent || isHovered;
                     return (
                       <button
                         key={id}
                         type="button"
-                        className={`cat-popover-item${isCurrent ? ' active' : ''}`}
-                        style={{ '--accent': c.accent, '--accent-soft': c.soft, '--accent-text': c.text }}
+                        className={`cat-popover-item${isHighlighted ? ' active is-highlighted' : ''}`}
+                        style={{
+                          '--accent': c.accent,
+                          '--item-accent': c.accent,
+                          '--accent-soft': c.soft,
+                          '--accent-text': c.text,
+                        }}
+                        onMouseEnter={() => setHoveredCat(id)}
+                        onMouseLeave={() => setHoveredCat(null)}
                         onClick={() => {
                           setComposeCategory(id);
                           setCategoryError(false);
@@ -563,7 +609,7 @@ export default function CreatePostBox({
                           playSound('reaction');
                         }}
                       >
-                        <span className="cat-dot" />
+                        <span className="cat-dot" style={{ background: c.accent }} />
                         <span className="cat-popover-label">{c.label}</span>
                         {isCurrent && <Check size={16} className="cat-check" />}
                       </button>

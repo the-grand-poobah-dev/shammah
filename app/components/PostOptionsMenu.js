@@ -195,17 +195,12 @@ export default function PostOptionsMenu({
                   </div>
                 ) : (
                   <div className="post-options-list no-scrollbar">
-                    {/* Project to Sanctuary Screen (Moved from post engagement bar) */}
+                    {/* Project to Screen (Moved from post engagement bar) */}
                     {onProjectClick && (
                       <button
                         type="button"
                         className={`post-options-item-card${highlightedOptionId === 'project' ? ' is-highlighted' : ''}`}
-                        style={{
-                          '--item-accent': '#06b6d4',
-                          borderColor: highlightedOptionId === 'project' ? '#06b6d4' : 'var(--border)',
-                          background: highlightedOptionId === 'project' ? 'color-mix(in srgb, #06b6d4 12%, var(--surface))' : 'var(--surface)',
-                          boxShadow: highlightedOptionId === 'project' ? '0 0 14px rgba(6, 182, 212, 0.35)' : 'none',
-                        }}
+                        style={{ '--item-accent': '#06b6d4' }}
                         onMouseEnter={() => setHighlightedOptionId('project')}
                         onMouseLeave={() => setHighlightedOptionId(null)}
                         onClick={() => {
@@ -213,27 +208,14 @@ export default function PostOptionsMenu({
                           onProjectClick();
                         }}
                       >
-                        <span
-                          className="post-options-card-icon-wrap"
-                          style={{
-                            '--item-accent': '#06b6d4',
-                            color: '#06b6d4',
-                            background: highlightedOptionId === 'project' ? 'rgba(6, 182, 212, 0.22)' : 'rgba(6, 182, 212, 0.12)',
-                          }}
-                        >
+                        <span className="post-options-card-icon-wrap">
                           <Tv size={17} />
                         </span>
                         <div className="post-options-card-text">
-                          <span className="post-options-card-label">Project to Sanctuary Screen</span>
+                          <span className="post-options-card-label">Project to Screen</span>
                           <span className="post-options-card-sub">Present slides, scriptures &amp; QR code live on stage</span>
                         </div>
-                        <span
-                          className={`item-color-picker-box${highlightedOptionId === 'project' ? ' active-picker' : ''}`}
-                          style={{
-                            '--picker-color': '#06b6d4',
-                            borderColor: highlightedOptionId === 'project' ? '#06b6d4' : 'var(--border)',
-                          }}
-                        >
+                        <span className="item-color-picker-box">
                           <span className="picker-box-swatch" style={{ background: '#06b6d4' }} />
                         </span>
                       </button>
@@ -243,24 +225,12 @@ export default function PostOptionsMenu({
                     <button
                       type="button"
                       className={`post-options-item-card${highlightedOptionId === 'save' ? ' is-highlighted' : ''}`}
-                      style={{
-                        '--item-accent': '#f59e0b',
-                        borderColor: highlightedOptionId === 'save' ? '#f59e0b' : 'var(--border)',
-                        background: highlightedOptionId === 'save' ? 'color-mix(in srgb, #f59e0b 12%, var(--surface))' : 'var(--surface)',
-                        boxShadow: highlightedOptionId === 'save' ? '0 0 14px rgba(245, 158, 11, 0.35)' : 'none',
-                      }}
+                      style={{ '--item-accent': '#f59e0b' }}
                       onMouseEnter={() => setHighlightedOptionId('save')}
                       onMouseLeave={() => setHighlightedOptionId(null)}
                       onClick={handleToggleSave}
                     >
-                      <span
-                        className="post-options-card-icon-wrap"
-                        style={{
-                          '--item-accent': '#f59e0b',
-                          color: '#f59e0b',
-                          background: highlightedOptionId === 'save' ? 'rgba(245, 158, 11, 0.22)' : 'rgba(245, 158, 11, 0.12)',
-                        }}
-                      >
+                      <span className="post-options-card-icon-wrap">
                         {saved ? <BookmarkCheck size={17} /> : <Bookmark size={17} />}
                       </span>
                       <div className="post-options-card-text">
@@ -271,13 +241,7 @@ export default function PostOptionsMenu({
                           {saved ? 'Remove from saved quiet time teachings' : 'Bookmark for personal reflection & study'}
                         </span>
                       </div>
-                      <span
-                        className={`item-color-picker-box${highlightedOptionId === 'save' ? ' active-picker' : ''}`}
-                        style={{
-                          '--picker-color': '#f59e0b',
-                          borderColor: highlightedOptionId === 'save' ? '#f59e0b' : 'var(--border)',
-                        }}
-                      >
+                      <span className="item-color-picker-box">
                         <span className="picker-box-swatch" style={{ background: '#f59e0b' }} />
                       </span>
                     </button>
@@ -286,37 +250,19 @@ export default function PostOptionsMenu({
                     <button
                       type="button"
                       className={`post-options-item-card${highlightedOptionId === 'more' ? ' is-highlighted' : ''}`}
-                      style={{
-                        '--item-accent': '#0d9488',
-                        borderColor: highlightedOptionId === 'more' ? '#0d9488' : 'var(--border)',
-                        background: highlightedOptionId === 'more' ? 'color-mix(in srgb, #0d9488 12%, var(--surface))' : 'var(--surface)',
-                        boxShadow: highlightedOptionId === 'more' ? '0 0 14px rgba(13, 148, 136, 0.35)' : 'none',
-                      }}
+                      style={{ '--item-accent': '#0d9488' }}
                       onMouseEnter={() => setHighlightedOptionId('more')}
                       onMouseLeave={() => setHighlightedOptionId(null)}
                       onClick={handleMoreLikeThis}
                     >
-                      <span
-                        className="post-options-card-icon-wrap"
-                        style={{
-                          '--item-accent': '#0d9488',
-                          color: '#0d9488',
-                          background: highlightedOptionId === 'more' ? 'rgba(13, 148, 136, 0.22)' : 'rgba(13, 148, 136, 0.12)',
-                        }}
-                      >
+                      <span className="post-options-card-icon-wrap">
                         <TrendingUp size={17} />
                       </span>
                       <div className="post-options-card-text">
                         <span className="post-options-card-label">Show more from this topic</span>
                         <span className="post-options-card-sub">Prioritize uplifting content in {categoryLabel || 'this topic'}</span>
                       </div>
-                      <span
-                        className={`item-color-picker-box${highlightedOptionId === 'more' ? ' active-picker' : ''}`}
-                        style={{
-                          '--picker-color': '#0d9488',
-                          borderColor: highlightedOptionId === 'more' ? '#0d9488' : 'var(--border)',
-                        }}
-                      >
+                      <span className="item-color-picker-box">
                         <span className="picker-box-swatch" style={{ background: '#0d9488' }} />
                       </span>
                     </button>
@@ -325,37 +271,19 @@ export default function PostOptionsMenu({
                     <button
                       type="button"
                       className={`post-options-item-card${highlightedOptionId === 'less' ? ' is-highlighted' : ''}`}
-                      style={{
-                        '--item-accent': '#f97316',
-                        borderColor: highlightedOptionId === 'less' ? '#f97316' : 'var(--border)',
-                        background: highlightedOptionId === 'less' ? 'color-mix(in srgb, #f97316 12%, var(--surface))' : 'var(--surface)',
-                        boxShadow: highlightedOptionId === 'less' ? '0 0 14px rgba(249, 115, 22, 0.35)' : 'none',
-                      }}
+                      style={{ '--item-accent': '#f97316' }}
                       onMouseEnter={() => setHighlightedOptionId('less')}
                       onMouseLeave={() => setHighlightedOptionId(null)}
                       onClick={handleLessLikeThis}
                     >
-                      <span
-                        className="post-options-card-icon-wrap"
-                        style={{
-                          '--item-accent': '#f97316',
-                          color: '#f97316',
-                          background: highlightedOptionId === 'less' ? 'rgba(249, 115, 22, 0.22)' : 'rgba(249, 115, 22, 0.12)',
-                        }}
-                      >
+                      <span className="post-options-card-icon-wrap">
                         <TrendingDown size={17} />
                       </span>
                       <div className="post-options-card-text">
                         <span className="post-options-card-label">Show less from this topic</span>
                         <span className="post-options-card-sub">Tune your feed away from {categoryLabel || 'this topic'}</span>
                       </div>
-                      <span
-                        className={`item-color-picker-box${highlightedOptionId === 'less' ? ' active-picker' : ''}`}
-                        style={{
-                          '--picker-color': '#f97316',
-                          borderColor: highlightedOptionId === 'less' ? '#f97316' : 'var(--border)',
-                        }}
-                      >
+                      <span className="item-color-picker-box">
                         <span className="picker-box-swatch" style={{ background: '#f97316' }} />
                       </span>
                     </button>
@@ -364,37 +292,19 @@ export default function PostOptionsMenu({
                     <button
                       type="button"
                       className={`post-options-item-card${highlightedOptionId === 'copy' ? ' is-highlighted' : ''}`}
-                      style={{
-                        '--item-accent': '#0ea5e9',
-                        borderColor: highlightedOptionId === 'copy' ? '#0ea5e9' : 'var(--border)',
-                        background: highlightedOptionId === 'copy' ? 'color-mix(in srgb, #0ea5e9 12%, var(--surface))' : 'var(--surface)',
-                        boxShadow: highlightedOptionId === 'copy' ? '0 0 14px rgba(14, 165, 233, 0.35)' : 'none',
-                      }}
+                      style={{ '--item-accent': '#0ea5e9' }}
                       onMouseEnter={() => setHighlightedOptionId('copy')}
                       onMouseLeave={() => setHighlightedOptionId(null)}
                       onClick={handleCopyLink}
                     >
-                      <span
-                        className="post-options-card-icon-wrap"
-                        style={{
-                          '--item-accent': '#0ea5e9',
-                          color: '#0ea5e9',
-                          background: highlightedOptionId === 'copy' ? 'rgba(14, 165, 233, 0.22)' : 'rgba(14, 165, 233, 0.12)',
-                        }}
-                      >
+                      <span className="post-options-card-icon-wrap">
                         <Copy size={17} />
                       </span>
                       <div className="post-options-card-text">
                         <span className="post-options-card-label">Copy link to post</span>
                         <span className="post-options-card-sub">Share directly with fellow believers</span>
                       </div>
-                      <span
-                        className={`item-color-picker-box${highlightedOptionId === 'copy' ? ' active-picker' : ''}`}
-                        style={{
-                          '--picker-color': '#0ea5e9',
-                          borderColor: highlightedOptionId === 'copy' ? '#0ea5e9' : 'var(--border)',
-                        }}
-                      >
+                      <span className="item-color-picker-box">
                         <span className="picker-box-swatch" style={{ background: '#0ea5e9' }} />
                       </span>
                     </button>
@@ -403,37 +313,19 @@ export default function PostOptionsMenu({
                     <button
                       type="button"
                       className={`post-options-item-card${highlightedOptionId === 'hide' ? ' is-highlighted' : ''}`}
-                      style={{
-                        '--item-accent': '#64748b',
-                        borderColor: highlightedOptionId === 'hide' ? '#64748b' : 'var(--border)',
-                        background: highlightedOptionId === 'hide' ? 'color-mix(in srgb, #64748b 12%, var(--surface))' : 'var(--surface)',
-                        boxShadow: highlightedOptionId === 'hide' ? '0 0 14px rgba(100, 116, 139, 0.35)' : 'none',
-                      }}
+                      style={{ '--item-accent': '#64748b' }}
                       onMouseEnter={() => setHighlightedOptionId('hide')}
                       onMouseLeave={() => setHighlightedOptionId(null)}
                       onClick={handleHidePost}
                     >
-                      <span
-                        className="post-options-card-icon-wrap"
-                        style={{
-                          '--item-accent': '#64748b',
-                          color: '#64748b',
-                          background: highlightedOptionId === 'hide' ? 'rgba(100, 116, 139, 0.22)' : 'rgba(100, 116, 139, 0.12)',
-                        }}
-                      >
+                      <span className="post-options-card-icon-wrap">
                         <EyeOff size={17} />
                       </span>
                       <div className="post-options-card-text">
                         <span className="post-options-card-label">Hide this post</span>
                         <span className="post-options-card-sub">Do not show this specific post in your feed</span>
                       </div>
-                      <span
-                        className={`item-color-picker-box${highlightedOptionId === 'hide' ? ' active-picker' : ''}`}
-                        style={{
-                          '--picker-color': '#64748b',
-                          borderColor: highlightedOptionId === 'hide' ? '#64748b' : 'var(--border)',
-                        }}
-                      >
+                      <span className="item-color-picker-box">
                         <span className="picker-box-swatch" style={{ background: '#64748b' }} />
                       </span>
                     </button>
@@ -443,24 +335,12 @@ export default function PostOptionsMenu({
                       <button
                         type="button"
                         className={`post-options-item-card danger${confirmingBlock ? ' is-confirming' : ''}${highlightedOptionId === 'block' ? ' is-highlighted' : ''}`}
-                        style={{
-                          '--item-accent': '#e11d48',
-                          borderColor: highlightedOptionId === 'block' || confirmingBlock ? '#e11d48' : 'var(--border)',
-                          background: highlightedOptionId === 'block' || confirmingBlock ? 'rgba(225, 29, 72, 0.15)' : 'var(--surface)',
-                          boxShadow: highlightedOptionId === 'block' ? '0 0 14px rgba(225, 29, 72, 0.35)' : 'none',
-                        }}
+                        style={{ '--item-accent': '#e11d48' }}
                         onMouseEnter={() => setHighlightedOptionId('block')}
                         onMouseLeave={() => setHighlightedOptionId(null)}
                         onClick={handleBlockAuthor}
                       >
-                        <span
-                          className="post-options-card-icon-wrap"
-                          style={{
-                            '--item-accent': '#e11d48',
-                            color: '#e11d48',
-                            background: highlightedOptionId === 'block' || confirmingBlock ? 'rgba(225, 29, 72, 0.25)' : 'rgba(225, 29, 72, 0.12)',
-                          }}
-                        >
+                        <span className="post-options-card-icon-wrap">
                           <UserX size={17} />
                         </span>
                         <div className="post-options-card-text">
@@ -469,13 +349,7 @@ export default function PostOptionsMenu({
                           </span>
                           <span className="post-options-card-sub">Hide all posts &amp; interactions from this author</span>
                         </div>
-                        <span
-                          className={`item-color-picker-box${highlightedOptionId === 'block' ? ' active-picker' : ''}`}
-                          style={{
-                            '--picker-color': '#e11d48',
-                            borderColor: highlightedOptionId === 'block' || confirmingBlock ? '#e11d48' : 'var(--border)',
-                          }}
-                        >
+                        <span className="item-color-picker-box">
                           <span className="picker-box-swatch" style={{ background: '#e11d48' }} />
                         </span>
                       </button>
@@ -485,12 +359,7 @@ export default function PostOptionsMenu({
                     <button
                       type="button"
                       className={`post-options-item-card danger${highlightedOptionId === 'report' ? ' is-highlighted' : ''}`}
-                      style={{
-                        '--item-accent': '#ef4444',
-                        borderColor: highlightedOptionId === 'report' ? '#ef4444' : 'var(--border)',
-                        background: highlightedOptionId === 'report' ? 'rgba(239, 68, 68, 0.15)' : 'var(--surface)',
-                        boxShadow: highlightedOptionId === 'report' ? '0 0 14px rgba(239, 68, 68, 0.35)' : 'none',
-                      }}
+                      style={{ '--item-accent': '#ef4444' }}
                       onMouseEnter={() => setHighlightedOptionId('report')}
                       onMouseLeave={() => setHighlightedOptionId(null)}
                       onClick={() => {
@@ -498,27 +367,14 @@ export default function PostOptionsMenu({
                         onReportClick(post);
                       }}
                     >
-                      <span
-                        className="post-options-card-icon-wrap"
-                        style={{
-                          '--item-accent': '#ef4444',
-                          color: '#ef4444',
-                          background: highlightedOptionId === 'report' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(239, 68, 68, 0.12)',
-                        }}
-                      >
+                      <span className="post-options-card-icon-wrap">
                         <Flag size={17} />
                       </span>
                       <div className="post-options-card-text">
                         <span className="post-options-card-label">Report post</span>
                         <span className="post-options-card-sub">Notify church leaders &amp; moderators</span>
                       </div>
-                      <span
-                        className={`item-color-picker-box${highlightedOptionId === 'report' ? ' active-picker' : ''}`}
-                        style={{
-                          '--picker-color': '#ef4444',
-                          borderColor: highlightedOptionId === 'report' ? '#ef4444' : 'var(--border)',
-                        }}
-                      >
+                      <span className="item-color-picker-box">
                         <span className="picker-box-swatch" style={{ background: '#ef4444' }} />
                       </span>
                     </button>

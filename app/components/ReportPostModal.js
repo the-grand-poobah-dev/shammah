@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   Flag,
@@ -58,6 +58,15 @@ export default function ReportPostModal({ post, onClose }) {
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
+  // Prevent background body scrolling to eliminate glitching & jump
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
   if (!post) return null;
 
   function handleSubmit(e) {
@@ -71,8 +80,17 @@ export default function ReportPostModal({ post, onClose }) {
   }
 
   return (
-    <div className="report-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="Report Post">
-      <div className="report-modal-card neon-glow-modal" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="report-modal-backdrop"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Report Fellowship Content"
+    >
+      <div
+        className="report-modal-card neon-glow-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="report-modal-header">
           <div className="report-title-row">
@@ -88,7 +106,7 @@ export default function ReportPostModal({ post, onClose }) {
             type="button"
             className="report-close-btn"
             onClick={onClose}
-            aria-label="Close"
+            aria-label="Close report dialog"
           >
             <X size={17} />
           </button>
@@ -97,7 +115,7 @@ export default function ReportPostModal({ post, onClose }) {
         {submitted ? (
           <div className="report-success-state">
             <div className="report-success-icon-wrap">
-              <ShieldCheck size={42} className="report-success-icon" />
+              <ShieldCheck size={44} className="report-success-icon" />
             </div>
             <h4>Report Received Confidentially</h4>
             <p>
@@ -105,84 +123,92 @@ export default function ReportPostModal({ post, onClose }) {
             </p>
             <button
               type="button"
-              className="signin-btn"
+              className="signin-btn report-done-btn"
               onClick={onClose}
-              style={{ marginTop: 12 }}
             >
               Done
             </button>
           </div>
         ) : (
           <form className="report-form" onSubmit={handleSubmit}>
-            <div className="report-banner-note">
-              <ShieldAlert size={14} className="text-amber-500 flex-shrink-0" />
-              <span>Reports are strictly anonymous and reviewed by ordained church elders.</span>
-            </div>
+            <div className="report-modal-scroll-area">
+              <div className="report-banner-note">
+                <ShieldAlert size={15} className="text-amber-500 flex-shrink-0" />
+                <span>Reports are strictly confidential and reviewed by ordained church elders.</span>
+              </div>
 
-            <div className="report-reasons-list no-scrollbar">
-              {REPORT_REASONS.map((r) => {
-                const isSelected = selectedReason === r.id;
-                const isHovered = hoveredReason === r.id;
-                const isHighlighted = isSelected || isHovered;
-                return (
-                  <label
-                    key={r.id}
-                    className={`report-reason-item${isHighlighted ? ' active' : ''}`}
-                    style={{
-                      '--reason-color': r.color,
-                      borderColor: isHighlighted ? r.color : undefined,
-                    }}
-                    onMouseEnter={() => setHoveredReason(r.id)}
-                    onMouseLeave={() => setHoveredReason(null)}
-                  >
-                    <input
-                      type="radio"
-                      name="reportReason"
-                      value={r.id}
-                      checked={isSelected}
-                      onChange={() => setSelectedReason(r.id)}
-                      className="report-radio-input"
-                    />
-                    <div className="report-reason-text">
-                      <strong style={{ color: isHighlighted ? r.color : undefined }}>
-                        {r.label}
-                      </strong>
-                      <small>{r.desc}</small>
-                    </div>
-
-                    <span
-                      className={`item-color-picker-box${isHighlighted ? ' active-picker' : ''}`}
-                      style={{ '--picker-color': r.color }}
+              <div className="report-reasons-list no-scrollbar">
+                {REPORT_REASONS.map((r) => {
+                  const isSelected = selectedReason === r.id;
+                  const isHovered = hoveredReason === r.id;
+                  const isHighlighted = isSelected || isHovered;
+                  return (
+                    <label
+                      key={r.id}
+                      className={`report-reason-item${isHighlighted ? ' active is-highlighted' : ''}`}
+                      style={{
+                        '--reason-color': r.color,
+                        '--item-accent': r.color,
+                      }}
+                      onMouseEnter={() => setHoveredReason(r.id)}
+                      onMouseLeave={() => setHoveredReason(null)}
                     >
-                      <span className="picker-box-swatch" />
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
+                      <input
+                        type="radio"
+                        name="reportReason"
+                        value={r.id}
+                        checked={isSelected}
+                        onChange={() => setSelectedReason(r.id)}
+                        className="report-radio-input"
+                      />
+                      <div className="report-reason-text">
+                        <strong>
+                          {r.label}
+                        </strong>
+                        <small>{r.desc}</small>
+                      </div>
 
-            <div className="report-notes-wrap">
-              <label htmlFor="report-notes" className="report-notes-label">
-                Additional context or scripture concern (optional):
-              </label>
-              <textarea
-                id="report-notes"
-                rows={2}
-                placeholder="Share any additional details to assist church leaders..."
-                value={additionalNotes}
-                onChange={(e) => setAdditionalNotes(e.target.value)}
-                className="report-textarea"
-                maxLength={300}
-              />
-              <span className="report-char-count">{additionalNotes.length} / 300</span>
+                      <span
+                        className={`item-color-picker-box${isHighlighted ? ' active-picker' : ''}`}
+                        style={{ '--picker-color': r.color }}
+                      >
+                        <span className="picker-box-swatch" style={{ background: r.color }} />
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="report-notes-wrap">
+                <label htmlFor="report-notes" className="report-notes-label">
+                  Additional context or scripture concern (optional):
+                </label>
+                <textarea
+                  id="report-notes"
+                  rows={2}
+                  placeholder="Share any details to assist church moderators..."
+                  value={additionalNotes}
+                  onChange={(e) => setAdditionalNotes(e.target.value)}
+                  className="report-textarea"
+                  maxLength={300}
+                />
+                <span className="report-char-count">{additionalNotes.length} / 300</span>
+              </div>
             </div>
 
             <div className="report-modal-actions">
-              <button type="button" className="report-cancel-btn" onClick={onClose}>
+              <button
+                type="button"
+                className="report-cancel-btn"
+                onClick={onClose}
+              >
                 Cancel
               </button>
-              <button type="submit" className="signin-btn report-submit-btn">
-                Submit Report
+              <button
+                type="submit"
+                className="report-submit-btn"
+              >
+                Submit Confidential Report
               </button>
             </div>
           </form>
