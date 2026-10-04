@@ -9,6 +9,10 @@ const SERVICE_BASE_URLS = {
   classroom: 'https://classroom.googleapis.com/v1',
   tasks: 'https://tasks.googleapis.com/tasks/v1',
   chat: 'https://chat.googleapis.com/v1',
+  slides: 'https://slides.googleapis.com/v1',
+  forms: 'https://forms.googleapis.com/v1',
+  drive: 'https://www.googleapis.com/drive/v3',
+  sheets: 'https://sheets.googleapis.com/v4',
 };
 
 export async function POST(req) {

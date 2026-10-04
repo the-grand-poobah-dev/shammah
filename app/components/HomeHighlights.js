@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Church,
   Users,
@@ -16,6 +17,15 @@ import {
   BarChart3,
   GraduationCap,
   Coins,
+  Calendar,
+  Gamepad2,
+  Rss,
+  MessageCircle,
+  Flame,
+  Tv,
+  DownloadCloud,
+  FileText,
+  Compass,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
@@ -466,22 +476,84 @@ export function TrendingReelsCard({ onSelectSection }) {
 }
 
 export function ExploreTabsBanner({ onSelectSection }) {
-  const SECTIONS = [
-    { id: 'bible', label: 'Holy Bible', icon: BookOpen, color: '#10b981', desc: 'Read scripture & daily plan' },
-    { id: 'podcasts', label: 'Audio & Songs', icon: Headphones, color: '#f59e0b', desc: 'Worship music & sermons' },
-    { id: 'polls', label: 'Church Polls', icon: BarChart3, color: '#06b6d4', desc: 'Vote & share perspective' },
-    { id: 'courses', label: 'Discipleship', icon: GraduationCap, color: '#8b5cf6', desc: 'Biblical growth academy' },
+  const router = useRouter();
+  const { ref, onPointerDown, onPointerMove, onPointerUp, dragInfo } = useDragScroll();
+
+  const SHORTCUTS = [
+    { id: 'bible', label: 'Holy Bible', icon: BookOpen, color: '#10b981', desc: 'Read scripture & daily plan', type: 'section' },
+    { id: 'podcasts', label: 'Audio & Songs', icon: Headphones, color: '#f59e0b', desc: 'Worship music & sermons', type: 'section' },
+    { id: 'polls', label: 'Church Polls', icon: BarChart3, color: '#06b6d4', desc: 'Vote & share perspective', type: 'section' },
+    { id: 'courses', label: 'Discipleship', icon: GraduationCap, color: '#8b5cf6', desc: 'Biblical growth academy', type: 'section' },
+    { id: 'videos', label: 'Videos & Reels', icon: Video, color: '#ec4899', desc: 'Watch sermons & testimonies', type: 'section' },
+    { id: 'workspace', label: 'Workspace Hub', icon: Calendar, color: '#0ea5e9', desc: 'Slides, Forms, Keep & Meet', type: 'section' },
+    { id: 'challenges', label: 'Faith Challenges', icon: Sparkles, color: '#a855f7', desc: 'Daily devotion challenges', type: 'section' },
+    { id: 'games', label: 'Faith Arcade', icon: Gamepad2, color: '#14b8a6', desc: 'Bible trivia & youth games', type: 'section' },
+    { id: 'rss', label: 'Christian RSS', icon: Rss, color: '#f97316', desc: 'Global articles & podcasts', type: 'section' },
+    { id: 'churches', label: 'Institutions & Map', icon: Church, color: '#059669', desc: 'Find churches & live routes', type: 'tab', target: 'churches' },
+    { id: 'messages', label: 'Fellowship Inbox', icon: MessageCircle, color: '#3b82f6', desc: 'Direct & group messages', type: 'tab', target: 'messages' },
+    { id: 'chatbot', label: 'Shammah AI', icon: Flame, color: '#eab308', desc: 'Pastoral study companion', type: 'event', event: 'shammah:open-chatbot' },
+    { id: 'projection', label: 'Sanctuary Screen', icon: Tv, color: '#6366f1', desc: 'Project verses & courses', type: 'event', event: 'shammah:open-projection', detail: { type: 'course' } },
+    { id: 'offline', label: 'Offline Library', icon: DownloadCloud, color: '#10b981', desc: 'Saved chapters & feeds', type: 'event', event: 'shammah:open-offline-library' },
+    { id: 'sermon-note', label: 'Sermon Notes', icon: FileText, color: '#d97706', desc: 'Capture points & verses', type: 'sermon-note' },
+    { id: 'categories', label: 'Browse Topics', icon: Compass, color: '#0d9488', desc: 'Filter feed by category', type: 'route', href: '/categories' },
   ];
+
+  function handleShortcutClick(item) {
+    if (dragInfo.current.hasMoved) {
+      dragInfo.current.hasMoved = false;
+      return;
+    }
+    playSound('reaction');
+
+    if (item.type === 'section') {
+      onSelectSection?.(item.id);
+      window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+      window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: item.id }));
+      return;
+    }
+
+    if (item.type === 'tab') {
+      window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: item.target }));
+      return;
+    }
+
+    if (item.type === 'event') {
+      window.dispatchEvent(new CustomEvent(item.event, { detail: item.detail }));
+      return;
+    }
+
+    if (item.type === 'sermon-note') {
+      onSelectSection?.('bible');
+      window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+      window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'bible' }));
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('shammah:open-sermon-note'));
+      }, 80);
+      return;
+    }
+
+    if (item.type === 'route' && item.href) {
+      router.push(item.href);
+    }
+  }
 
   return (
     <div className="explore-tabs-banner">
       <div className="banner-top-row">
         <Sparkles size={16} className="banner-sparkle-icon" />
-        <span>Explore Shammah Fellowship Channels</span>
+        <span>Explore Shammah</span>
       </div>
 
-      <div className="explore-tabs-grid">
-        {SECTIONS.map((sec) => {
+      <div
+        ref={ref}
+        className="explore-tabs-grid no-scrollbar"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onMouseLeave={onPointerUp}
+      >
+        {SHORTCUTS.map((sec) => {
           const Icon = sec.icon;
           return (
             <button
@@ -489,7 +561,7 @@ export function ExploreTabsBanner({ onSelectSection }) {
               type="button"
               className="explore-channel-card"
               style={{ '--sec-color': sec.color }}
-              onClick={() => onSelectSection?.(sec.id)}
+              onClick={() => handleShortcutClick(sec)}
             >
               <span className="channel-icon-wrap">
                 <Icon size={18} />

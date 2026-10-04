@@ -271,11 +271,13 @@ export function getFeedCacheMeta() {
  * Hook: Tracks browser online/offline connectivity state AND Service Worker network loss detection
  */
 export function useOnlineStatus() {
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
-  );
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      setIsOnline(navigator.onLine);
+    }
+
     const handleOnline = () => {
       setIsOnline(true);
       clearPendingSyncQueue();

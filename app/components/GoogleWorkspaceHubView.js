@@ -22,6 +22,9 @@ import {
   Heart,
   BookOpen,
   Users,
+  Presentation,
+  FileSpreadsheet,
+  ListChecks,
 } from 'lucide-react';
 import {
   initAuth,
@@ -41,9 +44,11 @@ import { playSound } from '../lib/soundEffects';
 
 const HUB_TABS = [
   { id: 'calendar', label: 'Google Calendar', icon: Calendar, color: '#3b82f6' },
+  { id: 'slides', label: 'Google Slides', icon: Presentation, color: '#f97316' },
+  { id: 'forms', label: 'Google Forms', icon: FileSpreadsheet, color: '#a855f7' },
+  { id: 'keep', label: 'Google Keep', icon: StickyNote, color: '#eab308' },
   { id: 'meet', label: 'Google Meet', icon: Video, color: '#10b981' },
   { id: 'classroom', label: 'Classroom', icon: GraduationCap, color: '#f59e0b' },
-  { id: 'keep', label: 'Keep & Notes', icon: StickyNote, color: '#eab308' },
   { id: 'tasks', label: 'Google Tasks', icon: CheckSquare, color: '#06b6d4' },
   { id: 'chat', label: 'Google Chat', icon: MessageSquare, color: '#8b5cf6' },
   { id: 'firebase', label: 'Live Prayer Cloud', icon: Flame, color: '#ec4899' },
@@ -87,6 +92,25 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
   const [noteTitle, setNoteTitle] = useState('');
   const [noteScripture, setNoteScripture] = useState('');
   const [noteBody, setNoteBody] = useState('');
+  const [keepNoteMode, setKeepNoteMode] = useState('text'); // 'text' | 'checklist'
+  const [keepChecklistInput, setKeepChecklistInput] = useState('');
+
+  // Google Slides State
+  const [presentations, setPresentations] = useState([]);
+  const [selectedPresentationId, setSelectedPresentationId] = useState('');
+  const [selectedPresentation, setSelectedPresentation] = useState(null);
+  const [newDeckTitle, setNewDeckTitle] = useState('');
+  const [newSlideHeading, setNewSlideHeading] = useState('');
+  const [newSlideBody, setNewSlideBody] = useState('');
+
+  // Google Forms State
+  const [formsList, setFormsList] = useState([]);
+  const [selectedFormId, setSelectedFormId] = useState('');
+  const [selectedFormDetail, setSelectedFormDetail] = useState(null);
+  const [selectedFormResponses, setSelectedFormResponses] = useState([]);
+  const [newFormTitle, setNewFormTitle] = useState('');
+  const [newFormDescription, setNewFormDescription] = useState('');
+  const [newFormQuestion, setNewFormQuestion] = useState('Will you attend Sunday Fellowship Service?');
 
   // Google Tasks State
   const [taskLists, setTaskLists] = useState([]);
@@ -181,6 +205,28 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
           if (list.length > 0 && !selectedCourseId) {
             setSelectedCourseId(list[0].id);
           }
+        } else if (tabId === 'slides') {
+          const q = encodeURIComponent("mimeType='application/vnd.google-apps.presentation' and trashed=false");
+          const data = await callWorkspaceApi(
+            'drive',
+            `/files?q=${q}&pageSize=15&orderBy=modifiedTime desc&fields=files(id,name,webViewLink,modifiedTime)`
+          );
+          const files = data.files || [];
+          setPresentations(files);
+          if (files.length > 0 && !selectedPresentationId) {
+            setSelectedPresentationId(files[0].id);
+          }
+        } else if (tabId === 'forms') {
+          const q = encodeURIComponent("mimeType='application/vnd.google-apps.form' and trashed=false");
+          const data = await callWorkspaceApi(
+            'drive',
+            `/files?q=${q}&pageSize=15&orderBy=modifiedTime desc&fields=files(id,name,webViewLink,modifiedTime)`
+          );
+          const files = data.files || [];
+          setFormsList(files);
+          if (files.length > 0 && !selectedFormId) {
+            setSelectedFormId(files[0].id);
+          }
         } else if (tabId === 'keep') {
           try {
             const data = await callWorkspaceApi('keep', '/notes?pageSize=15');
@@ -211,7 +257,7 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         setLoadingData(false);
       }
     },
-    [activeTab, callWorkspaceApi, selectedCourseId, selectedSpaceName]
+    [activeTab, callWorkspaceApi, selectedCourseId, selectedSpaceName, selectedPresentationId, selectedFormId]
   );
 
   useEffect(() => {
@@ -270,6 +316,28 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         .catch(() => setChatMessages([]));
     }
   }, [activeTab, needsAuth, token, selectedSpaceName, callWorkspaceApi]);
+
+  // Load selected Google Slides presentation details
+  useEffect(() => {
+    if (!needsAuth && token && activeTab === 'slides' && selectedPresentationId) {
+      callWorkspaceApi('slides', `/presentations/${encodeURIComponent(selectedPresentationId)}`)
+        .then((data) => setSelectedPresentation(data))
+        .catch(() => setSelectedPresentation(null));
+    }
+  }, [activeTab, needsAuth, token, selectedPresentationId, callWorkspaceApi]);
+
+  // Load selected Google Form structure & responses
+  useEffect(() => {
+    if (!needsAuth && token && activeTab === 'forms' && selectedFormId) {
+      Promise.all([
+        callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}`).catch(() => null),
+        callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}/responses`).catch(() => ({ responses: [] })),
+      ]).then(([formDoc, respDoc]) => {
+        setSelectedFormDetail(formDoc);
+        setSelectedFormResponses(respDoc?.responses || []);
+      });
+    }
+  }, [activeTab, needsAuth, token, selectedFormId, callWorkspaceApi]);
 
   async function handleLogin() {
     setIsLoggingIn(true);
@@ -436,35 +504,358 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
     });
   }
 
+  // ---------------- Google Slides Handlers ----------------
+  function handleCreateSlideDeck(e) {
+    e.preventDefault();
+    if (!newDeckTitle.trim()) return;
+    requestConfirmation({
+      title: 'Create Google Slides Presentation?',
+      description: `Create a new Google Slides presentation "${newDeckTitle.trim()}" in your Google Drive?`,
+      confirmLabel: 'Create Presentation',
+      onConfirm: async () => {
+        try {
+          setLoadingData(true);
+          const created = await callWorkspaceApi('slides', '/presentations', 'POST', {
+            title: newDeckTitle.trim(),
+          });
+          setNewDeckTitle('');
+          showBanner('Google Slides presentation created!');
+          await loadActiveTabData('slides');
+          if (created?.presentationId) {
+            setSelectedPresentationId(created.presentationId);
+            setSelectedPresentation(created);
+          }
+        } catch (err) {
+          showBanner(err.message, true);
+        } finally {
+          setLoadingData(false);
+        }
+      },
+    });
+  }
+
+  function handleAppendSlideToDeck(e) {
+    e.preventDefault();
+    if (!selectedPresentationId || !newSlideHeading.trim()) return;
+    requestConfirmation({
+      title: 'Add Slide to Google Slides Deck?',
+      description: `Insert a new slide titled "${newSlideHeading.trim()}" into the selected Google Slides presentation?`,
+      confirmLabel: 'Add Slide',
+      onConfirm: async () => {
+        try {
+          setLoadingData(true);
+          const slideObjId = `slide_${Date.now()}`;
+          const titleBoxId = `title_${Date.now()}`;
+          const bodyBoxId = `body_${Date.now()}`;
+          const requests = [
+            {
+              createSlide: {
+                objectId: slideObjId,
+                slideLayoutReference: { predefinedLayout: 'BLANK' },
+              },
+            },
+            {
+              createShape: {
+                objectId: titleBoxId,
+                shapeType: 'TEXT_BOX',
+                elementProperties: {
+                  pageObjectId: slideObjId,
+                  size: {
+                    height: { magnitude: 60, unit: 'PT' },
+                    width: { magnitude: 600, unit: 'PT' },
+                  },
+                  transform: {
+                    scaleX: 1,
+                    scaleY: 1,
+                    translateX: 50,
+                    translateY: 40,
+                    unit: 'PT',
+                  },
+                },
+              },
+            },
+            {
+              insertText: {
+                objectId: titleBoxId,
+                insertionIndex: 0,
+                text: newSlideHeading.trim(),
+              },
+            },
+          ];
+
+          if (newSlideBody.trim()) {
+            requests.push(
+              {
+                createShape: {
+                  objectId: bodyBoxId,
+                  shapeType: 'TEXT_BOX',
+                  elementProperties: {
+                    pageObjectId: slideObjId,
+                    size: {
+                      height: { magnitude: 220, unit: 'PT' },
+                      width: { magnitude: 600, unit: 'PT' },
+                    },
+                    transform: {
+                      scaleX: 1,
+                      scaleY: 1,
+                      translateX: 50,
+                      translateY: 120,
+                      unit: 'PT',
+                    },
+                  },
+                },
+              },
+              {
+                insertText: {
+                  objectId: bodyBoxId,
+                  insertionIndex: 0,
+                  text: newSlideBody.trim(),
+                },
+              }
+            );
+          }
+
+          await callWorkspaceApi(
+            'slides',
+            `/presentations/${encodeURIComponent(selectedPresentationId)}:batchUpdate`,
+            'POST',
+            { requests }
+          );
+          setNewSlideHeading('');
+          setNewSlideBody('');
+          showBanner('Worship / Scripture slide added to presentation!');
+          const updated = await callWorkspaceApi(
+            'slides',
+            `/presentations/${encodeURIComponent(selectedPresentationId)}`
+          );
+          setSelectedPresentation(updated);
+        } catch (err) {
+          showBanner(err.message, true);
+        } finally {
+          setLoadingData(false);
+        }
+      },
+    });
+  }
+
+  function handleDeletePresentation(deck) {
+    requestConfirmation({
+      title: 'Delete Google Slides Presentation?',
+      description: `Are you sure you want to permanently delete "${deck.name}" from your Google Drive?`,
+      confirmLabel: 'Delete Presentation',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          setLoadingData(true);
+          await callWorkspaceApi('drive', `/files/${encodeURIComponent(deck.id)}`, 'DELETE');
+          showBanner('Presentation deleted.');
+          if (selectedPresentationId === deck.id) {
+            setSelectedPresentationId('');
+            setSelectedPresentation(null);
+          }
+          await loadActiveTabData('slides');
+        } catch (err) {
+          showBanner(err.message, true);
+        } finally {
+          setLoadingData(false);
+        }
+      },
+    });
+  }
+
+  // ---------------- Google Forms Handlers ----------------
+  function handleCreateGoogleForm(e) {
+    e.preventDefault();
+    if (!newFormTitle.trim()) return;
+    requestConfirmation({
+      title: 'Create Google Form?',
+      description: `Create a new Google Form "${newFormTitle.trim()}" for your church community?`,
+      confirmLabel: 'Create Form',
+      onConfirm: async () => {
+        try {
+          setLoadingData(true);
+          const created = await callWorkspaceApi('forms', '/forms', 'POST', {
+            info: {
+              title: newFormTitle.trim(),
+              documentTitle: newFormTitle.trim(),
+            },
+          });
+
+          const formId = created?.formId;
+          if (formId && (newFormDescription.trim() || newFormQuestion.trim())) {
+            const batchRequests = [];
+            if (newFormDescription.trim()) {
+              batchRequests.push({
+                updateFormInfo: {
+                  info: {
+                    title: newFormTitle.trim(),
+                    description: newFormDescription.trim(),
+                  },
+                  updateMask: 'description',
+                },
+              });
+            }
+            if (newFormQuestion.trim()) {
+              batchRequests.push({
+                createItem: {
+                  item: {
+                    title: newFormQuestion.trim(),
+                    questionItem: {
+                      question: {
+                        required: true,
+                        textQuestion: { paragraph: false },
+                      },
+                    },
+                  },
+                  location: { index: 0 },
+                },
+              });
+            }
+            if (batchRequests.length > 0) {
+              await callWorkspaceApi('forms', `/forms/${encodeURIComponent(formId)}:batchUpdate`, 'POST', {
+                requests: batchRequests,
+              });
+            }
+          }
+
+          setNewFormTitle('');
+          setNewFormDescription('');
+          showBanner('Google Form created and configured!');
+          await loadActiveTabData('forms');
+          if (formId) {
+            setSelectedFormId(formId);
+          }
+        } catch (err) {
+          showBanner(err.message, true);
+        } finally {
+          setLoadingData(false);
+        }
+      },
+    });
+  }
+
+  function handleAddQuestionToSelectedForm(e) {
+    e.preventDefault();
+    if (!selectedFormId || !newFormQuestion.trim()) return;
+    requestConfirmation({
+      title: 'Add Question to Google Form?',
+      description: `Add question "${newFormQuestion.trim()}" to the selected Google Form?`,
+      confirmLabel: 'Add Question',
+      onConfirm: async () => {
+        try {
+          setLoadingData(true);
+          await callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}:batchUpdate`, 'POST', {
+            requests: [
+              {
+                createItem: {
+                  item: {
+                    title: newFormQuestion.trim(),
+                    questionItem: {
+                      question: {
+                        required: false,
+                        textQuestion: { paragraph: true },
+                      },
+                    },
+                  },
+                  location: { index: 0 },
+                },
+              },
+            ],
+          });
+          showBanner('Question added to Google Form!');
+          const updated = await callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}`);
+          setSelectedFormDetail(updated);
+        } catch (err) {
+          showBanner(err.message, true);
+        } finally {
+          setLoadingData(false);
+        }
+      },
+    });
+  }
+
+  function handleDeleteGoogleForm(formFile) {
+    requestConfirmation({
+      title: 'Delete Google Form?',
+      description: `Are you sure you want to permanently delete "${formFile.name}" from your Google Drive?`,
+      confirmLabel: 'Delete Form',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          setLoadingData(true);
+          await callWorkspaceApi('drive', `/files/${encodeURIComponent(formFile.id)}`, 'DELETE');
+          showBanner('Google Form deleted.');
+          if (selectedFormId === formFile.id) {
+            setSelectedFormId('');
+            setSelectedFormDetail(null);
+            setSelectedFormResponses([]);
+          }
+          await loadActiveTabData('forms');
+        } catch (err) {
+          showBanner(err.message, true);
+        } finally {
+          setLoadingData(false);
+        }
+      },
+    });
+  }
+
   // ---------------- Google Keep & Firestore Ministry Notes Handlers ----------------
   function handleCreateNote(e) {
     e.preventDefault();
-    if (!noteTitle.trim() || !noteBody.trim()) return;
+    const isChecklist = keepNoteMode === 'checklist';
+    const rawContent = isChecklist ? keepChecklistInput.trim() : noteBody.trim();
+    if (!noteTitle.trim() || !rawContent) return;
     requestConfirmation({
-      title: 'Save Sermon & Ministry Note?',
+      title: isChecklist ? 'Save Google Keep Checklist?' : 'Save Sermon & Ministry Note?',
       description: `Save "${noteTitle.trim()}" to your Google Keep & Firebase Cloud Ministry Notes?`,
       confirmLabel: 'Save Note',
       onConfirm: async () => {
         try {
           setLoadingData(true);
+          const formattedBody = isChecklist
+            ? rawContent
+                .split('\n')
+                .map((l) => l.trim())
+                .filter(Boolean)
+                .map((l) => `☐ ${l}`)
+                .join('\n')
+            : rawContent;
+
           // Save to Firestore Cloud Ministry Notes
           await saveMinistryNoteToFirestore({
             title: noteTitle.trim(),
             scriptureRef: noteScripture.trim(),
-            body: noteBody.trim(),
+            body: formattedBody,
           });
-          // Also attempt to create in Google Keep API if token is active
+          // Also create in Google Keep API if token is active
           if (token) {
             try {
+              const keepBody = isChecklist
+                ? {
+                    list: {
+                      listItems: rawContent
+                        .split('\n')
+                        .map((l) => l.trim())
+                        .filter(Boolean)
+                        .slice(0, 50)
+                        .map((line) => ({
+                          text: { text: line },
+                          checked: false,
+                        })),
+                    },
+                  }
+                : {
+                    text: {
+                      text: noteScripture.trim()
+                        ? `[${noteScripture.trim()}]\n${rawContent}`
+                        : rawContent,
+                    },
+                  };
+
               await callWorkspaceApi('keep', '/notes', 'POST', {
                 title: noteTitle.trim(),
-                body: {
-                  text: {
-                    text: noteScripture.trim()
-                      ? `[${noteScripture.trim()}]\n${noteBody.trim()}`
-                      : noteBody.trim(),
-                  },
-                },
+                body: keepBody,
               });
               await loadActiveTabData('keep');
             } catch {
@@ -474,7 +865,8 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
           setNoteTitle('');
           setNoteScripture('');
           setNoteBody('');
-          showBanner('Sermon note synced to Cloud & Google Keep!');
+          setKeepChecklistInput('');
+          showBanner('Note synced to Google Keep & Cloud Notes!');
         } catch (err) {
           showBanner(err.message, true);
         } finally {
@@ -690,7 +1082,7 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         </div>
         <h1 className="inst-hero-title">Connected Fellowship Workspace</h1>
         <p className="inst-hero-sub">
-          Manage Church Calendar events, host instant Google Meet prayer rooms, coordinate Google Classroom discipleship, track Google Tasks &amp; Keep sermon notes, chat in Spaces, and share live prayers on Firebase Firestore.
+          Manage Church Calendar events, build Google Slides worship decks, collect Google Forms RSVPs &amp; surveys, capture Google Keep sermon notes &amp; checklists, host Google Meet prayer rooms, coordinate Google Classroom discipleship, track Google Tasks, chat in Spaces, and share live prayers on Firebase Firestore.
         </p>
 
         {/* Official Google Sign-In / Connected Bar */}
@@ -926,6 +1318,378 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                       );
                     })}
                   </div>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* TAB 1B: GOOGLE SLIDES */}
+      {activeTab === 'slides' && (
+        <section className="inst-shelf-section">
+          <div className="inst-shelf-header">
+            <div className="shelf-title-wrap">
+              <Presentation size={18} className="text-orange-400" />
+              <h3>Google Slides — Worship Lyric Decks &amp; Sermon Presentations</h3>
+            </div>
+            <span className="shelf-hint">Create, edit &amp; project Google Slides presentations</span>
+          </div>
+
+          {needsAuth ? (
+            <div className="empty-state">
+              <h2>Sign in with Google to manage Google Slides</h2>
+              <p>Connect your Google account above to browse worship decks, create sermon presentations, and insert scripture slides.</p>
+            </div>
+          ) : (
+            <div className="inst-recommendations-grid">
+              <div className="inst-rec-card">
+                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
+                  Your Google Slides Decks ({presentations.length})
+                </h4>
+                {presentations.length === 0 ? (
+                  <p className="rec-about" style={{ marginBottom: 12 }}>
+                    No Google Slides presentations found in your Drive. Create your first sermon or worship deck below!
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14, maxHeight: 220, overflowY: 'auto' }}>
+                    {presentations.map((deck) => (
+                      <div
+                        key={deck.id}
+                        onClick={() => setSelectedPresentationId(deck.id)}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          cursor: 'pointer',
+                          background:
+                            selectedPresentationId === deck.id ? 'rgba(249,115,22,0.18)' : 'rgba(148,163,184,0.08)',
+                          border:
+                            selectedPresentationId === deck.id ? '1px solid #f97316' : '1px solid transparent',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <strong style={{ display: 'block', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {deck.name}
+                          </strong>
+                          <span style={{ fontSize: 11, opacity: 0.75 }}>
+                            {deck.modifiedTime ? `Updated ${new Date(deck.modifiedTime).toLocaleDateString()}` : 'Google Slides'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, shrink: 0 }}>
+                          <a
+                            href={deck.webViewLink || `https://docs.google.com/presentation/d/${deck.id}/edit`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inst-view-btn"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Open in Google Slides"
+                          >
+                            <ExternalLink size={13} />
+                          </a>
+                          <button
+                            type="button"
+                            className="inst-view-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletePresentation(deck);
+                            }}
+                            title="Delete presentation"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateSlideDeck} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input
+                    type="text"
+                    className="inst-search-field"
+                    style={{ paddingLeft: 14 }}
+                    placeholder="New deck title (e.g., Sunday Service Worship & Sermon)"
+                    value={newDeckTitle}
+                    onChange={(e) => setNewDeckTitle(e.target.value)}
+                    required
+                  />
+                  <button type="submit" className="inst-join-action-btn" disabled={loadingData}>
+                    + Create Google Slides Presentation
+                  </button>
+                </form>
+              </div>
+
+              <div className="inst-rec-card">
+                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
+                  {selectedPresentation ? `Deck Inspector: ${selectedPresentation.title}` : 'Slide Deck Builder'}
+                </h4>
+                {selectedPresentationId ? (
+                  <>
+                    <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.25)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>
+                          Total Slides: {selectedPresentation?.slides?.length || 1}
+                        </span>
+                        <a
+                          href={`https://docs.google.com/presentation/d/${selectedPresentationId}/present`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inst-view-btn"
+                        >
+                          Present Fullscreen <ExternalLink size={12} style={{ display: 'inline', marginLeft: 4 }} />
+                        </a>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleAppendSlideToDeck} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <input
+                        type="text"
+                        className="inst-search-field"
+                        style={{ paddingLeft: 14 }}
+                        placeholder="Slide heading (e.g., Psalm 23:1-4 / Amazing Grace)"
+                        value={newSlideHeading}
+                        onChange={(e) => setNewSlideHeading(e.target.value)}
+                        required
+                      />
+                      <textarea
+                        className="inst-search-field"
+                        style={{ padding: 12, minHeight: 75, borderRadius: 12 }}
+                        placeholder="Slide scripture text, sermon bullet points, or worship lyrics…"
+                        value={newSlideBody}
+                        onChange={(e) => setNewSlideBody(e.target.value)}
+                      />
+                      <button type="submit" className="inst-join-action-btn" disabled={loadingData}>
+                        + Insert Slide via BatchUpdate
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <p className="rec-about">Select or create a presentation on the left to inspect slides or insert new worship/scripture slides.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* TAB 1C: GOOGLE FORMS */}
+      {activeTab === 'forms' && (
+        <section className="inst-shelf-section">
+          <div className="inst-shelf-header">
+            <div className="shelf-title-wrap">
+              <FileSpreadsheet size={18} className="text-purple-400" />
+              <h3>Google Forms — Fellowship RSVPs, Surveys &amp; Ministry Signups</h3>
+            </div>
+            <span className="shelf-hint">Create forms, add questions &amp; review live responses</span>
+          </div>
+
+          {needsAuth ? (
+            <div className="empty-state">
+              <h2>Sign in with Google to manage Google Forms</h2>
+              <p>Connect your Google account above to create church registration forms, add survey questions, and read live responses.</p>
+            </div>
+          ) : (
+            <div className="inst-recommendations-grid">
+              <div className="inst-rec-card">
+                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
+                  Your Google Forms ({formsList.length})
+                </h4>
+                {formsList.length === 0 ? (
+                  <p className="rec-about" style={{ marginBottom: 12 }}>
+                    No Google Forms found. Create a new Church Event RSVP or Prayer Survey below!
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14, maxHeight: 210, overflowY: 'auto' }}>
+                    {formsList.map((f) => (
+                      <div
+                        key={f.id}
+                        onClick={() => setSelectedFormId(f.id)}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          cursor: 'pointer',
+                          background:
+                            selectedFormId === f.id ? 'rgba(168,85,247,0.18)' : 'rgba(148,163,184,0.08)',
+                          border:
+                            selectedFormId === f.id ? '1px solid #a855f7' : '1px solid transparent',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <strong style={{ display: 'block', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {f.name}
+                          </strong>
+                          <span style={{ fontSize: 11, opacity: 0.75 }}>
+                            {f.modifiedTime ? `Updated ${new Date(f.modifiedTime).toLocaleDateString()}` : 'Google Form'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <a
+                            href={f.webViewLink || `https://docs.google.com/forms/d/${f.id}/edit`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inst-view-btn"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Open in Google Forms"
+                          >
+                            <ExternalLink size={13} />
+                          </a>
+                          <button
+                            type="button"
+                            className="inst-view-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteGoogleForm(f);
+                            }}
+                            title="Delete form"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateGoogleForm} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input
+                    type="text"
+                    className="inst-search-field"
+                    style={{ paddingLeft: 14 }}
+                    placeholder="New Form title (e.g., Youth Camp Registration & RSVP)"
+                    value={newFormTitle}
+                    onChange={(e) => setNewFormTitle(e.target.value)}
+                    required
+                  />
+                  <input
+                    type="text"
+                    className="inst-search-field"
+                    style={{ paddingLeft: 14 }}
+                    placeholder="Form description (optional)"
+                    value={newFormDescription}
+                    onChange={(e) => setNewFormDescription(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="inst-search-field"
+                    style={{ paddingLeft: 14 }}
+                    placeholder="First question prompt"
+                    value={newFormQuestion}
+                    onChange={(e) => setNewFormQuestion(e.target.value)}
+                  />
+                  <button type="submit" className="inst-join-action-btn" disabled={loadingData}>
+                    + Create Google Form
+                  </button>
+                </form>
+              </div>
+
+              <div className="inst-rec-card">
+                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
+                  {selectedFormDetail?.info?.title
+                    ? `${selectedFormDetail.info.title} (${selectedFormResponses.length} responses)`
+                    : 'Form Questions & Live Responses'}
+                </h4>
+                {selectedFormId ? (
+                  <>
+                    {selectedFormDetail?.responderUri && (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                        <a
+                          href={selectedFormDetail.responderUri}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inst-join-action-btn"
+                        >
+                          Open Live Form <ExternalLink size={12} style={{ display: 'inline', marginLeft: 4 }} />
+                        </a>
+                        <button
+                          type="button"
+                          className="inst-view-btn"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(selectedFormDetail.responderUri);
+                            setCopiedUri(selectedFormDetail.responderUri);
+                            setTimeout(() => setCopiedUri(''), 2500);
+                          }}
+                        >
+                          {copiedUri === selectedFormDetail.responderUri ? <Check size={13} /> : <Copy size={13} />}{' '}
+                          {copiedUri === selectedFormDetail.responderUri ? 'Copied Link' : 'Copy Responder Link'}
+                        </button>
+                      </div>
+                    )}
+
+                    <div style={{ marginBottom: 12 }}>
+                      <strong style={{ fontSize: 12, opacity: 0.8, display: 'block', marginBottom: 6 }}>
+                        Form Questions ({(selectedFormDetail?.items || []).length})
+                      </strong>
+                      {(selectedFormDetail?.items || []).length === 0 ? (
+                        <p className="rec-about">No questions added yet.</p>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 130, overflowY: 'auto' }}>
+                          {(selectedFormDetail?.items || []).map((item, idx) => (
+                            <div
+                              key={item.itemId || idx}
+                              style={{ padding: '7px 10px', borderRadius: 8, background: 'rgba(148,163,184,0.08)', fontSize: 13 }}
+                            >
+                              {idx + 1}. {item.title || 'Untitled Question'}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <form onSubmit={handleAddQuestionToSelectedForm} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                      <input
+                        type="text"
+                        className="inst-search-field"
+                        style={{ paddingLeft: 14, flex: 1 }}
+                        placeholder="Add another question to this form…"
+                        value={newFormQuestion}
+                        onChange={(e) => setNewFormQuestion(e.target.value)}
+                        required
+                      />
+                      <button type="submit" className="inst-join-action-btn" disabled={loadingData}>
+                        + Add
+                      </button>
+                    </form>
+
+                    <div>
+                      <strong style={{ fontSize: 12, opacity: 0.8, display: 'block', marginBottom: 6 }}>
+                        Submitted Responses ({selectedFormResponses.length})
+                      </strong>
+                      {selectedFormResponses.length === 0 ? (
+                        <p className="rec-about">No responses submitted yet.</p>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 130, overflowY: 'auto' }}>
+                          {selectedFormResponses.map((resp) => {
+                            const answerTexts = Object.values(resp.answers || {})
+                              .map((ans) =>
+                                (ans.textAnswers?.answers || []).map((a) => a.value).join(', ')
+                              )
+                              .filter(Boolean);
+                            return (
+                              <div
+                                key={resp.responseId}
+                                style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(168,85,247,0.1)', fontSize: 12 }}
+                              >
+                                <span style={{ opacity: 0.75, display: 'block' }}>
+                                  Submitted {resp.lastSubmittedTime ? new Date(resp.lastSubmittedTime).toLocaleString() : ''}
+                                </span>
+                                <strong>{answerTexts.join(' • ') || 'Response recorded'}</strong>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="rec-about">Select or create a Google Form on the left to inspect questions and live responses.</p>
                 )}
               </div>
             </div>
@@ -1190,13 +1954,43 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
           ) : (
             <div className="inst-recommendations-grid">
               <form className="inst-rec-card" onSubmit={handleCreateNote}>
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>+ Capture Sermon / Study Note</h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
+                  <h4 style={{ margin: 0, fontWeight: 700 }}>+ Capture Google Keep / Sermon Note</h4>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="inst-view-btn"
+                      onClick={() => setKeepNoteMode('text')}
+                      style={
+                        keepNoteMode === 'text'
+                          ? { background: 'rgba(234,179,8,0.2)', borderColor: '#eab308', color: '#fde047' }
+                          : undefined
+                      }
+                    >
+                      <StickyNote size={12} style={{ display: 'inline', marginRight: 4 }} />
+                      Text Note
+                    </button>
+                    <button
+                      type="button"
+                      className="inst-view-btn"
+                      onClick={() => setKeepNoteMode('checklist')}
+                      style={
+                        keepNoteMode === 'checklist'
+                          ? { background: 'rgba(234,179,8,0.2)', borderColor: '#eab308', color: '#fde047' }
+                          : undefined
+                      }
+                    >
+                      <ListChecks size={12} style={{ display: 'inline', marginRight: 4 }} />
+                      Checklist
+                    </button>
+                  </div>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <input
                     type="text"
                     className="inst-search-field"
                     style={{ paddingLeft: 14 }}
-                    placeholder="Sermon Title (e.g., Walking in the Spirit)"
+                    placeholder="Note Title (e.g., Walking in the Spirit / Sunday Prep)"
                     value={noteTitle}
                     onChange={(e) => setNoteTitle(e.target.value)}
                     maxLength={160}
@@ -1211,18 +2005,30 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                     onChange={(e) => setNoteScripture(e.target.value)}
                     maxLength={100}
                   />
-                  <textarea
-                    className="inst-search-field"
-                    style={{ padding: 12, minHeight: 90, borderRadius: 12 }}
-                    placeholder="Write your sermon takeaways, study insights, or prayer points…"
-                    value={noteBody}
-                    onChange={(e) => setNoteBody(e.target.value)}
-                    maxLength={5000}
-                    required
-                  />
+                  {keepNoteMode === 'checklist' ? (
+                    <textarea
+                      className="inst-search-field"
+                      style={{ padding: 12, minHeight: 90, borderRadius: 12 }}
+                      placeholder={'Enter one checklist item per line:\nPrepare communion elements\nTest sanctuary microphones\nPrint bulletin handouts'}
+                      value={keepChecklistInput}
+                      onChange={(e) => setKeepChecklistInput(e.target.value)}
+                      maxLength={5000}
+                      required
+                    />
+                  ) : (
+                    <textarea
+                      className="inst-search-field"
+                      style={{ padding: 12, minHeight: 90, borderRadius: 12 }}
+                      placeholder="Write your sermon takeaways, study insights, or prayer points…"
+                      value={noteBody}
+                      onChange={(e) => setNoteBody(e.target.value)}
+                      maxLength={5000}
+                      required
+                    />
+                  )}
                   <button type="submit" className="inst-join-action-btn" disabled={loadingData}>
                     <BookOpen size={14} style={{ display: 'inline', marginRight: 6 }} />
-                    Save to Keep &amp; Cloud Notes
+                    Save to Google Keep &amp; Cloud Notes
                   </button>
                 </div>
               </form>
@@ -1283,7 +2089,19 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                       >
                         <div>
                           <strong style={{ display: 'block', fontSize: 14 }}>{kn.title || 'Google Keep Note'}</strong>
-                          <p style={{ fontSize: 13, margin: '4px 0 0' }}>{kn.body?.text?.text || ''}</p>
+                          {kn.body?.text?.text && (
+                            <p style={{ fontSize: 13, margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{kn.body.text.text}</p>
+                          )}
+                          {Array.isArray(kn.body?.list?.listItems) && kn.body.list.listItems.length > 0 && (
+                            <ul style={{ margin: '6px 0 0', paddingLeft: 16, fontSize: 13 }}>
+                              {kn.body.list.listItems.map((li, idx) => (
+                                <li key={idx}>
+                                  {li.checked ? '☑ ' : '☐ '}
+                                  {li.text?.text || ''}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
                         <button
                           type="button"

@@ -36,7 +36,7 @@ export const MORE_DROPDOWN_ITEMS = [
   {
     id: 'workspace',
     label: 'Google Workspace & Cloud Hub',
-    desc: 'Calendar, Keep, Meet, Classroom, Tasks, Chat & Firebase',
+    desc: 'Slides, Forms, Keep, Calendar, Meet, Classroom, Tasks & Chat',
     icon: Calendar,
     isSection: true,
     color: '#10b981', // Emerald Green

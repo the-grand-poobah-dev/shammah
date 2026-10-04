@@ -13469,13 +13469,33 @@ html, body, *, *::before, *::after {
 
 .explore-tabs-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 8px) / 2);
   gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.explore-tabs-grid:active {
+  cursor: grabbing;
+}
+
+.explore-tabs-grid::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 @media (min-width: 640px) {
   .explore-tabs-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(1, minmax(0, 1fr));
+    grid-auto-columns: calc((100% - 24px) / 4);
   }
 }
 

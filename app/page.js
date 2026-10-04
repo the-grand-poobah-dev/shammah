@@ -278,7 +278,7 @@ export default function Feed() {
       if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         const sec = params.get('section');
-        if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss'].includes(sec)) {
+        if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss', 'workspace'].includes(sec)) {
           setSection(sec);
         }
         const cat = params.get('category');
@@ -293,7 +293,7 @@ export default function Feed() {
     syncUrlParams();
 
     function onSectionSet(e) {
-      if (e.detail && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss'].includes(e.detail)) {
+      if (e.detail && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss', 'workspace'].includes(e.detail)) {
         setTab('home');
         setSection(e.detail);
         if (typeof window !== 'undefined') {
@@ -1688,7 +1688,7 @@ export default function Feed() {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-300 truncate">
-                    Calendar · Keep · Meet · Classroom · Tasks · Chat · Firestore · Church Maps
+                    Slides · Forms · Keep · Calendar · Meet · Classroom · Tasks · Chat · Firestore · Maps
                   </p>
                 </div>
               </div>

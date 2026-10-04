@@ -54,7 +54,7 @@ export default function BottomNav() {
     {
       id: 'workspace',
       label: 'Google Workspace & Firebase Hub',
-      desc: 'Calendar, Keep, Meet, Classroom, Tasks & Chat',
+      desc: 'Slides, Forms, Keep, Calendar, Meet, Classroom, Tasks & Chat',
       icon: Calendar,
       color: '#10b981', // Emerald
       action: handleOpenWorkspace,

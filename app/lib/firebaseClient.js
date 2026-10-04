@@ -27,6 +27,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+export default app;
 
 // All Google Workspace OAuth scopes configured for the applet
 export const SCOPES = [
@@ -103,6 +104,16 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/chat.users.sections',
   'https://www.googleapis.com/auth/chat.users.sections.readonly',
   'https://www.googleapis.com/auth/chat.users.spacesettings',
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/presentations',
+  'https://www.googleapis.com/auth/presentations.readonly',
+  'https://www.googleapis.com/auth/spreadsheets',
+  'https://www.googleapis.com/auth/spreadsheets.readonly',
+  'https://www.googleapis.com/auth/forms.body',
+  'https://www.googleapis.com/auth/forms.body.readonly',
+  'https://www.googleapis.com/auth/forms.responses.readonly',
 ];
 
 const provider = new GoogleAuthProvider();
@@ -124,6 +135,15 @@ export async function testFirestoreConnection() {
       console.error('Please check your Firebase configuration.');
     }
   }
+}
+
+export const testConnection = testFirestoreConnection;
+
+export function subscribeToFirebaseAuth(callback) {
+  if (typeof window === 'undefined') return () => {};
+  return onAuthStateChanged(auth, (user) => {
+    if (callback) callback(user);
+  });
 }
 
 if (typeof window !== 'undefined') {
@@ -242,6 +262,8 @@ export async function ensureUserProfileInFirestore(user, churchName = 'Shammah F
     }
   }
 }
+
+export const ensureFirestoreUserProfile = ensureUserProfileInFirestore;
 
 export function subscribeToPrayerRequests(onData, onError) {
   if (!auth.currentUser) return () => {};

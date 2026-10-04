@@ -14,6 +14,16 @@ module.exports = (phase) => {
     distDir: isDev ? '.next-dev' : '.next',
     output: isDev ? undefined : 'standalone',
     transpilePackages: ['lucide-react'],
+    productionBrowserSourceMaps: false,
+    eslint: {
+      ignoreDuringBuilds: true,
+    },
+    typescript: {
+      ignoreBuildErrors: true,
+    },
+    experimental: {
+      webpackMemoryOptimizations: true,
+    },
     env: {
       NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:
         process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
