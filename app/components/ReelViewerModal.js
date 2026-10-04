@@ -45,10 +45,20 @@ export default function ReelViewerModal({ reels = [], initialIndex = 0, currentU
     if (!currentReel) return;
     setLiked(false);
     setLikesCount(currentReel.likes_count || 32);
-    setReposted(isPostReposted(currentReel.id, session?.user?.id));
-    setRepostCount(getPostRepostCount(currentReel.id, currentReel.reposts_count || 6));
     setCommentCount(currentReel.comments_count || 8);
     setIsPlaying(true);
+
+    let cancelled = false;
+    isPostReposted(currentReel.id, session?.user?.id).then((isRep) => {
+      if (!cancelled) setReposted(isRep);
+    });
+    getPostRepostCount(currentReel.id, currentReel.reposts_count || 6).then((cnt) => {
+      if (!cancelled) setRepostCount(cnt);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentIndex, currentReel, session?.user?.id]);
 
   useEffect(() => {
@@ -117,8 +127,8 @@ export default function ReelViewerModal({ reels = [], initialIndex = 0, currentU
     setShowRepostModal(true);
   }
 
-  function handleConfirmRepost(quote) {
-    const res = toggleRepost(currentReel.id, currentReel, currentUser, quote);
+  async function handleConfirmRepost(quote) {
+    const res = await toggleRepost(currentReel.id, currentReel, currentUser, quote);
     setReposted(res.reposted);
     setRepostCount(res.count);
   }

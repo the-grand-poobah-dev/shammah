@@ -124,13 +124,13 @@ export default function PostOptionsMenu({
     showToast('Post link copied to clipboard ✓');
   }
 
-  function handleBlockAuthor() {
+  async function handleBlockAuthor() {
     if (!authorId) return;
     if (!confirmingBlock) {
       setConfirmingBlock(true);
       return;
     }
-    toggleBlock(authorId);
+    await toggleBlock(authorId);
     hidePost(post.id);
     setConfirmingBlock(false);
     playSound('offline_remove');

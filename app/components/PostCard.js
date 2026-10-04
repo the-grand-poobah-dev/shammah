@@ -328,9 +328,9 @@ export default function PostCard({
   const [showLinkCopiedToast, setShowLinkCopiedToast] = useState(false);
   const [showPollAnalytics, setShowPollAnalytics] = useState(false);
   const [isSavedOffline, setIsSavedOffline] = useState(() => (post?.id ? isItemSavedOffline(post.id) : false));
-  const [reposted, setReposted] = useState(() => (post?.id ? isPostReposted(post.id, session?.user?.id) : false));
-  const [repostCount, setRepostCount] = useState(() => (post?.id ? getPostRepostCount(post.id, post.reposts_count || 0) : 0));
-  const [visibility, setVisibility] = useState(() => (post?.id ? getPostVisibility(post.id, post.visibility || 'public') : 'public'));
+  const [reposted, setReposted] = useState(false);
+  const [repostCount, setRepostCount] = useState(post?.reposts_count || 0);
+  const [visibility, setVisibility] = useState(post?.visibility || 'public');
 
   const isPollPost = Boolean(
     (pollOptions && pollOptions.length > 0) ||
@@ -344,13 +344,26 @@ export default function PostCard({
   const authorId = post.author_id || post.user_id;
   const isAuthor = session?.user?.id && session.user.id === authorId;
 
-  // Repost status & visible counter
+  // Repost status & visible counter (backed by Supabase)
   useEffect(() => {
     if (!post?.id) return;
+    let cancelled = false;
 
-    function onRepostUpdated() {
-      setReposted(isPostReposted(post.id, session?.user?.id));
-      setRepostCount(getPostRepostCount(post.id, post.reposts_count || 0));
+    async function syncReposts() {
+      const isRep = await isPostReposted(post.id, session?.user?.id);
+      const cnt = await getPostRepostCount(post.id, post.reposts_count || 0);
+      if (!cancelled) {
+        setReposted(isRep);
+        setRepostCount(cnt);
+      }
+    }
+
+    syncReposts();
+
+    function onRepostUpdated(e) {
+      if (!e?.detail?.postId || e.detail.postId === post.id) {
+        syncReposts();
+      }
     }
     function onVisChanged(e) {
       if (e.detail?.postId === post.id) {
@@ -360,10 +373,11 @@ export default function PostCard({
     window.addEventListener('shammah:reposts-updated', onRepostUpdated);
     window.addEventListener('shammah:post-visibility-changed', onVisChanged);
     return () => {
+      cancelled = true;
       window.removeEventListener('shammah:reposts-updated', onRepostUpdated);
       window.removeEventListener('shammah:post-visibility-changed', onVisChanged);
     };
-  }, [post.id, session?.user?.id]);
+  }, [post.id, session?.user?.id, post.reposts_count]);
 
   // Load comment counts
   useEffect(() => {
@@ -385,8 +399,8 @@ export default function PostCard({
     setShowRepostModal(true);
   }
 
-  function handleConfirmRepost(quoteText) {
-    const res = toggleRepost(
+  async function handleConfirmRepost(quoteText) {
+    const res = await toggleRepost(
       post.id,
       post,
       {

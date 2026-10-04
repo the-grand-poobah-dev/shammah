@@ -4,59 +4,100 @@ import {
   X,
   ShieldCheck,
   Check,
+  Clock,
   Sparkles,
-  Smartphone,
-  CreditCard,
   Church,
-  Award,
+  AlertCircle,
 } from 'lucide-react';
 import VerifiedBadge from './VerifiedBadge';
 import {
-  VERIFICATION_TIERS,
-  getVerificationSubscription,
-  requestVerificationSubscription,
-  cancelVerificationSubscription,
+  fetchPendingBadgeRequest,
+  submitVerificationBadgeRequest,
 } from '../lib/profileManager';
-import { playSound } from '../lib/soundEffects';
+
+const MINISTRY_ROLES = [
+  { id: 'pastor', label: 'Lead Pastor / Shepherd' },
+  { id: 'worship', label: 'Worship Leader / Psalmist' },
+  { id: 'elder', label: 'Elder / Deacon / Deaconess' },
+  { id: 'youth', label: 'Youth Leader / Minister' },
+  { id: 'teacher', label: 'Bible Teacher / Evangelist' },
+  { id: 'church_admin', label: 'Church Administrator' },
+  { id: 'intercessor', label: 'Prayer Leader / Intercessor' },
+  { id: 'partner', label: 'Ministry Partner / Mentor' },
+];
 
 export default function VerificationBadgeModal({ session, profile, onClose }) {
-  const [selectedTier, setSelectedTier] = useState('quarterly');
   const [role, setRole] = useState('pastor');
-  const [phoneNumber, setPhoneNumber] = useState('254712345678');
-  const [paymentMethod, setPaymentMethod] = useState('mpesa');
   const [churchName, setChurchName] = useState(profile?.church_name || '');
-  const [currentSub, setCurrentSub] = useState(null);
-  const [processing, setProcessing] = useState(false);
+  const [reason, setReason] = useState('');
+  const [pendingRequest, setPendingRequest] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const isVerified = Boolean(profile?.badge_verified);
 
   useEffect(() => {
-    if (session?.user?.id) {
-      setCurrentSub(getVerificationSubscription(session.user.id));
+    let cancelled = false;
+    async function loadStatus() {
+      if (session?.user?.id) {
+        setLoading(true);
+        const pending = await fetchPendingBadgeRequest(session.user.id);
+        if (!cancelled) {
+          setPendingRequest(pending);
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
+      }
     }
+    loadStatus();
+    return () => {
+      cancelled = true;
+    };
   }, [session?.user?.id]);
 
-  const activeTier = VERIFICATION_TIERS.find((t) => t.id === selectedTier) || VERIFICATION_TIERS[0];
-
-  function handleSubscribe(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    setProcessing(true);
+    setErrorMsg('');
+    setSuccessMsg('');
 
-    setTimeout(() => {
-      const sub = requestVerificationSubscription(session?.user?.id, selectedTier, role);
-      setCurrentSub(sub);
-      setProcessing(false);
-      setSuccessMsg(`Congratulations! Your ${activeTier.name} is active with official ${role} badge.`);
-      playSound('postPublished');
-    }, 900);
-  }
+    if (!session?.user?.id) {
+      setErrorMsg('Please sign in to submit a verification request.');
+      return;
+    }
 
-  function handleCancel() {
-    if (confirm('Are you sure you want to cancel your verification badge subscription?')) {
-      cancelVerificationSubscription(session?.user?.id);
-      setCurrentSub(null);
-      setSuccessMsg('Verification subscription cancelled.');
+    const trimmedChurch = churchName.trim();
+    const trimmedReason = reason.trim();
+    const fullReason = trimmedChurch
+      ? `Church: ${trimmedChurch}. ${trimmedReason}`
+      : trimmedReason;
+
+    if (fullReason.length < 10) {
+      setErrorMsg('Please provide at least 10 characters explaining your ministry affiliation and background.');
+      return;
+    }
+
+    setSubmitting(true);
+    const result = await submitVerificationBadgeRequest({
+      userId: session.user.id,
+      currentBadge: profile?.badge,
+      requestedBadge: role,
+      reason: fullReason,
+    });
+    setSubmitting(false);
+
+    if (result.error) {
+      setErrorMsg(result.error);
+    } else {
+      setPendingRequest(result.data);
+      setSuccessMsg('Your verification request has been submitted for manual review by church leadership.');
     }
   }
+
+  const selectedRoleObj = MINISTRY_ROLES.find((r) => r.id === role) || MINISTRY_ROLES[0];
+  const charCount = (churchName.trim() ? `Church: ${churchName.trim()}. ` : '').length + reason.trim().length;
 
   return (
     <div className="verification-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
@@ -68,7 +109,7 @@ export default function VerificationBadgeModal({ session, profile, onClose }) {
             </span>
             <div>
               <h3>Ministry &amp; Member Verification</h3>
-              <p className="verif-sub">Official blue checkmark &amp; pastoral verification badge</p>
+              <p className="verif-sub">Official blue checkmark &amp; pastoral recognition</p>
             </div>
           </div>
           <button type="button" className="verif-close-btn" onClick={onClose} aria-label="Close">
@@ -83,38 +124,71 @@ export default function VerificationBadgeModal({ session, profile, onClose }) {
           </div>
           <div className="verif-preview-text">
             <div className="preview-name-row">
-              <strong>{profile?.display_name || session?.user?.email || 'Pastor / Member'}</strong>
+              <strong>{profile?.display_name || session?.user?.email || 'Fellowship Member'}</strong>
               <VerifiedBadge badge={role} size={16} />
             </div>
-            <span>Verified {role === 'pastor' ? 'Pastor' : role === 'worship' ? 'Worship Leader' : role === 'church_admin' ? 'Church Administrator' : 'Ministry Partner'}</span>
+            <span>Verified {selectedRoleObj.label}</span>
           </div>
         </div>
 
-        {currentSub ? (
-          <div className="verif-active-status-card">
+        {loading ? (
+          <div style={{ padding: '28px 16px', textAlign: 'center', opacity: 0.7 }}>
+            Checking verification status…
+          </div>
+        ) : isVerified ? (
+          <div className="verif-active-status-card" style={{ borderLeft: '4px solid #10b981' }}>
             <div className="active-status-left">
-              <Sparkles size={20} className="sparkle-active" />
+              <Sparkles size={22} className="sparkle-active" style={{ color: '#10b981' }} />
               <div>
-                <strong>Verification Active ({currentSub.tierName})</strong>
-                <p>Renews at Kes. {currentSub.amountKes}. Verified role: {currentSub.roleDetails}.</p>
+                <strong>Ministry Badge Verified ✓</strong>
+                <p>
+                  Your profile holds an official verified <strong>{profile?.badge || 'Member'}</strong> badge.
+                  Your ministry status is recognized across Shammah.
+                </p>
               </div>
             </div>
-            <button type="button" className="verif-cancel-btn" onClick={handleCancel}>
-              Cancel Plan
-            </button>
+          </div>
+        ) : pendingRequest ? (
+          <div className="verif-active-status-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+            <div className="active-status-left">
+              <Clock size={22} className="sparkle-active" style={{ color: '#f59e0b' }} />
+              <div>
+                <strong>Verification Request Pending Review</strong>
+                <p style={{ marginTop: 4 }}>
+                  Your request for the <strong>{pendingRequest.requested_badge}</strong> badge is currently under review by
+                  the Shammah team and church administrators.
+                </p>
+                <small style={{ opacity: 0.7, display: 'block', marginTop: 4 }}>
+                  Submitted on {new Date(pendingRequest.created_at).toLocaleDateString()}
+                </small>
+              </div>
+            </div>
           </div>
         ) : (
-          <form className="verif-form" onSubmit={handleSubscribe}>
+          <form className="verif-form" onSubmit={handleSubmit}>
+            {/* Honest Review Notice */}
+            <div
+              style={{
+                background: 'rgba(6, 182, 212, 0.08)',
+                border: '1px solid rgba(6, 182, 212, 0.25)',
+                borderRadius: 8,
+                padding: '10px 14px',
+                fontSize: '0.85rem',
+                lineHeight: 1.45,
+                color: 'inherit',
+                marginBottom: 12,
+              }}
+            >
+              <strong>Honest Pastoral Review:</strong> Verification on Shammah confirms ordained ministers, worship
+              leaders, and fellowship elders. Requests are reviewed personally by church leadership. Verification is{' '}
+              <strong>100% free of charge</strong> for individual servants.
+            </div>
+
             {/* Choose Role */}
             <div className="verif-section-group">
               <label className="verif-label">Select Ministry Role to Verify:</label>
               <div className="verif-roles-grid">
-                {[
-                  { id: 'pastor', label: 'Lead Pastor / Shepherd' },
-                  { id: 'worship', label: 'Worship Leader / Psalmist' },
-                  { id: 'church_admin', label: 'Church Administrator' },
-                  { id: 'partner', label: 'Ministry Partner / Mentor' },
-                ].map((r) => (
+                {MINISTRY_ROLES.map((r) => (
                   <button
                     key={r.id}
                     type="button"
@@ -130,7 +204,9 @@ export default function VerificationBadgeModal({ session, profile, onClose }) {
 
             {/* Church Affiliation */}
             <div className="verif-section-group">
-              <label className="verif-label" htmlFor="church-name-input">Church or Ministry Affiliation:</label>
+              <label className="verif-label" htmlFor="church-name-input">
+                Church or Ministry Affiliation:
+              </label>
               <input
                 id="church-name-input"
                 type="text"
@@ -141,92 +217,60 @@ export default function VerificationBadgeModal({ session, profile, onClose }) {
               />
             </div>
 
-            {/* Choose Pricing Tier (Kes. 300/mo with discounts) */}
+            {/* Reason / Background */}
             <div className="verif-section-group">
-              <label className="verif-label">Choose Subscription Plan:</label>
-              <div className="verif-tiers-list">
-                {VERIFICATION_TIERS.map((tier) => {
-                  const isSelected = selectedTier === tier.id;
-                  return (
-                    <div
-                      key={tier.id}
-                      className={`verif-tier-item${isSelected ? ' active' : ''}`}
-                      onClick={() => setSelectedTier(tier.id)}
-                    >
-                      <div className="tier-radio">
-                        <input
-                          type="radio"
-                          name="verifTier"
-                          checked={isSelected}
-                          onChange={() => setSelectedTier(tier.id)}
-                        />
-                      </div>
-                      <div className="tier-info">
-                        <div className="tier-name-row">
-                          <strong>{tier.name}</strong>
-                          {tier.popular && <span className="tier-badge popular">Most Popular</span>}
-                          {tier.bestValue && <span className="tier-badge best">Best Value</span>}
-                        </div>
-                        <span className="tier-discount">{tier.discountLabel}</span>
-                      </div>
-                      <div className="tier-price-box">
-                        <span className="tier-kes">Kes. {tier.priceKes}</span>
-                        <small>({tier.billingCycle})</small>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <label className="verif-label" htmlFor="verif-reason-input">
+                Ministry Background &amp; Reason:
+              </label>
+              <textarea
+                id="verif-reason-input"
+                placeholder="Provide a brief explanation of your ministry calling, ordination, or leadership role at your church (at least 10 characters)."
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="verif-input"
+                rows={3}
+                maxLength={500}
+                style={{ resize: 'vertical' }}
+              />
+              <small style={{ display: 'block', textAlign: 'right', opacity: 0.6, fontSize: '0.75rem', marginTop: 4 }}>
+                {charCount < 10 ? 'At least 10 characters required' : `${charCount}/500`}
+              </small>
             </div>
 
-            {/* Payment Method */}
-            <div className="verif-section-group">
-              <label className="verif-label">Select Payment Method:</label>
-              <div className="verif-pay-methods">
-                <button
-                  type="button"
-                  className={`verif-pay-btn${paymentMethod === 'mpesa' ? ' active' : ''}`}
-                  onClick={() => setPaymentMethod('mpesa')}
-                >
-                  <Smartphone size={16} />
-                  <span>M-Pesa Express</span>
-                </button>
-                <button
-                  type="button"
-                  className={`verif-pay-btn${paymentMethod === 'card' ? ' active' : ''}`}
-                  onClick={() => setPaymentMethod('card')}
-                >
-                  <CreditCard size={16} />
-                  <span>Credit / Debit Card</span>
-                </button>
+            {errorMsg && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#ef4444',
+                  fontSize: '0.84rem',
+                  marginBottom: 12,
+                }}
+              >
+                <AlertCircle size={16} />
+                <span>{errorMsg}</span>
               </div>
-
-              {paymentMethod === 'mpesa' && (
-                <div className="mpesa-input-wrap">
-                  <label htmlFor="mpesa-number">M-Pesa Phone Number:</label>
-                  <input
-                    id="mpesa-number"
-                    type="tel"
-                    placeholder="2547XXXXXXXX"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className="verif-input"
-                  />
-                  <small className="mpesa-hint">Prompt will appear on your phone to authorize Kes. {activeTier.priceKes}</small>
-                </div>
-              )}
-            </div>
+            )}
 
             {successMsg && (
-              <div className="verif-success-banner">
+              <div className="verif-success-banner" style={{ marginBottom: 12 }}>
                 <Check size={16} />
                 <span>{successMsg}</span>
               </div>
             )}
 
-            <button type="submit" className="verif-submit-btn" disabled={processing}>
+            <button
+              type="submit"
+              className="verif-submit-btn"
+              disabled={submitting || charCount < 10}
+            >
               <ShieldCheck size={18} />
-              <span>{processing ? 'Processing Payment…' : `Pay Kes. ${activeTier.priceKes} & Activate Badge`}</span>
+              <span>{submitting ? 'Submitting Application…' : 'Submit Verification Request'}</span>
             </button>
           </form>
         )}

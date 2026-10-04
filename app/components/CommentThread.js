@@ -15,6 +15,7 @@ import {
 } from '../lib/commentPinManager';
 import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousManager';
 import { logActivity } from '../lib/activityLogManager';
+import { getBlockedUsers } from '../lib/profileManager';
 import { Pin, Sparkles, User, RefreshCw, EyeOff } from 'lucide-react';
 
 export default function CommentThread({
@@ -27,6 +28,7 @@ export default function CommentThread({
 }) {
   const [state, setState] = useState('loading'); // loading | ready | error
   const [comments, setComments] = useState([]); // flat, newest replies included
+  const [blockedUserIds, setBlockedUserIds] = useState(() => getBlockedUsers());
   const [nameById, setNameById] = useState({}); // profile id -> display name (authors + mentions)
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState(null); // { id, name }
@@ -52,8 +54,15 @@ export default function CommentThread({
         setAuthorReactions(getAuthorCommentReactions(postId));
       }
     }
+    function onBlocksUpdated() {
+      setBlockedUserIds([...getBlockedUsers()]);
+    }
     window.addEventListener('shammah:comments-updated', onCommentsUpdated);
-    return () => window.removeEventListener('shammah:comments-updated', onCommentsUpdated);
+    window.addEventListener('shammah:blocks-updated', onBlocksUpdated);
+    return () => {
+      window.removeEventListener('shammah:comments-updated', onCommentsUpdated);
+      window.removeEventListener('shammah:blocks-updated', onBlocksUpdated);
+    };
   }, [postId]);
 
   function handleTogglePin(commentId) {
@@ -111,10 +120,13 @@ export default function CommentThread({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
 
+  const blockedSet = new Set(blockedUserIds || []);
+  const visibleComments = comments.filter((c) => !c.author_id || !blockedSet.has(c.author_id));
+
   // Which top-level comment a reply ultimately belongs under (keeps the thread just one level deep)
   function rootOf(comment) {
     let current = comment;
-    const byId = Object.fromEntries(comments.map((c) => [c.id, c]));
+    const byId = Object.fromEntries(visibleComments.map((c) => [c.id, c]));
     const seen = new Set();
     while (current && current.parent_id && byId[current.parent_id] && !seen.has(current.id)) {
       seen.add(current.id);
@@ -123,9 +135,9 @@ export default function CommentThread({
     return current ? current.id : comment.id;
   }
 
-  const topLevel = comments.filter((c) => !c.parent_id || !comments.some((x) => x.id === c.parent_id));
+  const topLevel = visibleComments.filter((c) => !c.parent_id || !visibleComments.some((x) => x.id === c.parent_id));
   const repliesByRoot = {};
-  comments.forEach((c) => {
+  visibleComments.forEach((c) => {
     if (topLevel.includes(c)) return;
     const rootId = rootOf(c);
     (repliesByRoot[rootId] ||= []).push(c);

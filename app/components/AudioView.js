@@ -169,8 +169,16 @@ function AudioTrackCard({
   const [shareToast, setShareToast] = useState('');
 
   useEffect(() => {
-    setReposted(isPostReposted(track.id, session?.user?.id));
-    setRepostCount(getPostRepostCount(track.id, track.reposts_count || 0));
+    let cancelled = false;
+    isPostReposted(track.id, session?.user?.id).then((isRep) => {
+      if (!cancelled) setReposted(isRep);
+    });
+    getPostRepostCount(track.id, track.reposts_count || 0).then((cnt) => {
+      if (!cancelled) setRepostCount(cnt);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [track.id, session?.user?.id, track.reposts_count]);
 
   const authorName = track.profiles?.name || track.profiles?.display_name || track.speaker || 'Member';
@@ -304,8 +312,8 @@ function AudioTrackCard({
           post={track}
           currentUser={currentUser}
           onClose={() => setShowRepostModal(false)}
-          onConfirm={(quote) => {
-            const res = toggleRepost(track.id, track, currentUser, quote);
+          onConfirm={async (quote) => {
+            const res = await toggleRepost(track.id, track, currentUser, quote);
             setReposted(res.reposted);
             setRepostCount(res.count);
           }}

@@ -155,8 +155,16 @@ function VideoCard({ video, session, currentUser, openAuth, onOpenReelViewer }) 
   const videoRef = useRef(null);
 
   useEffect(() => {
-    setReposted(isPostReposted(video.id, session?.user?.id));
-    setRepostCount(getPostRepostCount(video.id, video.reposts_count || 0));
+    let cancelled = false;
+    isPostReposted(video.id, session?.user?.id).then((isRep) => {
+      if (!cancelled) setReposted(isRep);
+    });
+    getPostRepostCount(video.id, video.reposts_count || 0).then((cnt) => {
+      if (!cancelled) setRepostCount(cnt);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [video.id, session?.user?.id, video.reposts_count]);
 
   function togglePlay() {
@@ -290,8 +298,8 @@ function VideoCard({ video, session, currentUser, openAuth, onOpenReelViewer }) 
             post={video}
             currentUser={currentUser}
             onClose={() => setShowRepostModal(false)}
-            onConfirm={(quote) => {
-              const res = toggleRepost(video.id, video, currentUser, quote);
+            onConfirm={async (quote) => {
+              const res = await toggleRepost(video.id, video, currentUser, quote);
               setReposted(res.reposted);
               setRepostCount(res.count);
             }}
@@ -448,8 +456,8 @@ function VideoCard({ video, session, currentUser, openAuth, onOpenReelViewer }) 
           post={video}
           currentUser={currentUser}
           onClose={() => setShowRepostModal(false)}
-          onConfirm={(quote) => {
-            const res = toggleRepost(video.id, video, currentUser, quote);
+          onConfirm={async (quote) => {
+            const res = await toggleRepost(video.id, video, currentUser, quote);
             setReposted(res.reposted);
             setRepostCount(res.count);
           }}

@@ -21,12 +21,12 @@ export default function PostVisibilityModal({
   const [selected, setSelected] = useState(currentVisibility);
   const [applyToAll, setApplyToAll] = useState(false);
 
-  function handleSave() {
+  async function handleSave() {
     if (postId) {
-      setPostVisibility(postId, selected);
+      await setPostVisibility(postId, selected);
     }
-    if (applyToAll && allPostIds.length > 0) {
-      batchSetAllPostsVisibility(currentUser?.id, selected, allPostIds);
+    if (applyToAll) {
+      await batchSetAllPostsVisibility(currentUser?.id, selected, allPostIds);
     }
     if (onUpdated) onUpdated(selected, applyToAll);
     onClose();

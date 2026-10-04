@@ -1,7 +1,7 @@
 'use client';
+import { supabase } from '../../lib/supabaseClient';
 import { playSound } from './soundEffects';
-
-const INBOX_STORAGE_KEY = 'shammah_direct_messages_v2';
+import { getBlockedUsers } from './profileManager';
 
 export const FAITH_MESSAGE_REACTIONS = [
   { id: 'pray', emoji: '🙏', label: 'Amen / Pray' },
@@ -12,384 +12,344 @@ export const FAITH_MESSAGE_REACTIONS = [
   { id: 'smile', emoji: '😊', label: 'Joy' },
 ];
 
-// Initial welcoming inbox conversations with rich badges and member tags
-export const DEFAULT_CONVERSATIONS = [
-  {
-    id: 'conv-pastor-david',
-    participantId: 'user-pastor-david',
-    participantName: 'Pastor David Mwangi',
-    participantTag: 'Lead Pastor · Nairobi Worship Center',
-    participantAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-    participantBadge: 'pastor',
-    participantVerified: true,
-    isE2EE: true,
-    encryptionFingerprint: 'SHA256:7f4a...9b12',
-    lastMessage: 'Grace and peace to you! Let me know if you need prayer this week.',
-    lastMessageTime: new Date(Date.now() - 3600000 * 2).toISOString(),
-    unreadCount: 1,
-    messages: [
-      {
-        id: 'msg-pd-1',
-        senderId: 'user-pastor-david',
-        senderName: 'Pastor David Mwangi',
-        text: 'Welcome to Shammah Fellowship! We are praying for your family.',
-        timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
-        isFromMe: false,
-        reactions: { '🙏': 2, '❤️': 1 },
-      },
-      {
-        id: 'msg-pd-2',
-        senderId: 'user-pastor-david',
-        senderName: 'Pastor David Mwangi',
-        text: 'Grace and peace to you! Let me know if you need prayer this week.',
-        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-        isFromMe: false,
-        reactions: {},
-      },
-    ],
-  },
-  {
-    id: 'conv-sister-mary',
-    participantId: 'user-sister-mary',
-    participantName: 'Sister Mary Grace',
-    participantTag: 'Worship Team Director',
-    participantAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    participantBadge: 'worship',
-    participantVerified: true,
-    isE2EE: true,
-    encryptionFingerprint: 'SHA256:1a8c...4e3f',
-    lastMessage: 'Amen! Looking forward to joining fellowship together this Sunday.',
-    lastMessageTime: new Date(Date.now() - 3600000 * 6).toISOString(),
-    unreadCount: 0,
-    messages: [
-      {
-        id: 'msg-sm-1',
-        senderId: 'user-sister-mary',
-        senderName: 'Sister Mary Grace',
-        text: 'Amen! Looking forward to joining fellowship together this Sunday.',
-        timestamp: new Date(Date.now() - 3600000 * 6).toISOString(),
-        isFromMe: false,
-        reactions: { '🙌': 1 },
-      },
-    ],
-  },
-  {
-    id: 'conv-brother-john',
-    participantId: 'user-brother-john',
-    participantName: 'Brother John Ochieng',
-    participantTag: 'Youth & Outreach Mentor',
-    participantAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    participantBadge: 'partner',
-    participantVerified: true,
-    isE2EE: true,
-    encryptionFingerprint: 'SHA256:3d9e...c702',
-    lastMessage: 'The youth Bible study was so blessed! Here is the scripture reading plan.',
-    lastMessageTime: new Date(Date.now() - 3600000 * 12).toISOString(),
-    unreadCount: 1,
-    messages: [
-      {
-        id: 'msg-bj-1',
-        senderId: 'user-brother-john',
-        senderName: 'Brother John Ochieng',
-        text: 'The youth Bible study was so blessed! Here is the scripture reading plan.',
-        timestamp: new Date(Date.now() - 3600000 * 12).toISOString(),
-        isFromMe: false,
-        reactions: { '🔥': 3 },
-      },
-    ],
-  },
-];
+function isValidUuid(id) {
+  if (!id || typeof id !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
 
-export function getInboxConversations() {
-  if (typeof window === 'undefined') return DEFAULT_CONVERSATIONS;
-  try {
-    const raw = localStorage.getItem(INBOX_STORAGE_KEY);
-    if (!raw) return DEFAULT_CONVERSATIONS;
-    return JSON.parse(raw);
-  } catch {
-    return DEFAULT_CONVERSATIONS;
+/**
+ * Fetches real 1:1 conversations for the current user from Supabase.
+ * Derives conversation threads from direct_messages table joined with profiles.
+ */
+export async function getInboxConversations(currentUserId) {
+  if (!currentUserId || !isValidUuid(currentUserId)) {
+    return [];
   }
-}
 
-export function saveInboxConversations(convs) {
-  if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(INBOX_STORAGE_KEY, JSON.stringify(convs));
-    window.dispatchEvent(new CustomEvent('shammah:inbox-updated'));
-  } catch (err) {
-    console.error('Failed to save inbox conversations', err);
-  }
-}
+    // 1. Attempt using optimized RPC
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_user_conversations', {
+      p_user_id: currentUserId,
+    });
 
-export function getTotalUnreadMessagesCount() {
-  const convs = getInboxConversations();
-  return convs.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
-}
+    const blockedList = getBlockedUsers();
+    const blockedSet = new Set(blockedList || []);
 
-export function markConversationAsRead(convId) {
-  const convs = getInboxConversations();
-  let changed = false;
-  const next = convs.map((c) => {
-    if (c.id === convId && c.unreadCount > 0) {
-      changed = true;
-      return { ...c, unreadCount: 0 };
+    if (!rpcError && Array.isArray(rpcData)) {
+      return rpcData
+        .filter((row) => !blockedSet.has(row.participant_id))
+        .map((row) => ({
+          id: row.conversation_id || `conv-${row.participant_id}`,
+          participantId: row.participant_id,
+          participantName: row.participant_name || 'Fellowship Member',
+          participantAvatar: row.participant_avatar || null,
+          participantBadge: row.participant_badge || 'member',
+          participantVerified: Boolean(row.participant_verified),
+          participantRole: row.participant_role || 'member',
+          participantInboxPermission: row.participant_inbox_permission || 'everyone',
+          lastMessage: row.last_message || '',
+          lastMessageTime: row.last_message_time || new Date().toISOString(),
+          unreadCount: Number(row.unread_count || 0),
+        }));
     }
-    return c;
-  });
-  if (changed) {
-    saveInboxConversations(next);
+
+    // 2. Direct query fallback
+    const { data: messages, error: msgError } = await supabase
+      .from('direct_messages')
+      .select('id, sender_id, recipient_id, text_content, created_at, read_at')
+      .or(`sender_id.eq.${currentUserId},recipient_id.eq.${currentUserId}`)
+      .order('created_at', { ascending: false });
+
+    if (msgError || !messages || messages.length === 0) {
+      return [];
+    }
+
+    const conversationMap = new Map();
+    for (const msg of messages) {
+      const otherId = msg.sender_id === currentUserId ? msg.recipient_id : msg.sender_id;
+      if (!conversationMap.has(otherId)) {
+        conversationMap.set(otherId, {
+          participantId: otherId,
+          lastMessage: msg.text_content,
+          lastMessageTime: msg.created_at,
+          unreadCount: 0,
+        });
+      }
+      if (msg.recipient_id === currentUserId && !msg.read_at) {
+        const conv = conversationMap.get(otherId);
+        conv.unreadCount += 1;
+      }
+    }
+
+    const otherIds = Array.from(conversationMap.keys());
+    if (otherIds.length === 0) return [];
+
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url, badge, badge_verified, role, inbox_permission')
+      .in('id', otherIds);
+
+    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+    return otherIds.map((otherId) => {
+      const convData = conversationMap.get(otherId);
+      const prof = profileMap.get(otherId);
+      return {
+        id: `conv-${otherId}`,
+        participantId: otherId,
+        participantName: prof?.display_name || 'Fellowship Member',
+        participantAvatar: prof?.avatar_url || null,
+        participantBadge: prof?.badge || 'member',
+        participantVerified: Boolean(prof?.badge_verified),
+        participantRole: prof?.role || 'member',
+        participantInboxPermission: prof?.inbox_permission || 'everyone',
+        lastMessage: convData.lastMessage,
+        lastMessageTime: convData.lastMessageTime,
+        unreadCount: convData.unreadCount,
+      };
+    });
+  } catch (err) {
+    console.error('Failed to load conversations from Supabase:', err);
+    return [];
   }
 }
 
 /**
- * Delivers a status story reply directly to the recipient's inbox
+ * Fetches all direct messages between the current user and a target participant.
  */
-export function sendStatusReplyToInbox({
+export async function getConversationMessages(currentUserId, otherUserId) {
+  if (!currentUserId || !otherUserId || !isValidUuid(currentUserId) || !isValidUuid(otherUserId)) {
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('direct_messages')
+      .select('*')
+      .or(
+        `and(sender_id.eq.${currentUserId},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${currentUserId})`
+      )
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Failed to fetch messages:', error);
+      return [];
+    }
+
+    return (data || []).map((m) => ({
+      id: m.id,
+      senderId: m.sender_id,
+      recipientId: m.recipient_id,
+      text: m.text_content,
+      timestamp: m.created_at,
+      readAt: m.read_at,
+      isFromMe: m.sender_id === currentUserId,
+      reactions: {},
+    }));
+  } catch (err) {
+    console.error('Error in getConversationMessages:', err);
+    return [];
+  }
+}
+
+/**
+ * Sends a real 1:1 direct message via Supabase with RLS validation.
+ */
+export async function sendDirectMessage(recipientId, text, senderId) {
+  const cleanText = (text || '').trim();
+  if (!cleanText) {
+    throw new Error('Message text cannot be empty.');
+  }
+  if (!senderId || !isValidUuid(senderId)) {
+    throw new Error('You must be signed in to send a message.');
+  }
+  if (!recipientId || !isValidUuid(recipientId)) {
+    throw new Error('Invalid recipient.');
+  }
+  if (recipientId === senderId) {
+    throw new Error('You cannot message yourself.');
+  }
+
+  // Verify recipient allows incoming messages
+  const { data: recipientProf } = await supabase
+    .from('profiles')
+    .select('inbox_permission')
+    .eq('id', recipientId)
+    .maybeSingle();
+
+  if (recipientProf && recipientProf.inbox_permission === 'no_one') {
+    throw new Error('This fellowship member has closed their inbox to new direct messages.');
+  }
+
+  const { data, error } = await supabase
+    .from('direct_messages')
+    .insert({
+      sender_id: senderId,
+      recipient_id: recipientId,
+      text_content: cleanText,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.message?.includes('violates row-level security')) {
+      throw new Error('Unable to send message: recipient inbox is closed or permissions restricted.');
+    }
+    throw new Error(error.message || 'Failed to send message');
+  }
+
+  playSound('messageSent');
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('shammah:inbox-updated', {
+        detail: { type: 'message_sent', message: data },
+      })
+    );
+  }
+
+  return {
+    id: data.id,
+    senderId: data.sender_id,
+    recipientId: data.recipient_id,
+    text: data.text_content,
+    timestamp: data.created_at,
+    readAt: data.read_at,
+    isFromMe: true,
+    reactions: {},
+  };
+}
+
+/**
+ * Marks all incoming messages from a conversation as read in Supabase.
+ */
+export async function markConversationAsRead(currentUserId, otherUserId) {
+  if (!currentUserId || !otherUserId || !isValidUuid(currentUserId) || !isValidUuid(otherUserId)) {
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from('direct_messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('recipient_id', currentUserId)
+      .eq('sender_id', otherUserId)
+      .is('read_at', null);
+
+    if (error) {
+      console.warn('Failed to mark conversation as read:', error);
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('shammah:inbox-updated', { detail: { type: 'read' } }));
+    }
+  } catch (err) {
+    console.error('Error in markConversationAsRead:', err);
+  }
+}
+
+/**
+ * Returns total unread messages count for the current user.
+ */
+export async function getTotalUnreadMessagesCount(currentUserId = null) {
+  try {
+    let uid = currentUserId;
+    if (!uid) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      uid = sessionData?.session?.user?.id;
+    }
+    if (!uid || !isValidUuid(uid)) return 0;
+
+    const { data: rpcCount, error: rpcErr } = await supabase.rpc('total_unread_messages_count', {
+      p_user_id: uid,
+    });
+    if (!rpcErr && rpcCount !== null && rpcCount !== undefined) {
+      return Number(rpcCount);
+    }
+
+    const { count, error } = await supabase
+      .from('direct_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('recipient_id', uid)
+      .is('read_at', null);
+
+    if (!error && count !== null && count !== undefined) {
+      return count;
+    }
+    return 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Subscribes to Supabase Realtime changes for direct messages involving the current user.
+ */
+export function subscribeToDirectMessages(currentUserId, onUpdate) {
+  if (!currentUserId || !isValidUuid(currentUserId)) {
+    return () => {};
+  }
+
+  const channel = supabase
+    .channel(`dm_${currentUserId}_${Date.now()}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'direct_messages',
+        filter: `recipient_id=eq.${currentUserId}`,
+      },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          playSound('messageReceived');
+        }
+        if (onUpdate) onUpdate(payload);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('shammah:inbox-updated', { detail: payload }));
+        }
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'direct_messages',
+        filter: `sender_id=eq.${currentUserId}`,
+      },
+      (payload) => {
+        if (onUpdate) onUpdate(payload);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('shammah:inbox-updated', { detail: payload }));
+        }
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+/**
+ * Safely routes status story comments to recipient's direct messages if valid.
+ */
+export async function sendStatusReplyToInbox({
   recipientId,
-  recipientName,
-  recipientAvatar,
-  recipientBadge,
-  recipientVerified,
   senderId,
-  senderName,
-  senderAvatar,
-  senderBadge,
-  senderVerified,
   commentText,
   statusPreviewText,
 }) {
-  const convs = getInboxConversations();
-  const convId = `conv-${recipientId || 'admin'}`;
-  let conv = convs.find((c) => c.id === convId || c.participantId === recipientId);
-
-  const newMsg = {
-    id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-    senderId: senderId || 'me',
-    senderName: senderName || 'You',
-    senderAvatar,
-    senderBadge,
-    senderVerified,
-    text: commentText,
-    storyReplyTo: statusPreviewText ? statusPreviewText.slice(0, 80) : null,
-    timestamp: new Date().toISOString(),
-    isFromMe: true,
-    reactions: {},
-  };
-
-  if (conv) {
-    conv.messages = [...(conv.messages || []), newMsg];
-    conv.lastMessage = `Replied to story: "${commentText}"`;
-    conv.lastMessageTime = newMsg.timestamp;
-  } else {
-    conv = {
-      id: convId,
-      participantId: recipientId || 'recipient',
-      participantName: recipientName || 'Fellowship Member',
-      participantTag: 'Fellowship Member',
-      participantAvatar,
-      participantBadge,
-      participantVerified,
-      isE2EE: true,
-      encryptionFingerprint: `SHA256:${Math.random().toString(16).substr(2, 4)}...${Math.random().toString(16).substr(2, 4)}`,
-      lastMessage: `Replied to story: "${commentText}"`,
-      lastMessageTime: newMsg.timestamp,
-      unreadCount: 0,
-      messages: [newMsg],
-    };
-    convs.unshift(conv);
+  if (!recipientId || !senderId || !isValidUuid(recipientId) || !isValidUuid(senderId) || recipientId === senderId) {
+    return null;
   }
-
-  saveInboxConversations(convs);
-  playSound('messageSent');
-  return newMsg;
-}
-
-/**
- * Send a direct message with optional quote reply
- */
-export function sendDirectMessage(participantIdOrConvId, text, sender, replyTo = null) {
-  const convs = getInboxConversations();
-  const conv = convs.find((c) => c.id === participantIdOrConvId || c.participantId === participantIdOrConvId);
-
-  if (!conv) return null;
-
-  const newMsg = {
-    id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-    senderId: sender?.id || 'me',
-    senderName: sender?.name || 'You',
-    text,
-    timestamp: new Date().toISOString(),
-    isFromMe: true,
-    reactions: {},
-    replyTo: replyTo
-      ? {
-          id: replyTo.id,
-          text: replyTo.text,
-          senderName: replyTo.senderName,
-        }
-      : null,
-  };
-
-  conv.messages = [...(conv.messages || []), newMsg];
-  conv.lastMessage = text;
-  conv.lastMessageTime = newMsg.timestamp;
-
-  saveInboxConversations(convs);
-  playSound('messageSent');
-
-  // Trigger fellowship automated response after brief realistic delay
-  simulateFellowshipReply(conv.id, conv.participantName, text);
-
-  return newMsg;
-}
-
-/**
- * Edit an existing sent message
- */
-export function editDirectMessage(convId, msgId, newText) {
-  const convs = getInboxConversations();
-  const conv = convs.find((c) => c.id === convId);
-  if (!conv) return false;
-
-  const msg = (conv.messages || []).find((m) => m.id === msgId);
-  if (!msg || !msg.isFromMe) return false;
-
-  msg.text = newText;
-  msg.isEdited = true;
-  msg.editedAt = new Date().toISOString();
-
-  // If last message was edited, sync conv.lastMessage
-  if (conv.messages[conv.messages.length - 1]?.id === msgId) {
-    conv.lastMessage = newText;
+  const prefix = statusPreviewText ? `[Story: "${statusPreviewText.slice(0, 40)}..."] ` : '[Story Reply] ';
+  try {
+    return await sendDirectMessage(recipientId, `${prefix}${commentText}`, senderId);
+  } catch (err) {
+    console.warn('Status story reply could not be sent to inbox:', err.message);
+    return null;
   }
-
-  saveInboxConversations(convs);
-  return true;
-}
-
-/**
- * Delete a message
- */
-export function deleteDirectMessage(convId, msgId) {
-  const convs = getInboxConversations();
-  const conv = convs.find((c) => c.id === convId);
-  if (!conv) return false;
-
-  const msg = (conv.messages || []).find((m) => m.id === msgId);
-  if (!msg) return false;
-
-  msg.isDeleted = true;
-  msg.text = 'This message was deleted';
-  msg.reactions = {};
-
-  if (conv.messages[conv.messages.length - 1]?.id === msgId) {
-    conv.lastMessage = 'This message was deleted';
-  }
-
-  saveInboxConversations(convs);
-  return true;
-}
-
-/**
- * Toggle reaction on a message
- */
-export function toggleMessageReaction(convId, msgId, emoji, userName = 'You') {
-  const convs = getInboxConversations();
-  const conv = convs.find((c) => c.id === convId);
-  if (!conv) return false;
-
-  const msg = (conv.messages || []).find((m) => m.id === msgId);
-  if (!msg) return false;
-
-  if (!msg.reactions) msg.reactions = {};
-  if (!msg.reactionUsers) msg.reactionUsers = {};
-
-  const currentCount = msg.reactions[emoji] || 0;
-  const userList = msg.reactionUsers[emoji] || [];
-  const hasReacted = userList.includes(userName);
-
-  if (hasReacted) {
-    // Remove reaction
-    if (currentCount <= 1) {
-      delete msg.reactions[emoji];
-      delete msg.reactionUsers[emoji];
-    } else {
-      msg.reactions[emoji] = currentCount - 1;
-      msg.reactionUsers[emoji] = userList.filter((u) => u !== userName);
-    }
-  } else {
-    // Add reaction
-    msg.reactions[emoji] = currentCount + 1;
-    msg.reactionUsers[emoji] = [...userList, userName];
-    playSound('reaction');
-  }
-
-  saveInboxConversations(convs);
-  return true;
-}
-
-// Simulates a warm, biblical fellowship response for demo & testing
-function simulateFellowshipReply(convId, participantName, userMessage) {
-  setTimeout(() => {
-    // Broadcast typing event
-    window.dispatchEvent(
-      new CustomEvent('shammah:inbox-typing', {
-        detail: { convId, isTyping: true, name: participantName },
-      })
-    );
-    playSound('typing');
-
-    setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent('shammah:inbox-typing', {
-          detail: { convId, isTyping: false, name: participantName },
-        })
-      );
-
-      const convs = getInboxConversations();
-      const conv = convs.find((c) => c.id === convId);
-      if (!conv) return;
-
-      const responses = [
-        `Amen! The Lord bless you abundantly today. Remember: Philippians 4:13.`,
-        `Thank you for sharing this! I am keeping this in our weekly church prayers.`,
-        `Praise God! Always here for fellowship and prayer whenever you need.`,
-        `Such an encouragement! May God continue to guide your steps.`,
-      ];
-      const reply = responses[Math.floor(Math.random() * responses.length)];
-
-      const incomingMsg = {
-        id: `msg-in-${Date.now()}`,
-        senderId: conv.participantId,
-        senderName: conv.participantName,
-        text: reply,
-        timestamp: new Date().toISOString(),
-        isFromMe: false,
-        reactions: {},
-      };
-
-      conv.messages.push(incomingMsg);
-      conv.lastMessage = reply;
-      conv.lastMessageTime = incomingMsg.timestamp;
-      conv.unreadCount = (conv.unreadCount || 0) + 1;
-
-      saveInboxConversations(convs);
-      playSound('messageReceived');
-
-      // Dispatch alert notification popup
-      window.dispatchEvent(
-        new CustomEvent('shammah:new-notification', {
-          detail: {
-            id: `notif-${Date.now()}`,
-            type: 'message',
-            title: `New Message from ${conv.participantName}`,
-            text: reply,
-            time: 'Just now',
-            avatar: conv.participantAvatar,
-            senderName: conv.participantName,
-          },
-        })
-      );
-    }, 1800);
-  }, 1000);
 }

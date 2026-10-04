@@ -1,154 +1,277 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   MessageCircle,
   Send,
-  Sparkles,
   Lock,
   ArrowLeft,
   Smile,
   Reply,
   Edit2,
   Trash2,
-  Check,
-  X,
   ShieldCheck,
   Info,
+  X,
+  AlertCircle,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import {
   getInboxConversations,
+  getConversationMessages,
   sendDirectMessage,
-  editDirectMessage,
-  deleteDirectMessage,
-  toggleMessageReaction,
   markConversationAsRead,
-  FAITH_MESSAGE_REACTIONS,
+  subscribeToDirectMessages,
 } from '../lib/inboxManager';
-import { playSound } from '../lib/soundEffects';
+import { supabase } from '../../lib/supabaseClient';
 
 export default function InboxView({ currentUser }) {
   const [conversations, setConversations] = useState([]);
   const [activeConvId, setActiveConvId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loadingConvs, setLoadingConvs] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [replyText, setReplyText] = useState('');
-  const [replyingTo, setReplyingTo] = useState(null); // { id, text, senderName }
-  const [editingMsgId, setEditingMsgId] = useState(null);
-  const [editText, setEditText] = useState('');
-  const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState(null);
-  const [typingUser, setTypingUser] = useState(null);
-  const [showE2eeInfo, setShowE2eeInfo] = useState(false);
-  const [highlightedMsgId, setHighlightedMsgId] = useState(null);
+  const [showPrivacyInfo, setShowPrivacyInfo] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const [isSending, setIsSending] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const activeConvRef = useRef(null);
 
-  function loadConversations() {
-    const list = getInboxConversations();
-    setConversations(list);
-    if (!activeConvId && list.length > 0) {
-      setActiveConvId(list[0].id);
-      markConversationAsRead(list[0].id);
+  // Load conversations from Supabase
+  const loadConversations = useCallback(async (preserveActiveId = null) => {
+    if (!currentUser?.id) {
+      setConversations([]);
+      setLoadingConvs(false);
+      return;
     }
-  }
 
-  useEffect(() => {
-    loadConversations();
-
-    function onInboxUpdated() {
-      const list = getInboxConversations();
+    try {
+      const list = await getInboxConversations(currentUser.id);
       setConversations(list);
+
+      // Determine active conversation
+      const currentActive = preserveActiveId || activeConvRef.current;
+      if (currentActive && list.some((c) => c.id === currentActive)) {
+        setActiveConvId(currentActive);
+      } else if (!currentActive && list.length > 0) {
+        setActiveConvId(list[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load inbox conversations:', err);
+    } finally {
+      setLoadingConvs(false);
+    }
+  }, [currentUser?.id]);
+
+  // Load messages for active conversation
+  const loadMessages = useCallback(async (conv) => {
+    if (!conv || !currentUser?.id) {
+      setMessages([]);
+      return;
     }
 
-    function onTyping(e) {
-      if (e.detail?.convId === activeConvId && e.detail.isTyping) {
-        setTypingUser(e.detail.name);
-      } else {
-        setTypingUser(null);
+    setLoadingMessages(true);
+    setSendError('');
+    try {
+      const msgs = await getConversationMessages(currentUser.id, conv.participantId);
+      setMessages(msgs);
+      // Mark unread messages as read in Supabase
+      if (conv.unreadCount > 0) {
+        await markConversationAsRead(currentUser.id, conv.participantId);
+        setConversations((prev) =>
+          prev.map((c) => (c.id === conv.id ? { ...c, unreadCount: 0 } : c))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load messages for thread:', err);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [currentUser?.id]);
+
+  // Handle open conversation event (from Profile Message button or other links)
+  const handleOpenTargetRecipient = useCallback(async (recipientId, optionalMeta = {}) => {
+    if (!recipientId || !currentUser?.id) return;
+
+    // Check if conversation already exists in state
+    let target = conversations.find(
+      (c) => c.participantId === recipientId || c.id === `conv-${recipientId}`
+    );
+
+    if (!target) {
+      // Fetch recipient profile from Supabase
+      try {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('id, display_name, avatar_url, badge, badge_verified, role, inbox_permission')
+          .eq('id', recipientId)
+          .maybeSingle();
+
+        target = {
+          id: `conv-${recipientId}`,
+          participantId: recipientId,
+          participantName: prof?.display_name || optionalMeta.recipientName || 'Fellowship Member',
+          participantAvatar: prof?.avatar_url || optionalMeta.recipientAvatar || null,
+          participantBadge: prof?.badge || optionalMeta.recipientBadge || 'member',
+          participantVerified: Boolean(prof?.badge_verified ?? optionalMeta.recipientVerified),
+          participantRole: prof?.role || optionalMeta.recipientRole || 'member',
+          participantInboxPermission: prof?.inbox_permission || optionalMeta.recipientInboxPermission || 'everyone',
+          lastMessage: '',
+          lastMessageTime: new Date().toISOString(),
+          unreadCount: 0,
+        };
+
+        setConversations((prev) => [target, ...prev.filter((c) => c.participantId !== recipientId)]);
+      } catch (err) {
+        console.error('Failed to resolve profile for messaging:', err);
       }
     }
 
-    window.addEventListener('shammah:inbox-updated', onInboxUpdated);
-    window.addEventListener('shammah:inbox-typing', onTyping);
-    return () => {
-      window.removeEventListener('shammah:inbox-updated', onInboxUpdated);
-      window.removeEventListener('shammah:inbox-typing', onTyping);
-    };
-  }, [activeConvId]);
-
-  useEffect(() => {
-    if (activeConvId) {
-      markConversationAsRead(activeConvId);
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+    if (target) {
+      setActiveConvId(target.id);
+      loadMessages(target);
     }
-  }, [activeConvId]);
+  }, [conversations, currentUser?.id, loadMessages]);
+
+  // Initialize and check URL recipient param
+  useEffect(() => {
+    loadConversations();
+
+    // Check if recipient was specified in URL query
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const recipientParam = params.get('recipient');
+      if (recipientParam) {
+        handleOpenTargetRecipient(recipientParam);
+      }
+    }
+
+    function onOpenConv(e) {
+      if (e.detail?.recipientId) {
+        handleOpenTargetRecipient(e.detail.recipientId, e.detail);
+      }
+    }
+
+    function onInboxEvent() {
+      loadConversations(activeConvRef.current);
+    }
+
+    window.addEventListener('shammah:open-conversation', onOpenConv);
+    window.addEventListener('shammah:inbox-updated', onInboxEvent);
+
+    return () => {
+      window.removeEventListener('shammah:open-conversation', onOpenConv);
+      window.removeEventListener('shammah:inbox-updated', onInboxEvent);
+    };
+  }, [loadConversations, handleOpenTargetRecipient]);
+
+  // Realtime Supabase Channel Subscription
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const unsubscribe = subscribeToDirectMessages(currentUser.id, (payload) => {
+      const active = activeConvRef.current;
+      const activeItem = conversations.find((c) => c.id === active);
+
+      if (payload.eventType === 'INSERT' && payload.new) {
+        const newMsg = payload.new;
+        const otherId = newMsg.sender_id === currentUser.id ? newMsg.recipient_id : newMsg.sender_id;
+
+        // If message is in the active thread, append it
+        if (activeItem && otherId === activeItem.participantId) {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: newMsg.id,
+                senderId: newMsg.sender_id,
+                recipientId: newMsg.recipient_id,
+                text: newMsg.text_content,
+                timestamp: newMsg.created_at,
+                readAt: newMsg.read_at,
+                isFromMe: newMsg.sender_id === currentUser.id,
+                reactions: {},
+              },
+            ];
+          });
+
+          // Mark as read immediately if viewer is recipient
+          if (newMsg.recipient_id === currentUser.id) {
+            markConversationAsRead(currentUser.id, otherId);
+          }
+        }
+      } else if (payload.eventType === 'UPDATE' && payload.new) {
+        // Read receipt update
+        setMessages((prev) =>
+          prev.map((m) => (m.id === payload.new.id ? { ...m, readAt: payload.new.read_at } : m))
+        );
+      }
+
+      loadConversations(active);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser?.id, conversations, loadConversations]);
+
+  // Keep active conversation ref in sync
+  useEffect(() => {
+    activeConvRef.current = activeConvId;
+    const conv = conversations.find((c) => c.id === activeConvId);
+    if (conv) {
+      loadMessages(conv);
+    }
+  }, [activeConvId, loadMessages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll to bottom on message updates
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const activeConv = conversations.find((c) => c.id === activeConvId);
+  const isInboxClosed = activeConv?.participantInboxPermission === 'no_one';
 
   function handleSelectConv(convId) {
     setActiveConvId(convId);
-    markConversationAsRead(convId);
-    setReplyingTo(null);
-    setEditingMsgId(null);
-  }
-
-  function handleSendReply(e) {
-    e.preventDefault();
-    if (!replyText.trim() || !activeConv) return;
-
-    sendDirectMessage(
-      activeConv.id,
-      replyText.trim(),
-      {
-        id: currentUser?.id,
-        name: currentUser?.name || 'You',
-      },
-      replyingTo
-    );
-
+    setSendError('');
     setReplyText('');
-    setReplyingTo(null);
-    loadConversations();
-
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 120);
   }
 
-  function handleStartEdit(msg) {
-    setEditingMsgId(msg.id);
-    setEditText(msg.text);
-    setActiveReactionPickerMsgId(null);
-  }
+  async function handleSendReply(e) {
+    e.preventDefault();
+    const text = replyText.trim();
+    if (!text || !activeConv || !currentUser?.id || isSending) return;
 
-  function handleSaveEdit(msgId) {
-    if (!editText.trim()) return;
-    editDirectMessage(activeConv.id, msgId, editText.trim());
-    setEditingMsgId(null);
-    setEditText('');
-    loadConversations();
-    playSound('reaction');
-  }
+    if (isInboxClosed) {
+      setSendError('This fellowship member has closed their inbox to incoming direct messages.');
+      return;
+    }
 
-  function handleDeleteMsg(msgId) {
-    deleteDirectMessage(activeConv.id, msgId);
-    loadConversations();
-    playSound('reaction');
-  }
+    setIsSending(true);
+    setSendError('');
 
-  function handleReaction(msgId, emoji) {
-    toggleMessageReaction(activeConv.id, msgId, emoji, currentUser?.name || 'You');
-    setActiveReactionPickerMsgId(null);
-    loadConversations();
-  }
+    try {
+      const sent = await sendDirectMessage(activeConv.participantId, text, currentUser.id);
+      setMessages((prev) => [...prev, sent]);
+      setReplyText('');
 
-  function handleJumpToQuoted(quotedMsgId) {
-    const el = document.getElementById(`msg-bubble-${quotedMsgId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setHighlightedMsgId(quotedMsgId);
-      setTimeout(() => setHighlightedMsgId(null), 2000);
+      // Refresh conversations list to update snippet
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === activeConv.id
+            ? { ...c, lastMessage: text, lastMessageTime: new Date().toISOString() }
+            : c
+        )
+      );
+    } catch (err) {
+      console.error('Error sending message:', err);
+      setSendError(err.message || 'Failed to deliver message.');
+    } finally {
+      setIsSending(false);
     }
   }
 
@@ -161,10 +284,10 @@ export default function InboxView({ currentUser }) {
             <div className="inbox-gate-icon-wrap">
               <Lock size={36} className="inbox-gate-lock-icon" />
             </div>
-            <h2>End-to-End Encrypted Messages</h2>
+            <h2>Private Fellowship Messages</h2>
             <p>
-              Direct messaging and status story replies are reserved for signed-in fellowship members.
-              Sign in or create your account to securely message pastors, leaders, and friends.
+              Direct messaging and personal fellowship conversations are reserved for signed-in members.
+              Sign in or create an account to securely message pastors, leaders, and friends.
             </p>
             <button
               type="button"
@@ -189,26 +312,38 @@ export default function InboxView({ currentUser }) {
       <div className="inbox-header">
         <div className="inbox-header-title">
           <MessageCircle size={20} className="inbox-title-icon" />
-          <h2>End-to-End Encrypted Fellowship Messages</h2>
+          <h2>Direct Fellowship Messages</h2>
         </div>
-        <div className="inbox-header-e2ee-tag" onClick={() => setShowE2eeInfo((v) => !v)} title="Click for encryption details">
-          <Lock size={12} className="e2ee-lock-icon" />
-          <span>E2EE Active · AES-256</span>
+        <div
+          className="inbox-header-e2ee-tag"
+          onClick={() => setShowPrivacyInfo((v) => !v)}
+          title="Click for security & privacy details"
+          role="button"
+          tabIndex={0}
+        >
+          <ShieldCheck size={13} className="e2ee-lock-icon text-cyan-400" />
+          <span>Encrypted in Transit (TLS) · RLS Protected</span>
           <Info size={12} />
         </div>
       </div>
 
-      {showE2eeInfo && (
+      {showPrivacyInfo && (
         <div className="inbox-e2ee-banner">
-          <ShieldCheck size={18} className="e2ee-shield-icon" />
+          <ShieldCheck size={18} className="e2ee-shield-icon text-cyan-400" />
           <div>
-            <strong>End-to-End Encrypted with Fellowship Key</strong>
+            <strong>Encrypted in Transit · Row-Level Security Protected</strong>
             <p>
-              Direct messages and 24-hour status replies are protected with client-side end-to-end encryption.
-              Only you and your fellowship partner possess the keys to decrypt these conversations.
+              All direct messages are transmitted securely over TLS encryption and guarded by
+              Supabase Row-Level Security (RLS) policies. Only you and your fellowship partner
+              have permission to read or query these conversations.
             </p>
           </div>
-          <button type="button" className="e2ee-banner-close" onClick={() => setShowE2eeInfo(false)}>
+          <button
+            type="button"
+            className="e2ee-banner-close"
+            onClick={() => setShowPrivacyInfo(false)}
+            aria-label="Close security notice"
+          >
             <X size={15} />
           </button>
         </div>
@@ -217,10 +352,14 @@ export default function InboxView({ currentUser }) {
       <div className="inbox-layout">
         {/* Conversations List */}
         <div className={`inbox-sidebar${activeConvId ? ' has-active-on-mobile' : ''}`}>
-          {conversations.length === 0 ? (
+          {loadingConvs ? (
+            <div className="inbox-empty-sidebar">
+              <p>Loading fellowship conversations…</p>
+            </div>
+          ) : conversations.length === 0 ? (
             <div className="inbox-empty-sidebar">
               <MessageCircle size={32} className="inbox-empty-icon" />
-              <p>No messages yet. Direct messages and story comments will appear here!</p>
+              <p>No messages yet. Direct messages and fellowship chats will appear here!</p>
             </div>
           ) : (
             conversations.map((conv) => {
@@ -231,6 +370,8 @@ export default function InboxView({ currentUser }) {
                   key={conv.id}
                   className={`inbox-conv-item${isSelected ? ' active' : ''}`}
                   onClick={() => handleSelectConv(conv.id)}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="inbox-conv-avatar-wrap">
                     <Avatar name={conv.participantName} src={conv.participantAvatar} className="avatar-sm" />
@@ -241,11 +382,13 @@ export default function InboxView({ currentUser }) {
                       <span className="inbox-conv-name">{conv.participantName}</span>
                       {conv.participantVerified && <VerifiedBadge badge={conv.participantBadge} size={14} />}
                     </div>
-                    {conv.participantTag && <span className="inbox-conv-member-tag">{conv.participantTag}</span>}
-                    <span className="inbox-conv-snippet">{conv.lastMessage}</span>
+                    {conv.participantRole && (
+                      <span className="inbox-conv-member-tag">{conv.participantRole}</span>
+                    )}
+                    <span className="inbox-conv-snippet">{conv.lastMessage || 'New conversation'}</span>
                   </div>
                   <div className="inbox-conv-meta">
-                    <Lock size={10} className="inbox-mini-lock" title="Encrypted" />
+                    <ShieldCheck size={11} className="inbox-mini-lock text-cyan-400" title="RLS Protected" />
                   </div>
                 </div>
               );
@@ -275,10 +418,10 @@ export default function InboxView({ currentUser }) {
                     <span className="inbox-badge-tag">{activeConv.participantBadge || 'Member'}</span>
                   </div>
                   <div className="inbox-thread-tag-row">
-                    <span className="inbox-thread-tag-text">{activeConv.participantTag || 'Fellowship Member'}</span>
-                    <span className="inbox-e2ee-pill">
-                      <Lock size={9} />
-                      <span>Encrypted</span>
+                    <span className="inbox-thread-tag-text">{activeConv.participantRole || 'Fellowship Member'}</span>
+                    <span className="inbox-e2ee-pill" title="Protected by database Row-Level Security">
+                      <ShieldCheck size={10} className="text-cyan-400" />
+                      <span>RLS Protected</span>
                     </span>
                   </div>
                 </div>
@@ -286,113 +429,69 @@ export default function InboxView({ currentUser }) {
 
               {/* Message Bubbles */}
               <div className="inbox-thread-messages">
-                {activeConv.messages?.map((msg) => {
-                  const isMe = msg.isFromMe;
-                  const isEditing = editingMsgId === msg.id;
-                  const isHighlighted = highlightedMsgId === msg.id;
-
-                  return (
-                    <div
-                      key={msg.id}
-                      id={`msg-bubble-${msg.id}`}
-                      className={`inbox-bubble-wrap${isMe ? ' from-me' : ' from-them'}${isHighlighted ? ' highlighted' : ''}`}
-                    >
-                      {/* Status Story Reply Header Context */}
-                      {msg.storyReplyTo && (
-                        <div className="inbox-story-reply-context">
-                          <Sparkles size={12} className="story-context-icon" />
-                          <span>Replied to 24h status: &ldquo;{msg.storyReplyTo}&rdquo;</span>
-                        </div>
-                      )}
-
-                      {/* Quoted Reply Block */}
-                      {msg.replyTo && (
-                        <div
-                          className="inbox-quoted-context"
-                          onClick={() => handleJumpToQuoted(msg.replyTo.id)}
-                          title="Click to view quoted message"
-                        >
-                          <Reply size={12} className="inbox-quoted-icon" />
-                          <div className="inbox-quoted-text">
-                            <strong>{msg.replyTo.senderName}</strong>: {msg.replyTo.text}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="inbox-bubble-row">
-                        <div className="inbox-bubble">
-                          {isEditing ? (
-                            <div className="inbox-edit-box">
-                              <input
-                                type="text"
-                                value={editText}
-                                onChange={(e) => setEditText(e.target.value)}
-                                className="inbox-edit-input"
-                                autoFocus
-                              />
-                              <div className="inbox-edit-actions">
-                                <button type="button" className="inbox-edit-save-btn" onClick={() => handleSaveEdit(msg.id)}>
-                                  <Check size={13} /> Save
-                                </button>
-                                <button type="button" className="inbox-edit-cancel-btn" onClick={() => setEditingMsgId(null)}>
-                                  <X size={13} />
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <p className={`inbox-bubble-text${msg.isDeleted ? ' is-deleted' : ''}`}>{msg.text}</p>
-                              <div className="inbox-bubble-footer">
-                                {msg.isEdited && <span className="inbox-bubble-edited">(edited)</span>}
-                                <span className="inbox-bubble-time">
-                                  {msg.timestamp
-                                    ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                    : 'Now'}
+                {loadingMessages ? (
+                  <div className="inbox-loading-thread">
+                    <p>Loading messages…</p>
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="inbox-empty-thread-content">
+                    <p>This is the start of your direct conversation with {activeConv.participantName}.</p>
+                  </div>
+                ) : (
+                  messages.map((msg) => {
+                    const isMe = msg.isFromMe;
+                    return (
+                      <div
+                        key={msg.id}
+                        id={`msg-bubble-${msg.id}`}
+                        className={`inbox-bubble-wrap${isMe ? ' from-me' : ' from-them'}`}
+                      >
+                        <div className="inbox-bubble-row">
+                          <div className="inbox-bubble">
+                            <p className="inbox-bubble-text">{msg.text}</p>
+                            <div className="inbox-bubble-footer">
+                              <span className="inbox-bubble-time">
+                                {msg.timestamp
+                                  ? new Date(msg.timestamp).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })
+                                  : 'Now'}
+                              </span>
+                              {isMe && (
+                                <span
+                                  className="inbox-read-check"
+                                  title={msg.readAt ? `Read ${new Date(msg.readAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Delivered'}
+                                  style={{
+                                    marginLeft: 5,
+                                    fontSize: '11px',
+                                    fontWeight: 'bold',
+                                    color: msg.readAt ? '#06b6d4' : '#94a3b8',
+                                  }}
+                                >
+                                  {msg.readAt ? '✓✓' : '✓'}
                                 </span>
-                              </div>
-                            </>
-                          )}
-
-                          {/* Message Reactions Row */}
-                          {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-                            <div className="inbox-bubble-reactions">
-                              {Object.entries(msg.reactions).map(([emoji, count]) => {
-                                const userReacted = (msg.reactionUsers?.[emoji] || []).includes(currentUser?.name || 'You');
-                                return (
-                                  <button
-                                    key={emoji}
-                                    type="button"
-                                    className={`inbox-reaction-tag${userReacted ? ' mine' : ''}`}
-                                    onClick={() => handleReaction(msg.id, emoji)}
-                                    title={`${count} reactions`}
-                                  >
-                                    <span>{emoji}</span>
-                                    {count > 1 && <span className="inbox-reaction-count">{count}</span>}
-                                  </button>
-                                );
-                              })}
+                              )}
                             </div>
-                          )}
-                        </div>
+                          </div>
 
-                        {/* Hover Quick Actions (Reply, React, Edit, Delete) */}
-                        {!msg.isDeleted && !isEditing && (
+                          {/* Action icons cleanly disabled with tooltips */}
                           <div className="inbox-msg-actions">
                             <button
                               type="button"
-                              className="inbox-action-icon-btn"
-                              onClick={() => setReplyingTo({ id: msg.id, text: msg.text, senderName: msg.senderName })}
-                              title="Quote Reply"
+                              className="inbox-action-icon-btn disabled"
+                              disabled
+                              title="Quote reply coming soon"
+                              aria-label="Quote reply coming soon"
                             >
                               <Reply size={13} />
                             </button>
                             <button
                               type="button"
-                              className="inbox-action-icon-btn"
-                              onClick={() =>
-                                setActiveReactionPickerMsgId((id) => (id === msg.id ? null : msg.id))
-                              }
-                              title="Add Reaction"
+                              className="inbox-action-icon-btn disabled"
+                              disabled
+                              title="Message reactions coming soon"
+                              aria-label="Message reactions coming soon"
                             >
                               <Smile size={13} />
                             </button>
@@ -400,98 +499,74 @@ export default function InboxView({ currentUser }) {
                               <>
                                 <button
                                   type="button"
-                                  className="inbox-action-icon-btn"
-                                  onClick={() => handleStartEdit(msg)}
-                                  title="Edit Message"
+                                  className="inbox-action-icon-btn disabled"
+                                  disabled
+                                  title="Message editing coming soon"
+                                  aria-label="Message editing coming soon"
                                 >
                                   <Edit2 size={12} />
                                 </button>
                                 <button
                                   type="button"
-                                  className="inbox-action-icon-btn danger"
-                                  onClick={() => handleDeleteMsg(msg.id)}
-                                  title="Delete Message"
+                                  className="inbox-action-icon-btn danger disabled"
+                                  disabled
+                                  title="Message deletion coming soon"
+                                  aria-label="Message deletion coming soon"
                                 >
                                   <Trash2 size={12} />
                                 </button>
                               </>
                             )}
                           </div>
-                        )}
-                      </div>
-
-                      {/* Reaction Picker Popover */}
-                      {activeReactionPickerMsgId === msg.id && (
-                        <div className="inbox-reaction-picker">
-                          {FAITH_MESSAGE_REACTIONS.map((r) => (
-                            <button
-                              key={r.id}
-                              type="button"
-                              className="inbox-picker-emoji-btn"
-                              onClick={() => handleReaction(msg.id, r.emoji)}
-                              title={r.label}
-                            >
-                              {r.emoji}
-                            </button>
-                          ))}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Live Typing Indicator */}
-                {typingUser && (
-                  <div className="inbox-typing-row">
-                    <span className="typing-dots">
-                      <span />
-                      <span />
-                      <span />
-                    </span>
-                    <span className="typing-label">{typingUser} is typing fellowship reply…</span>
-                  </div>
+                      </div>
+                    );
+                  })
                 )}
-
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Quoted reply banner if active */}
-              {replyingTo && (
-                <div className="inbox-replying-to-banner">
-                  <div className="replying-to-left">
-                    <Reply size={14} className="replying-to-icon" />
-                    <span>Replying to <strong>{replyingTo.senderName}</strong>: &ldquo;{replyingTo.text}&rdquo;</span>
-                  </div>
-                  <button type="button" className="replying-to-cancel" onClick={() => setReplyingTo(null)}>
-                    <X size={14} />
-                  </button>
+              {/* Error notice if send fails */}
+              {sendError && (
+                <div className="inbox-send-error-bar" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '13px' }}>
+                  <AlertCircle size={14} />
+                  <span>{sendError}</span>
                 </div>
               )}
 
-              {/* Reply Input Form */}
-              <form className="inbox-reply-form" onSubmit={handleSendReply}>
-                <input
-                  type="text"
-                  placeholder={`Encrypted message to ${activeConv.participantName}...`}
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  className="inbox-reply-input"
-                />
-                <button
-                  type="submit"
-                  className="inbox-reply-send-btn"
-                  disabled={!replyText.trim()}
-                  aria-label="Send encrypted message"
-                >
-                  <Send size={15} />
-                </button>
-              </form>
+              {/* Inbox closed notice if recipient has closed inbox */}
+              {isInboxClosed ? (
+                <div className="inbox-closed-banner" style={{ padding: '14px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', background: 'rgba(255,255,255,0.03)' }}>
+                  <Lock size={14} style={{ display: 'inline', marginRight: 6 }} />
+                  <span>This fellowship member has closed their inbox to incoming direct messages.</span>
+                </div>
+              ) : (
+                /* Reply Input Form */
+                <form className="inbox-reply-form" onSubmit={handleSendReply}>
+                  <input
+                    type="text"
+                    placeholder={`Message ${activeConv.participantName}...`}
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    className="inbox-reply-input"
+                    disabled={isSending}
+                  />
+                  <button
+                    type="submit"
+                    className="inbox-reply-send-btn"
+                    disabled={!replyText.trim() || isSending}
+                    aria-label="Send message"
+                  >
+                    <Send size={15} />
+                  </button>
+                </form>
+              )}
             </div>
           ) : (
             <div className="inbox-empty-thread">
               <MessageCircle size={40} className="inbox-empty-thread-icon" />
               <h3>Select a fellowship conversation</h3>
-              <p>Direct encrypted messages and comments on your 24h status stories will appear here.</p>
+              <p>Direct messages and fellowship conversations will appear here.</p>
             </div>
           )}
         </div>

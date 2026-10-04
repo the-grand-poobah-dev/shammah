@@ -47,7 +47,7 @@ import {
 import { getHomefeedPostsWithRss } from './lib/rssManager';
 import { playSound, isSoundEnabled, setSoundEnabled } from './lib/soundEffects';
 import { rankPostsWithAlgorithm } from './lib/feedAlgorithm';
-import { getBlockedUsers, getFollows } from './lib/profileManager';
+import { getBlockedUsers, getFollows, fetchFollows, fetchBlockedUsers } from './lib/profileManager';
 import AuthorOverviewModal from './components/AuthorOverviewModal';
 import InstitutionProfileModal from './components/InstitutionProfileModal';
 import ShammahChatbotModal from './components/ShammahChatbotModal';
@@ -277,6 +277,10 @@ export default function Feed() {
     function syncUrlParams() {
       if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
+        const t = params.get('tab');
+        if (t && ['home', 'messages', 'alerts', 'churches', 'menu'].includes(t)) {
+          setTab(t);
+        }
         const sec = params.get('section');
         if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss', 'workspace'].includes(sec)) {
           setSection(sec);
@@ -509,6 +513,10 @@ export default function Feed() {
   }, [activeCategory]);
 
   async function loadProfile(userId) {
+    if (userId) {
+      fetchFollows(userId);
+      fetchBlockedUsers(userId);
+    }
     const { data, error } = await supabase
       .from('profiles')
       .select(
@@ -569,7 +577,7 @@ export default function Feed() {
       let query = supabase
         .from('posts')
         .select(
-          'id, text_content, media_url, media_type, created_at, category_id, is_pinned, pinned_at, profiles(display_name, avatar_url, badge, badge_verified, role)'
+          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, visibility, is_pinned, pinned_at, profiles(display_name, avatar_url, badge, badge_verified, role)'
         )
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
@@ -804,6 +812,7 @@ export default function Feed() {
         text_content: text || null,
         media_url,
         media_type,
+        visibility: visibility || 'public',
         is_pinned: isPinnedToSave,
         pinned_at: pinnedAtToSave,
         poll_duration: pollDurationToSave,
@@ -831,6 +840,8 @@ export default function Feed() {
         created_at: new Date().toISOString(),
         category_id: composeCategory,
         church_id: profile?.church_id ?? null,
+        author_id: session.user.id,
+        visibility: visibility || 'public',
         is_pinned: isPinnedToSave,
         pinned_at: pinnedAtToSave,
         poll_duration: pollDurationToSave,

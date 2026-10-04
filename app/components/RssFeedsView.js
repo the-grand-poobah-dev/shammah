@@ -53,8 +53,16 @@ function RssItemCard({ item, feed, session, currentUser, openAuth, isDeveloper }
   const audioRef = useRef(null);
 
   useEffect(() => {
-    setReposted(isPostReposted(item.id, session?.user?.id));
-    setRepostCount(getPostRepostCount(item.id, item.repostsCount || 7));
+    let cancelled = false;
+    isPostReposted(item.id, session?.user?.id).then((isRep) => {
+      if (!cancelled) setReposted(isRep);
+    });
+    getPostRepostCount(item.id, item.repostsCount || 7).then((cnt) => {
+      if (!cancelled) setRepostCount(cnt);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [item.id, session?.user?.id, item.repostsCount]);
 
   function toggleAudio() {
@@ -216,8 +224,8 @@ function RssItemCard({ item, feed, session, currentUser, openAuth, isDeveloper }
           post={postCompat}
           currentUser={currentUser}
           onClose={() => setShowRepostModal(false)}
-          onConfirm={(quote) => {
-            const res = toggleRepost(item.id, postCompat, currentUser, quote);
+          onConfirm={async (quote) => {
+            const res = await toggleRepost(item.id, postCompat, currentUser, quote);
             setReposted(res.reposted);
             setRepostCount(res.count);
           }}

@@ -16,13 +16,14 @@ import {
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
-import { isFollowing, toggleFollow, isBlocked, toggleBlock, getProfileSettings } from '../lib/profileManager';
+import { isFollowing, toggleFollow, isBlocked, toggleBlock, getProfileSettings, fetchFollowStats } from '../lib/profileManager';
 import { playSound } from '../lib/soundEffects';
 
 export default function AuthorOverviewModal({ author, authorId, currentUser, onClose, onOpenDirectMessage }) {
   const router = useRouter();
-  const [following, setFollowing] = useState(false);
-  const [blocked, setBlocked] = useState(false);
+  const [following, setFollowing] = useState(() => (authorId ? isFollowing(authorId) : false));
+  const [followersCount, setFollowersCount] = useState(0);
+  const [blocked, setBlocked] = useState(() => (authorId ? isBlocked(authorId) : false));
   const [profileSettings, setProfileSettings] = useState({ isLocked: false, inboxPermission: 'everyone' });
 
   const [toastMsg, setToastMsg] = useState('');
@@ -36,11 +37,43 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
   const verified = author?.badge_verified;
 
   useEffect(() => {
+    let cancelled = false;
     if (authorId) {
       setFollowing(isFollowing(authorId));
       setBlocked(isBlocked(authorId));
       setProfileSettings(getProfileSettings(authorId));
+
+      fetchFollowStats(authorId).then((stats) => {
+        if (!cancelled) {
+          setFollowersCount(stats.followersCount);
+        }
+      });
     }
+
+    function onFollowsUpdated() {
+      if (authorId) {
+        setFollowing(isFollowing(authorId));
+        fetchFollowStats(authorId).then((stats) => {
+          if (!cancelled) {
+            setFollowersCount(stats.followersCount);
+          }
+        });
+      }
+    }
+
+    function onBlocksUpdated() {
+      if (authorId) {
+        setBlocked(isBlocked(authorId));
+      }
+    }
+
+    window.addEventListener('shammah:follows-updated', onFollowsUpdated);
+    window.addEventListener('shammah:blocks-updated', onBlocksUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('shammah:follows-updated', onFollowsUpdated);
+      window.removeEventListener('shammah:blocks-updated', onBlocksUpdated);
+    };
   }, [authorId]);
 
   function showToast(msg) {
@@ -48,25 +81,26 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
     setTimeout(() => setToastMsg(''), 3000);
   }
 
-  function handleFollowToggle() {
+  async function handleFollowToggle() {
     if (isMe) return;
     if (!isLoggedIn) {
       showToast('Please sign in or create an account to follow members.');
       return;
     }
-    const next = toggleFollow(authorId);
+    const next = await toggleFollow(authorId, currentUser?.id);
     setFollowing(next);
+    setFollowersCount((prev) => (next ? prev + 1 : Math.max(0, prev - 1)));
     showToast(next ? `Now following ${name}` : `Unfollowed ${name}`);
   }
 
-  function handleBlockToggle() {
+  async function handleBlockToggle() {
     if (isMe) return;
     if (!isLoggedIn) {
       showToast('Please sign in to block or manage member connections.');
       return;
     }
     if (blocked) {
-      const next = toggleBlock(authorId);
+      const next = await toggleBlock(authorId, currentUser?.id);
       setBlocked(next);
       setConfirmingBlock(false);
       showToast(`Unblocked ${name}`);
@@ -75,7 +109,7 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
         setConfirmingBlock(true);
         return;
       }
-      const next = toggleBlock(authorId);
+      const next = await toggleBlock(authorId, currentUser?.id);
       setBlocked(next);
       setConfirmingBlock(false);
       showToast(`Blocked ${name}`);
@@ -176,12 +210,12 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
             <span>Testimonies</span>
           </div>
           <div className="author-stat-item">
-            <strong>{following ? '129' : '128'}</strong>
+            <strong>{followersCount}</strong>
             <span>Followers</span>
           </div>
           <div className="author-stat-item">
-            <strong>E2EE</strong>
-            <span>Encrypted</span>
+            <strong>Private</strong>
+            <span>TLS &amp; RLS</span>
           </div>
         </div>
 

@@ -111,8 +111,11 @@ create table if not exists profiles (
   location_lng             double precision,
   display_name_changed_at  timestamptz,
   onboarding_completed_at  timestamptz,
+  inbox_permission         text not null default 'everyone',
+  is_locked                boolean not null default false,
   created_at               timestamptz not null default now(),
-  constraint profiles_about_len check (about is null or char_length(about) <= 250)
+  constraint profiles_about_len check (about is null or char_length(about) <= 250),
+  constraint profiles_inbox_permission_check check (inbox_permission in ('everyone', 'followers_church', 'no_one'))
 );
 
 -- Now that profiles exists, wire the churches FK
@@ -148,7 +151,10 @@ create table if not exists posts (
   external_guid           text,
   is_pinned               boolean not null default false,
   pinned_at               timestamptz,
+  visibility              text not null default 'public',
   created_at              timestamptz not null default now(),
+  constraint posts_visibility_check
+    check (visibility in ('public','followers','church','private')),
   constraint posts_media_type_check
     check (media_type is null or media_type in ('image','video','audio','reel','podcast')),
   constraint posts_source_check
@@ -191,7 +197,23 @@ create table if not exists reactions (
 create index if not exists reactions_target_idx on reactions (target_type, target_id);
 
 -- ---------------------------------------------------------------
--- 9. Polls
+-- 9. Reposts
+-- ---------------------------------------------------------------
+create table if not exists post_reposts (
+  id         uuid primary key default gen_random_uuid(),
+  post_id    uuid not null references posts(id) on delete cascade,
+  user_id    uuid not null references profiles(id) on delete cascade,
+  quote_text text,
+  created_at timestamptz not null default now(),
+  unique (post_id, user_id)
+);
+
+create index if not exists post_reposts_post_idx on post_reposts (post_id);
+create index if not exists post_reposts_user_idx on post_reposts (user_id);
+create index if not exists post_reposts_created_idx on post_reposts (created_at desc);
+
+-- ---------------------------------------------------------------
+-- 10. Polls
 -- ---------------------------------------------------------------
 create table if not exists poll_options (
   id        uuid primary key default gen_random_uuid(),
@@ -259,7 +281,58 @@ create table if not exists rss_feeds (
 );
 
 -- ---------------------------------------------------------------
--- 13. Helpful RPCs (used by the app)
+-- 13. Direct Messages
+-- ---------------------------------------------------------------
+create table if not exists direct_messages (
+  id           uuid primary key default gen_random_uuid(),
+  sender_id    uuid not null references profiles(id) on delete cascade,
+  recipient_id uuid not null references profiles(id) on delete cascade,
+  text_content text not null,
+  created_at   timestamptz not null default now(),
+  read_at      timestamptz,
+  constraint direct_messages_distinct_users check (sender_id <> recipient_id),
+  constraint direct_messages_text_not_empty check (char_length(btrim(text_content)) > 0)
+);
+
+create index if not exists direct_messages_conversation_idx
+  on direct_messages (least(sender_id, recipient_id), greatest(sender_id, recipient_id), created_at asc);
+create index if not exists direct_messages_sender_created_idx
+  on direct_messages (sender_id, created_at desc);
+create index if not exists direct_messages_recipient_created_idx
+  on direct_messages (recipient_id, created_at desc);
+create index if not exists direct_messages_unread_idx
+  on direct_messages (recipient_id, read_at) where read_at is null;
+
+-- ---------------------------------------------------------------
+-- 14. Follows
+-- ---------------------------------------------------------------
+create table if not exists follows (
+  follower_id uuid not null references profiles(id) on delete cascade,
+  followed_id uuid not null references profiles(id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  primary key (follower_id, followed_id),
+  constraint follows_distinct_users check (follower_id <> followed_id)
+);
+
+create index if not exists follows_follower_id_idx on follows (follower_id);
+create index if not exists follows_followed_id_idx on follows (followed_id);
+
+-- ---------------------------------------------------------------
+-- 15. Blocks
+-- ---------------------------------------------------------------
+create table if not exists blocks (
+  blocker_id uuid not null references profiles(id) on delete cascade,
+  blocked_id uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, blocked_id),
+  constraint blocks_distinct_users check (blocker_id <> blocked_id)
+);
+
+create index if not exists blocks_blocker_id_idx on blocks (blocker_id);
+create index if not exists blocks_blocked_id_idx on blocks (blocked_id);
+
+-- ---------------------------------------------------------------
+-- 16. Helpful RPCs (used by the app)
 -- ---------------------------------------------------------------
 create or replace function public.category_counts()
 returns table (category_id text, total bigint)
@@ -304,8 +377,87 @@ language sql stable as $$
   group by v.post_id, v.option_id
 $$;
 
+create or replace function public.repost_counts(p_post_ids uuid[])
+returns table (post_id uuid, count bigint)
+language sql stable as $$
+  select post_id, count(*)::bigint
+  from post_reposts
+  where post_id = any(p_post_ids)
+  group by post_id
+$$;
+
+create or replace function public.get_user_conversations(p_user_id uuid)
+returns table (
+  conversation_id text,
+  participant_id uuid,
+  participant_name text,
+  participant_avatar text,
+  participant_badge text,
+  participant_verified boolean,
+  participant_role text,
+  participant_inbox_permission text,
+  last_message text,
+  last_message_time timestamptz,
+  unread_count bigint
+)
+language sql stable as $$
+  with user_msgs as (
+    select
+      m.id,
+      m.sender_id,
+      m.recipient_id,
+      case when m.sender_id = p_user_id then m.recipient_id else m.sender_id end as other_user_id,
+      m.text_content,
+      m.created_at,
+      m.read_at
+    from direct_messages m
+    where m.sender_id = p_user_id or m.recipient_id = p_user_id
+  ),
+  ranked_msgs as (
+    select
+      other_user_id,
+      text_content,
+      created_at,
+      row_number() over (partition by other_user_id order by created_at desc) as rn
+    from user_msgs
+  ),
+  unreads as (
+    select
+      sender_id as other_user_id,
+      count(*)::bigint as cnt
+    from direct_messages
+    where recipient_id = p_user_id and read_at is null
+    group by sender_id
+  )
+  select
+    'conv-' || rm.other_user_id::text as conversation_id,
+    rm.other_user_id as participant_id,
+    coalesce(p.display_name, 'Fellowship Member') as participant_name,
+    p.avatar_url as participant_avatar,
+    p.badge as participant_badge,
+    p.badge_verified as participant_verified,
+    p.role as participant_role,
+    coalesce(p.inbox_permission, 'everyone') as participant_inbox_permission,
+    rm.text_content as last_message,
+    rm.created_at as last_message_time,
+    coalesce(u.cnt, 0)::bigint as unread_count
+  from ranked_msgs rm
+  join profiles p on p.id = rm.other_user_id
+  left join unreads u on u.other_user_id = rm.other_user_id
+  where rm.rn = 1
+  order by rm.created_at desc;
+$$;
+
+create or replace function public.total_unread_messages_count(p_user_id uuid)
+returns bigint
+language sql stable as $$
+  select coalesce(count(*)::bigint, 0)
+  from direct_messages
+  where recipient_id = p_user_id and read_at is null;
+$$;
+
 -- ---------------------------------------------------------------
--- 14. Storage buckets (profile, church, poll, post)
+-- 15. Storage buckets (profile, church, poll, post)
 -- ---------------------------------------------------------------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values
@@ -333,5 +485,9 @@ on conflict (id) do nothing;
 --   006_profile_private_grants.sql
 --   007_churches_and_categories.sql
 --   008_post_media_and_rss.sql
+--   010_pinned_posts.sql
+--   011_reposts_and_visibility.sql
+--   012_direct_messages.sql
+--   013_follows_blocks_and_profile_privacy.sql
 -- Keep using those migrations for live projects.
 -- ============================================================

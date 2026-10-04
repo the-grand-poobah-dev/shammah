@@ -6,7 +6,7 @@ import PostCard from './PostCard';
 import { sortPostsWithPinned, isUserAdmin } from '../lib/pinnedPosts';
 
 const POST_FIELDS =
-  'id, text_content, media_url, media_type, created_at, category_id, church_id, is_pinned, pinned_at, profiles(display_name, avatar_url, badge, badge_verified, role)';
+  'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, visibility, is_pinned, pinned_at, profiles(display_name, avatar_url, badge, badge_verified, role)';
 
 // Loads and shows a list of posts (pinned announcements first, then newest). Used by the category and church pages.
 //   filter: { column: 'category_id' | 'church_id', value }

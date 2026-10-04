@@ -36,6 +36,7 @@ import PostCard from './PostCard';
 import WatermarkShareModal from './WatermarkShareModal';
 import ProjectionModeModal from './ProjectionModeModal';
 import { COURSES_CATALOG } from './CoursesView';
+import { supabase } from '../../lib/supabaseClient';
 import {
   setAuthorOfflineDownloadPermission,
   getAuthorOfflineDownloadPermission,
@@ -46,8 +47,9 @@ import {
   isFollowing,
   toggleFollow,
   getUserPlaylists,
+  fetchFollowStats,
 } from '../lib/profileManager';
-import { getStoredReposts } from '../lib/postInteractions';
+import { getUserRepostsCount } from '../lib/postInteractions';
 import { categoryStyle } from '../lib/postDisplay';
 import VerificationBadgeModal from './VerificationBadgeModal';
 import ActivityLog from './ActivityLog';
@@ -62,7 +64,9 @@ export default function UserProfileView({
 }) {
   const [activeTab, setActiveTab] = useState('all'); // all | videos | audio | polls | text | playlists | courses
   const [layoutMode, setLayoutMode] = useState('magazine2'); // magazine1 | magazine2 | magazine3 | list
-  const [isFollowingUser, setIsFollowingUser] = useState(false);
+  const [isFollowingUser, setIsFollowingUser] = useState(() => (targetProfile?.id ? isFollowing(targetProfile.id) : false));
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
   const [privacySettings, setPrivacySettings] = useState({ isLocked: false, inboxPermission: 'everyone' });
   const [allowOffline, setAllowOffline] = useState(true);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -79,30 +83,60 @@ export default function UserProfileView({
   const verified = targetProfile?.badge_verified;
 
   useEffect(() => {
+    let cancelled = false;
     if (targetProfile?.id) {
       setIsFollowingUser(isFollowing(targetProfile.id));
-      setPrivacySettings(getProfileSettings(targetProfile.id));
+      const local = getProfileSettings(targetProfile.id);
+      const perm = targetProfile.inbox_permission || local.inboxPermission || 'everyone';
+      const locked = targetProfile.is_locked !== undefined ? Boolean(targetProfile.is_locked) : Boolean(local.isLocked);
+      setPrivacySettings({ isLocked: locked, inboxPermission: perm });
       setAllowOffline(getAuthorOfflineDownloadPermission(targetProfile.id));
+
+      fetchFollowStats(targetProfile.id).then((stats) => {
+        if (!cancelled) {
+          setFollowersCount(stats.followersCount);
+          setFollowingCount(stats.followingCount);
+        }
+      });
     }
-  }, [targetProfile?.id]);
+
+    function onFollowsUpdated() {
+      if (targetProfile?.id) {
+        setIsFollowingUser(isFollowing(targetProfile.id));
+        fetchFollowStats(targetProfile.id).then((stats) => {
+          if (!cancelled) {
+            setFollowersCount(stats.followersCount);
+            setFollowingCount(stats.followingCount);
+          }
+        });
+      }
+    }
+
+    window.addEventListener('shammah:follows-updated', onFollowsUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('shammah:follows-updated', onFollowsUpdated);
+    };
+  }, [targetProfile?.id, targetProfile?.inbox_permission, targetProfile?.is_locked]);
 
   // Compute completed & enrolled courses for this profile
   const completedCourses = COURSES_CATALOG.filter(
     (c) => c.id === 'course-foundations' || c.id === 'course-intercession'
   );
 
-  function handleFollowToggle() {
+  async function handleFollowToggle() {
     if (!session) {
       if (onOpenAuth) onOpenAuth('signin');
       return;
     }
-    const next = toggleFollow(targetProfile?.id);
+    const next = await toggleFollow(targetProfile?.id, session?.user?.id);
     setIsFollowingUser(next);
+    setFollowersCount((prev) => (next ? prev + 1 : Math.max(0, prev - 1)));
   }
 
-  function handleLockToggle() {
+  async function handleLockToggle() {
     const nextLocked = !privacySettings.isLocked;
-    updateProfileSettings(targetProfile?.id, { isLocked: nextLocked });
+    await updateProfileSettings(targetProfile?.id, { isLocked: nextLocked });
     setPrivacySettings((prev) => ({ ...prev, isLocked: nextLocked }));
   }
 
@@ -115,6 +149,15 @@ export default function UserProfileView({
   function handleInboxPermissionChange(newPerm) {
     updateProfileSettings(targetProfile?.id, { inboxPermission: newPerm });
     setPrivacySettings((prev) => ({ ...prev, inboxPermission: newPerm }));
+    if (session?.user?.id && targetProfile?.id === session.user.id) {
+      supabase
+        .from('profiles')
+        .update({ inbox_permission: newPerm })
+        .eq('id', session.user.id)
+        .then(({ error }) => {
+          if (error) console.error('Failed to sync inbox_permission to Supabase:', error);
+        });
+    }
   }
 
   function handleShareProfile() {
@@ -170,8 +213,19 @@ export default function UserProfileView({
   // Playlists
   const playlists = getUserPlaylists(targetProfile?.id);
 
-  // Stats
-  const repostsCount = getStoredReposts().filter((r) => r.post?.author_id === targetProfile?.id).length;
+  // Stats (backed by Supabase post_reposts)
+  const [repostsCount, setRepostsCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!targetProfile?.id) return;
+    getUserRepostsCount(targetProfile.id).then((count) => {
+      if (!cancelled) setRepostsCount(count);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [targetProfile?.id]);
 
   return (
     <div className="profile-page-shell">
@@ -229,7 +283,7 @@ export default function UserProfileView({
                     type="button"
                     className="profile-action-btn highlight"
                     onClick={() => setShowVerificationModal(true)}
-                    title="Request Ministry Verification Badge (Kes. 300 / mo)"
+                    title="Request Ministry Verification Badge"
                   >
                     <Sparkles size={15} />
                     <span>Get Verified</span>
@@ -246,7 +300,25 @@ export default function UserProfileView({
                   </button>
 
                   <Link
-                    href={`/?tab=messages`}
+                    href={`/?tab=messages&recipient=${targetProfile?.id}`}
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'messages' }));
+                        window.dispatchEvent(
+                          new CustomEvent('shammah:open-conversation', {
+                            detail: {
+                              recipientId: targetProfile?.id,
+                              recipientName: authorName,
+                              recipientAvatar: targetProfile?.avatar_url,
+                              recipientBadge: targetProfile?.badge,
+                              recipientVerified: targetProfile?.badge_verified,
+                              recipientRole: targetProfile?.role,
+                              recipientInboxPermission: privacySettings.inboxPermission,
+                            },
+                          })
+                        );
+                      }
+                    }}
                     className={`profile-action-btn secondary${privacySettings.inboxPermission === 'no_one' ? ' disabled' : ''}`}
                     title={privacySettings.inboxPermission === 'no_one' ? 'Inbox closed by user' : 'Send direct message'}
                   >
@@ -299,11 +371,11 @@ export default function UserProfileView({
                 <span>Posts</span>
               </div>
               <div className="profile-stat-item">
-                <strong>{targetProfile?.followers_count || (isFollowingUser ? 29 : 28)}</strong>
+                <strong>{followersCount}</strong>
                 <span>Followers</span>
               </div>
               <div className="profile-stat-item">
-                <strong>{targetProfile?.following_count || 42}</strong>
+                <strong>{followingCount}</strong>
                 <span>Following</span>
               </div>
               <div className="profile-stat-item">
@@ -715,7 +787,7 @@ export default function UserProfileView({
               <h4>Official Ministry Verification Badge</h4>
               <p className="visibility-desc">
                 Request an official blue verification checkmark &amp; pastoral badge (Pastor, Worship Leader, Elder).
-                Only Kes. 300 / mo with quarterly, bi-annual, and annual discount plans.
+                Verification is 100% free of charge and reviewed manually by church leadership.
               </p>
               <button
                 type="button"

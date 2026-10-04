@@ -61,7 +61,7 @@ const DEFAULT_NOTIFICATIONS = [
     type: 'messages',
     category: 'messages',
     title: 'New Fellowship Direct Message',
-    body: 'Pastor David sent you an encrypted fellowship message.',
+    body: 'Pastor David sent you a direct fellowship message.',
     timestamp: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
     isRead: false,
     actorName: 'Pastor David Mwangi',

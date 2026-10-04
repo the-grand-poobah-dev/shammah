@@ -61,8 +61,13 @@ export default function BottomNav() {
     },
   ];
 
-  function syncBadges() {
-    setUnreadMessages(getTotalUnreadMessagesCount());
+  async function syncBadges() {
+    try {
+      const count = await getTotalUnreadMessagesCount();
+      setUnreadMessages(Number(count) || 0);
+    } catch {
+      setUnreadMessages(0);
+    }
     setUnreadAlerts(getUnreadNotificationCount());
   }
 

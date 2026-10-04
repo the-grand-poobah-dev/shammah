@@ -50,8 +50,8 @@ const FAITH_FAQS = [
     a: 'Status stories let fellowship members share daily testimonies, scripture tags, prayers, and photo moments. Each story expires automatically after 24 hours, keeping the community fresh and authentic.',
   },
   {
-    q: 'Is the messaging system really End-to-End Encrypted?',
-    a: 'Yes. Direct messages and status story replies are encrypted with client-side keys (AES-256-GCM). Only you and the recipient can read the contents of your conversations.',
+    q: 'How are direct messages secured on Shammah?',
+    a: 'Direct messages are encrypted in transit via HTTPS/TLS and strictly restricted by database Row-Level Security (RLS) policies. Only you and your recipient have permission to access your conversations.',
   },
   {
     q: 'How do church pastors and administrators get verified?',
