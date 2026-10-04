@@ -28,6 +28,7 @@ export default function LocationPicker({ value, onChange }) {
             'administrative_area_level_1',
             'country',
           ],
+          internalUsageAttributionIds: ['gmp_mcp_codeassist_v1_aistudio'],
         });
         el.style.width = '100%';
         el.style.colorScheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';

@@ -1,0 +1,299 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public fellowship member profile stored in Firestore.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The authenticated Firebase user UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Public display name of the fellowship member.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Optional avatar URL.",
+          "minLength": 0,
+          "maxLength": 500
+        },
+        "churchName": {
+          "type": "string",
+          "description": "Optional home church or fellowship name.",
+          "minLength": 0,
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was last updated."
+        }
+      },
+      "required": ["uid", "displayName", "createdAt", "updatedAt"]
+    },
+    "PrayerRequest": {
+      "title": "PrayerRequest",
+      "description": "A community prayer request shared by a verified fellowship member.",
+      "type": "object",
+      "properties": {
+        "authorId": {
+          "type": "string",
+          "description": "UID of the member who created the prayer request.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Display name of the author.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "title": {
+          "type": "string",
+          "description": "Short prayer request heading.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "content": {
+          "type": "string",
+          "description": "Detailed prayer request body.",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "category": {
+          "type": "string",
+          "description": "Prayer category tag.",
+          "enum": ["healing", "family", "missions", "thanksgiving", "guidance", "general"],
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the prayer request (active or answered).",
+          "enum": ["active", "answered"],
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "prayedCount": {
+          "type": "number",
+          "description": "Count of fellowship members who prayed for this request."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated."
+        }
+      },
+      "required": ["authorId", "authorName", "title", "content", "category", "status", "prayedCount", "createdAt", "updatedAt"]
+    },
+    "MinistryNote": {
+      "title": "MinistryNote",
+      "description": "A personal sermon or Bible study note synced to Firestore and Google Workspace.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "UID of the note owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the sermon or study note.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "scriptureRef": {
+          "type": "string",
+          "description": "Primary scripture reference.",
+          "minLength": 0,
+          "maxLength": 100
+        },
+        "body": {
+          "type": "string",
+          "description": "Note content text.",
+          "minLength": 1,
+          "maxLength": 5000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated."
+        }
+      },
+      "required": ["ownerId", "title", "scriptureRef", "body", "createdAt", "updatedAt"]
+    },
+    "FcmTokenRegistration": {
+      "title": "FcmTokenRegistration",
+      "description": "Stores a member's Firebase Cloud Messaging (FCM) device token and community notification preferences.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authenticated Firebase UID owning this FCM token.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "fcmToken": {
+          "type": "string",
+          "description": "Firebase Cloud Messaging device registration token.",
+          "minLength": 8,
+          "maxLength": 512
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Member display name for mention matching.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "churchId": {
+          "type": "string",
+          "description": "Primary church or fellowship identifier subscribed for push alerts.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "notifyNewPosts": {
+          "type": "boolean",
+          "description": "Whether to receive push notifications for new posts in the church community."
+        },
+        "notifyMentions": {
+          "type": "boolean",
+          "description": "Whether to receive push notifications when mentioned (@name) in posts."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when registered."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated."
+        }
+      },
+      "required": ["userId", "fcmToken", "displayName", "churchId", "notifyNewPosts", "notifyMentions", "createdAt", "updatedAt"]
+    },
+    "CommunityPushNotification": {
+      "title": "CommunityPushNotification",
+      "description": "A real-time Firebase Cloud Messaging notification event triggered by a new church community post or @mention.",
+      "type": "object",
+      "properties": {
+        "authorId": {
+          "type": "string",
+          "description": "UID of the member who published the post or mention.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Display name of the author.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "type": {
+          "type": "string",
+          "description": "Notification trigger type: church_post or mention.",
+          "enum": ["church_post", "mention"],
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "churchId": {
+          "type": "string",
+          "description": "Church or community identifier.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "churchName": {
+          "type": "string",
+          "description": "Human-readable church or fellowship community name.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "mentionedHandle": {
+          "type": "string",
+          "description": "Optional @handle or member name mentioned in the post.",
+          "minLength": 0,
+          "maxLength": 80
+        },
+        "title": {
+          "type": "string",
+          "description": "Push notification headline.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "body": {
+          "type": "string",
+          "description": "Push notification message body.",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "status": {
+          "type": "string",
+          "description": "Delivery status of the push broadcast.",
+          "enum": ["sent", "archived"],
+          "minLength": 1,
+          "maxLength": 24
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated."
+        }
+      },
+      "required": ["authorId", "authorName", "type", "churchId", "churchName", "mentionedHandle", "title", "body", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Stores public fellowship user profiles keyed by Firebase Auth UID."
+    },
+    "/prayerRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/PrayerRequest" },
+      "description": "Stores shared community prayer requests."
+    },
+    "/ministryNotes/{noteId}": {
+      "schema": { "$ref": "#/entities/MinistryNote" },
+      "description": "Stores private personal sermon and Bible study notes owned by individual users."
+    },
+    "/fcmTokens/{userId}": {
+      "schema": { "$ref": "#/entities/FcmTokenRegistration" },
+      "description": "Stores Firebase Cloud Messaging device tokens and notification subscriptions keyed by user UID."
+    },
+    "/communityNotifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/CommunityPushNotification" },
+      "description": "Stores real-time community push notification broadcasts for new posts and @mentions."
+    }
+  }
+}

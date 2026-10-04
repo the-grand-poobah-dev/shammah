@@ -14,6 +14,7 @@ import {
   Tv,
   Sparkles,
   ChevronUp,
+  Calendar,
 } from 'lucide-react';
 import { getTotalUnreadMessagesCount } from '../lib/inboxManager';
 import { getUnreadNotificationCount } from '../lib/notificationsManager';
@@ -49,6 +50,14 @@ export default function BottomNav() {
       icon: Tv,
       color: '#f59e0b', // Sanctuary Gold
       action: handleOpenProjection,
+    },
+    {
+      id: 'workspace',
+      label: 'Google Workspace & Firebase Hub',
+      desc: 'Calendar, Keep, Meet, Classroom, Tasks & Chat',
+      icon: Calendar,
+      color: '#10b981', // Emerald
+      action: handleOpenWorkspace,
     },
   ];
 
@@ -243,6 +252,18 @@ export default function BottomNav() {
     setMenuOpen(false);
     playSound('reaction');
     window.dispatchEvent(new CustomEvent('shammah:open-projection', { detail: { type: 'course' } }));
+  }
+
+  function handleOpenWorkspace() {
+    setMenuOpen(false);
+    playSound('reaction');
+    if (pathname === '/') {
+      window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+      window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'workspace' }));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      router.push('/?section=workspace');
+    }
   }
 
   return (

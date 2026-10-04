@@ -1,0 +1,233 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Global Hardened Primitives
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        request.auth.token.email == 'juliusthandi005@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // =========================================================================
+    // Validation Blueprints (Anti-Update-Gap)
+    // =========================================================================
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'displayName', 'photoURL', 'churchName', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.uid == request.auth.uid &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+        (!('churchName' in data) || (data.churchName is string && data.churchName.size() <= 120)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidPrayerRequest(data) {
+      return data.keys().hasAll(['authorId', 'authorName', 'title', 'content', 'category', 'status', 'prayedCount', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['authorId', 'authorName', 'title', 'content', 'category', 'status', 'prayedCount', 'createdAt', 'updatedAt']) &&
+        data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 && data.authorId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 2000 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 32 &&
+        data.category in ['healing', 'family', 'missions', 'thanksgiving', 'guidance', 'general'] &&
+        data.status is string && data.status.size() >= 1 && data.status.size() <= 20 &&
+        data.status in ['active', 'answered'] &&
+        data.prayedCount is int && data.prayedCount >= 0 && data.prayedCount <= 1000000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidMinistryNote(data) {
+      return data.keys().hasAll(['ownerId', 'title', 'scriptureRef', 'body', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerId', 'title', 'scriptureRef', 'body', 'createdAt', 'updatedAt']) &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerId == request.auth.uid &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.scriptureRef is string && data.scriptureRef.size() <= 100 &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 5000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidFcmToken(data) {
+      return data.keys().hasAll(['userId', 'fcmToken', 'displayName', 'churchId', 'notifyNewPosts', 'notifyMentions', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'fcmToken', 'displayName', 'churchId', 'notifyNewPosts', 'notifyMentions', 'createdAt', 'updatedAt']) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.userId == request.auth.uid &&
+        data.fcmToken is string && data.fcmToken.size() >= 8 && data.fcmToken.size() <= 512 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+        data.churchId is string && data.churchId.size() >= 1 && data.churchId.size() <= 128 &&
+        data.notifyNewPosts is bool &&
+        data.notifyMentions is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidCommunityNotification(data) {
+      return data.keys().hasAll(['authorId', 'authorName', 'type', 'churchId', 'churchName', 'mentionedHandle', 'title', 'body', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['authorId', 'authorName', 'type', 'churchId', 'churchName', 'mentionedHandle', 'title', 'body', 'status', 'createdAt', 'updatedAt']) &&
+        data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 && data.authorId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.authorId == request.auth.uid &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80 &&
+        data.type is string && data.type.size() >= 1 && data.type.size() <= 32 &&
+        data.type in ['church_post', 'mention'] &&
+        data.churchId is string && data.churchId.size() >= 1 && data.churchId.size() <= 128 &&
+        data.churchName is string && data.churchName.size() >= 1 && data.churchName.size() <= 140 &&
+        data.mentionedHandle is string && data.mentionedHandle.size() <= 80 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 600 &&
+        data.status is string && data.status.size() >= 1 && data.status.size() <= 24 &&
+        data.status in ['sent', 'archived'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    // =========================================================================
+    // Collection Rules
+    // =========================================================================
+
+    match /admins/{adminId} {
+      allow get: if isVerified() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isVerified() && isValidId(userId) && userId == request.auth.uid &&
+        isValidUserProfile(incoming()) && incoming().createdAt == request.time;
+      allow update: if isVerified() && isValidUserProfile(incoming()) && isValidId(userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'churchName', 'updatedAt']))
+        );
+      allow delete: if isVerified() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /prayerRequests/{requestId} {
+      allow get: if isSignedIn() && isValidId(requestId) && (
+        existing().status in ['active', 'answered'] || existing().authorId == request.auth.uid || isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.status in ['active', 'answered'] || resource.data.authorId == request.auth.uid
+      );
+      allow create: if isVerified() && isValidId(requestId) &&
+        isValidPrayerRequest(incoming()) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().status == 'active' &&
+        incoming().prayedCount == 0 &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update: if isVerified() && isValidPrayerRequest(incoming()) && isValidId(requestId) &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt &&
+        (existing().status != 'answered' || isAdmin()) && (
+          isAdmin() ||
+          // Tier 1: Author updates request details or marks answered
+          (existing().authorId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content', 'category', 'status', 'updatedAt'])) ||
+          // Tier 2: Fellowship member increments prayedCount by 1
+          (incoming().diff(existing()).affectedKeys().hasOnly(['prayedCount', 'updatedAt']) &&
+            incoming().prayedCount == existing().prayedCount + 1)
+        );
+      allow delete: if isVerified() && isValidId(requestId) && (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    match /ministryNotes/{noteId} {
+      allow get: if isSignedIn() && isValidId(noteId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerified() && isValidId(noteId) &&
+        isValidMinistryNote(incoming()) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update: if isVerified() && isValidMinistryNote(incoming()) && isValidId(noteId) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          (existing().ownerId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'scriptureRef', 'body', 'updatedAt']))
+        );
+      allow delete: if isVerified() && isValidId(noteId) && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /fcmTokens/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidId(userId) && userId == request.auth.uid &&
+        isValidFcmToken(incoming()) &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update: if isVerified() && isValidFcmToken(incoming()) && isValidId(userId) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          (request.auth.uid == userId &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['fcmToken', 'displayName', 'churchId', 'notifyNewPosts', 'notifyMentions', 'updatedAt']))
+        );
+      allow delete: if isVerified() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /communityNotifications/{notificationId} {
+      allow get: if isSignedIn() && isValidId(notificationId) && (
+        existing().status == 'sent' || existing().authorId == request.auth.uid || isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.status == 'sent' || resource.data.authorId == request.auth.uid
+      );
+      allow create: if isVerified() && isValidId(notificationId) &&
+        isValidCommunityNotification(incoming()) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().status == 'sent' &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update: if isVerified() && isValidCommunityNotification(incoming()) && isValidId(notificationId) &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt &&
+        (existing().status != 'archived' || isAdmin()) && (
+          isAdmin() ||
+          (existing().authorId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if isVerified() && isValidId(notificationId) && (existing().authorId == request.auth.uid || isAdmin());
+    }
+  }
+}

@@ -27,9 +27,19 @@ export const metadata = {
     title: 'Shammah',
     description: 'A shared feed for your church community.',
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Shammah',
+  },
+  icons: {
+    icon: '/icon.svg',
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export const viewport = {
+  themeColor: '#0d9488',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,

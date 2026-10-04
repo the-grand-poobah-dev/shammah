@@ -256,6 +256,41 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
           </Link>
 
           <Link
+            href="/?section=workspace"
+            className="explore-tool-card tool-card-challenges"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+              window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'workspace' }));
+            }}
+          >
+            <div className="explore-tool-icon-wrap challenges">
+              <Sparkles size={22} />
+            </div>
+            <div className="explore-tool-info">
+              <h4>Google Workspace &amp; Firebase Ministry Hub</h4>
+              <p>Connect Google Calendar, Keep notes, Meet video prayer rooms, Classroom Bible academy, Tasks &amp; Chat spaces with live Firebase Cloud sync.</p>
+              <span className="explore-tool-badge">☁️ Google Workspace + Firebase</span>
+            </div>
+          </Link>
+
+          <Link
+            href="/?tab=churches"
+            className="explore-tool-card tool-card-arcade"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'churches' }));
+            }}
+          >
+            <div className="explore-tool-icon-wrap arcade">
+              <Compass size={22} />
+            </div>
+            <div className="explore-tool-info">
+              <h4>Google Maps Church &amp; CU Locator</h4>
+              <p>Discover nearby sanctuaries, campus Christian Unions, and ministry hubs on an interactive 3D-capable Google Map with live Routes API directions.</p>
+              <span className="explore-tool-badge">🗺️ Google Maps Platform</span>
+            </div>
+          </Link>
+
+          <Link
             href="/?section=challenges"
             className="explore-tool-card tool-card-challenges"
             onClick={() => {

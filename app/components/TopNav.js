@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Check,
   FileText,
+  Calendar,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 
@@ -28,9 +29,18 @@ export const TOP_NAV_SECTIONS = [
   { id: 'courses', label: 'Courses', icon: GraduationCap },
   { id: 'rss', label: 'RSS', icon: Rss },
   { id: 'bible', label: 'Bible', icon: BookOpen },
+  { id: 'workspace', label: 'Workspace', icon: Calendar },
 ];
 
 export const MORE_DROPDOWN_ITEMS = [
+  {
+    id: 'workspace',
+    label: 'Google Workspace & Cloud Hub',
+    desc: 'Calendar, Keep, Meet, Classroom, Tasks, Chat & Firebase',
+    icon: Calendar,
+    isSection: true,
+    color: '#10b981', // Emerald Green
+  },
   {
     id: 'sermon-note',
     label: 'Take Sermon Note',

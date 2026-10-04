@@ -24,6 +24,16 @@ import RssFeedsView from './components/RssFeedsView';
 import BibleReaderView from './components/BibleReaderView';
 import FaithChallengesView from './components/FaithChallengesView';
 import FaithArcadeGamesView from './components/FaithArcadeGamesView';
+import GoogleWorkspaceHubView from './components/GoogleWorkspaceHubView';
+import PWAInstallButton from './components/PWAInstallButton';
+import { testConnection } from './lib/firebaseClient';
+import {
+  cacheMainFeedPosts,
+  getCachedMainFeedPosts,
+  useOfflineIndicatorStatus,
+  addPendingSyncItem,
+} from './lib/swFeedCache';
+import { dispatchCommunityPushForPost } from './lib/fcmClient';
 import NotificationsView from './components/NotificationsView';
 import ExploreView from './components/ExploreView';
 import InstitutionsView from './components/InstitutionsView';
@@ -98,6 +108,20 @@ export default function Feed() {
 
   // Auth panel state
   const [showAuth, setShowAuth] = useState(false);
+  const [feedFromSwCache, setFeedFromSwCache] = useState(false);
+  const [lastSwCachedAt, setLastSwCachedAt] = useState(null);
+  const {
+    isOnline,
+    isDisconnected,
+    hasPendingSyncs,
+    pendingSyncCount,
+    dotColor,
+  } = useOfflineIndicatorStatus();
+
+  // Verify Firestore connection on initial boot
+  useEffect(() => {
+    testConnection();
+  }, []);
   const [authMode, setAuthMode] = useState('signin'); // signin | signup | forgot | oauth
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -528,24 +552,58 @@ export default function Feed() {
   }
 
   async function loadPosts(category) {
-    let query = supabase
-      .from('posts')
-      .select(
-        'id, text_content, media_url, media_type, created_at, category_id, is_pinned, pinned_at, profiles(display_name, avatar_url, badge, badge_verified, role)'
-      )
-      .order('is_pinned', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (category) query = query.eq('category_id', category);
-    const { data, error } = await query;
-    if (!error && data && data.length > 0) {
-      setPosts(sortPostsWithPinned(data));
-      loadPollData(data.map((p) => p.id));
-    } else {
-      // Default to rich community posts featuring a prominent pinned announcement
-      const sample = getSampleFeedPosts(category);
-      setPosts(sample);
+    // 1. If browser is offline, serve recently loaded posts from Service Worker CacheStorage first
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const cached = await getCachedMainFeedPosts(category);
+      if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
+        setPosts(sortPostsWithPinned(cached.posts));
+        if (cached.pollOptionsByPost) setPollOptionsByPost(cached.pollOptionsByPost);
+        if (cached.pollCountsByPost) setPollCountsByPost(cached.pollCountsByPost);
+        setFeedFromSwCache(true);
+        setLastSwCachedAt(cached.cachedAt);
+        return;
+      }
     }
+
+    try {
+      let query = supabase
+        .from('posts')
+        .select(
+          'id, text_content, media_url, media_type, created_at, category_id, is_pinned, pinned_at, profiles(display_name, avatar_url, badge, badge_verified, role)'
+        )
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (category) query = query.eq('category_id', category);
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        const sorted = sortPostsWithPinned(data);
+        setPosts(sorted);
+        setFeedFromSwCache(false);
+        await loadPollData(data.map((p) => p.id));
+        cacheMainFeedPosts(category, sorted, pollOptionsByPost, pollCountsByPost);
+        setLastSwCachedAt(new Date().toISOString());
+        return;
+      }
+    } catch {
+      // Network error: try Service Worker offline feed cache before falling back to sample posts
+      const cached = await getCachedMainFeedPosts(category);
+      if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
+        setPosts(sortPostsWithPinned(cached.posts));
+        if (cached.pollOptionsByPost) setPollOptionsByPost(cached.pollOptionsByPost);
+        if (cached.pollCountsByPost) setPollCountsByPost(cached.pollCountsByPost);
+        setFeedFromSwCache(true);
+        setLastSwCachedAt(cached.cachedAt);
+        return;
+      }
+    }
+
+    // Default to rich community posts featuring a prominent pinned announcement and cache them in Service Worker
+    const sample = getSampleFeedPosts(category);
+    setPosts(sample);
+    setFeedFromSwCache(typeof navigator !== 'undefined' && !navigator.onLine);
+    cacheMainFeedPosts(category, sample, pollOptionsByPost, pollCountsByPost);
+    setLastSwCachedAt(new Date().toISOString());
   }
 
   async function handleTogglePin(post) {
@@ -791,7 +849,15 @@ export default function Feed() {
           role: isAnon || isPseudo ? 'member' : profile?.role || 'member',
         },
       };
-      setPosts((prev) => sortPostsWithPinned([newPost, ...prev]));
+      setPosts((prev) => {
+        const nextList = sortPostsWithPinned([newPost, ...prev]);
+        cacheMainFeedPosts(activeCategory, nextList, pollOptionsByPost, pollCountsByPost);
+        setLastSwCachedAt(new Date().toISOString());
+        return nextList;
+      });
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        addPendingSyncItem({ type: 'post_sync', label: 'New fellowship post' });
+      }
 
       if (isPoll && optionsToInsert.length > 0) {
         const generatedOpts = optionsToInsert.map((o, idx) => ({
@@ -820,6 +886,25 @@ export default function Feed() {
     }
     setPosting(false);
     playSound('postPublished');
+
+    // Sync updated feed posts to Service Worker offline cache & dispatch FCM community/mention push notifications
+    const authorDisplay =
+      identityMeta?.identityMode === 'anonymous'
+        ? 'Anonymous Disciple'
+        : identityMeta?.identityMode === 'pseudo'
+          ? identityMeta?.pseudoName || 'Humble Seeker #402'
+          : profile?.display_name || session?.user?.email || 'Fellowship Member';
+
+    dispatchCommunityPushForPost({
+      text: text || '',
+      categoryId: composeCategory,
+      churchId: profile?.church_id || 'nairobi-chapel',
+      churchName: profile?.location_label || 'Shammah Church Community',
+      authorName: authorDisplay,
+      authorAvatar: profile?.avatar_url || null,
+      isPoll,
+    }).catch(() => {});
+
     logActivity({
       type: 'post',
       icon: isPoll ? '📊' : '✍️',
@@ -1022,9 +1107,13 @@ export default function Feed() {
                   type="button"
                   className={`topbar-toggle-btn offline-cache-toggle-btn${offlineCount > 0 ? ' is-cached' : ''}`}
                   title={
-                    offlineCount > 0
-                      ? `✓ ${offlineCount} item${offlineCount > 1 ? 's' : ''} cached & available for offline viewing (30-day cache). Click to open library.`
-                      : 'Offline Library: Save feeds & chapters for offline viewing'
+                    isDisconnected || hasPendingSyncs
+                      ? hasPendingSyncs
+                        ? `Offline — ${pendingSyncCount || 1} pending sync(s) queued (yellow indicator). Click to open library.`
+                        : 'Offline — Complete network disconnection detected by Service Worker (red indicator). Click to open library.'
+                      : offlineCount > 0
+                        ? `✓ ${offlineCount} item${offlineCount > 1 ? 's' : ''} cached & available for offline viewing (30-day cache). Click to open library.`
+                        : 'Offline Library: Save feeds & chapters for offline viewing'
                   }
                   aria-label="Offline Cached Content Status"
                   onClick={() => {
@@ -1033,8 +1122,41 @@ export default function Feed() {
                   }}
                 >
                   <DownloadCloud size={17} className={offlineCount > 0 ? 'text-emerald-400' : 'text-gray-400'} />
-                  {offlineCount > 0 && <span className="topbar-offline-dot" />}
+                  {(isDisconnected || hasPendingSyncs) ? (
+                    <span
+                      className={`inline-block w-2 h-2 rounded-full ml-1 animate-pulse ${
+                        dotColor === 'yellow' ? 'bg-yellow-400' : 'bg-red-500'
+                      }`}
+                    />
+                  ) : (
+                    offlineCount > 0 && <span className="topbar-offline-dot" />
+                  )}
                 </button>
+
+                {/* Topbar 'Offline' indicator badge when Service Worker detects network loss or pending syncs */}
+                {(isDisconnected || hasPendingSyncs) && (
+                  <span
+                    role="status"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-900/90 text-white border border-white/15 shadow-sm"
+                    title={
+                      dotColor === 'yellow'
+                        ? 'Yellow dot: Pending syncs waiting for network reconnection'
+                        : 'Red dot: Complete network disconnection detected by Service Worker'
+                    }
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
+                        dotColor === 'yellow' ? 'bg-yellow-400' : 'bg-red-500'
+                      }`}
+                    />
+                    <span>
+                      {dotColor === 'yellow'
+                        ? `Offline · Pending (${pendingSyncCount || 1})`
+                        : 'Offline'}
+                    </span>
+                  </span>
+                )}
               </div>
 
               {session ? (
@@ -1487,6 +1609,11 @@ export default function Feed() {
           <FaithArcadeGamesView />
         )}
 
+        {/* Google Workspace (Calendar, Keep, Meet, Classroom, Tasks, Chat) & Firebase Cloud Hub */}
+        {tab === 'home' && section === 'workspace' && (
+          <GoogleWorkspaceHubView session={session} currentUser={profile} />
+        )}
+
         {tab === 'churches' && (
           <InstitutionsView
             session={session}
@@ -1533,16 +1660,93 @@ export default function Feed() {
 
         {/* 24-Hour Status Story Tray (Facebook/Instagram style) */}
         {tab === 'home' && section === 'all' && (
-          <StatusTray
-            currentUser={{
-              id: session?.user?.id,
-              name: headerName,
-              avatar_url: profile?.avatar_url,
-              badge: profile?.badge,
-              badge_verified: profile?.badge_verified,
-              role: profile?.role,
-            }}
-          />
+          <>
+            <StatusTray
+              currentUser={{
+                id: session?.user?.id,
+                name: headerName,
+                avatar_url: profile?.avatar_url,
+                badge: profile?.badge,
+                badge_verified: profile?.badge_verified,
+                role: profile?.role,
+              }}
+            />
+
+            {/* Quick Bar: Google Workspace (Calendar, Keep, Meet, Classroom, Tasks, Chat), Firebase & Google Maps */}
+            <div className="my-3 p-3 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-900/70 to-teal-950/50 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2.5 shadow-sm">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-sm shrink-0">
+                  ☁️
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <strong className="text-xs font-bold text-white">
+                      Google Workspace, Firebase &amp; Maps Connected
+                    </strong>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
+                      Live Sync
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 truncate">
+                    Calendar · Keep · Meet · Classroom · Tasks · Chat · Firestore · Church Maps
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                <PWAInstallButton compact />
+                <button
+                  type="button"
+                  onClick={() => {
+                    cacheMainFeedPosts(activeCategory, posts, pollOptionsByPost, pollCountsByPost);
+                    setLastSwCachedAt(new Date().toISOString());
+                    playSound('reaction');
+                  }}
+                  title={
+                    lastSwCachedAt
+                      ? `Service Worker cached ${posts.length} posts (${new Date(lastSwCachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                      : 'Sync current feed posts to Service Worker offline cache'
+                  }
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-emerald-200 hover:bg-white/15 border border-emerald-400/30 transition-all flex items-center gap-1.5"
+                >
+                  {(isDisconnected || hasPendingSyncs || feedFromSwCache) && (
+                    <span
+                      aria-hidden="true"
+                      className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
+                        dotColor === 'yellow' ? 'bg-yellow-400' : 'bg-red-500'
+                      }`}
+                    />
+                  )}
+                  <span>
+                    {!isOnline || feedFromSwCache
+                      ? dotColor === 'yellow'
+                        ? `Offline · Pending Sync (${pendingSyncCount || 1})`
+                        : 'Offline'
+                      : `✓ SW Cached (${posts.length})`}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSection('workspace');
+                    playSound('reaction');
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition-all shadow-sm"
+                >
+                  Open Workspace Hub
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('churches');
+                    playSound('reaction');
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-white hover:bg-white/15 border border-white/15 transition-all"
+                >
+                  🗺️ Church Map
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
         {tab === 'home' && section === 'all' && session && (

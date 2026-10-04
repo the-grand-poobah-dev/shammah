@@ -11,6 +11,8 @@
   "dependencies": {
     "@google/genai": "^2.27.0",
     "@supabase/supabase-js": "^2.45.0",
+    "@vis.gl/react-google-maps": "^1.10.1",
+    "firebase": "^12.19.0",
     "lucide-react": "^1.49.0",
     "motion": "^14.0.0",
     "next": "14.2.34",
@@ -19,6 +21,7 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "eslint": "^8",
     "eslint-config-next": "14.2.34"
   }

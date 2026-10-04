@@ -31,6 +31,7 @@ import {
 import VerifiedBadge from './VerifiedBadge';
 import InstitutionProfileModal from './InstitutionProfileModal';
 import InstitutionSubscriptionModal from './InstitutionSubscriptionModal';
+import ChurchMapLocator from './ChurchMapLocator';
 import { playSound } from '../lib/soundEffects';
 
 export default function InstitutionsView({ session, currentUser, openAuth }) {
@@ -40,6 +41,7 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
   const [selectedInstForModal, setSelectedInstForModal] = useState(null);
   const [selectedInstForSub, setSelectedInstForSub] = useState(null);
   const [toastMsg, setToastMsg] = useState('');
+  const [viewMode, setViewMode] = useState('split'); // 'split' | 'map' | 'directory'
 
   function showToast(msg) {
     setToastMsg(msg);
@@ -129,6 +131,70 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
           </button>
         ))}
       </div>
+
+      {/* View Mode Switcher: Directory + Live Google Maps Locator */}
+      <div className="flex flex-wrap items-center justify-between gap-2 my-3 px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/10">
+        <div className="flex items-center gap-2 text-xs text-slate-300">
+          <MapPin size={15} className="text-teal-400" />
+          <span>
+            <strong>Google Maps Church &amp; Ministry Locator:</strong> Search places, explore verified markers, and compute live driving/walking routes.
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('split');
+              playSound('reaction');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              viewMode === 'split'
+                ? 'bg-teal-500/20 border-teal-400 text-teal-200'
+                : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+            }`}
+          >
+            🗺️ Map + Directory
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('map');
+              playSound('reaction');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              viewMode === 'map'
+                ? 'bg-teal-500/20 border-teal-400 text-teal-200'
+                : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+            }`}
+          >
+            📍 Full Map &amp; Routes
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('directory');
+              playSound('reaction');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              viewMode === 'directory'
+                ? 'bg-teal-500/20 border-teal-400 text-teal-200'
+                : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+            }`}
+          >
+            🏛️ Cards Only
+          </button>
+        </div>
+      </div>
+
+      {/* Interactive Google Maps Platform Locator & Route Planner */}
+      {(viewMode === 'split' || viewMode === 'map') && (
+        <section className="inst-shelf-section mb-6">
+          <ChurchMapLocator
+            institutions={filteredInstitutions}
+            onSelectInstitution={(inst) => setSelectedInstForModal(inst)}
+          />
+        </section>
+      )}
 
       {/* Layer 1: Joined Institutions Shelf (if user has joined any) */}
       {!searchTerm && joinedInstitutions.length > 0 && activeCategory === 'all' && (
