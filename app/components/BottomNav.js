@@ -17,7 +17,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { getTotalUnreadMessagesCount } from '../lib/inboxManager';
-import { getUnreadNotificationCount } from '../lib/notificationsManager';
+import { getUnreadNotificationCount, fetchRealNotifications } from '../lib/notificationsManager';
 import { playSound } from '../lib/soundEffects';
 
 export default function BottomNav() {
@@ -155,17 +155,7 @@ export default function BottomNav() {
   const isScrollTopVisible = showScrollTop && !isContentHovered;
 
   useEffect(() => {
-    syncBadges();
-
-    function onBadgeUpdate() {
-      syncBadges();
-    }
-    window.addEventListener('shammah:inbox-updated', onBadgeUpdate);
-    window.addEventListener('shammah:notifications-updated', onBadgeUpdate);
-    return () => {
-      window.removeEventListener('shammah:inbox-updated', onBadgeUpdate);
-      window.removeEventListener('shammah:notifications-updated', onBadgeUpdate);
-    };
+    fetchRealNotifications().catch(() => {});
   }, []);
 
   useEffect(() => {

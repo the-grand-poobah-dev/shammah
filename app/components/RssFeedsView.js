@@ -35,6 +35,7 @@ import {
   addSubscribedFeed,
   removeSubscribedFeed,
   getDeveloperBroadcastFeeds,
+  fetchCommunityRssFeeds,
   toggleDeveloperBroadcast,
   searchFeedsByQuery,
   PRESET_RSS_FEEDS,
@@ -257,6 +258,11 @@ export default function RssFeedsView({ session, currentUser, openAuth }) {
 
   useEffect(() => {
     loadFeeds();
+    fetchCommunityRssFeeds().then((remoteBroadcasts) => {
+      if (Array.isArray(remoteBroadcasts)) {
+        setBroadcastFeeds(remoteBroadcasts);
+      }
+    });
     window.addEventListener('shammah:rss-feeds-updated', loadFeeds);
     window.addEventListener('shammah:rss-broadcast-updated', loadFeeds);
     return () => {

@@ -20,15 +20,15 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
   const [mediaUrl, setMediaUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!text.trim()) return;
 
     setSubmitting(true);
 
-    const newStatus = createStatusUpdate({
+    const newStatus = await createStatusUpdate({
       userId: currentUser?.id || 'me',
-      userName: currentUser?.name || 'Member',
+      userName: currentUser?.name || currentUser?.display_name || 'Member',
       userAvatar: currentUser?.avatar_url || null,
       userBadge: currentUser?.badge || 'believer',
       userRole: currentUser?.role || 'member',

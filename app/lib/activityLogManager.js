@@ -1,69 +1,6 @@
 'use client';
 
-const ACTIVITY_STORAGE_KEY = 'shammah:activity-log';
-
-const INITIAL_SAMPLE_ACTIVITIES = [
-  {
-    id: 'act-sample-1',
-    type: 'reaction',
-    icon: '❤️',
-    title: 'Reacted with Amen ❤️',
-    targetTitle: 'Sunday Morning Fellowship: He Restores My Soul',
-    snippet: 'Praising God for His unfailing mercy and grace in this new season.',
-    authorName: 'Pastor Sarah Jenkins',
-    timestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(), // 18m ago
-    visibility: 'public',
-    meta: { emoji: '❤️', targetType: 'post' },
-  },
-  {
-    id: 'act-sample-2',
-    type: 'comment',
-    icon: '💬',
-    title: 'Commented on Sermon Notes',
-    targetTitle: 'Walking in the Light of Christ (1 John 1:5-9)',
-    snippet: 'Amen! This scripture gave me so much peace this week during my exams.',
-    authorName: 'Grace Community Church',
-    timestamp: new Date(Date.now() - 1000 * 60 * 95).toISOString(), // ~1.5h ago
-    visibility: 'public',
-    meta: { targetType: 'comment' },
-  },
-  {
-    id: 'act-sample-3',
-    type: 'poll_vote',
-    icon: '📊',
-    title: 'Participated in Fellowship Poll',
-    targetTitle: 'Church Camp 2026: Preferred Weekend Theme',
-    snippet: 'Cast anonymous vote: “Deepening Discipleship & Prayer Walking”',
-    authorName: 'Church Youth Fellowship',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(), // 4h ago
-    visibility: 'anonymous',
-    meta: { optionChosen: 'Deepening Discipleship & Prayer Walking' },
-  },
-  {
-    id: 'act-sample-4',
-    type: 'post',
-    icon: '✍️',
-    title: 'Published Fellowship Post',
-    targetTitle: 'Prayer & Praise in Fellowship',
-    snippet: 'Thanking God for healing my mother after months of hospital visits. Our God answers prayers!',
-    authorName: 'You',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(), // 1 day ago
-    visibility: 'church',
-    meta: { category: 'Stories & Testimonies' },
-  },
-  {
-    id: 'act-sample-5',
-    type: 'reaction',
-    icon: '🔥',
-    title: 'Reacted with Holy Fire 🔥',
-    targetTitle: 'Youth Revival Night Praise Highlights',
-    snippet: '“The presence of the Holy Spirit was palpable during our worship vigil.”',
-    authorName: 'Worship Team Nairobi',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 52).toISOString(), // 2 days ago
-    visibility: 'public',
-    meta: { emoji: '🔥', targetType: 'video' },
-  },
-];
+const ACTIVITY_STORAGE_KEY = 'shammah:activity-log-v2';
 
 /**
  * Get all activities sorted in reverse-chronological order (newest first)
@@ -72,16 +9,13 @@ export function getActivityLog() {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(ACTIVITY_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(INITIAL_SAMPLE_ACTIVITIES));
-      return INITIAL_SAMPLE_ACTIVITIES;
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return INITIAL_SAMPLE_ACTIVITIES;
+    if (!Array.isArray(parsed)) return [];
     return parsed.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   } catch (err) {
     console.error('Failed to read activity log:', err);
-    return INITIAL_SAMPLE_ACTIVITIES;
+    return [];
   }
 }
 
@@ -104,7 +38,15 @@ export function logActivity(action) {
       id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       timestamp: new Date().toISOString(),
       type: action.type || 'action',
-      icon: action.icon || (action.type === 'reaction' ? (action.meta?.emoji || '❤️') : action.type === 'comment' ? '💬' : action.type === 'poll_vote' ? '📊' : '✍️'),
+      icon:
+        action.icon ||
+        (action.type === 'reaction'
+          ? action.meta?.emoji || '❤️'
+          : action.type === 'comment'
+          ? '💬'
+          : action.type === 'poll_vote'
+          ? '📊'
+          : '✍️'),
       title: action.title || 'User Action',
       targetTitle: action.targetTitle || '',
       snippet: action.snippet || '',

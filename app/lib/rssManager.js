@@ -1,7 +1,13 @@
 'use client';
+import { supabase } from '../../lib/supabaseClient';
 
 const RSS_FEEDS_KEY = 'shammah_rss_feeds_v2';
 const RSS_BROADCAST_KEY = 'shammah_developer_broadcast_rss_v1';
+
+function isValidUuid(id) {
+  if (!id || typeof id !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
 
 // Curated faith, church, and scripture RSS presets for quick one-click discovery
 export const PRESET_RSS_FEEDS = [
@@ -202,7 +208,48 @@ export function removeSubscribedFeed(feedId) {
   return next;
 }
 
-// Developer-only: Broadcast RSS feed items into the community homefeed under developer profile
+/**
+ * Fetches community-wide RSS feeds from the real Supabase `rss_feeds` table.
+ */
+export async function fetchCommunityRssFeeds() {
+  try {
+    const { data, error } = await supabase
+      .from('rss_feeds')
+      .select('id, church_id, title, feed_url, keywords, category_id, is_active, created_by, created_at')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+
+    if (error || !Array.isArray(data)) {
+      return getDeveloperBroadcastFeeds();
+    }
+
+    const mapped = data.map((row) => {
+      const presetMatch = PRESET_RSS_FEEDS.find((p) => p.feedUrl === row.feed_url);
+      return {
+        id: presetMatch?.id || row.id,
+        dbId: row.id,
+        name: row.title,
+        category: row.category_id || presetMatch?.category || 'resources',
+        sourceName: presetMatch?.sourceName || row.title,
+        sourceUrl: presetMatch?.sourceUrl || row.feed_url,
+        feedUrl: row.feed_url,
+        description: presetMatch?.description || `Active community RSS feed (${row.feed_url})`,
+        icon: presetMatch?.icon || '🌐',
+        mediaType: presetMatch?.mediaType || 'text',
+        items: presetMatch?.items || [],
+      };
+    });
+
+    if (typeof window !== 'undefined' && mapped.length > 0) {
+      localStorage.setItem(RSS_BROADCAST_KEY, JSON.stringify(mapped));
+    }
+    return mapped;
+  } catch {
+    return getDeveloperBroadcastFeeds();
+  }
+}
+
+// Developer-only: Broadcast RSS feed items into the community homefeed (backed by Supabase rss_feeds)
 export function getDeveloperBroadcastFeeds() {
   if (typeof window === 'undefined') return [];
   try {
@@ -223,24 +270,54 @@ export function saveDeveloperBroadcastFeeds(feeds) {
   }
 }
 
-export function toggleDeveloperBroadcast(feed, shouldBroadcast) {
+export async function toggleDeveloperBroadcast(feed, shouldBroadcast, userId = null) {
   const current = getDeveloperBroadcastFeeds();
   let next;
   if (shouldBroadcast) {
-    if (!current.some((f) => f.id === feed.id)) {
+    if (!current.some((f) => f.id === feed.id || f.feedUrl === feed.feedUrl)) {
       next = [...current, feed];
     } else {
       next = current;
     }
   } else {
-    next = current.filter((f) => f.id !== feed.id);
+    next = current.filter((f) => f.id !== feed.id && f.feedUrl !== feed.feedUrl);
   }
   saveDeveloperBroadcastFeeds(next);
+
+  // Sync with real Supabase `rss_feeds` table
+  try {
+    let activeUserId = userId;
+    if (!isValidUuid(activeUserId)) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      activeUserId = sessionData?.session?.user?.id;
+    }
+
+    if (isValidUuid(activeUserId) && feed?.feedUrl) {
+      if (shouldBroadcast) {
+        await supabase.from('rss_feeds').insert({
+          title: feed.name || feed.sourceName || 'Community RSS Feed',
+          feed_url: feed.feedUrl,
+          category_id: feed.category || 'resources',
+          is_active: true,
+          created_by: activeUserId,
+        });
+      } else {
+        await supabase
+          .from('rss_feeds')
+          .delete()
+          .eq('feed_url', feed.feedUrl)
+          .eq('created_by', activeUserId);
+      }
+    }
+  } catch (err) {
+    console.warn('Could not sync RSS feed to Supabase rss_feeds:', err);
+  }
+
   return next;
 }
 
 /**
- * Searches feeds by keyword or tests a custom RSS URL
+ * Searches feeds by keyword or registers a custom RSS URL without fabricating fake articles
  */
 export function searchFeedsByQuery(query) {
   const q = (query || '').toLowerCase().trim();
@@ -248,48 +325,22 @@ export function searchFeedsByQuery(query) {
 
   // Check if it's a URL
   if (q.startsWith('http://') || q.startsWith('https://')) {
-    // Generate a discovered custom RSS feed container
+    let hostname = q;
+    try {
+      hostname = new URL(q).hostname;
+    } catch {}
     return [
       {
-        id: `custom-feed-${Date.now()}`,
-        name: `Custom RSS Feed (${new URL(q).hostname})`,
+        id: `custom-feed-${hostname}`,
+        name: `RSS Feed (${hostname})`,
         category: 'resources',
-        sourceName: new URL(q).hostname,
+        sourceName: hostname,
         sourceUrl: q,
         feedUrl: q,
-        description: `Live RSS stream from ${q}. Discovered via URL search.`,
+        description: `External RSS feed URL (${q}). When added by an admin, new items are ingested into the feed via the server RSS cron job (/api/rss/fetch).`,
         icon: '🌐',
         mediaType: 'text',
-        items: [
-          {
-            id: `custom-item-1`,
-            title: `Fellowship Update from ${new URL(q).hostname}`,
-            author: 'Editorial Team',
-            source: new URL(q).hostname,
-            sourceUrl: q,
-            pubDate: 'Just now',
-            description: `Curated publication content streamed from ${q}. Discover sermons, articles, and community stories.`,
-            mediaType: 'text',
-            imageUrl: 'https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=600',
-            likesCount: 14,
-            commentsCount: 3,
-            repostsCount: 6,
-          },
-          {
-            id: `custom-item-2`,
-            title: `Discipleship & Community Reflections`,
-            author: 'Contributing Author',
-            source: new URL(q).hostname,
-            sourceUrl: q,
-            pubDate: 'Yesterday',
-            description: `Spiritual nourishment, reflections on scripture, and encouraging testimonies for the body of Christ.`,
-            mediaType: 'text',
-            imageUrl: 'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?w=600',
-            likesCount: 22,
-            commentsCount: 5,
-            repostsCount: 8,
-          },
-        ],
+        items: [],
       },
     ];
   }
@@ -306,9 +357,7 @@ export function searchFeedsByQuery(query) {
 
 /**
  * Merges developer-broadcasted RSS feed items and user-subscribed RSS feed items
- * into the homefeed so that:
- * 1) Developer-broadcasted feeds appear under the developer's profile name
- * 2) User-subscribed feeds are displayed intermittently in the feed
+ * into the homefeed.
  */
 export function getHomefeedPostsWithRss(posts = [], developerUser = null) {
   if (typeof window === 'undefined' || !Array.isArray(posts) || posts.length === 0) return posts;
@@ -431,4 +480,3 @@ export function getHomefeedPostsWithRss(posts = [], developerUser = null) {
 
   return [...pinned, ...combined];
 }
-

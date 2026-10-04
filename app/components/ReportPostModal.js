@@ -69,9 +69,9 @@ export default function ReportPostModal({ post, onClose }) {
 
   if (!post) return null;
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    reportPost(post.id, selectedReason, post.author_id || post.user_id);
+    await reportPost(post.id, selectedReason, post.author_id || post.user_id, additionalNotes);
     setSubmitted(true);
     playSound('reaction');
     setTimeout(() => {

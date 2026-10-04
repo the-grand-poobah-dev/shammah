@@ -13,6 +13,7 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [commentText, setCommentText] = useState('');
   const [sentFeedback, setSentFeedback] = useState(false);
+  const [replyError, setReplyError] = useState('');
   const [floatingEmojis, setFloatingEmojis] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -29,6 +30,7 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
   useEffect(() => {
     setProgress(0);
     setSentFeedback(false);
+    setReplyError('');
     setCommentText('');
     setShowEmojiSheet(false);
   }, [currentIndex]);
@@ -217,11 +219,14 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
     }, 1800);
   }
 
-  function handleSendComment(e) {
+  async function handleSendComment(e) {
     e.preventDefault();
     if (!commentText.trim()) return;
 
-    commentOnStatus(currentStatus, commentText.trim(), {
+    setReplyError('');
+    setSentFeedback(false);
+
+    const res = await commentOnStatus(currentStatus, commentText.trim(), {
       id: currentUser?.id,
       name: currentUser?.name || currentUser?.display_name || 'Member',
       avatar: currentUser?.avatar_url,
@@ -229,9 +234,14 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
       verified: currentUser?.badge_verified,
     });
 
-    setSentFeedback(true);
-    setCommentText('');
-    setTimeout(() => setSentFeedback(false), 3500);
+    if (res?.sent) {
+      setSentFeedback(true);
+      setCommentText('');
+      setTimeout(() => setSentFeedback(false), 3500);
+    } else {
+      setReplyError(res?.error || 'Could not send reply to inbox.');
+      setTimeout(() => setReplyError(''), 4000);
+    }
   }
 
   const hoursAgo = Math.max(
@@ -403,6 +413,11 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
           {sentFeedback && (
             <div className="status-sent-banner">
               ✓ Sent directly to {currentStatus.userName}&apos;s inbox!
+            </div>
+          )}
+          {replyError && (
+            <div className="status-sent-banner" style={{ background: 'rgba(239, 68, 68, 0.2)', borderColor: 'rgba(239, 68, 68, 0.45)', color: '#fecaca' }}>
+              {replyError}
             </div>
           )}
 

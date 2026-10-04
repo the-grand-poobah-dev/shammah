@@ -1,10 +1,16 @@
 'use client';
+import { supabase } from '../../lib/supabaseClient';
 import { playSound } from './soundEffects';
 
 const HIDDEN_POSTS_KEY = 'shammah_hidden_posts_v1';
 const SAVED_POSTS_KEY = 'shammah_saved_posts_v1';
 const CATEGORY_WEIGHTS_KEY = 'shammah_category_weights_v1';
 const REPORTED_POSTS_KEY = 'shammah_reported_posts_v1';
+
+function isValidUuid(id) {
+  if (!id || typeof id !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
 
 export function getHiddenPostIds() {
   if (typeof window === 'undefined') return [];
@@ -88,24 +94,49 @@ export function adjustCategoryWeight(categoryId, delta) {
   window.dispatchEvent(new CustomEvent('shammah:feed-algorithm-updated'));
 }
 
-export function reportPost(postId, reason, authorId = null) {
-  if (typeof window === 'undefined') return;
-  try {
-    const raw = localStorage.getItem(REPORTED_POSTS_KEY);
-    const reports = raw ? JSON.parse(raw) : [];
-    reports.push({
-      postId,
-      authorId,
-      reason,
-      reportedAt: new Date().toISOString(),
-    });
-    localStorage.setItem(REPORTED_POSTS_KEY, JSON.stringify(reports));
+export async function reportPost(postId, reason, authorId = null, notes = '') {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(REPORTED_POSTS_KEY);
+      const reports = raw ? JSON.parse(raw) : [];
+      reports.push({
+        postId,
+        authorId,
+        reason,
+        notes,
+        reportedAt: new Date().toISOString(),
+      });
+      localStorage.setItem(REPORTED_POSTS_KEY, JSON.stringify(reports));
 
-    // Immediately hide the post
-    hidePost(postId);
-  } catch (err) {
-    console.error('Failed to report post', err);
+      // Immediately hide the post locally for the reporter
+      hidePost(postId);
+    } catch (err) {
+      console.error('Failed to cache reported post locally', err);
+    }
   }
+
+  // Persist confidential report to real Supabase post_reports table for moderator review
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const reporterId = sessionData?.session?.user?.id;
+    if (isValidUuid(reporterId) && isValidUuid(postId)) {
+      const { error } = await supabase.from('post_reports').insert({
+        post_id: postId,
+        reporter_id: reporterId,
+        author_id: isValidUuid(authorId) ? authorId : null,
+        reason: reason || 'other',
+        notes: (notes || '').trim().slice(0, 300) || null,
+      });
+      if (error) {
+        console.warn('Could not persist post report to Supabase:', error.message);
+        return { persisted: false, error: error.message };
+      }
+      return { persisted: true };
+    }
+  } catch (err) {
+    console.warn('Error persisting post report:', err);
+  }
+  return { persisted: false };
 }
 
 /**

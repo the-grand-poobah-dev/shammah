@@ -30,6 +30,7 @@ import {
   initAuth,
   googleSignIn,
   getAccessToken,
+  clearAccessToken,
   logout,
   subscribeToPrayerRequests,
   createPrayerRequestInFirestore,
@@ -57,6 +58,7 @@ const HUB_TABS = [
 export default function GoogleWorkspaceHubView({ onShareToFeed }) {
   const [activeTab, setActiveTab] = useState('calendar');
   const [needsAuth, setNeedsAuth] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -157,8 +159,10 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
   const callWorkspaceApi = useCallback(async (service, endpoint, method = 'GET', body = null) => {
     const activeToken = await getAccessToken();
     if (!activeToken) {
+      setToken(null);
       setNeedsAuth(true);
-      throw new Error('Please sign in with Google to access Google Workspace.');
+      if (user) setSessionExpired(true);
+      throw new Error('Your Google Workspace token is missing or expired. Please reconnect your Google account.');
     }
 
     const res = await fetch('/api/workspace', {
@@ -172,14 +176,17 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
 
     const data = await res.json();
     if (res.status === 401) {
+      clearAccessToken();
+      setToken(null);
       setNeedsAuth(true);
-      throw new Error('Your Google Workspace session expired. Please sign in with Google again.');
+      setSessionExpired(true);
+      throw new Error('Your Google Workspace session expired (401). Please reconnect your Google account.');
     }
     if (!res.ok || data.error) {
       throw new Error(data.error || `Failed calling Google ${service} API`);
     }
     return data;
-  }, []);
+  }, [user]);
 
   // Load active tab data when authenticated
   const loadActiveTabData = useCallback(
@@ -231,7 +238,10 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
           try {
             const data = await callWorkspaceApi('keep', '/notes?pageSize=15');
             setKeepNotes(data.notes || []);
-          } catch {
+          } catch (keepErr) {
+            if (keepErr?.message?.includes('401') || keepErr?.message?.includes('expired')) {
+              throw keepErr;
+            }
             // Keep API requires Workspace enterprise domain on some accounts; still show Firestore Cloud Notes seamlessly
             setKeepNotes([]);
           }
@@ -266,11 +276,16 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         setUser(u);
         setToken(accessToken);
         setNeedsAuth(false);
+        setSessionExpired(false);
       },
       (u) => {
         setUser(u || null);
         setToken(null);
         setNeedsAuth(true);
+        if (u) {
+          // User is still signed into Firebase across a page reload, but the in-memory OAuth access token was cleared
+          setSessionExpired(true);
+        }
       }
     );
     return () => {
@@ -304,7 +319,12 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
     if (!needsAuth && token && activeTab === 'classroom' && selectedCourseId) {
       callWorkspaceApi('classroom', `/courses/${encodeURIComponent(selectedCourseId)}/announcements?pageSize=10`)
         .then((data) => setAnnouncements(data.announcements || []))
-        .catch(() => setAnnouncements([]));
+        .catch((err) => {
+          setAnnouncements([]);
+          if (err?.message?.includes('401') || err?.message?.includes('expired')) {
+            showBanner(err.message, true);
+          }
+        });
     }
   }, [activeTab, needsAuth, token, selectedCourseId, callWorkspaceApi]);
 
@@ -313,7 +333,12 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
     if (!needsAuth && token && activeTab === 'chat' && selectedSpaceName) {
       callWorkspaceApi('chat', `/${selectedSpaceName}/messages?pageSize=15`)
         .then((data) => setChatMessages(data.messages || []))
-        .catch(() => setChatMessages([]));
+        .catch((err) => {
+          setChatMessages([]);
+          if (err?.message?.includes('401') || err?.message?.includes('expired')) {
+            showBanner(err.message, true);
+          }
+        });
     }
   }, [activeTab, needsAuth, token, selectedSpaceName, callWorkspaceApi]);
 
@@ -322,7 +347,12 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
     if (!needsAuth && token && activeTab === 'slides' && selectedPresentationId) {
       callWorkspaceApi('slides', `/presentations/${encodeURIComponent(selectedPresentationId)}`)
         .then((data) => setSelectedPresentation(data))
-        .catch(() => setSelectedPresentation(null));
+        .catch((err) => {
+          setSelectedPresentation(null);
+          if (err?.message?.includes('401') || err?.message?.includes('expired')) {
+            showBanner(err.message, true);
+          }
+        });
     }
   }, [activeTab, needsAuth, token, selectedPresentationId, callWorkspaceApi]);
 
@@ -330,7 +360,12 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
   useEffect(() => {
     if (!needsAuth && token && activeTab === 'forms' && selectedFormId) {
       Promise.all([
-        callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}`).catch(() => null),
+        callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}`).catch((err) => {
+          if (err?.message?.includes('401') || err?.message?.includes('expired')) {
+            showBanner(err.message, true);
+          }
+          return null;
+        }),
         callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}/responses`).catch(() => ({ responses: [] })),
       ]).then(([formDoc, respDoc]) => {
         setSelectedFormDetail(formDoc);
@@ -348,6 +383,7 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         setToken(result.accessToken);
         setUser(result.user);
         setNeedsAuth(false);
+        setSessionExpired(false);
         playSound('postPublished');
         showBanner(`Signed in as ${result.user.displayName || result.user.email}`);
       }
@@ -363,6 +399,7 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
     setToken(null);
     setUser(null);
     setNeedsAuth(true);
+    setSessionExpired(false);
     showBanner('Signed out of Google Workspace & Firebase.');
   }
 
@@ -1140,7 +1177,11 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                   </svg>
                 </div>
                 <span className="gsi-material-button-contents">
-                  {isLoggingIn ? 'Connecting Google Workspace…' : 'Sign in with Google'}
+                  {isLoggingIn
+                    ? 'Connecting Google Workspace…'
+                    : sessionExpired
+                      ? 'Reconnect your Google account'
+                      : 'Sign in with Google'}
                 </span>
                 <span style={{ display: 'none' }}>Sign in with Google</span>
               </div>
@@ -1173,6 +1214,39 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
             </div>
           )}
         </div>
+
+        {(sessionExpired || (user && (!token || needsAuth))) && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: '10px 14px',
+              borderRadius: 10,
+              background: 'rgba(245,158,11,0.16)',
+              border: '1px solid rgba(245,158,11,0.4)',
+              color: '#b45309',
+              fontSize: 13,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>
+              ⚠ Your Google Workspace access token has expired or was cleared on page reload{user?.email ? ` (${user.email})` : ''}. Please reconnect your Google account to continue using Workspace tools.
+            </span>
+            <button
+              type="button"
+              className="inst-join-action-btn"
+              onClick={handleLogin}
+              disabled={isLoggingIn}
+              style={{ shrink: 0, padding: '6px 14px', fontSize: 12.5 }}
+            >
+              {isLoggingIn ? 'Reconnecting…' : 'Reconnect Google Account'}
+            </button>
+          </div>
+        )}
 
         {statusMessage && (
           <div style={{ marginTop: 12, padding: '8px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.16)', color: '#10b981', fontSize: 13, fontWeight: 600 }}>

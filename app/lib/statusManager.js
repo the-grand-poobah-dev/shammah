@@ -1,116 +1,106 @@
 'use client';
+import { supabase } from '../../lib/supabaseClient';
 import { sendStatusReplyToInbox } from './inboxManager';
 
-const STATUS_STORAGE_KEY = 'shammah_24h_statuses_v1';
+const STATUS_STORAGE_KEY = 'shammah_24h_statuses_v2';
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
-// Curated active community statuses from church leaders & members within 24h
-const DEFAULT_COMMUNITY_STATUSES = [
-  {
-    id: 'status-pastor-david',
-    userId: 'user-pastor-david',
-    userName: 'Pastor David Mwangi',
-    userAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-    userBadge: 'pastor',
-    userRole: 'church_admin',
-    userVerified: true,
-    text: "Prepare your hearts for Sunday worship! 'The Lord is my strength and my shield; in Him my heart trusts.' — Psalm 28:7 🙏",
-    scriptureTag: 'Psalm 28:7',
-    bgStyle: 'emerald',
-    createdAt: new Date(Date.now() - 3600000 * 2.5).toISOString(),
-    expiresAt: new Date(Date.now() - 3600000 * 2.5 + TWENTY_FOUR_HOURS_MS).toISOString(),
-    isPublic: true,
-    views: ['user-1', 'user-2', 'user-3'],
-    reactions: [
-      { userId: 'user-1', userName: 'Grace', emoji: '🙏', createdAt: new Date().toISOString() },
-      { userId: 'user-2', userName: 'John', emoji: '❤️', createdAt: new Date().toISOString() },
-    ],
-    comments: [],
-  },
-  {
-    id: 'status-sister-mary',
-    userId: 'user-sister-mary',
-    userName: 'Sister Mary Grace',
-    userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    userBadge: 'worship',
-    userVerified: true,
-    text: 'Worship team soundcheck at 5:00 PM today. Let everything that has breath praise the Lord! 🎶🙌',
-    scriptureTag: 'Psalm 150:6',
-    bgStyle: 'sunset',
-    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-    expiresAt: new Date(Date.now() - 3600000 * 5 + TWENTY_FOUR_HOURS_MS).toISOString(),
-    isPublic: true,
-    views: ['user-4', 'user-5'],
-    reactions: [
-      { userId: 'user-4', userName: 'Mark', emoji: '🔥', createdAt: new Date().toISOString() },
-    ],
-    comments: [],
-  },
-  {
-    id: 'status-elder-james',
-    userId: 'user-elder-james',
-    userName: 'Elder James Ochieng',
-    userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    userBadge: 'elder',
-    userVerified: true,
-    text: 'Youth Bible Camp registration is now open! 30 spots remaining for this summer fellowship. 📖⛺',
-    scriptureTag: 'Proverbs 22:6',
-    bgStyle: 'royal',
-    createdAt: new Date(Date.now() - 3600000 * 8).toISOString(),
-    expiresAt: new Date(Date.now() - 3600000 * 8 + TWENTY_FOUR_HOURS_MS).toISOString(),
-    isPublic: true,
-    views: ['user-1'],
-    reactions: [],
-    comments: [],
-  },
-  {
-    id: 'status-sister-esther',
-    userId: 'user-sister-esther',
-    userName: 'Esther Wanjiku',
-    userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-    userBadge: 'intercessor',
-    userVerified: true,
-    text: 'Early morning prayer fellowship was such an uplifting start to the day. God is faithful! ☀️✨',
-    scriptureTag: 'Lamentations 3:22',
-    bgStyle: 'amber',
-    createdAt: new Date(Date.now() - 3600000 * 11).toISOString(),
-    expiresAt: new Date(Date.now() - 3600000 * 11 + TWENTY_FOUR_HOURS_MS).toISOString(),
-    isPublic: true,
-    views: [],
-    reactions: [],
-    comments: [],
-  },
-];
+let statusesMemoryCache = null;
+
+function isValidUuid(id) {
+  if (!id || typeof id !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
 
 /**
- * Retrieves all valid 24-hour statuses that have not expired.
+ * Retrieves all valid 24-hour statuses from local cache that have not expired.
+ * Use fetchActiveStatuses() to hydrate from Supabase.
  */
 export function getActiveStatuses() {
   const now = Date.now();
-  let stored = [];
+  let stored = statusesMemoryCache;
 
-  if (typeof window !== 'undefined') {
+  if (stored === null && typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(STATUS_STORAGE_KEY);
       if (raw) {
-        stored = JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        stored = Array.isArray(parsed) ? parsed : [];
+      } else {
+        stored = [];
       }
     } catch (e) {
       console.warn('Error reading statuses', e);
+      stored = [];
     }
+    statusesMemoryCache = stored;
   }
 
-  // Combine user stored statuses with default community statuses
-  const all = [...stored, ...DEFAULT_COMMUNITY_STATUSES];
+  const list = Array.isArray(stored) ? stored : [];
 
   // Filter out any status older than 24 hours
-  const valid = all.filter((s) => {
+  const valid = list.filter((s) => {
     const exp = new Date(s.expiresAt || new Date(s.createdAt).getTime() + TWENTY_FOUR_HOURS_MS).getTime();
     return exp > now;
   });
 
   // Sort: newest first
   return valid.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+/**
+ * Fetches real 24-hour statuses from Supabase `statuses` table joined with `profiles`.
+ */
+export async function fetchActiveStatuses() {
+  try {
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('statuses')
+      .select(
+        'id, user_id, text_content, scripture_tag, bg_style, media_url, created_at, expires_at, profiles(id, display_name, avatar_url, badge, badge_verified, role)'
+      )
+      .gt('expires_at', nowIso)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.warn('Could not fetch statuses from Supabase:', error.message);
+      return getActiveStatuses();
+    }
+
+    const mapped = (data || []).map((row) => {
+      const prof = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      return {
+        id: row.id,
+        userId: row.user_id,
+        userName: prof?.display_name || 'Fellowship Member',
+        userAvatar: prof?.avatar_url || null,
+        userBadge: prof?.badge || 'believer',
+        userRole: prof?.role || 'member',
+        userVerified: Boolean(prof?.badge_verified),
+        text: row.text_content,
+        scriptureTag: row.scripture_tag || null,
+        bgStyle: row.bg_style || 'emerald',
+        mediaUrl: row.media_url || null,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        isPublic: true,
+        views: [],
+        reactions: [],
+        comments: [],
+      };
+    });
+
+    statusesMemoryCache = mapped;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(mapped));
+      window.dispatchEvent(new CustomEvent('shammah:status-updated', { detail: mapped }));
+    }
+    return mapped;
+  } catch (err) {
+    console.warn('fetchActiveStatuses error:', err);
+    return getActiveStatuses();
+  }
 }
 
 /**
@@ -128,9 +118,9 @@ export function hasUserActiveStatus(userId, userName) {
 }
 
 /**
- * Creates and publishes a new 24-hour status update.
+ * Creates and publishes a new 24-hour status update to Supabase.
  */
-export function createStatusUpdate({
+export async function createStatusUpdate({
   userId,
   userName,
   userAvatar,
@@ -144,16 +134,25 @@ export function createStatusUpdate({
 }) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + TWENTY_FOUR_HOURS_MS);
+  const cleanText = (text || '').trim();
 
-  const newStatus = {
+  let activeUserId = userId;
+  if (!isValidUuid(activeUserId)) {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      activeUserId = sessionData?.session?.user?.id || userId;
+    } catch {}
+  }
+
+  let newStatus = {
     id: `status-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-    userId: userId || 'my-user',
+    userId: activeUserId || 'my-user',
     userName: userName || 'You',
     userAvatar: userAvatar || null,
     userBadge: userBadge || 'believer',
     userRole: userRole || 'member',
     userVerified: Boolean(userVerified),
-    text: text.trim(),
+    text: cleanText,
     mediaUrl,
     bgStyle: bgStyle || 'emerald',
     scriptureTag: scriptureTag || null,
@@ -165,16 +164,46 @@ export function createStatusUpdate({
     comments: [],
   };
 
+  if (isValidUuid(activeUserId)) {
+    try {
+      const { data, error } = await supabase
+        .from('statuses')
+        .insert({
+          user_id: activeUserId,
+          text_content: cleanText,
+          scripture_tag: scriptureTag || null,
+          bg_style: bgStyle || 'emerald',
+          media_url: mediaUrl || null,
+          expires_at: expiresAt.toISOString(),
+        })
+        .select('id, created_at, expires_at')
+        .single();
+
+      if (!error && data) {
+        newStatus = {
+          ...newStatus,
+          id: data.id,
+          createdAt: data.created_at,
+          expiresAt: data.expires_at,
+        };
+      } else if (error) {
+        console.warn('Failed to persist status to Supabase:', error.message);
+      }
+    } catch (err) {
+      console.warn('Error persisting status to Supabase:', err);
+    }
+  }
+
+  const existing = getActiveStatuses();
+  const updated = [newStatus, ...existing];
+  statusesMemoryCache = updated;
+
   if (typeof window !== 'undefined') {
     try {
-      const raw = localStorage.getItem(STATUS_STORAGE_KEY);
-      const existing = raw ? JSON.parse(raw) : [];
-      // Keep other active statuses and prepend this one
-      const updated = [newStatus, ...existing];
       localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(updated));
       window.dispatchEvent(new CustomEvent('shammah:status-updated', { detail: newStatus }));
     } catch (err) {
-      console.error('Failed to save status', err);
+      console.error('Failed to cache status locally', err);
     }
   }
 
@@ -188,8 +217,7 @@ export function reactToStatus(statusId, emoji, user) {
   if (typeof window === 'undefined') return;
 
   try {
-    const raw = localStorage.getItem(STATUS_STORAGE_KEY);
-    const existing = raw ? JSON.parse(raw) : [];
+    const existing = getActiveStatuses();
     const idx = existing.findIndex((s) => s.id === statusId);
 
     const reaction = {
@@ -201,6 +229,7 @@ export function reactToStatus(statusId, emoji, user) {
 
     if (idx !== -1) {
       existing[idx].reactions = [...(existing[idx].reactions || []), reaction];
+      statusesMemoryCache = existing;
       localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(existing));
     }
 
@@ -211,54 +240,62 @@ export function reactToStatus(statusId, emoji, user) {
 }
 
 /**
- * Comments on a status story -> automatically routed to the poster's direct inbox!
+ * Comments on a status story -> routed to the poster's real Supabase direct_messages inbox.
  */
-export function commentOnStatus(status, commentText, sender) {
-  if (!status || !commentText.trim()) return;
+export async function commentOnStatus(status, commentText, sender) {
+  if (!status || !commentText.trim()) return { sent: false, error: 'Empty reply' };
+
+  let senderId = sender?.id;
+  if (!isValidUuid(senderId)) {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      senderId = sessionData?.session?.user?.id;
+    } catch {}
+  }
+
+  if (!isValidUuid(senderId)) {
+    return { sent: false, error: 'Please sign in to send a status reply to their inbox.' };
+  }
+
+  if (!isValidUuid(status.userId)) {
+    return { sent: false, error: 'This status author cannot receive direct inbox replies.' };
+  }
+
+  if (status.userId === senderId) {
+    return { sent: false, error: 'You cannot send a status reply to your own inbox.' };
+  }
+
+  // Deliver directly into the poster's real Supabase direct_messages inbox
+  const dmResult = await sendStatusReplyToInbox({
+    recipientId: status.userId,
+    senderId,
+    commentText: commentText.trim(),
+    statusPreviewText: status.text,
+  });
+
+  if (!dmResult) {
+    return {
+      sent: false,
+      error: 'Could not deliver reply — recipient may have closed their inbox.',
+    };
+  }
 
   const commentObj = {
-    id: `comm-${Date.now()}`,
-    senderId: sender?.id || 'me',
+    id: dmResult.id || `comm-${Date.now()}`,
+    senderId,
     senderName: sender?.name || 'You',
     senderAvatar: sender?.avatar || null,
     senderBadge: sender?.badge || null,
     senderVerified: sender?.verified || false,
     text: commentText.trim(),
-    createdAt: new Date().toISOString(),
+    createdAt: dmResult.timestamp || new Date().toISOString(),
   };
 
-  // 1. Deliver directly into the poster's inbox
-  sendStatusReplyToInbox({
-    recipientId: status.userId,
-    recipientName: status.userName,
-    recipientAvatar: status.userAvatar,
-    recipientBadge: status.userBadge,
-    recipientVerified: status.userVerified,
-    senderId: sender?.id,
-    senderName: sender?.name,
-    senderAvatar: sender?.avatar,
-    senderBadge: sender?.badge,
-    senderVerified: sender?.verified,
-    commentText: commentText.trim(),
-    statusPreviewText: status.text,
-  });
-
-  // 2. Also record in status comments array
   if (typeof window !== 'undefined') {
-    try {
-      const raw = localStorage.getItem(STATUS_STORAGE_KEY);
-      const existing = raw ? JSON.parse(raw) : [];
-      const idx = existing.findIndex((s) => s.id === status.id);
-
-      if (idx !== -1) {
-        existing[idx].comments = [...(existing[idx].comments || []), commentObj];
-        localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(existing));
-      }
-      window.dispatchEvent(new CustomEvent('shammah:status-commented', { detail: { statusId: status.id, comment: commentObj } }));
-    } catch (err) {
-      console.error('Failed to record comment', err);
-    }
+    window.dispatchEvent(
+      new CustomEvent('shammah:status-commented', { detail: { statusId: status.id, comment: commentObj } })
+    );
   }
 
-  return commentObj;
+  return { sent: true, comment: commentObj };
 }

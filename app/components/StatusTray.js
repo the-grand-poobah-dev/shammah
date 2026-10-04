@@ -4,7 +4,7 @@ import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
-import { getActiveStatuses } from '../lib/statusManager';
+import { getActiveStatuses, fetchActiveStatuses } from '../lib/statusManager';
 import StatusViewerModal from './StatusViewerModal';
 import StatusCreatorModal from './StatusCreatorModal';
 
@@ -31,6 +31,9 @@ export default function StatusTray({ currentUser }) {
 
   useEffect(() => {
     loadStatuses();
+    fetchActiveStatuses().then((fresh) => {
+      if (Array.isArray(fresh)) setStatuses(fresh);
+    });
 
     function onStatusUpdated() {
       loadStatuses();

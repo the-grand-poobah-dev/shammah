@@ -19,6 +19,7 @@ import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import {
   getNotifications,
+  fetchRealNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotification,
@@ -60,6 +61,9 @@ export default function NotificationsView({ currentUser, openAuth }) {
 
   useEffect(() => {
     reload();
+    fetchRealNotifications(currentUser?.id).then((fresh) => {
+      if (Array.isArray(fresh)) setNotifications(fresh);
+    });
 
     function onUpdate() {
       reload();
@@ -72,7 +76,7 @@ export default function NotificationsView({ currentUser, openAuth }) {
       window.removeEventListener('shammah:firebase-config-updated', onUpdate);
       window.removeEventListener('shammah:sound-toggled', onUpdate);
     };
-  }, []);
+  }, [currentUser?.id]);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 

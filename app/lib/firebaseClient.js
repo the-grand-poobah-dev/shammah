@@ -29,95 +29,68 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export default app;
 
-// All Google Workspace OAuth scopes configured for the applet
+// Per-service scopes mapped to the exact endpoints called in GoogleWorkspaceHubView.js
+export const WORKSPACE_TAB_SCOPES = {
+  calendar: [
+    'https://www.googleapis.com/auth/calendar.events',
+  ],
+  keep: [
+    'https://www.googleapis.com/auth/keep',
+  ],
+  meet: [
+    'https://www.googleapis.com/auth/meetings.space.created',
+  ],
+  classroom: [
+    'https://www.googleapis.com/auth/classroom.courses',
+    'https://www.googleapis.com/auth/classroom.announcements',
+  ],
+  tasks: [
+    'https://www.googleapis.com/auth/tasks',
+  ],
+  chat: [
+    'https://www.googleapis.com/auth/chat.spaces.readonly',
+    'https://www.googleapis.com/auth/chat.messages',
+  ],
+  slides: [
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/presentations',
+  ],
+  forms: [
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/forms.body',
+    'https://www.googleapis.com/auth/forms.responses.readonly',
+  ],
+  firebase: [],
+};
+
+// Trimmed Google Workspace OAuth scopes (only the 13 scopes actually used by live hub features, down from 84)
 export const SCOPES = [
-  'https://www.googleapis.com/auth/calendar',
-  'https://www.googleapis.com/auth/calendar.acls',
-  'https://www.googleapis.com/auth/calendar.acls.readonly',
-  'https://www.googleapis.com/auth/calendar.app.created',
-  'https://www.googleapis.com/auth/calendar.calendarlist',
-  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-  'https://www.googleapis.com/auth/calendar.calendars',
-  'https://www.googleapis.com/auth/calendar.calendars.readonly',
   'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/calendar.events.freebusy',
-  'https://www.googleapis.com/auth/calendar.events.owned',
-  'https://www.googleapis.com/auth/calendar.events.owned.readonly',
-  'https://www.googleapis.com/auth/calendar.events.public.readonly',
-  'https://www.googleapis.com/auth/calendar.events.readonly',
-  'https://www.googleapis.com/auth/calendar.freebusy',
-  'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/calendar.settings.readonly',
   'https://www.googleapis.com/auth/keep',
-  'https://www.googleapis.com/auth/keep.readonly',
   'https://www.googleapis.com/auth/meetings.space.created',
-  'https://www.googleapis.com/auth/meetings.space.readonly',
-  'https://www.googleapis.com/auth/meetings.space.settings',
-  'https://www.googleapis.com/auth/classroom.addons.student',
-  'https://www.googleapis.com/auth/classroom.addons.teacher',
-  'https://www.googleapis.com/auth/classroom.announcements',
-  'https://www.googleapis.com/auth/classroom.announcements.readonly',
   'https://www.googleapis.com/auth/classroom.courses',
-  'https://www.googleapis.com/auth/classroom.courses.readonly',
-  'https://www.googleapis.com/auth/classroom.coursework.me',
-  'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
-  'https://www.googleapis.com/auth/classroom.coursework.students',
-  'https://www.googleapis.com/auth/classroom.coursework.students.readonly',
-  'https://www.googleapis.com/auth/classroom.courseworkmaterials',
-  'https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly',
-  'https://www.googleapis.com/auth/classroom.guardianlinks.me.readonly',
-  'https://www.googleapis.com/auth/classroom.guardianlinks.students',
-  'https://www.googleapis.com/auth/classroom.guardianlinks.students.readonly',
-  'https://www.googleapis.com/auth/classroom.profile.emails',
-  'https://www.googleapis.com/auth/classroom.profile.photos',
-  'https://www.googleapis.com/auth/classroom.push-notifications',
-  'https://www.googleapis.com/auth/classroom.rosters',
-  'https://www.googleapis.com/auth/classroom.rosters.readonly',
-  'https://www.googleapis.com/auth/classroom.student-submissions.me.readonly',
-  'https://www.googleapis.com/auth/classroom.student-submissions.students.readonly',
-  'https://www.googleapis.com/auth/classroom.topics',
-  'https://www.googleapis.com/auth/classroom.topics.readonly',
+  'https://www.googleapis.com/auth/classroom.announcements',
   'https://www.googleapis.com/auth/tasks',
-  'https://www.googleapis.com/auth/tasks.readonly',
-  'https://www.googleapis.com/auth/chat.admin.delete',
-  'https://www.googleapis.com/auth/chat.admin.memberships',
-  'https://www.googleapis.com/auth/chat.admin.memberships.readonly',
-  'https://www.googleapis.com/auth/chat.admin.spaces',
-  'https://www.googleapis.com/auth/chat.admin.spaces.readonly',
-  'https://www.googleapis.com/auth/chat.customemojis',
-  'https://www.googleapis.com/auth/chat.customemojis.readonly',
-  'https://www.googleapis.com/auth/chat.delete',
-  'https://www.googleapis.com/auth/chat.memberships',
-  'https://www.googleapis.com/auth/chat.memberships.app',
-  'https://www.googleapis.com/auth/chat.memberships.readonly',
-  'https://www.googleapis.com/auth/chat.messages',
-  'https://www.googleapis.com/auth/chat.messages.create',
-  'https://www.googleapis.com/auth/chat.messages.reactions',
-  'https://www.googleapis.com/auth/chat.messages.reactions.create',
-  'https://www.googleapis.com/auth/chat.messages.reactions.readonly',
-  'https://www.googleapis.com/auth/chat.messages.readonly',
-  'https://www.googleapis.com/auth/chat.spaces',
-  'https://www.googleapis.com/auth/chat.spaces.create',
   'https://www.googleapis.com/auth/chat.spaces.readonly',
-  'https://www.googleapis.com/auth/chat.users.readstate',
-  'https://www.googleapis.com/auth/chat.users.readstate.readonly',
-  'https://www.googleapis.com/auth/chat.users.sections',
-  'https://www.googleapis.com/auth/chat.users.sections.readonly',
-  'https://www.googleapis.com/auth/chat.users.spacesettings',
-  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/chat.messages',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/presentations',
-  'https://www.googleapis.com/auth/presentations.readonly',
-  'https://www.googleapis.com/auth/spreadsheets',
-  'https://www.googleapis.com/auth/spreadsheets.readonly',
   'https://www.googleapis.com/auth/forms.body',
-  'https://www.googleapis.com/auth/forms.body.readonly',
   'https://www.googleapis.com/auth/forms.responses.readonly',
 ];
 
-const provider = new GoogleAuthProvider();
-SCOPES.forEach((scope) => provider.addScope(scope));
+function createGoogleProvider(requestedScopes = SCOPES) {
+  const googleProvider = new GoogleAuthProvider();
+  googleProvider.setCustomParameters({
+    include_granted_scopes: 'true',
+  });
+  const list = Array.isArray(requestedScopes) && requestedScopes.length > 0 ? requestedScopes : SCOPES;
+  list.forEach((scope) => googleProvider.addScope(scope));
+  return googleProvider;
+}
 
 // In-memory access token cache (never stored in localStorage or sessionStorage)
 let isSigningIn = false;
@@ -198,10 +171,11 @@ export const initAuth = (onAuthSuccess, onAuthFailure) => {
   });
 };
 
-export const googleSignIn = async () => {
+export const googleSignIn = async (customScopes = SCOPES) => {
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
+    const activeProvider = createGoogleProvider(customScopes);
+    const result = await signInWithPopup(auth, activeProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {
       throw new Error('Failed to get access token from Firebase Auth');
@@ -219,6 +193,10 @@ export const googleSignIn = async () => {
 
 export const getAccessToken = async () => {
   return cachedAccessToken;
+};
+
+export const clearAccessToken = () => {
+  cachedAccessToken = null;
 };
 
 export const logout = async () => {

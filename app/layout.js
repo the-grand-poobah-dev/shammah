@@ -1,10 +1,9 @@
 import { Fraunces, Work_Sans } from 'next/font/google';
 import './globals.css';
-import './cx.css'; // categories + churches pages
-import BottomNav from './components/BottomNav';
-import TopNavGlobal from './components/TopNavGlobal';
-import ScrollProgressIndicator from './components/ScrollProgressIndicator';
+import './cx.css';
 import AppClientInit from './components/AppClientInit';
+import BottomNav from './components/BottomNav';
+import ScrollProgressIndicator from './components/ScrollProgressIndicator';
 
 const fraunces = Fraunces({
   subsets: ['latin'],
@@ -27,23 +26,6 @@ export const metadata = {
     title: 'Shammah',
     description: 'A shared feed for your church community.',
   },
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Shammah',
-  },
-  icons: {
-    icon: '/icon.svg',
-    apple: '/apple-touch-icon.png',
-  },
-};
-
-export const viewport = {
-  themeColor: '#0d9488',
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }) {
@@ -52,7 +34,6 @@ export default function RootLayout({ children }) {
       <body>
         <AppClientInit />
         <ScrollProgressIndicator />
-        <TopNavGlobal />
         {children}
         <BottomNav />
       </body>

@@ -2,12 +2,16 @@ import Link from 'next/link';
 
 export default function NotFound() {
   return (
-    <div className="shell" style={{ textAlign: 'center', padding: '60px 20px' }}>
-      <h2>Page Not Found</h2>
-      <p style={{ marginTop: '12px', color: 'var(--ink-muted)' }}>The page you are looking for does not exist.</p>
-      <Link href="/" style={{ display: 'inline-block', marginTop: '20px', color: 'var(--teal)' }}>
-        Return Home
-      </Link>
-    </div>
+    <main className="shell">
+      <div className="empty-state" style={{ margin: '48px 16px' }}>
+        <h2>Page not found</h2>
+        <p>The page you are looking for does not exist or has been moved.</p>
+        <div className="empty-auth-actions">
+          <Link href="/" className="signin-btn" style={{ textDecoration: 'none' }}>
+            Return Home
+          </Link>
+        </div>
+      </div>
+    </main>
   );
 }
