@@ -15,6 +15,7 @@ import {
   Sparkles,
   ChevronUp,
   Calendar,
+  LayoutGrid,
 } from 'lucide-react';
 import { getTotalUnreadMessagesCount } from '../lib/inboxManager';
 import { getUnreadNotificationCount, fetchRealNotifications } from '../lib/notificationsManager';
@@ -55,7 +56,7 @@ export default function BottomNav() {
       id: 'workspace',
       label: 'Google Workspace & Firebase Hub',
       desc: 'Slides, Forms, Keep, Calendar, Meet, Classroom, Tasks & Chat',
-      icon: Calendar,
+      icon: LayoutGrid,
       color: '#10b981', // Emerald
       action: handleOpenWorkspace,
     },

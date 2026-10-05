@@ -26,6 +26,10 @@ import {
   Bot,
   DownloadCloud,
   Clock,
+  MessageCircle,
+  Share2,
+  Heart,
+  Tv,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
@@ -1193,16 +1197,20 @@ export default function CreatePostBox({
               {/* Feed Card Actions Mockup */}
               <div className="post-actions-preview">
                 <div className="post-action-preview-pill">
-                  <span>❤️ Amen · 0</span>
+                  <Heart size={12} className="text-rose-400" />
+                  <span>Amen · 0</span>
                 </div>
                 <div className="post-action-preview-pill">
-                  <span>💬 Comment · 0</span>
+                  <MessageCircle size={12} />
+                  <span>Comment · 0</span>
                 </div>
                 <div className="post-action-preview-pill">
-                  <span>↗ Share</span>
+                  <Share2 size={12} />
+                  <span>Share</span>
                 </div>
                 <div className="post-action-preview-pill">
-                  <span>📺 Sanctuary Screen</span>
+                  <Tv size={12} />
+                  <span>Sanctuary Screen</span>
                 </div>
               </div>
             </div>

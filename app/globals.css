@@ -67,9 +67,88 @@ button {
 }
 
 button:focus-visible,
-a:focus-visible {
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
   outline: 2px solid var(--teal);
-  outline-offset: 2px;
+  outline-offset: 1px;
+}
+
+button:disabled,
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+/* Standardized Checkboxes across all forms, dialogs and lists */
+input[type="checkbox"] {
+  accent-color: var(--teal);
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* Standardized Toggle Switch Component */
+.theme-toggle-switch,
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  padding: 2px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.theme-toggle-switch.is-dark,
+.toggle-switch.active,
+.toggle-switch[aria-checked="true"] {
+  background: var(--teal);
+  border-color: var(--teal);
+}
+
+.theme-toggle-switch .switch-knob,
+.toggle-switch .switch-knob {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: block;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+  transform: translateX(0);
+}
+
+.theme-toggle-switch.is-dark .switch-knob,
+.toggle-switch.active .switch-knob,
+.toggle-switch[aria-checked="true"] .switch-knob {
+  transform: translateX(20px);
+}
+
+/* Standardized Badge & Status Pill Baseline */
+.badge-pill,
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {

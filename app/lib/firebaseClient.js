@@ -97,16 +97,20 @@ let isSigningIn = false;
 let cachedAccessToken = null;
 let connectionTested = false;
 
-// Validate connection to Firestore on boot
+// Validate connection to Firestore when provisioned
 export async function testFirestoreConnection() {
   if (typeof window === 'undefined' || connectionTested) return;
   connectionTested = true;
+  // If Firestore database has not been provisioned for this project, return quietly
+  if (!firebaseConfig?.firestoreDatabaseId) return;
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    const testPromise = getDocFromServer(doc(db, 'test', 'connection'));
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 2500)
+    );
+    await Promise.race([testPromise, timeoutPromise]);
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-    }
+    // Offline or pending provisioning - client operates gracefully
   }
 }
 
@@ -117,10 +121,6 @@ export function subscribeToFirebaseAuth(callback) {
   return onAuthStateChanged(auth, (user) => {
     if (callback) callback(user);
   });
-}
-
-if (typeof window !== 'undefined') {
-  testFirestoreConnection();
 }
 
 export const OperationType = {

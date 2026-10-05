@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check, Eye, EyeOff, BookOpen, AlertCircle, Sparkles } from 'lucide-react';
+import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check, Eye, EyeOff, BookOpen, AlertCircle, Sparkles, MessageCircle, Share2, Pin } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { categoryStyle, timeAgo } from '../lib/postDisplay';
 import Avatar from './Avatar';
@@ -479,7 +479,7 @@ export default function PostCard({
         <div className="pinned-announcement-banner">
           <div className="pinned-badge-left">
             <span className="pinned-icon-wrapper" aria-hidden="true">
-              <PinIcon className="pinned-icon" />
+              <Pin size={13} className="pinned-icon" />
             </span>
             <span className="pinned-banner-text">Pinned Announcement</span>
           </div>
@@ -491,7 +491,7 @@ export default function PostCard({
               title="Unpin this announcement from the top of the feed"
               aria-label="Unpin announcement"
             >
-              <PinIcon className="pin-action-icon" />
+              <Pin size={13} className="pin-action-icon" />
               <span>Unpin</span>
             </button>
           )}
@@ -721,7 +721,7 @@ export default function PostCard({
           title="Join Christian family comments"
           aria-label="Comments"
         >
-          <span className="action-icon">💬</span>
+          <MessageCircle size={15} className="action-icon" />
           <span className="action-label comment-label">Comment</span>
           {commentCount != null && commentCount > 0 && (
             <span className="action-count-badge comment-count-badge">{commentCount}</span>
@@ -748,7 +748,7 @@ export default function PostCard({
           title="Share with official Shammah options"
           aria-label="Share"
         >
-          <span className="action-icon">↗</span>
+          <Share2 size={15} className="action-icon" />
           <span className="action-label share-label">Share</span>
         </button>
 
@@ -760,7 +760,7 @@ export default function PostCard({
           title={isSavedOffline ? 'Saved offline for 30 days' : 'Download for 30-day offline access'}
           aria-label="Save offline"
         >
-          {isSavedOffline ? <Check size={14} className="text-emerald-400" /> : <DownloadCloud size={14} />}
+          {isSavedOffline ? <Check size={15} className="text-emerald-400" /> : <DownloadCloud size={15} />}
           <span className="action-label offline-label">{isSavedOffline ? 'Saved' : 'Offline'}</span>
         </button>
 
@@ -772,7 +772,7 @@ export default function PostCard({
             title={post.is_pinned ? 'Unpin announcement' : 'Pin to top of feed'}
             aria-label={post.is_pinned ? 'Unpin post' : 'Pin post'}
           >
-            <PinIcon className="action-icon pin-action-icon" />
+            <Pin size={15} className="action-icon pin-action-icon" />
             <span className="action-label pin-label">{post.is_pinned ? 'Pinned' : 'Pin'}</span>
           </button>
         )}

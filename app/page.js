@@ -11,8 +11,7 @@ import MemberName from './components/MemberName';
 import OnboardingWizard from './components/OnboardingWizard';
 import { uploadPostMedia } from './lib/mediaUpload';
 import { sortPostsWithPinned, isUserAdmin, getSampleFeedPosts } from './lib/pinnedPosts';
-import PinIcon from './components/PinIcon';
-import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX, DownloadCloud, X, Search } from 'lucide-react';
+import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX, DownloadCloud, X, Search, Home, MessageCircle, Bell, Building2 } from 'lucide-react';
 import TopNav, { TOP_NAV_SECTIONS } from './components/TopNav';
 import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
@@ -26,7 +25,6 @@ import FaithChallengesView from './components/FaithChallengesView';
 import FaithArcadeGamesView from './components/FaithArcadeGamesView';
 import GoogleWorkspaceHubView from './components/GoogleWorkspaceHubView';
 import PWAInstallButton from './components/PWAInstallButton';
-import { testConnection } from './lib/firebaseClient';
 import {
   cacheMainFeedPosts,
   getCachedMainFeedPosts,
@@ -62,21 +60,11 @@ import { getOfflineItems } from './lib/offlineSyncManager';
 const SECTIONS = TOP_NAV_SECTIONS;
 
 const ICONS = {
-  home: (
-    <svg viewBox="0 0 24 24" className="icon"><path d="M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z" /></svg>
-  ),
-  messages: (
-    <svg viewBox="0 0 24 24" className="icon"><path d="M21 12a8 8 0 01-11.5 7.2L4 20l1-4.5A8 8 0 1121 12z" /></svg>
-  ),
-  alerts: (
-    <svg viewBox="0 0 24 24" className="icon"><path d="M6 9a6 6 0 1112 0c0 6 2 7 2 7H4s2-1 2-7zm4 10a2 2 0 004 0" /></svg>
-  ),
-  churches: (
-    <svg viewBox="0 0 24 24" className="icon"><path d="M12 2v5m-2-2.5h4M5 22V12l7-5 7 5v10zm5 0v-5h4v5" /></svg>
-  ),
-  menu: (
-    <svg viewBox="0 0 24 24" className="icon"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
-  ),
+  home: <Home size={20} className="icon" />,
+  messages: <MessageCircle size={20} className="icon" />,
+  alerts: <Bell size={20} className="icon" />,
+  churches: <Building2 size={20} className="icon" />,
+  menu: <Compass size={20} className="icon" />,
 };
 
 const TABS = [
@@ -118,10 +106,6 @@ export default function Feed() {
     dotColor,
   } = useOfflineIndicatorStatus();
 
-  // Verify Firestore connection on initial boot
-  useEffect(() => {
-    testConnection();
-  }, []);
   const [authMode, setAuthMode] = useState('signin'); // signin | signup | forgot | oauth
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');

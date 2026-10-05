@@ -18,6 +18,7 @@ import {
   Check,
   FileText,
   Calendar,
+  LayoutGrid,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 
@@ -29,7 +30,7 @@ export const TOP_NAV_SECTIONS = [
   { id: 'courses', label: 'Courses', icon: GraduationCap },
   { id: 'rss', label: 'RSS', icon: Rss },
   { id: 'bible', label: 'Bible', icon: BookOpen },
-  { id: 'workspace', label: 'Workspace', icon: Calendar },
+  { id: 'workspace', label: 'Workspace', icon: LayoutGrid },
 ];
 
 export const MORE_DROPDOWN_ITEMS = [
