@@ -589,19 +589,6 @@ export default function PostCard({
         {/* Top-Right Column: Post Options Menu on top, Privacy State Pill directly below it (no overlap) */}
         <div className="post-header-actions-right">
           <div className="post-header-top-controls">
-            {!post.is_pinned && isAdmin && (
-              <button
-                type="button"
-                className="header-pin-btn"
-                onClick={() => onTogglePin?.(post)}
-                title="Pin this announcement to top of feed"
-                aria-label="Pin announcement to top"
-              >
-                <PinIcon className="pin-action-icon" />
-                <span>Pin</span>
-              </button>
-            )}
-
             {/* Post Options Dropdown Menu for every post */}
             <PostOptionsMenu
               post={post}

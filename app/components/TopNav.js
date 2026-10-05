@@ -34,14 +34,6 @@ export const TOP_NAV_SECTIONS = [
 
 export const MORE_DROPDOWN_ITEMS = [
   {
-    id: 'workspace',
-    label: 'Google Workspace & Cloud Hub',
-    desc: 'Slides, Forms, Keep, Calendar, Meet, Classroom, Tasks & Chat',
-    icon: Calendar,
-    isSection: true,
-    color: '#10b981', // Emerald Green
-  },
-  {
     id: 'sermon-note',
     label: 'Take Sermon Note',
     desc: 'Capture points & view scriptures',
@@ -306,7 +298,7 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                         position: 'fixed',
                         top: dropdownPos.top,
                         right: dropdownPos.right,
-                        zIndex: 999999,
+                        zIndex: 55,
                       }}
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}

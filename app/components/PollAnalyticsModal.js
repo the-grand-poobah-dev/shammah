@@ -162,7 +162,7 @@ export default function PollAnalyticsModal({
         {/* Modal Body */}
         <div className="p-5 max-h-[80vh] overflow-y-auto space-y-4 text-sm text-gray-200">
           {/* Quick Metrics Cards */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
               <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
                 <Users size={13} className="text-cyan-400" />
@@ -200,7 +200,7 @@ export default function PollAnalyticsModal({
           </div>
 
           {/* Chart Header & Toggle Controls */}
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-gray-300">
                 Voting Pattern Over Time

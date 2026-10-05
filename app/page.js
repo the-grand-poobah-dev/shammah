@@ -1148,7 +1148,7 @@ export default function Feed() {
                 {(isDisconnected || hasPendingSyncs) && (
                   <span
                     role="status"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-900/90 text-white border border-white/15 shadow-sm"
+                    className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-900/90 text-white border border-white/15 shadow-sm"
                     title={
                       dotColor === 'yellow'
                         ? 'Yellow dot: Pending syncs waiting for network reconnection'

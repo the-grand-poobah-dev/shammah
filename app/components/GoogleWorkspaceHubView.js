@@ -2543,7 +2543,7 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
 
       {/* MANDATORY CONFIRMATION DIALOG MODAL FOR MUTATING / DESTRUCTIVE ACTIONS */}
       {confirmDialog && (
-        <div className="auth-overlay" onClick={() => setConfirmDialog(null)} style={{ zIndex: 99999 }}>
+        <div className="auth-overlay" onClick={() => setConfirmDialog(null)} style={{ zIndex: 100 }}>
           <div className="auth-panel neon-glow-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <AlertTriangle size={22} className={confirmDialog.isDestructive ? 'text-red-400' : 'text-amber-400'} />
