@@ -711,7 +711,7 @@ export default function CoursesView({ session, currentUser, openAuth }) {
                       type="button"
                       className="action-btn"
                       onClick={() => setRepostModalCourse(course)}
-                      title="Repost course to fellowship profile"
+                      title="Repost course to profile"
                     >
                       <Repeat size={14} className="repost-icon" />
                       <span className="repost-label-text">Repost</span>
@@ -835,7 +835,7 @@ export default function CoursesView({ session, currentUser, openAuth }) {
               {/* Course Discussion & Q&A Thread */}
               <div className="course-discussion-section">
                 <h4 style={{ margin: '20px 0 10px', fontSize: 15 }}>
-                  Fellowship Discussion &amp; Questions:
+                  Course Discussion &amp; Questions:
                 </h4>
                 <CommentThread
                   postId={selectedCourse.id}

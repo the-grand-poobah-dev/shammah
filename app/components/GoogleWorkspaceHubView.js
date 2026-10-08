@@ -25,6 +25,8 @@ import {
   Presentation,
   FileSpreadsheet,
   ListChecks,
+  LayoutGrid,
+  LogIn,
 } from 'lucide-react';
 import {
   initAuth,
@@ -44,15 +46,15 @@ import {
 import { playSound } from '../lib/soundEffects';
 
 const HUB_TABS = [
-  { id: 'calendar', label: 'Google Calendar', icon: Calendar, color: '#3b82f6' },
-  { id: 'slides', label: 'Google Slides', icon: Presentation, color: '#f97316' },
-  { id: 'forms', label: 'Google Forms', icon: FileSpreadsheet, color: '#a855f7' },
-  { id: 'keep', label: 'Google Keep', icon: StickyNote, color: '#eab308' },
-  { id: 'meet', label: 'Google Meet', icon: Video, color: '#10b981' },
-  { id: 'classroom', label: 'Classroom', icon: GraduationCap, color: '#f59e0b' },
-  { id: 'tasks', label: 'Google Tasks', icon: CheckSquare, color: '#06b6d4' },
-  { id: 'chat', label: 'Google Chat', icon: MessageSquare, color: '#8b5cf6' },
-  { id: 'firebase', label: 'Live Prayer Cloud', icon: Flame, color: '#ec4899' },
+  { id: 'calendar', label: 'Calendar', icon: Calendar, color: '#0d766e' },
+  { id: 'slides', label: 'Slides', icon: Presentation, color: '#d97706' },
+  { id: 'forms', label: 'Sign-Up Forms', icon: FileSpreadsheet, color: '#8b5cf6' },
+  { id: 'keep', label: 'Notes', icon: StickyNote, color: '#eab308' },
+  { id: 'meet', label: 'Video Rooms', icon: Video, color: '#10b981' },
+  { id: 'classroom', label: 'Classes', icon: GraduationCap, color: '#f59e0b' },
+  { id: 'tasks', label: 'To-Do List', icon: CheckSquare, color: '#06b6d4' },
+  { id: 'chat', label: 'Group Chat', icon: MessageSquare, color: '#6366f1' },
+  { id: 'firebase', label: 'Prayer Wall', icon: Flame, color: '#ec4899' },
 ];
 
 export default function GoogleWorkspaceHubView({ onShareToFeed }) {
@@ -1110,206 +1112,166 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
   }
 
   return (
-    <div className="gws-page-shell">
-      {/* Hero Header */}
+    <div className="section-feed-view gws-page-shell">
+      {/* Assimilated Workspace Header Card */}
       <div className="gws-hero-card">
-        <div className="gws-hero-badge">
-          <Sparkles size={14} />
-          <span>Google Workspace &amp; Firebase Cloud Ministry Suite</span>
-        </div>
-        <h1 className="gws-hero-title">Connected Fellowship Workspace</h1>
-        <p className="gws-hero-sub">
-          Manage Church Calendar events, build Google Slides worship decks, collect Google Forms RSVPs &amp; surveys, capture Google Keep sermon notes &amp; checklists, host Google Meet prayer rooms, coordinate Google Classroom discipleship, track Google Tasks, chat in Spaces, and share live prayers on Firebase Firestore.
-        </p>
-
-        {/* Official Google Sign-In / Connected Bar */}
-        <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
-          {needsAuth || !token ? (
-            <button
-              type="button"
-              className="gsi-material-button"
-              onClick={handleLogin}
-              disabled={isLoggingIn}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 10,
-                background: '#ffffff',
-                color: '#1f1f1f',
-                border: '1px solid #747775',
-                borderRadius: 999,
-                padding: '9px 18px',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-              }}
-            >
-              <div className="gsi-material-button-state" />
-              <div
-                className="gsi-material-button-content-wrapper"
-                style={{ display: 'flex', alignItems: 'center', gap: 10 }}
-              >
-                <div className="gsi-material-button-icon" style={{ width: 18, height: 18 }}>
-                  <svg
-                    version="1.1"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 48 48"
-                    style={{ display: 'block', width: 18, height: 18 }}
-                  >
-                    <path
-                      fill="#EA4335"
-                      d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                    />
-                    <path
-                      fill="#4285F4"
-                      d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                    />
-                    <path fill="none" d="M0 0h48v48H0z" />
-                  </svg>
-                </div>
-                <span className="gsi-material-button-contents">
-                  {isLoggingIn
-                    ? 'Connecting Google Workspace…'
-                    : sessionExpired
-                      ? 'Reconnect your Google account'
-                      : 'Sign in with Google'}
-                </span>
-                <span style={{ display: 'none' }}>Sign in with Google</span>
-              </div>
-            </button>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span className="gws-status-badge gws-status-badge-teal" style={{ padding: '6px 12px', fontSize: 13 }}>
-                <Check size={14} />
-                <span>Connected: {user?.displayName || user?.email}</span>
-              </span>
-              <button
-                type="button"
-                className="gws-btn-secondary"
-                onClick={() => loadActiveTabData(activeTab)}
-                disabled={loadingData}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                <RefreshCw size={14} />
-                <span>Refresh</span>
-              </button>
-              <button
-                type="button"
-                className="gws-btn-secondary"
-                onClick={handleSignOut}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                <LogOut size={14} />
-                <span>Disconnect</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {(sessionExpired || (user && (!token || needsAuth))) && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: '10px 14px',
-              borderRadius: 10,
-              background: 'rgba(245,158,11,0.16)',
-              border: '1px solid rgba(245,158,11,0.4)',
-              color: '#b45309',
-              fontSize: 13,
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              flexWrap: 'wrap',
-            }}
-          >
-            <span>
-              ⚠ Your Google Workspace access token has expired or was cleared on page reload{user?.email ? ` (${user.email})` : ''}. Please reconnect your Google account to continue using Workspace tools.
+        <div className="gws-hero-top-row">
+          <div className="gws-hero-title-group">
+            <span className="gws-hero-icon-box">
+              <LayoutGrid size={18} />
             </span>
+            <div className="gws-hero-text-wrap">
+              <div className="gws-hero-heading-line">
+                <h2 className="gws-hero-title">My Workspace</h2>
+                <span className="gws-hero-badge">
+                  <Sparkles size={11} />
+                  <span>Study &amp; Ministry Tools</span>
+                </span>
+              </div>
+              <p className="gws-hero-sub">
+                Plan fellowship events, make worship slides, create quick sign-up forms, take sermon notes, start video prayer rooms, join Bible study classes, track to-do lists, chat with your group, and share prayer requests.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Account Connection & Action Bar */}
+        <div className="gws-auth-bar">
+          {needsAuth || !token ? (
             <button
               type="button"
               className="gws-btn-primary"
               onClick={handleLogin}
               disabled={isLoggingIn}
-              style={{ shrink: 0, padding: '6px 14px', fontSize: 12.5 }}
             >
-              {isLoggingIn ? 'Reconnecting…' : 'Reconnect Google Account'}
+              <LogIn size={15} />
+              <span>
+                {isLoggingIn
+                  ? 'Connecting account…'
+                  : sessionExpired
+                    ? 'Reconnect Google Account'
+                    : 'Connect Google Account'}
+              </span>
+            </button>
+          ) : (
+            <div className="gws-connected-row">
+              <span className="gws-status-badge gws-status-badge-teal">
+                <Check size={13} />
+                <span>Connected: {user?.displayName || user?.email}</span>
+              </span>
+              <div className="gws-connected-actions">
+                <button
+                  type="button"
+                  className="gws-btn-secondary"
+                  onClick={() => loadActiveTabData(activeTab)}
+                  disabled={loadingData}
+                >
+                  <RefreshCw size={13} />
+                  <span>Refresh</span>
+                </button>
+                <button
+                  type="button"
+                  className="gws-btn-secondary"
+                  onClick={handleSignOut}
+                >
+                  <LogOut size={13} />
+                  <span>Disconnect</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {(sessionExpired || (user && (!token || needsAuth))) && (
+          <div className="gws-banner gws-banner-warn">
+            <span>
+              Your session expired after reloading the page{user?.email ? ` (${user.email})` : ''}. Reconnect your account to keep using your tools.
+            </span>
+            <button
+              type="button"
+              className="gws-btn-primary gws-btn-sm"
+              onClick={handleLogin}
+              disabled={isLoggingIn}
+            >
+              <LogIn size={13} />
+              <span>{isLoggingIn ? 'Reconnecting…' : 'Reconnect'}</span>
             </button>
           </div>
         )}
 
         {statusMessage && (
-          <div style={{ marginTop: 12, padding: '8px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.16)', color: '#10b981', fontSize: 13, fontWeight: 600 }}>
-            ✓ {statusMessage}
+          <div className="gws-banner gws-banner-ok">
+            <Check size={14} />
+            <span>{statusMessage}</span>
           </div>
         )}
         {errorMessage && (
-          <div style={{ marginTop: 12, padding: '8px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.16)', color: '#f87171', fontSize: 13, fontWeight: 600 }}>
-            ⚠ {errorMessage}
+          <div className="gws-banner gws-banner-err">
+            <AlertTriangle size={14} />
+            <span>{errorMessage}</span>
           </div>
         )}
       </div>
 
-      {/* Sub-Navigation Pills */}
-      <div className="gws-nav-tabs" role="tablist">
-        {HUB_TABS.map((t) => {
-          const Icon = t.icon;
-          const isActive = activeTab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              className={`gws-tab-pill${isActive ? ' active' : ''}`}
-              onClick={() => {
-                setActiveTab(t.id);
-                playSound('reaction');
-              }}
-            >
-              <Icon size={15} style={{ color: isActive ? '#fff' : t.color }} />
-              <span>{t.label}</span>
-            </button>
-          );
-        })}
+      {/* Tool Selector Card */}
+      <div className="gws-nav-card">
+        <div className="gws-nav-tabs no-scrollbar" role="tablist" aria-label="Workspace Tools">
+          {HUB_TABS.map((t) => {
+            const Icon = t.icon;
+            const isActive = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                className={`gws-tab-pill${isActive ? ' active' : ''}`}
+                style={{ '--gws-tab-color': t.color }}
+                onClick={() => {
+                  setActiveTab(t.id);
+                  playSound('reaction');
+                }}
+              >
+                <Icon size={14} className="gws-tab-icon" />
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* TAB 1: GOOGLE CALENDAR */}
+      {/* TAB 1: CALENDAR */}
       {activeTab === 'calendar' && (
-        <section className="gws-workspace-section">
+        <section className="gws-workspace-section" style={{ '--gws-accent': '#0d766e' }}>
           <div className="gws-section-header">
             <div className="gws-title-wrap">
-              <Calendar size={18} className="text-sky-400" />
-              <h3>Google Calendar — Services, Keshas &amp; Fellowship Events</h3>
+              <span className="gws-sec-icon-box">
+                <Calendar size={17} />
+              </span>
+              <div>
+                <h3>Fellowship &amp; Youth Calendar</h3>
+                <span className="gws-section-hint">Plan services, youth hangouts, keshas &amp; study sessions</span>
+              </div>
             </div>
-            <span className="gws-section-hint">Synced with your primary Google Calendar</span>
           </div>
 
           {needsAuth ? (
-            <div className="empty-state">
-              <h2>Sign in with Google to view &amp; schedule events</h2>
-              <p>Connect your Google account above to view upcoming calendar events and add church gatherings.</p>
+            <div className="empty-state gws-empty-card">
+              <h2>Connect your account to view &amp; schedule events</h2>
+              <p>Link your account above to see upcoming dates and add church or youth group events.</p>
             </div>
           ) : (
             <div className="gws-grid">
               <form className="gws-panel-card" onSubmit={handleCreateCalendarEvent}>
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>+ Schedule Fellowship Event</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="gws-panel-header">
+                  <h4>Schedule an Event</h4>
+                  <span className="gws-panel-sub">Adds directly to your calendar</span>
+                </div>
+                <div className="gws-form-stack">
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Event title (e.g., Friday Night Prayer Kesha)"
+                    placeholder="Event name (e.g., Friday Night Youth Kesha)"
                     value={eventSummary}
                     onChange={(e) => setEventSummary(e.target.value)}
                     required
@@ -1317,7 +1279,6 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                   <input
                     type="datetime-local"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
                     value={eventStart}
                     onChange={(e) => setEventStart(e.target.value)}
                     required
@@ -1325,63 +1286,52 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Notes / Scripture theme (optional)"
+                    placeholder="Short note or Bible verse theme (optional)"
                     value={eventDescription}
                     onChange={(e) => setEventDescription(e.target.value)}
                   />
                   <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    <Plus size={14} style={{ display: 'inline', marginRight: 4 }} />
-                    Add to Google Calendar
+                    <Plus size={14} />
+                    <span>Add Event</span>
                   </button>
                 </div>
               </form>
 
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
-                  Upcoming Events ({calendarEvents.length})
-                </h4>
+                <div className="gws-panel-header">
+                  <h4>Upcoming Events ({calendarEvents.length})</h4>
+                  <span className="gws-panel-sub">Your next scheduled gatherings</span>
+                </div>
                 {calendarEvents.length === 0 ? (
-                  <p className="gws-card-hint">No upcoming events found on your primary calendar.</p>
+                  <p className="gws-card-hint">No upcoming events scheduled yet.</p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
+                  <div className="gws-items-list">
                     {calendarEvents.map((ev) => {
                       const startStr = ev.start?.dateTime || ev.start?.date || '';
                       return (
-                        <div
-                          key={ev.id}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '10px 12px',
-                            borderRadius: 10,
-                            background: 'rgba(148,163,184,0.08)',
-                            gap: 8,
-                          }}
-                        >
-                          <div>
-                            <strong style={{ display: 'block', fontSize: 14 }}>{ev.summary || 'Untitled Event'}</strong>
-                            <span style={{ fontSize: 12, opacity: 0.75 }}>
-                              <Clock size={11} style={{ display: 'inline', marginRight: 4 }} />
-                              {startStr ? new Date(startStr).toLocaleString() : 'All day'}
+                        <div key={ev.id} className="gws-item-card">
+                          <div className="gws-item-body">
+                            <strong className="gws-item-title">{ev.summary || 'Untitled Event'}</strong>
+                            <span className="gws-item-meta">
+                              <Clock size={11} />
+                              <span>{startStr ? new Date(startStr).toLocaleString() : 'All day'}</span>
                             </span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div className="gws-item-actions">
                             {ev.htmlLink && (
                               <a
                                 href={ev.htmlLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="gws-btn-secondary"
-                                title="Open in Google Calendar"
+                                className="gws-icon-btn"
+                                title="Open event"
                               >
                                 <ExternalLink size={13} />
                               </a>
                             )}
                             <button
                               type="button"
-                              className="gws-btn-secondary"
+                              className="gws-icon-btn gws-icon-btn-danger"
                               onClick={() => handleDeleteCalendarEvent(ev)}
                               title="Delete event"
                             >
@@ -1399,150 +1349,145 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         </section>
       )}
 
-      {/* TAB 1B: GOOGLE SLIDES */}
+      {/* TAB 1B: SLIDES */}
       {activeTab === 'slides' && (
-        <section className="gws-workspace-section">
+        <section className="gws-workspace-section" style={{ '--gws-accent': '#d97706' }}>
           <div className="gws-section-header">
             <div className="gws-title-wrap">
-              <Presentation size={18} className="text-orange-400" />
-              <h3>Google Slides — Worship Lyric Decks &amp; Sermon Presentations</h3>
+              <span className="gws-sec-icon-box">
+                <Presentation size={17} />
+              </span>
+              <div>
+                <h3>Worship &amp; Sermon Slides</h3>
+                <span className="gws-section-hint">Build lyric slides, Bible verse decks &amp; youth presentations</span>
+              </div>
             </div>
-            <span className="gws-section-hint">Create, edit &amp; project Google Slides presentations</span>
           </div>
 
           {needsAuth ? (
-            <div className="empty-state">
-              <h2>Sign in with Google to manage Google Slides</h2>
-              <p>Connect your Google account above to browse worship decks, create sermon presentations, and insert scripture slides.</p>
+            <div className="empty-state gws-empty-card">
+              <h2>Connect your account to build slide decks</h2>
+              <p>Link your account above to create worship lyrics, sermon points, and presentation slides.</p>
             </div>
           ) : (
             <div className="gws-grid">
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
-                  Your Google Slides Decks ({presentations.length})
-                </h4>
+                <div className="gws-panel-header">
+                  <h4>Your Slide Decks ({presentations.length})</h4>
+                  <span className="gws-panel-sub">Click a deck to add slides or present</span>
+                </div>
                 {presentations.length === 0 ? (
-                  <p className="gws-card-hint" style={{ marginBottom: 12 }}>
-                    No Google Slides presentations found in your Drive. Create your first sermon or worship deck below!
+                  <p className="gws-card-hint">
+                    No presentations yet. Create your first worship or sermon deck below!
                   </p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14, maxHeight: 220, overflowY: 'auto' }}>
-                    {presentations.map((deck) => (
-                      <div
-                        key={deck.id}
-                        onClick={() => setSelectedPresentationId(deck.id)}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          cursor: 'pointer',
-                          background:
-                            selectedPresentationId === deck.id ? 'rgba(249,115,22,0.18)' : 'rgba(148,163,184,0.08)',
-                          border:
-                            selectedPresentationId === deck.id ? '1px solid #f97316' : '1px solid transparent',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <strong style={{ display: 'block', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {deck.name}
-                          </strong>
-                          <span style={{ fontSize: 11, opacity: 0.75 }}>
-                            {deck.modifiedTime ? `Updated ${new Date(deck.modifiedTime).toLocaleDateString()}` : 'Google Slides'}
-                          </span>
+                  <div className="gws-items-list">
+                    {presentations.map((deck) => {
+                      const isSelected = selectedPresentationId === deck.id;
+                      return (
+                        <div
+                          key={deck.id}
+                          onClick={() => setSelectedPresentationId(deck.id)}
+                          className={`gws-item-card is-clickable${isSelected ? ' is-selected' : ''}`}
+                        >
+                          <div className="gws-item-body">
+                            <strong className="gws-item-title">{deck.name}</strong>
+                            <span className="gws-item-meta">
+                              {deck.modifiedTime ? `Updated ${new Date(deck.modifiedTime).toLocaleDateString()}` : 'Slide Deck'}
+                            </span>
+                          </div>
+                          <div className="gws-item-actions">
+                            <a
+                              href={deck.webViewLink || `https://docs.google.com/presentation/d/${deck.id}/edit`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="gws-icon-btn"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Open presentation"
+                            >
+                              <ExternalLink size={13} />
+                            </a>
+                            <button
+                              type="button"
+                              className="gws-icon-btn gws-icon-btn-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeletePresentation(deck);
+                              }}
+                              title="Delete presentation"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, shrink: 0 }}>
-                          <a
-                            href={deck.webViewLink || `https://docs.google.com/presentation/d/${deck.id}/edit`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="gws-btn-secondary"
-                            onClick={(e) => e.stopPropagation()}
-                            title="Open in Google Slides"
-                          >
-                            <ExternalLink size={13} />
-                          </a>
-                          <button
-                            type="button"
-                            className="gws-btn-secondary"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeletePresentation(deck);
-                            }}
-                            title="Delete presentation"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
-                <form onSubmit={handleCreateSlideDeck} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <form onSubmit={handleCreateSlideDeck} className="gws-form-stack gws-form-divider">
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="New deck title (e.g., Sunday Service Worship & Sermon)"
+                    placeholder="New deck title (e.g., Sunday Worship Lyrics)"
                     value={newDeckTitle}
                     onChange={(e) => setNewDeckTitle(e.target.value)}
                     required
                   />
                   <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    + Create Google Slides Presentation
+                    <Plus size={14} />
+                    <span>Create New Slide Deck</span>
                   </button>
                 </form>
               </div>
 
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
-                  {selectedPresentation ? `Deck Inspector: ${selectedPresentation.title}` : 'Slide Deck Builder'}
-                </h4>
+                <div className="gws-panel-header">
+                  <h4>
+                    {selectedPresentation ? `Editing: ${selectedPresentation.title}` : 'Add a Slide'}
+                  </h4>
+                  <span className="gws-panel-sub">Add lyrics, Bible verses, or key points</span>
+                </div>
                 {selectedPresentationId ? (
                   <>
-                    <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.25)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>
-                          Total Slides: {selectedPresentation?.slides?.length || 1}
-                        </span>
-                        <a
-                          href={`https://docs.google.com/presentation/d/${selectedPresentationId}/present`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="gws-btn-secondary"
-                        >
-                          Present Fullscreen <ExternalLink size={12} style={{ display: 'inline', marginLeft: 4 }} />
-                        </a>
-                      </div>
+                    <div className="gws-summary-strip">
+                      <span>
+                        Slides in deck: <strong>{selectedPresentation?.slides?.length || 1}</strong>
+                      </span>
+                      <a
+                        href={`https://docs.google.com/presentation/d/${selectedPresentationId}/present`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="gws-btn-secondary gws-btn-sm"
+                      >
+                        <span>Present Fullscreen</span>
+                        <ExternalLink size={12} />
+                      </a>
                     </div>
 
-                    <form onSubmit={handleAppendSlideToDeck} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <form onSubmit={handleAppendSlideToDeck} className="gws-form-stack">
                       <input
                         type="text"
                         className="gws-input-field"
-                        style={{ paddingLeft: 14 }}
-                        placeholder="Slide heading (e.g., Psalm 23:1-4 / Amazing Grace)"
+                        placeholder="Slide heading (e.g., Psalm 23:1-4 or Song Title)"
                         value={newSlideHeading}
                         onChange={(e) => setNewSlideHeading(e.target.value)}
                         required
                       />
                       <textarea
-                        className="gws-input-field"
-                        style={{ padding: 12, minHeight: 75, borderRadius: 12 }}
-                        placeholder="Slide scripture text, sermon bullet points, or worship lyrics…"
+                        className="gws-input-field gws-textarea"
+                        placeholder="Type the Bible verse, sermon points, or song lyrics for this slide…"
                         value={newSlideBody}
                         onChange={(e) => setNewSlideBody(e.target.value)}
                       />
                       <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                        + Insert Slide via BatchUpdate
+                        <Plus size={14} />
+                        <span>Add Slide to Deck</span>
                       </button>
                     </form>
                   </>
                 ) : (
-                  <p className="gws-card-hint">Select or create a presentation on the left to inspect slides or insert new worship/scripture slides.</p>
+                  <p className="gws-card-hint">Choose or create a slide deck first to add new slides.</p>
                 )}
               </div>
             </div>
@@ -1550,94 +1495,87 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         </section>
       )}
 
-      {/* TAB 1C: GOOGLE FORMS */}
+      {/* TAB 1C: FORMS */}
       {activeTab === 'forms' && (
-        <section className="gws-workspace-section">
+        <section className="gws-workspace-section" style={{ '--gws-accent': '#8b5cf6' }}>
           <div className="gws-section-header">
             <div className="gws-title-wrap">
-              <FileSpreadsheet size={18} className="text-purple-400" />
-              <h3>Google Forms — Fellowship RSVPs, Surveys &amp; Ministry Signups</h3>
+              <span className="gws-sec-icon-box">
+                <FileSpreadsheet size={17} />
+              </span>
+              <div>
+                <h3>Event Sign-Ups &amp; Quick Surveys</h3>
+                <span className="gws-section-hint">Collect RSVPs for youth camps, retreats &amp; volunteer teams</span>
+              </div>
             </div>
-            <span className="gws-section-hint">Create forms, add questions &amp; review live responses</span>
           </div>
 
           {needsAuth ? (
-            <div className="empty-state">
-              <h2>Sign in with Google to manage Google Forms</h2>
-              <p>Connect your Google account above to create church registration forms, add survey questions, and read live responses.</p>
+            <div className="empty-state gws-empty-card">
+              <h2>Connect your account to create sign-up forms</h2>
+              <p>Link your account above to make registration forms, add questions, and check responses.</p>
             </div>
           ) : (
             <div className="gws-grid">
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
-                  Your Google Forms ({formsList.length})
-                </h4>
+                <div className="gws-panel-header">
+                  <h4>Your Forms ({formsList.length})</h4>
+                  <span className="gws-panel-sub">Select a form to view questions &amp; replies</span>
+                </div>
                 {formsList.length === 0 ? (
-                  <p className="gws-card-hint" style={{ marginBottom: 12 }}>
-                    No Google Forms found. Create a new Church Event RSVP or Prayer Survey below!
+                  <p className="gws-card-hint">
+                    No sign-up forms yet. Create an event RSVP or feedback form below!
                   </p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14, maxHeight: 210, overflowY: 'auto' }}>
-                    {formsList.map((f) => (
-                      <div
-                        key={f.id}
-                        onClick={() => setSelectedFormId(f.id)}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          cursor: 'pointer',
-                          background:
-                            selectedFormId === f.id ? 'rgba(168,85,247,0.18)' : 'rgba(148,163,184,0.08)',
-                          border:
-                            selectedFormId === f.id ? '1px solid #a855f7' : '1px solid transparent',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <strong style={{ display: 'block', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {f.name}
-                          </strong>
-                          <span style={{ fontSize: 11, opacity: 0.75 }}>
-                            {f.modifiedTime ? `Updated ${new Date(f.modifiedTime).toLocaleDateString()}` : 'Google Form'}
-                          </span>
+                  <div className="gws-items-list">
+                    {formsList.map((f) => {
+                      const isSelected = selectedFormId === f.id;
+                      return (
+                        <div
+                          key={f.id}
+                          onClick={() => setSelectedFormId(f.id)}
+                          className={`gws-item-card is-clickable${isSelected ? ' is-selected' : ''}`}
+                        >
+                          <div className="gws-item-body">
+                            <strong className="gws-item-title">{f.name}</strong>
+                            <span className="gws-item-meta">
+                              {f.modifiedTime ? `Updated ${new Date(f.modifiedTime).toLocaleDateString()}` : 'Sign-Up Form'}
+                            </span>
+                          </div>
+                          <div className="gws-item-actions">
+                            <a
+                              href={f.webViewLink || `https://docs.google.com/forms/d/${f.id}/edit`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="gws-icon-btn"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Open form"
+                            >
+                              <ExternalLink size={13} />
+                            </a>
+                            <button
+                              type="button"
+                              className="gws-icon-btn gws-icon-btn-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteGoogleForm(f);
+                              }}
+                              title="Delete form"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <a
-                            href={f.webViewLink || `https://docs.google.com/forms/d/${f.id}/edit`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="gws-btn-secondary"
-                            onClick={(e) => e.stopPropagation()}
-                            title="Open in Google Forms"
-                          >
-                            <ExternalLink size={13} />
-                          </a>
-                          <button
-                            type="button"
-                            className="gws-btn-secondary"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteGoogleForm(f);
-                            }}
-                            title="Delete form"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
-                <form onSubmit={handleCreateGoogleForm} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <form onSubmit={handleCreateGoogleForm} className="gws-form-stack gws-form-divider">
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="New Form title (e.g., Youth Camp Registration & RSVP)"
+                    placeholder="Form title (e.g., Youth Camp Sign-Up)"
                     value={newFormTitle}
                     onChange={(e) => setNewFormTitle(e.target.value)}
                     required
@@ -1645,101 +1583,103 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Form description (optional)"
+                    placeholder="Short description (optional)"
                     value={newFormDescription}
                     onChange={(e) => setNewFormDescription(e.target.value)}
                   />
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="First question prompt"
+                    placeholder="First question to ask"
                     value={newFormQuestion}
                     onChange={(e) => setNewFormQuestion(e.target.value)}
                   />
                   <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    + Create Google Form
+                    <Plus size={14} />
+                    <span>Create Sign-Up Form</span>
                   </button>
                 </form>
               </div>
 
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
-                  {selectedFormDetail?.info?.title
-                    ? `${selectedFormDetail.info.title} (${selectedFormResponses.length} responses)`
-                    : 'Form Questions & Live Responses'}
-                </h4>
+                <div className="gws-panel-header">
+                  <h4>
+                    {selectedFormDetail?.info?.title
+                      ? `${selectedFormDetail.info.title} (${selectedFormResponses.length} replies)`
+                      : 'Questions & Replies'}
+                  </h4>
+                  <span className="gws-panel-sub">Share link with friends or check sign-ups</span>
+                </div>
                 {selectedFormId ? (
-                  <>
+                  <div className="gws-form-stack">
                     {selectedFormDetail?.responderUri && (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                      <div className="gws-action-row">
                         <a
                           href={selectedFormDetail.responderUri}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="gws-btn-primary"
+                          className="gws-btn-primary gws-btn-sm"
                         >
-                          Open Live Form <ExternalLink size={12} style={{ display: 'inline', marginLeft: 4 }} />
+                          <span>Open Shareable Form</span>
+                          <ExternalLink size={12} />
                         </a>
                         <button
                           type="button"
-                          className="gws-btn-secondary"
+                          className="gws-btn-secondary gws-btn-sm"
                           onClick={() => {
                             navigator.clipboard?.writeText(selectedFormDetail.responderUri);
                             setCopiedUri(selectedFormDetail.responderUri);
                             setTimeout(() => setCopiedUri(''), 2500);
                           }}
                         >
-                          {copiedUri === selectedFormDetail.responderUri ? <Check size={13} /> : <Copy size={13} />}{' '}
-                          {copiedUri === selectedFormDetail.responderUri ? 'Copied Link' : 'Copy Responder Link'}
+                          {copiedUri === selectedFormDetail.responderUri ? <Check size={13} /> : <Copy size={13} />}
+                          <span>{copiedUri === selectedFormDetail.responderUri ? 'Copied Link' : 'Copy Link'}</span>
                         </button>
                       </div>
                     )}
 
-                    <div style={{ marginBottom: 12 }}>
-                      <strong style={{ fontSize: 12, opacity: 0.8, display: 'block', marginBottom: 6 }}>
-                        Form Questions ({(selectedFormDetail?.items || []).length})
-                      </strong>
+                    <div>
+                      <span className="gws-sub-label">
+                        Questions ({(selectedFormDetail?.items || []).length})
+                      </span>
                       {(selectedFormDetail?.items || []).length === 0 ? (
                         <p className="gws-card-hint">No questions added yet.</p>
                       ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 130, overflowY: 'auto' }}>
+                        <div className="gws-items-list gws-items-compact">
                           {(selectedFormDetail?.items || []).map((item, idx) => (
-                            <div
-                              key={item.itemId || idx}
-                              style={{ padding: '7px 10px', borderRadius: 8, background: 'rgba(148,163,184,0.08)', fontSize: 13 }}
-                            >
-                              {idx + 1}. {item.title || 'Untitled Question'}
+                            <div key={item.itemId || idx} className="gws-item-card">
+                              <span className="gws-item-title">
+                                {idx + 1}. {item.title || 'Untitled Question'}
+                              </span>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
 
-                    <form onSubmit={handleAddQuestionToSelectedForm} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <form onSubmit={handleAddQuestionToSelectedForm} className="gws-inline-form">
                       <input
                         type="text"
                         className="gws-input-field"
-                        style={{ paddingLeft: 14, flex: 1 }}
-                        placeholder="Add another question to this form…"
+                        placeholder="Add another question…"
                         value={newFormQuestion}
                         onChange={(e) => setNewFormQuestion(e.target.value)}
                         required
                       />
                       <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                        + Add
+                        <Plus size={14} />
+                        <span>Add</span>
                       </button>
                     </form>
 
                     <div>
-                      <strong style={{ fontSize: 12, opacity: 0.8, display: 'block', marginBottom: 6 }}>
-                        Submitted Responses ({selectedFormResponses.length})
-                      </strong>
+                      <span className="gws-sub-label">
+                        People’s Replies ({selectedFormResponses.length})
+                      </span>
                       {selectedFormResponses.length === 0 ? (
-                        <p className="gws-card-hint">No responses submitted yet.</p>
+                        <p className="gws-card-hint">No replies submitted yet.</p>
                       ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 130, overflowY: 'auto' }}>
+                        <div className="gws-items-list gws-items-compact">
                           {selectedFormResponses.map((resp) => {
                             const answerTexts = Object.values(resp.answers || {})
                               .map((ans) =>
@@ -1747,23 +1687,24 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                               )
                               .filter(Boolean);
                             return (
-                              <div
-                                key={resp.responseId}
-                                style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(168,85,247,0.1)', fontSize: 12 }}
-                              >
-                                <span style={{ opacity: 0.75, display: 'block' }}>
-                                  Submitted {resp.lastSubmittedTime ? new Date(resp.lastSubmittedTime).toLocaleString() : ''}
-                                </span>
-                                <strong>{answerTexts.join(' • ') || 'Response recorded'}</strong>
+                              <div key={resp.responseId} className="gws-item-card">
+                                <div className="gws-item-body">
+                                  <strong className="gws-item-title">
+                                    {answerTexts.join(' • ') || 'Response recorded'}
+                                  </strong>
+                                  <span className="gws-item-meta">
+                                    {resp.lastSubmittedTime ? new Date(resp.lastSubmittedTime).toLocaleString() : 'Submitted'}
+                                  </span>
+                                </div>
                               </div>
                             );
                           })}
                         </div>
                       )}
                     </div>
-                  </>
+                  </div>
                 ) : (
-                  <p className="gws-card-hint">Select or create a Google Form on the left to inspect questions and live responses.</p>
+                  <p className="gws-card-hint">Select or create a form above to see its questions and replies.</p>
                 )}
               </div>
             </div>
@@ -1771,37 +1712,40 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         </section>
       )}
 
-      {/* TAB 2: GOOGLE MEET */}
+      {/* TAB 2: VIDEO ROOMS */}
       {activeTab === 'meet' && (
-        <section className="gws-workspace-section">
+        <section className="gws-workspace-section" style={{ '--gws-accent': '#10b981' }}>
           <div className="gws-section-header">
             <div className="gws-title-wrap">
-              <Video size={18} className="text-emerald-400" />
-              <h3>Google Meet — Instant Prayer Rooms &amp; Online Bible Study</h3>
+              <span className="gws-sec-icon-box">
+                <Video size={17} />
+              </span>
+              <div>
+                <h3>Live Video &amp; Prayer Rooms</h3>
+                <span className="gws-section-hint">Start a video call for Bible study, cell group, or prayer</span>
+              </div>
             </div>
-            <span className="gws-section-hint">Create real Google Meet spaces via Meet REST API v2</span>
           </div>
 
           {needsAuth ? (
-            <div className="empty-state">
-              <h2>Sign in with Google to launch Google Meet spaces</h2>
-              <p>Create instant video rooms for cell groups, intercessory prayer, and pastoral counseling.</p>
+            <div className="empty-state gws-empty-card">
+              <h2>Connect your account to start a video room</h2>
+              <p>Create instant video call links to share with your youth group, Bible study, or prayer partners.</p>
             </div>
           ) : (
             <div className="gws-grid">
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>Create Instant Google Meet Space</h4>
-                <p className="gws-card-hint" style={{ marginBottom: 12 }}>
-                  Generate a live Google Meet conference link to share with your church cell group or fellowship.
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="gws-panel-header">
+                  <h4>Start a New Video Room</h4>
+                  <span className="gws-panel-sub">Get a shareable video call link in one tap</span>
+                </div>
+                <div className="gws-form-stack">
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
                     value={meetTopic}
                     onChange={(e) => setMeetTopic(e.target.value)}
-                    placeholder="Meeting purpose (e.g., Youth Bible Study)"
+                    placeholder="What is this call for? (e.g., Evening Prayer & Study)"
                   />
                   <button
                     type="button"
@@ -1809,64 +1753,62 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                     onClick={handleCreateMeetSpace}
                     disabled={loadingData}
                   >
-                    <Video size={14} style={{ display: 'inline', marginRight: 6 }} />
-                    {loadingData ? 'Creating Meet Space…' : 'Create Google Meet Room'}
+                    <Video size={14} />
+                    <span>{loadingData ? 'Starting Room…' : 'Create Video Room'}</span>
                   </button>
                 </div>
               </div>
 
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>Created Meet Rooms ({meetSpaces.length})</h4>
+                <div className="gws-panel-header">
+                  <h4>Active Video Rooms ({meetSpaces.length})</h4>
+                  <span className="gws-panel-sub">Join or copy link to invite friends</span>
+                </div>
                 {meetSpaces.length === 0 ? (
-                  <p className="gws-card-hint">No Meet rooms created in this session yet. Click &ldquo;Create Google Meet Room&rdquo; to generate one.</p>
+                  <p className="gws-card-hint">No rooms created yet. Tap &ldquo;Create Video Room&rdquo; to start one.</p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div className="gws-items-list">
                     {meetSpaces.map((sp) => (
-                      <div
-                        key={sp.name}
-                        style={{
-                          padding: '12px',
-                          borderRadius: 10,
-                          background: 'rgba(16,185,129,0.1)',
-                          border: '1px solid rgba(16,185,129,0.28)',
-                        }}
-                      >
-                        <strong style={{ display: 'block', fontSize: 14 }}>{sp.topic}</strong>
-                        <span style={{ fontSize: 12, opacity: 0.8, display: 'block', margin: '4px 0 8px' }}>
-                          Code: <code>{sp.meetingCode}</code> • Created {sp.createdAt}
-                        </span>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <div key={sp.name} className="gws-item-card gws-item-card-stacked">
+                        <div className="gws-item-body">
+                          <strong className="gws-item-title">{sp.topic}</strong>
+                          <span className="gws-item-meta">
+                            Room code: <code>{sp.meetingCode}</code> • Created {sp.createdAt}
+                          </span>
+                        </div>
+                        <div className="gws-action-row">
                           <a
                             href={sp.meetingUri}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="gws-btn-primary"
+                            className="gws-btn-primary gws-btn-sm"
                           >
-                            Open Meet Call <ExternalLink size={12} style={{ display: 'inline', marginLeft: 4 }} />
+                            <span>Join Video Call</span>
+                            <ExternalLink size={12} />
                           </a>
                           <button
                             type="button"
-                            className="gws-btn-secondary"
+                            className="gws-btn-secondary gws-btn-sm"
                             onClick={() => {
                               navigator.clipboard?.writeText(sp.meetingUri);
                               setCopiedUri(sp.meetingUri);
                               setTimeout(() => setCopiedUri(''), 2500);
                             }}
                           >
-                            {copiedUri === sp.meetingUri ? <Check size={13} /> : <Copy size={13} />}{' '}
-                            {copiedUri === sp.meetingUri ? 'Copied' : 'Copy Link'}
+                            {copiedUri === sp.meetingUri ? <Check size={13} /> : <Copy size={13} />}
+                            <span>{copiedUri === sp.meetingUri ? 'Copied' : 'Copy Link'}</span>
                           </button>
                           {onShareToFeed && (
                             <button
                               type="button"
-                              className="gws-btn-secondary"
+                              className="gws-btn-secondary gws-btn-sm"
                               onClick={() =>
                                 onShareToFeed(
-                                  `🙏 Join our live Google Meet for "${sp.topic}": ${sp.meetingUri}`
+                                  `🙏 Join our live video room for "${sp.topic}": ${sp.meetingUri}`
                                 )
                               }
                             >
-                              Share to Feed
+                              <span>Share to Feed</span>
                             </button>
                           )}
                         </div>
@@ -1880,75 +1822,76 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         </section>
       )}
 
-      {/* TAB 3: GOOGLE CLASSROOM */}
+      {/* TAB 3: CLASSES */}
       {activeTab === 'classroom' && (
-        <section className="gws-workspace-section">
+        <section className="gws-workspace-section" style={{ '--gws-accent': '#f59e0b' }}>
           <div className="gws-section-header">
             <div className="gws-title-wrap">
-              <GraduationCap size={18} className="text-amber-400" />
-              <h3>Google Classroom — Discipleship &amp; Sunday School Classes</h3>
+              <span className="gws-sec-icon-box">
+                <GraduationCap size={17} />
+              </span>
+              <div>
+                <h3>Bible Study &amp; Discipleship Classes</h3>
+                <span className="gws-section-hint">Follow lessons, class updates &amp; Sunday school groups</span>
+              </div>
             </div>
-            <span className="gws-section-hint">Manage courses &amp; class announcements</span>
           </div>
 
           {needsAuth ? (
-            <div className="empty-state">
-              <h2>Sign in with Google to access Google Classroom</h2>
-              <p>Connect your Google account to view your discipleship classes, rosters, and announcements.</p>
+            <div className="empty-state gws-empty-card">
+              <h2>Connect your account to view classes</h2>
+              <p>Link your account above to join discipleship classes, view lessons, and post class updates.</p>
             </div>
           ) : (
             <div className="gws-grid">
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>Your Classroom Courses ({courses.length})</h4>
+                <div className="gws-panel-header">
+                  <h4>Your Classes ({courses.length})</h4>
+                  <span className="gws-panel-sub">Select a class to view or post updates</span>
+                </div>
                 {courses.length === 0 ? (
-                  <p className="gws-card-hint" style={{ marginBottom: 12 }}>
-                    No Google Classroom courses found. Create a new Discipleship class below!
+                  <p className="gws-card-hint">
+                    No classes found yet. Create a new Bible study or discipleship class below!
                   </p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14, maxHeight: 220, overflowY: 'auto' }}>
-                    {courses.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => setSelectedCourseId(c.id)}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          cursor: 'pointer',
-                          background: selectedCourseId === c.id ? 'rgba(245,158,11,0.18)' : 'rgba(148,163,184,0.08)',
-                          border: selectedCourseId === c.id ? '1px solid #f59e0b' : '1px solid transparent',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <div>
-                          <strong style={{ display: 'block', fontSize: 14 }}>{c.name}</strong>
-                          <span style={{ fontSize: 12, opacity: 0.75 }}>
-                            {c.section || 'General'} • Enrollment Code: <code>{c.enrollmentCode || 'N/A'}</code>
-                          </span>
+                  <div className="gws-items-list">
+                    {courses.map((c) => {
+                      const isSelected = selectedCourseId === c.id;
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => setSelectedCourseId(c.id)}
+                          className={`gws-item-card is-clickable${isSelected ? ' is-selected' : ''}`}
+                        >
+                          <div className="gws-item-body">
+                            <strong className="gws-item-title">{c.name}</strong>
+                            <span className="gws-item-meta">
+                              {c.section || 'General'} • Join code: <code>{c.enrollmentCode || 'N/A'}</code>
+                            </span>
+                          </div>
+                          {c.alternateLink && (
+                            <a
+                              href={c.alternateLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="gws-icon-btn"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Open class"
+                            >
+                              <ExternalLink size={13} />
+                            </a>
+                          )}
                         </div>
-                        {c.alternateLink && (
-                          <a
-                            href={c.alternateLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="gws-btn-secondary"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <ExternalLink size={13} />
-                          </a>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
-                <form onSubmit={handleCreateCourse} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <form onSubmit={handleCreateCourse} className="gws-form-stack gws-form-divider">
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="New course name (e.g., Foundations of Faith 101)"
+                    placeholder="Class name (e.g., Youth Foundations 101)"
                     value={newCourseName}
                     onChange={(e) => setNewCourseName(e.target.value)}
                     required
@@ -1956,52 +1899,52 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Section (e.g., Sunday School / New Believers)"
+                    placeholder="Group (e.g., Teens / New Believers)"
                     value={newCourseSection}
                     onChange={(e) => setNewCourseSection(e.target.value)}
                   />
                   <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    + Create Classroom Course
+                    <Plus size={14} />
+                    <span>Create Class</span>
                   </button>
                 </form>
               </div>
 
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>Class Announcements</h4>
+                <div className="gws-panel-header">
+                  <h4>Class Updates &amp; Readings</h4>
+                  <span className="gws-panel-sub">Share weekly memory verses or study notes</span>
+                </div>
                 {selectedCourseId ? (
-                  <>
-                    <form onSubmit={handlePostClassroomAnnouncement} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <div className="gws-form-stack">
+                    <form onSubmit={handlePostClassroomAnnouncement} className="gws-inline-form">
                       <input
                         type="text"
                         className="gws-input-field"
-                        style={{ paddingLeft: 14, flex: 1 }}
-                        placeholder="Share scripture reading or homework with class…"
+                        placeholder="Post a reading or update to the class…"
                         value={announcementText}
                         onChange={(e) => setAnnouncementText(e.target.value)}
                         required
                       />
                       <button type="submit" className="gws-btn-primary" disabled={loadingData}>
                         <Send size={14} />
+                        <span>Post</span>
                       </button>
                     </form>
                     {announcements.length === 0 ? (
-                      <p className="gws-card-hint">No announcements in this course yet.</p>
+                      <p className="gws-card-hint">No updates posted in this class yet.</p>
                     ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+                      <div className="gws-items-list">
                         {announcements.map((a) => (
-                          <div
-                            key={a.id}
-                            style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(148,163,184,0.08)' }}
-                          >
-                            <p style={{ fontSize: 13, margin: 0 }}>{a.text}</p>
+                          <div key={a.id} className="gws-item-card">
+                            <p className="gws-item-text">{a.text}</p>
                           </div>
                         ))}
                       </div>
                     )}
-                  </>
+                  </div>
                 ) : (
-                  <p className="gws-card-hint">Select or create a course on the left to view and post announcements.</p>
+                  <p className="gws-card-hint">Select or create a class to view and post updates.</p>
                 )}
               </div>
             </div>
@@ -2009,62 +1952,58 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         </section>
       )}
 
-      {/* TAB 4: GOOGLE KEEP & FIRESTORE MINISTRY NOTES */}
+      {/* TAB 4: NOTES */}
       {activeTab === 'keep' && (
-        <section className="gws-workspace-section">
+        <section className="gws-workspace-section" style={{ '--gws-accent': '#eab308' }}>
           <div className="gws-section-header">
             <div className="gws-title-wrap">
-              <StickyNote size={18} className="text-yellow-400" />
-              <h3>Google Keep &amp; Cloud Sermon Notes</h3>
+              <span className="gws-sec-icon-box">
+                <StickyNote size={17} />
+              </span>
+              <div>
+                <h3>Sermon Notes &amp; Checklists</h3>
+                <span className="gws-section-hint">Jot down sermon points, Bible verses &amp; quick checklists</span>
+              </div>
             </div>
-            <span className="gws-section-hint">Synced with Google Keep API &amp; Firebase Firestore</span>
           </div>
 
           {!user ? (
-            <div className="empty-state">
-              <h2>Sign in with Google to sync Sermon &amp; Keep Notes</h2>
-              <p>Capture sermon takeaways, scripture cross-references, and sync them across devices.</p>
+            <div className="empty-state gws-empty-card">
+              <h2>Connect your account to save sermon notes</h2>
+              <p>Write down Sunday sermon takeaways, Bible verses, and checklists that stay saved across your devices.</p>
             </div>
           ) : (
             <div className="gws-grid">
               <form className="gws-panel-card" onSubmit={handleCreateNote}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
-                  <h4 style={{ margin: 0, fontWeight: 700 }}>+ Capture Google Keep / Sermon Note</h4>
-                  <div style={{ display: 'flex', gap: 6 }}>
+                <div className="gws-panel-header gws-panel-header-row">
+                  <div>
+                    <h4>New Sermon Note</h4>
+                    <span className="gws-panel-sub">Write a note or a quick checklist</span>
+                  </div>
+                  <div className="gws-mode-switch">
                     <button
                       type="button"
-                      className="gws-btn-secondary"
+                      className={`gws-mode-btn${keepNoteMode === 'text' ? ' active' : ''}`}
                       onClick={() => setKeepNoteMode('text')}
-                      style={
-                        keepNoteMode === 'text'
-                          ? { background: 'rgba(234,179,8,0.2)', borderColor: '#eab308', color: '#fde047' }
-                          : undefined
-                      }
                     >
-                      <StickyNote size={12} style={{ display: 'inline', marginRight: 4 }} />
-                      Text Note
+                      <StickyNote size={12} />
+                      <span>Note</span>
                     </button>
                     <button
                       type="button"
-                      className="gws-btn-secondary"
+                      className={`gws-mode-btn${keepNoteMode === 'checklist' ? ' active' : ''}`}
                       onClick={() => setKeepNoteMode('checklist')}
-                      style={
-                        keepNoteMode === 'checklist'
-                          ? { background: 'rgba(234,179,8,0.2)', borderColor: '#eab308', color: '#fde047' }
-                          : undefined
-                      }
                     >
-                      <ListChecks size={12} style={{ display: 'inline', marginRight: 4 }} />
-                      Checklist
+                      <ListChecks size={12} />
+                      <span>Checklist</span>
                     </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="gws-form-stack">
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Note Title (e.g., Walking in the Spirit / Sunday Prep)"
+                    placeholder="Title (e.g., Sunday Sermon: Walking in Faith)"
                     value={noteTitle}
                     onChange={(e) => setNoteTitle(e.target.value)}
                     maxLength={160}
@@ -2073,17 +2012,15 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Scripture Reference (e.g., Galatians 5:16-25)"
+                    placeholder="Bible Verse (e.g., Galatians 5:16-25)"
                     value={noteScripture}
                     onChange={(e) => setNoteScripture(e.target.value)}
                     maxLength={100}
                   />
                   {keepNoteMode === 'checklist' ? (
                     <textarea
-                      className="gws-input-field"
-                      style={{ padding: 12, minHeight: 90, borderRadius: 12 }}
-                      placeholder={'Enter one checklist item per line:\nPrepare communion elements\nTest sanctuary microphones\nPrint bulletin handouts'}
+                      className="gws-input-field gws-textarea"
+                      placeholder={'One item per line:\nBring Bible & notebook\nPractice worship songs\nCheck sound system'}
                       value={keepChecklistInput}
                       onChange={(e) => setKeepChecklistInput(e.target.value)}
                       maxLength={5000}
@@ -2091,9 +2028,8 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                     />
                   ) : (
                     <textarea
-                      className="gws-input-field"
-                      style={{ padding: 12, minHeight: 90, borderRadius: 12 }}
-                      placeholder="Write your sermon takeaways, study insights, or prayer points…"
+                      className="gws-input-field gws-textarea"
+                      placeholder="Write your sermon takeaways, favorite quotes, or prayer points…"
                       value={noteBody}
                       onChange={(e) => setNoteBody(e.target.value)}
                       maxLength={5000}
@@ -2101,46 +2037,36 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                     />
                   )}
                   <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    <BookOpen size={14} style={{ display: 'inline', marginRight: 6 }} />
-                    Save to Google Keep &amp; Cloud Notes
+                    <BookOpen size={14} />
+                    <span>Save Note</span>
                   </button>
                 </div>
               </form>
 
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
-                  Synced Notes ({cloudNotes.length + keepNotes.length})
-                </h4>
+                <div className="gws-panel-header">
+                  <h4>Saved Notes ({cloudNotes.length + keepNotes.length})</h4>
+                  <span className="gws-panel-sub">Your personal sermon &amp; study notes</span>
+                </div>
                 {cloudNotes.length === 0 && keepNotes.length === 0 ? (
-                  <p className="gws-card-hint">No sermon notes saved yet. Create your first note on the left!</p>
+                  <p className="gws-card-hint">No notes saved yet. Write your first note above!</p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
+                  <div className="gws-items-list">
                     {cloudNotes.map((n) => (
-                      <div
-                        key={n.id}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          background: 'rgba(234,179,8,0.1)',
-                          border: '1px solid rgba(234,179,8,0.25)',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          gap: 8,
-                        }}
-                      >
-                        <div>
-                          <strong style={{ display: 'block', fontSize: 14 }}>{n.title}</strong>
+                      <div key={n.id} className="gws-item-card">
+                        <div className="gws-item-body">
+                          <strong className="gws-item-title">{n.title}</strong>
                           {n.scriptureRef && (
-                            <span style={{ fontSize: 12, color: '#eab308', fontWeight: 600 }}>
-                              📖 {n.scriptureRef}
+                            <span className="gws-scripture-tag">
+                              <BookOpen size={11} />
+                              <span>{n.scriptureRef}</span>
                             </span>
                           )}
-                          <p style={{ fontSize: 13, margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{n.body}</p>
+                          <p className="gws-item-text">{n.body}</p>
                         </div>
                         <button
                           type="button"
-                          className="gws-btn-secondary"
+                          className="gws-icon-btn gws-icon-btn-danger"
                           onClick={() => handleDeleteCloudNote(n)}
                           title="Delete note"
                         >
@@ -2149,25 +2075,14 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                       </div>
                     ))}
                     {keepNotes.map((kn) => (
-                      <div
-                        key={kn.name}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          background: 'rgba(148,163,184,0.08)',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          gap: 8,
-                        }}
-                      >
-                        <div>
-                          <strong style={{ display: 'block', fontSize: 14 }}>{kn.title || 'Google Keep Note'}</strong>
+                      <div key={kn.name} className="gws-item-card">
+                        <div className="gws-item-body">
+                          <strong className="gws-item-title">{kn.title || 'Saved Note'}</strong>
                           {kn.body?.text?.text && (
-                            <p style={{ fontSize: 13, margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{kn.body.text.text}</p>
+                            <p className="gws-item-text">{kn.body.text.text}</p>
                           )}
                           {Array.isArray(kn.body?.list?.listItems) && kn.body.list.listItems.length > 0 && (
-                            <ul style={{ margin: '6px 0 0', paddingLeft: 16, fontSize: 13 }}>
+                            <ul className="gws-checklist-ul">
                               {kn.body.list.listItems.map((li, idx) => (
                                 <li key={idx}>
                                   {li.checked ? '☑ ' : '☐ '}
@@ -2179,9 +2094,9 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                         </div>
                         <button
                           type="button"
-                          className="gws-btn-secondary"
+                          className="gws-icon-btn gws-icon-btn-danger"
                           onClick={() => handleDeleteKeepNote(kn.name, kn.title)}
-                          title="Delete Keep note"
+                          title="Delete note"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -2195,31 +2110,37 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         </section>
       )}
 
-      {/* TAB 5: GOOGLE TASKS */}
+      {/* TAB 5: TO-DO LIST */}
       {activeTab === 'tasks' && (
-        <section className="gws-workspace-section">
+        <section className="gws-workspace-section" style={{ '--gws-accent': '#06b6d4' }}>
           <div className="gws-section-header">
             <div className="gws-title-wrap">
-              <CheckSquare size={18} className="text-cyan-400" />
-              <h3>Google Tasks — Ministry &amp; Service Action Items</h3>
+              <span className="gws-sec-icon-box">
+                <CheckSquare size={17} />
+              </span>
+              <div>
+                <h3>To-Do List &amp; Action Items</h3>
+                <span className="gws-section-hint">Keep track of Sunday prep, outreach &amp; personal goals</span>
+              </div>
             </div>
-            <span className="gws-section-hint">Organize Sunday service prep, outreach &amp; follow-ups</span>
           </div>
 
           {needsAuth ? (
-            <div className="empty-state">
-              <h2>Sign in with Google to manage Google Tasks</h2>
-              <p>Keep track of church service preparation, hospitality checklists, and pastoral follow-ups.</p>
+            <div className="empty-state gws-empty-card">
+              <h2>Connect your account to manage your to-do list</h2>
+              <p>Stay on top of fellowship tasks, service preparation, and weekly goals.</p>
             </div>
           ) : (
             <div className="gws-grid">
               <form className="gws-panel-card" onSubmit={handleCreateTask}>
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>+ New Ministry Task</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="gws-panel-header">
+                  <h4>Add a To-Do Item</h4>
+                  <span className="gws-panel-sub">Check off tasks as you finish them</span>
+                </div>
+                <div className="gws-form-stack">
                   {taskLists.length > 0 && (
                     <select
                       className="gws-input-field"
-                      style={{ paddingLeft: 14 }}
                       value={selectedTaskListId}
                       onChange={(e) => setSelectedTaskListId(e.target.value)}
                     >
@@ -2233,8 +2154,7 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Task title (e.g., Prepare sanctuary worship slides)"
+                    placeholder="What needs to be done? (e.g., Prepare worship lyrics)"
                     value={newTaskTitle}
                     onChange={(e) => setNewTaskTitle(e.target.value)}
                     required
@@ -2242,62 +2162,46 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Details / assignee notes (optional)"
+                    placeholder="Extra details (optional)"
                     value={newTaskNotes}
                     onChange={(e) => setNewTaskNotes(e.target.value)}
                   />
                   <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    + Add to Google Tasks
+                    <Plus size={14} />
+                    <span>Add Task</span>
                   </button>
                 </div>
               </form>
 
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>Active Tasks ({tasks.length})</h4>
+                <div className="gws-panel-header">
+                  <h4>Your Tasks ({tasks.length})</h4>
+                  <span className="gws-panel-sub">Tap the checkbox to mark complete</span>
+                </div>
                 {tasks.length === 0 ? (
-                  <p className="gws-card-hint">No tasks in this Google Tasks list yet.</p>
+                  <p className="gws-card-hint">No tasks in this list yet.</p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+                  <div className="gws-items-list">
                     {tasks.map((t) => {
                       const done = t.status === 'completed';
                       return (
-                        <div
-                          key={t.id}
-                          style={{
-                            padding: '10px 12px',
-                            borderRadius: 10,
-                            background: 'rgba(148,163,184,0.08)',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            gap: 8,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div key={t.id} className="gws-item-card">
+                          <label className="gws-task-check-row">
                             <input
                               type="checkbox"
                               checked={done}
                               onChange={() => handleToggleTaskStatus(t)}
-                              style={{ width: 16, height: 16, cursor: 'pointer' }}
                             />
-                            <div>
-                              <strong
-                                style={{
-                                  display: 'block',
-                                  fontSize: 14,
-                                  textDecoration: done ? 'line-through' : 'none',
-                                  opacity: done ? 0.6 : 1,
-                                }}
-                              >
+                            <div className="gws-item-body">
+                              <strong className={`gws-item-title${done ? ' is-done' : ''}`}>
                                 {t.title}
                               </strong>
-                              {t.notes && <span style={{ fontSize: 12, opacity: 0.75 }}>{t.notes}</span>}
+                              {t.notes && <span className="gws-item-meta">{t.notes}</span>}
                             </div>
-                          </div>
+                          </label>
                           <button
                             type="button"
-                            className="gws-btn-secondary"
+                            className="gws-icon-btn gws-icon-btn-danger"
                             onClick={() => handleDeleteTask(t)}
                             title="Delete task"
                           >
@@ -2314,93 +2218,99 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         </section>
       )}
 
-      {/* TAB 6: GOOGLE CHAT */}
+      {/* TAB 6: GROUP CHAT */}
       {activeTab === 'chat' && (
-        <section className="gws-workspace-section">
+        <section className="gws-workspace-section" style={{ '--gws-accent': '#6366f1' }}>
           <div className="gws-section-header">
             <div className="gws-title-wrap">
-              <MessageSquare size={18} className="text-purple-400" />
-              <h3>Google Chat — Ministry Spaces &amp; Team Channels</h3>
+              <span className="gws-sec-icon-box">
+                <MessageSquare size={17} />
+              </span>
+              <div>
+                <h3>Group Chat Spaces</h3>
+                <span className="gws-section-hint">Chat with your ministry team or youth group spaces</span>
+              </div>
             </div>
-            <span className="gws-section-hint">Communicate across your Google Chat Spaces</span>
           </div>
 
           {needsAuth ? (
-            <div className="empty-state">
-              <h2>Sign in with Google to connect Google Chat Spaces</h2>
-              <p>Read and send fellowship updates to your Google Chat ministry spaces.</p>
+            <div className="empty-state gws-empty-card">
+              <h2>Connect your account to open group chats</h2>
+              <p>Read and send quick messages to your connected fellowship chat spaces.</p>
             </div>
           ) : (
             <div className="gws-grid">
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>Your Google Chat Spaces ({chatSpaces.length})</h4>
+                <div className="gws-panel-header">
+                  <h4>Your Chat Spaces ({chatSpaces.length})</h4>
+                  <span className="gws-panel-sub">Select a group space to open messages</span>
+                </div>
                 {chatSpaces.length === 0 ? (
-                  <p className="gws-card-hint">No Google Chat spaces found for this account.</p>
+                  <p className="gws-card-hint">No group chat spaces found for this account.</p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
-                    {chatSpaces.map((sp) => (
-                      <button
-                        key={sp.name}
-                        type="button"
-                        onClick={() => setSelectedSpaceName(sp.name)}
-                        style={{
-                          textAlign: 'left',
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          cursor: 'pointer',
-                          background: selectedSpaceName === sp.name ? 'rgba(139,92,246,0.2)' : 'rgba(148,163,184,0.08)',
-                          border: selectedSpaceName === sp.name ? '1px solid #8b5cf6' : '1px solid transparent',
-                          color: 'inherit',
-                        }}
-                      >
-                        <strong style={{ display: 'block', fontSize: 14 }}>
-                          {sp.displayName || sp.name}
-                        </strong>
-                        <span style={{ fontSize: 12, opacity: 0.7 }}>{sp.spaceType || 'SPACE'}</span>
-                      </button>
-                    ))}
+                  <div className="gws-items-list">
+                    {chatSpaces.map((sp) => {
+                      const isSelected = selectedSpaceName === sp.name;
+                      return (
+                        <button
+                          key={sp.name}
+                          type="button"
+                          onClick={() => setSelectedSpaceName(sp.name)}
+                          className={`gws-item-card is-clickable${isSelected ? ' is-selected' : ''}`}
+                        >
+                          <div className="gws-item-body">
+                            <strong className="gws-item-title">
+                              {sp.displayName || sp.name}
+                            </strong>
+                            <span className="gws-item-meta">{sp.spaceType || 'Group Space'}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>Space Messages</h4>
+                <div className="gws-panel-header">
+                  <h4>Messages</h4>
+                  <span className="gws-panel-sub">Recent conversation in selected space</span>
+                </div>
                 {selectedSpaceName ? (
-                  <>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto', marginBottom: 12 }}>
+                  <div className="gws-form-stack">
+                    <div className="gws-items-list">
                       {chatMessages.length === 0 ? (
                         <p className="gws-card-hint">No recent messages in this space.</p>
                       ) : (
                         chatMessages.map((m) => (
-                          <div
-                            key={m.name}
-                            style={{ padding: '8px 12px', borderRadius: 10, background: 'rgba(148,163,184,0.08)' }}
-                          >
-                            <span style={{ fontSize: 11, opacity: 0.7, display: 'block' }}>
-                              {m.sender?.displayName || 'Member'}
-                            </span>
-                            <p style={{ fontSize: 13, margin: '2px 0 0' }}>{m.text}</p>
+                          <div key={m.name} className="gws-item-card">
+                            <div className="gws-item-body">
+                              <span className="gws-item-meta">
+                                {m.sender?.displayName || 'Member'}
+                              </span>
+                              <p className="gws-item-text">{m.text}</p>
+                            </div>
                           </div>
                         ))
                       )}
                     </div>
-                    <form onSubmit={handleSendChatMessage} style={{ display: 'flex', gap: 8 }}>
+                    <form onSubmit={handleSendChatMessage} className="gws-inline-form">
                       <input
                         type="text"
                         className="gws-input-field"
-                        style={{ paddingLeft: 14, flex: 1 }}
-                        placeholder="Write a message to this Google Chat space…"
+                        placeholder="Write a message to the group…"
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
                         required
                       />
                       <button type="submit" className="gws-btn-primary" disabled={loadingData}>
                         <Send size={14} />
+                        <span>Send</span>
                       </button>
                     </form>
-                  </>
+                  </div>
                 ) : (
-                  <p className="gws-card-hint">Select a Google Chat space on the left to view or send messages.</p>
+                  <p className="gws-card-hint">Select a chat space above to read or send messages.</p>
                 )}
               </div>
             </div>
@@ -2408,32 +2318,38 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         </section>
       )}
 
-      {/* TAB 7: FIREBASE FIRESTORE LIVE PRAYER WALL */}
+      {/* TAB 7: LIVE PRAYER WALL */}
       {activeTab === 'firebase' && (
-        <section className="gws-workspace-section">
+        <section className="gws-workspace-section" style={{ '--gws-accent': '#ec4899' }}>
           <div className="gws-section-header">
             <div className="gws-title-wrap">
-              <Flame size={18} className="text-pink-400" />
-              <h3>Firebase Firestore — Real-Time Intercessory Prayer Wall</h3>
+              <span className="gws-sec-icon-box">
+                <Flame size={17} />
+              </span>
+              <div>
+                <h3>Live Prayer Wall</h3>
+                <span className="gws-section-hint">Share prayer requests and pray for others in real time</span>
+              </div>
             </div>
-            <span className="gws-section-hint">Live multi-user persistence powered by Cloud Firestore</span>
           </div>
 
           {!user ? (
-            <div className="empty-state">
-              <h2>Sign in with Google to access the Live Prayer Cloud</h2>
-              <p>Share prayer requests and intercede in real time with believers across the fellowship.</p>
+            <div className="empty-state gws-empty-card">
+              <h2>Connect your account to join the Prayer Wall</h2>
+              <p>Post prayer requests and let friends and church family pray with you live.</p>
             </div>
           ) : (
             <div className="gws-grid">
               <form className="gws-panel-card" onSubmit={handleCreatePrayerRequest}>
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>🙏 Share a Prayer Request</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="gws-panel-header">
+                  <h4>Share a Prayer Request</h4>
+                  <span className="gws-panel-sub">Let the fellowship stand with you in prayer</span>
+                </div>
+                <div className="gws-form-stack">
                   <input
                     type="text"
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Prayer heading (e.g., Healing for my mother)"
+                    placeholder="Short title (e.g., Peace for upcoming exams)"
                     value={prayerTitle}
                     onChange={(e) => setPrayerTitle(e.target.value)}
                     maxLength={140}
@@ -2441,90 +2357,83 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
                   />
                   <select
                     className="gws-input-field"
-                    style={{ paddingLeft: 14 }}
                     value={prayerCategory}
                     onChange={(e) => setPrayerCategory(e.target.value)}
                   >
-                    <option value="general">Category: General Intercession</option>
-                    <option value="healing">Category: Divine Healing</option>
-                    <option value="family">Category: Family &amp; Marriage</option>
-                    <option value="missions">Category: Missions &amp; Revival</option>
-                    <option value="guidance">Category: Wisdom &amp; Guidance</option>
-                    <option value="thanksgiving">Category: Praise &amp; Thanksgiving</option>
+                    <option value="general">Topic: General Prayer</option>
+                    <option value="healing">Topic: Healing &amp; Health</option>
+                    <option value="family">Topic: Family &amp; Friends</option>
+                    <option value="missions">Topic: Church &amp; Outreach</option>
+                    <option value="guidance">Topic: Studies, Work &amp; Guidance</option>
+                    <option value="thanksgiving">Topic: Praise &amp; Testimony</option>
                   </select>
                   <textarea
-                    className="gws-input-field"
-                    style={{ padding: 12, minHeight: 85, borderRadius: 12 }}
-                    placeholder="Share how the church family can pray with you…"
+                    className="gws-input-field gws-textarea"
+                    placeholder="Write how we can pray with you…"
                     value={prayerContent}
                     onChange={(e) => setPrayerContent(e.target.value)}
                     maxLength={2000}
                     required
                   />
                   <button type="submit" className="gws-btn-primary">
-                    Publish to Live Prayer Wall
+                    <Flame size={14} />
+                    <span>Post Prayer Request</span>
                   </button>
                 </div>
               </form>
 
               <div className="gws-panel-card">
-                <h4 style={{ marginBottom: 10, fontWeight: 700 }}>
-                  Live Community Prayers ({prayerRequests.length})
-                </h4>
+                <div className="gws-panel-header">
+                  <h4>Community Prayer Wall ({prayerRequests.length})</h4>
+                  <span className="gws-panel-sub">Tap &ldquo;I Prayed&rdquo; to encourage someone</span>
+                </div>
                 {prayerRequests.length === 0 ? (
                   <p className="gws-card-hint">No prayer requests posted yet. Be the first to share one!</p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 340, overflowY: 'auto' }}>
+                  <div className="gws-items-list">
                     {prayerRequests.map((pr) => (
                       <div
                         key={pr.id}
-                        style={{
-                          padding: '12px',
-                          borderRadius: 10,
-                          background:
-                            pr.status === 'answered' ? 'rgba(16,185,129,0.12)' : 'rgba(148,163,184,0.08)',
-                          border:
-                            pr.status === 'answered'
-                              ? '1px solid rgba(16,185,129,0.35)'
-                              : '1px solid rgba(148,163,184,0.15)',
-                        }}
+                        className={`gws-item-card gws-item-card-stacked${pr.status === 'answered' ? ' is-answered' : ''}`}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <strong style={{ fontSize: 14 }}>{pr.title}</strong>
-                          <span className="gws-status-badge gws-status-badge-gold" style={{ textTransform: 'capitalize' }}>
+                        <div className="gws-prayer-top">
+                          <strong className="gws-item-title">{pr.title}</strong>
+                          <span className={`gws-status-badge ${pr.status === 'answered' ? 'gws-status-badge-teal' : 'gws-status-badge-gold'}`}>
                             {pr.status === 'answered' ? '✓ Answered' : pr.category}
                           </span>
                         </div>
-                        <p style={{ fontSize: 13, margin: '6px 0' }}>{pr.content}</p>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                          <span style={{ fontSize: 12, opacity: 0.75 }}>
+                        <p className="gws-item-text">{pr.content}</p>
+                        <div className="gws-prayer-footer">
+                          <span className="gws-item-meta">
                             By {pr.authorName} • 🙏 {pr.prayedCount || 0} prayed
                           </span>
-                          <div style={{ display: 'flex', gap: 6 }}>
+                          <div className="gws-item-actions">
                             {pr.status !== 'answered' && (
                               <button
                                 type="button"
-                                className="gws-btn-secondary"
+                                className="gws-btn-secondary gws-btn-sm"
                                 onClick={() => incrementPrayerCountInFirestore(pr.id, pr.prayedCount)}
                               >
-                                <Heart size={12} style={{ display: 'inline', marginRight: 4 }} />
-                                I Prayed
+                                <Heart size={12} />
+                                <span>I Prayed</span>
                               </button>
                             )}
                             {pr.authorId === user?.uid && pr.status !== 'answered' && (
                               <button
                                 type="button"
-                                className="gws-btn-secondary"
+                                className="gws-btn-secondary gws-btn-sm"
                                 onClick={() => markPrayerAnsweredInFirestore(pr.id)}
                               >
-                                Mark Answered
+                                <Check size={12} />
+                                <span>Mark Answered</span>
                               </button>
                             )}
                             {pr.authorId === user?.uid && (
                               <button
                                 type="button"
-                                className="gws-btn-secondary"
+                                className="gws-icon-btn gws-icon-btn-danger"
                                 onClick={() => handleDeletePrayerRequest(pr)}
+                                title="Delete prayer request"
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -2541,36 +2450,31 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
         </section>
       )}
 
-      {/* MANDATORY CONFIRMATION DIALOG MODAL FOR MUTATING / DESTRUCTIVE ACTIONS */}
+      {/* CONFIRMATION DIALOG MODAL FOR MUTATING / DESTRUCTIVE ACTIONS */}
       {confirmDialog && (
         <div className="auth-overlay" onClick={() => setConfirmDialog(null)} style={{ zIndex: 100 }}>
           <div className="auth-panel neon-glow-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <AlertTriangle size={22} className={confirmDialog.isDestructive ? 'text-red-400' : 'text-amber-400'} />
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{confirmDialog.title}</h3>
+            <div className="gws-confirm-header">
+              <AlertTriangle size={20} className={confirmDialog.isDestructive ? 'text-red-500' : 'text-amber-500'} />
+              <h3>{confirmDialog.title}</h3>
             </div>
-            <p style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.9, marginBottom: 18 }}>
+            <p className="gws-confirm-desc">
               {confirmDialog.description}
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <div className="gws-confirm-actions">
               <button
                 type="button"
                 className="gws-btn-secondary"
                 onClick={() => setConfirmDialog(null)}
               >
-                Cancel
+                <span>Cancel</span>
               </button>
               <button
                 type="button"
-                className="gws-btn-primary"
-                style={
-                  confirmDialog.isDestructive
-                    ? { background: '#ef4444', borderColor: '#ef4444', color: '#fff' }
-                    : undefined
-                }
+                className={confirmDialog.isDestructive ? 'gws-btn-danger' : 'gws-btn-primary'}
                 onClick={confirmDialog.onConfirm}
               >
-                {confirmDialog.confirmLabel}
+                <span>{confirmDialog.confirmLabel}</span>
               </button>
             </div>
           </div>

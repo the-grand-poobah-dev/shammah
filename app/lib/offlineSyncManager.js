@@ -110,7 +110,7 @@ export function saveOfflineItem(item, type = 'post') {
   const offlineEntry = {
     id: item.id,
     type,
-    title: item.title || item.text_content?.slice(0, 40) || 'Fellowship Content',
+    title: item.title || item.text_content?.slice(0, 40) || 'Saved Content',
     text_content: item.text_content || '',
     media_url: item.media_url || null,
     media_type: item.media_type || type,

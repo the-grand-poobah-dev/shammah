@@ -589,7 +589,7 @@ export default function VideosView({ feedPosts = [], session, currentUser, openA
             <div className="empty-state">
               <VideoIcon size={36} className="empty-icon" />
               <h3>No videos found under this filter</h3>
-              <p>Explore all fellowship videos or upload your own testimony.</p>
+              <p>Explore all videos or upload your own testimony.</p>
             </div>
           ) : (
             displayedVideos.map((video) => (

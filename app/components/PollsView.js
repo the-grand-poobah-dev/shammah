@@ -136,7 +136,7 @@ export default function PollsView({
       ...poll,
       options,
       counts,
-      churchName: poll.profiles?.name ? `${poll.profiles.name}'s Church` : 'Shammah Fellowship',
+      churchName: poll.profiles?.name ? `${poll.profiles.name}'s Church` : 'Shammah Community',
     });
   }
 
@@ -144,11 +144,11 @@ export default function PollsView({
     playSound('reaction');
     const options = poll.options || pollOptionsByPost[poll.id] || [];
     setWatermarkShareData({
-      title: 'Interactive Fellowship Poll',
+      title: 'Interactive Poll',
       textContent: poll.text_content,
       authorName: poll.profiles?.name || poll.profiles?.display_name || 'Church Admin',
-      churchName: 'Shammah Global Fellowship',
-      category: 'Fellowship Poll',
+      churchName: 'Shammah Global Community',
+      category: 'Community Poll',
       pollOptions: options,
     });
   }

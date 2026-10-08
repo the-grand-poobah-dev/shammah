@@ -18,6 +18,18 @@ export default function AppClientInit() {
     useOfflineIndicatorStatus();
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const explicitMode = localStorage.getItem('shammah-theme-mode');
+      const isDark = explicitMode ? explicitMode === 'dark' : true;
+      const themeVal = isDark ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', themeVal);
+      document.documentElement.classList.toggle('dark', isDark);
+      localStorage.setItem('shammah-theme', themeVal);
+      if (!explicitMode) {
+        localStorage.setItem('shammah-theme-mode', 'dark');
+      }
+    }
+
     // 1. Enable global mouse drag-to-scroll on all horizontal items
     const cleanupDrag = initGlobalHorizontalDrag();
 

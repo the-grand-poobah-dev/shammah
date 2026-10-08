@@ -68,7 +68,7 @@ export default function ShareMenuModal({
   const [activeItem, setActiveItem] = useState(null);
 
   const authorName = post?.profiles?.name || post?.profiles?.display_name || post?.author_name || 'Shammah Member';
-  const postSnippet = post?.text_content ? post.text_content.slice(0, 160) : 'Check out this fellowship publication';
+  const postSnippet = post?.text_content ? post.text_content.slice(0, 160) : 'Check out this publication';
   const shareUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/?post=${post?.id || ''}`
     : `https://shammah.faith/?post=${post?.id || ''}`;
@@ -146,7 +146,7 @@ export default function ShareMenuModal({
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          title: `Fellowship post by ${authorName}`,
+          title: `Post by ${authorName}`,
           text: shareText,
           url: shareUrl,
         });

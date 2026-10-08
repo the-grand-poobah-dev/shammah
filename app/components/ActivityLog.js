@@ -390,7 +390,7 @@ export default function ActivityLog({ onSelectPost = null, onClose = null }) {
             <p>
               {isDateFiltered || searchQuery
                 ? 'No actions match your current search and date filters. Try adjusting the date range or search terms.'
-                : 'Interact with fellowship posts, vote on polls, or share reflections to see your activity timeline.'}
+                : 'Interact with posts, vote on polls, or share reflections to see your activity timeline.'}
             </p>
             {isDateFiltered && (
               <button
@@ -467,7 +467,7 @@ export default function ActivityLog({ onSelectPost = null, onClose = null }) {
                     {/* Transparency & Privacy Footer */}
                     <div className="activity-item-footer">
                       <span className="activity-privacy-pill">
-                        {item.visibility === 'anonymous' ? '🔒 Anonymous Action' : '🌐 Public Fellowship'}
+                        {item.visibility === 'anonymous' ? '🔒 Anonymous Action' : '🌐 Public Post'}
                       </span>
                       <span className="activity-sync-pill">
                         ✓ Recorded locally

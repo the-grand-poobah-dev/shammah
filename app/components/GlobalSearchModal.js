@@ -638,10 +638,10 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                 ))}
               </div>
 
-              {/* Featured Fellowships */}
+              {/* Featured Churches */}
               <div className="search-section-label search-mt-16">
                 <Church size={13} className="text-emerald-400" />
-                <span>Featured Fellowships &amp; Churches</span>
+                <span>Featured Churches &amp; Ministries</span>
               </div>
               <div className="search-inst-list">
                 {FALLBACK_CHURCHES.slice(0, 3).map((c) => (
@@ -720,7 +720,7 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                 >
                   <div className="search-section-label">
                     <Church size={13} className="text-emerald-400" />
-                    <span>Churches &amp; Fellowships ({filteredChurches.length})</span>
+                    <span>Churches &amp; Ministries ({filteredChurches.length})</span>
                   </div>
                   {filteredChurches.map((c) => (
                     <motion.div

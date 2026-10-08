@@ -63,7 +63,7 @@ export default function CategoriesPage() {
             </Link>
             <div className="brand-text-wrap">
               <h1 className="brand-mark" style={{ fontSize: '18px' }}>Categories &amp; Topics</h1>
-              <span className="brand-subtext">Fellowship Streams</span>
+              <span className="brand-subtext">Community Streams</span>
             </div>
           </div>
         </header>
@@ -121,7 +121,7 @@ export default function CategoriesPage() {
                 </div>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <strong style={{ display: 'block', fontSize: 14, color: 'var(--ink)' }}>{cat.label}</strong>
-                  <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Browse fellowship posts</span>
+                  <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Browse category posts</span>
                 </div>
               </button>
             );

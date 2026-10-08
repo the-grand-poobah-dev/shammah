@@ -151,7 +151,7 @@ export default function ReelViewerModal({ reels = [], initialIndex = 0, currentU
     } catch {}
   }
 
-  const authorName = currentReel.profiles?.name || currentReel.profiles?.display_name || 'Fellowship Creator';
+  const authorName = currentReel.profiles?.name || currentReel.profiles?.display_name || 'Creator';
 
   return (
     <div className="reel-viewer-fullscreen" role="dialog" aria-modal="true" aria-label="Fullscreen Portrait Faith Reel">
@@ -315,7 +315,7 @@ export default function ReelViewerModal({ reels = [], initialIndex = 0, currentU
 
           <div className="reel-audio-track-tag">
             <Music size={13} className="reel-music-icon" />
-            <span>Spiritual Fellowship Audio · Original Sound</span>
+            <span>Original Audio · Original Sound</span>
           </div>
         </div>
 
@@ -325,7 +325,7 @@ export default function ReelViewerModal({ reels = [], initialIndex = 0, currentU
         {showComments && (
           <div className="reel-comments-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="reel-comments-header">
-              <h3>Fellowship Comments ({commentCount})</h3>
+              <h3>Comments ({commentCount})</h3>
               <button
                 type="button"
                 className="reel-comments-close"

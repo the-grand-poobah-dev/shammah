@@ -4,13 +4,15 @@ import { playSound } from './soundEffects';
 const INSTITUTION_SUBS_KEY = 'shammah_institution_subscriptions_v1';
 const JOINED_INSTITUTIONS_KEY = 'shammah_joined_institutions_v1';
 const INSTITUTION_FOLLOWS_KEY = 'shammah_institution_follows_v1';
+const CUSTOM_INSTITUTIONS_KEY = 'shammah_custom_institutions_v1';
+const OWNED_INSTITUTIONS_KEY = 'shammah_owned_institutions_v1';
 
 export const INSTITUTION_CATEGORIES = [
   { id: 'all', label: 'All Institutions', icon: '🏛️' },
   { id: 'church', label: 'Churches & Ministries', icon: '⛪' },
   { id: 'missionary', label: 'Missionary & Relief Orgs', icon: '🌍' },
   { id: 'cu', label: 'School & University CUs', icon: '🎓' },
-  { id: 'fellowship', label: 'Bible Study & Fellowships', icon: '📖' },
+  { id: 'fellowship', label: 'Bible Study & Ministries', icon: '📖' },
   { id: 'club', label: 'Youth & Campus Clubs', icon: '🤝' },
 ];
 
@@ -486,4 +488,130 @@ export function toggleFollowInstitution(institutionId) {
   localStorage.setItem(INSTITUTION_FOLLOWS_KEY, JSON.stringify(next));
   window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
   return !exists;
+}
+
+export function getCustomInstitutions() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_INSTITUTIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function getAllInstitutions() {
+  const custom = getCustomInstitutions();
+  const customIds = new Set(custom.map((c) => c.id));
+  return [...custom, ...SAMPLE_INSTITUTIONS.filter((s) => !customIds.has(s.id))];
+}
+
+export function getOwnedInstitutionIds(userId) {
+  if (typeof window === 'undefined' || !userId) return [];
+  try {
+    const raw = localStorage.getItem(OWNED_INSTITUTIONS_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    return Array.isArray(map[userId]) ? map[userId] : [];
+  } catch {
+    return [];
+  }
+}
+
+export function isInstitutionOwner(institution, user, profile = null) {
+  if (!institution || !user || !user.id || user.is_anonymous) return false;
+  const uid = String(user.id);
+  if (
+    (institution.owner_id && String(institution.owner_id) === uid) ||
+    (institution.created_by && String(institution.created_by) === uid) ||
+    (institution.admin_id && String(institution.admin_id) === uid)
+  ) {
+    return true;
+  }
+  if (
+    institution.owner_email &&
+    user.email &&
+    String(institution.owner_email).toLowerCase() === String(user.email).toLowerCase()
+  ) {
+    return true;
+  }
+  const ownedIds = getOwnedInstitutionIds(uid);
+  if (ownedIds.includes(institution.id)) return true;
+  if (profile?.role === 'platform_admin') return true;
+  if (
+    profile?.role === 'church_admin' &&
+    profile?.church_id &&
+    String(profile.church_id) === String(institution.id)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function registerInstitution(instData, user) {
+  if (typeof window === 'undefined') return null;
+  const id = instData.id || `inst-${Date.now()}`;
+  const uid = user?.id || 'local-owner';
+  const newInst = {
+    id,
+    name: (instData.name || 'New Church Ministry').trim(),
+    parentName: (instData.parentName || instData.denomination || instData.name || 'Christian Ministry').trim(),
+    branch: (instData.branch || 'Main Sanctuary').trim(),
+    category: instData.category || 'church',
+    categoryLabel: instData.categoryLabel || 'Church / Ministry',
+    denomination: (instData.denomination || 'Non-Denominational').trim(),
+    location: (instData.location || 'Nairobi, Kenya').trim(),
+    county: (instData.county || 'Nairobi').trim(),
+    verified: instData.plan && instData.plan !== 'free',
+    logo_url: instData.logo_url || 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=200',
+    cover_url: instData.cover_url || 'https://images.unsplash.com/photo-1510590337019-5ef8d3d32116?w=1000',
+    about: (instData.about || 'A vibrant Christ-centered church and community ministry.').trim(),
+    website: instData.website || '',
+    phone: instData.phone || '',
+    email: instData.email || user?.email || '',
+    membersCount: Number(instData.membersCount) || 1,
+    plan: instData.plan || 'free',
+    coursesCount: 0,
+    hasFundraising: instData.plan === 'advanced',
+    upcomingEvents: instData.upcomingEvents || [
+      { title: 'Sunday Worship Service', date: 'Every Sunday 9:30 AM', venue: instData.branch || 'Main Sanctuary' },
+    ],
+    owner_id: uid,
+    created_by: uid,
+    owner_email: user?.email || null,
+    created_at: new Date().toISOString(),
+  };
+
+  try {
+    const existing = getCustomInstitutions().filter((c) => c.id !== id);
+    localStorage.setItem(CUSTOM_INSTITUTIONS_KEY, JSON.stringify([newInst, ...existing]));
+
+    const rawOwned = localStorage.getItem(OWNED_INSTITUTIONS_KEY);
+    const ownedMap = rawOwned ? JSON.parse(rawOwned) : {};
+    const userOwned = Array.isArray(ownedMap[uid]) ? ownedMap[uid] : [];
+    if (!userOwned.includes(id)) {
+      ownedMap[uid] = [id, ...userOwned];
+      localStorage.setItem(OWNED_INSTITUTIONS_KEY, JSON.stringify(ownedMap));
+    }
+
+    saveInstitutionSubscription(id, {
+      institutionId: id,
+      planId: newInst.plan,
+      intervalId: instData.intervalId || 'monthly',
+      status: 'active',
+      isTrial: Boolean(instData.startTrial),
+      trialEndsAt: instData.startTrial ? new Date(Date.now() + 7 * 86400000).toISOString() : null,
+      renewsAt: new Date(Date.now() + (instData.startTrial ? 7 : 30) * 86400000).toISOString(),
+      fundsBalanceKes: 0,
+      coursesPublished: 0,
+      coursesPaused: false,
+    });
+
+    toggleJoinInstitution(id);
+    toggleFollowInstitution(id);
+    window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
+  } catch (err) {
+    console.error('Failed to register institution:', err);
+  }
+
+  return newInst;
 }

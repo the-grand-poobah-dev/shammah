@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Shield, X, Check, Globe, Users, Church, Lock } from 'lucide-react';
 import { VISIBILITY_OPTIONS, setPostVisibility, batchSetAllPostsVisibility } from '../lib/postInteractions';
+import { updateUserCreatedPost } from '../lib/pinnedPosts';
 
 const VIS_ICONS = {
   public: Globe,
@@ -24,6 +25,7 @@ export default function PostVisibilityModal({
   async function handleSave() {
     if (postId) {
       await setPostVisibility(postId, selected);
+      updateUserCreatedPost(postId, { visibility: selected });
     }
     if (applyToAll) {
       await batchSetAllPostsVisibility(currentUser?.id, selected, allPostIds);
@@ -46,7 +48,7 @@ export default function PostVisibilityModal({
         </div>
 
         <p className="visibility-desc">
-          Choose who can see this fellowship post on Shammah:
+          Choose who can see this post on Shammah:
         </p>
 
         <div className="visibility-options-list">

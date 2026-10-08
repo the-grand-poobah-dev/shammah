@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Building2,
@@ -19,13 +19,14 @@ import {
 } from 'lucide-react';
 import {
   INSTITUTION_CATEGORIES,
-  SAMPLE_INSTITUTIONS,
+  getAllInstitutions,
   getJoinedInstitutionIds,
   toggleJoinInstitution,
   isInstitutionJoined,
   isInstitutionFollowed,
   toggleFollowInstitution,
   getInstitutionSubscription,
+  isInstitutionOwner,
   SUBSCRIPTION_PLANS,
 } from '../lib/institutionManager';
 import VerifiedBadge from './VerifiedBadge';
@@ -37,11 +38,25 @@ import { playSound } from '../lib/soundEffects';
 export default function InstitutionsView({ session, currentUser, openAuth }) {
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [allInstitutions, setAllInstitutions] = useState(() => getAllInstitutions());
   const [joinedIds, setJoinedIds] = useState(() => getJoinedInstitutionIds());
   const [selectedInstForModal, setSelectedInstForModal] = useState(null);
   const [selectedInstForSub, setSelectedInstForSub] = useState(null);
   const [toastMsg, setToastMsg] = useState('');
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'map' | 'directory'
+
+  useEffect(() => {
+    function syncInstitutions() {
+      setAllInstitutions(getAllInstitutions());
+      setJoinedIds(getJoinedInstitutionIds());
+    }
+    window.addEventListener('shammah:institutions-updated', syncInstitutions);
+    window.addEventListener('shammah:institution-sub-updated', syncInstitutions);
+    return () => {
+      window.removeEventListener('shammah:institutions-updated', syncInstitutions);
+      window.removeEventListener('shammah:institution-sub-updated', syncInstitutions);
+    };
+  }, []);
 
   function showToast(msg) {
     setToastMsg(msg);
@@ -60,7 +75,7 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
 
   // Filter institutions
   const filteredInstitutions = useMemo(() => {
-    return SAMPLE_INSTITUTIONS.filter((inst) => {
+    return allInstitutions.filter((inst) => {
       if (activeCategory !== 'all' && inst.category !== activeCategory) {
         return false;
       }
@@ -74,14 +89,14 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
       }
       return true;
     });
-  }, [activeCategory, searchTerm]);
+  }, [allInstitutions, activeCategory, searchTerm]);
 
   // Joined institutions list
-  const joinedInstitutions = SAMPLE_INSTITUTIONS.filter((inst) => joinedIds.includes(inst.id));
+  const joinedInstitutions = allInstitutions.filter((inst) => joinedIds.includes(inst.id));
 
   // Location-based recommendations (user's location or default to Nairobi regional recommendations)
   const userCounty = currentUser?.location_label || 'Nairobi';
-  const recommendedInstitutions = SAMPLE_INSTITUTIONS.filter(
+  const recommendedInstitutions = allInstitutions.filter(
     (inst) => (inst.county || '').toLowerCase().includes('nairobi') || inst.verified
   ).slice(0, 4);
 
@@ -93,7 +108,7 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
           <Sparkles size={14} />
           <span>Christian Institutions Directory &amp; Ministry Hub</span>
         </div>
-        <h1 className="inst-hero-title">Institutions, Unions &amp; Fellowships</h1>
+        <h1 className="inst-hero-title">Churches, Ministries &amp; Unions</h1>
         <p className="inst-hero-sub">
           Explore churches, missionary organizations, school &amp; university Christian Unions, and bible study groups across Kenya.
         </p>
@@ -258,8 +273,11 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
           <div className="inst-recommendations-grid">
             {recommendedInstitutions.map((inst) => {
               const isJoined = joinedIds.includes(inst.id);
-              const sub = getInstitutionSubscription(inst.id);
-              const plan = SUBSCRIPTION_PLANS.find((p) => p.id === sub.planId) || SUBSCRIPTION_PLANS[0];
+              const isOwner = isInstitutionOwner(inst, session?.user, currentUser);
+              const sub = isOwner ? getInstitutionSubscription(inst.id) : null;
+              const plan = isOwner
+                ? SUBSCRIPTION_PLANS.find((p) => p.id === sub.planId) || SUBSCRIPTION_PLANS[0]
+                : null;
 
               return (
                 <div
@@ -279,9 +297,11 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
                         <span className="rec-meta">{inst.location}</span>
                       </div>
                     </div>
-                    <span className="rec-plan-pill" style={{ color: plan.badgeColor, borderColor: plan.badgeColor }}>
-                      {plan.name}
-                    </span>
+                    {isOwner && plan && (
+                      <span className="rec-plan-pill" style={{ color: plan.badgeColor, borderColor: plan.badgeColor }} title="Visible only to you as page owner">
+                        {plan.name}
+                      </span>
+                    )}
                   </div>
 
                   <p className="rec-about">{inst.about}</p>
@@ -336,8 +356,11 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
           <div className="inst-main-grid">
             {filteredInstitutions.map((inst) => {
               const isJoined = joinedIds.includes(inst.id);
-              const sub = getInstitutionSubscription(inst.id);
-              const plan = SUBSCRIPTION_PLANS.find((p) => p.id === sub.planId) || SUBSCRIPTION_PLANS[0];
+              const isOwner = isInstitutionOwner(inst, session?.user, currentUser);
+              const sub = isOwner ? getInstitutionSubscription(inst.id) : null;
+              const plan = isOwner
+                ? SUBSCRIPTION_PLANS.find((p) => p.id === sub.planId) || SUBSCRIPTION_PLANS[0]
+                : null;
 
               return (
                 <div
@@ -351,9 +374,11 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
                   >
                     <div className="inst-dir-cover-overlay" />
                     <span className="inst-dir-type-pill">{inst.categoryLabel}</span>
-                    <span className="inst-dir-plan-badge" style={{ background: plan.badgeColor }}>
-                      {plan.name}
-                    </span>
+                    {isOwner && plan && (
+                      <span className="inst-dir-plan-badge" style={{ background: plan.badgeColor }} title="Visible only to you as page owner">
+                        {plan.name} (Owner)
+                      </span>
+                    )}
                   </div>
 
                   <div className="inst-dir-body">
@@ -405,6 +430,16 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
                       </span>
 
                       <div className="dir-actions-pair" onClick={(e) => e.stopPropagation()}>
+                        {isOwner && (
+                          <button
+                            type="button"
+                            className="inst-view-btn"
+                            onClick={() => setSelectedInstForSub(inst)}
+                            title="Manage your page subscription plan"
+                          >
+                            ⚙️ Plan
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={`inst-join-action-btn${isJoined ? ' joined' : ''}`}
@@ -429,20 +464,27 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
       {selectedInstForModal && (
         <InstitutionProfileModal
           institution={selectedInstForModal}
+          session={session}
+          currentUser={currentUser}
           onClose={() => setSelectedInstForModal(null)}
           onOpenSubscription={() => {
-            setSelectedInstForSub(selectedInstForModal);
-            setSelectedInstForModal(null);
+            if (isInstitutionOwner(selectedInstForModal, session?.user, currentUser)) {
+              setSelectedInstForSub(selectedInstForModal);
+              setSelectedInstForModal(null);
+            }
           }}
         />
       )}
 
-      {/* Subscription Modal for Admins */}
-      {selectedInstForSub && (
+      {/* Subscription Modal for Page Owners Only */}
+      {selectedInstForSub && isInstitutionOwner(selectedInstForSub, session?.user, currentUser) && (
         <InstitutionSubscriptionModal
           institution={selectedInstForSub}
+          session={session}
+          currentUser={currentUser}
           onClose={() => setSelectedInstForSub(null)}
           onUpdated={() => {
+            setAllInstitutions(getAllInstitutions());
             setJoinedIds(getJoinedInstitutionIds());
           }}
         />

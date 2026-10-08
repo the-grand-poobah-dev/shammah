@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -33,6 +33,8 @@ import { playSound } from '../lib/soundEffects';
 import InstitutionProfileModal from './InstitutionProfileModal';
 import AuthorOverviewModal from './AuthorOverviewModal';
 import MpesaPaymentModal, { COMMUNITY_PROJECTS } from './MpesaPaymentModal';
+import { getFollowedInstitutionIds, toggleFollowInstitution } from '../lib/institutionManager';
+import { getFollows, toggleFollow } from '../lib/profileManager';
 
 const SAMPLE_CHURCHES = [
   {
@@ -203,16 +205,21 @@ function useDragScroll() {
 }
 
 export function ChurchesToFollowCard({ onFollowToggle }) {
-  const [followingMap, setFollowingMap] = useState({});
+  const [followedIds, setFollowedIds] = useState(() => getFollowedInstitutionIds());
   const [selectedInst, setSelectedInst] = useState(null);
   const { ref, onPointerDown, onPointerMove, onPointerUp, dragInfo } = useDragScroll();
 
+  useEffect(() => {
+    function sync() {
+      setFollowedIds(getFollowedInstitutionIds());
+    }
+    window.addEventListener('shammah:institutions-updated', sync);
+    return () => window.removeEventListener('shammah:institutions-updated', sync);
+  }, []);
+
   function handleToggle(cId) {
-    setFollowingMap((prev) => {
-      const next = { ...prev, [cId]: !prev[cId] };
-      playSound('reaction');
-      return next;
-    });
+    toggleFollowInstitution(cId);
+    setFollowedIds(getFollowedInstitutionIds());
     onFollowToggle?.(cId);
   }
 
@@ -238,7 +245,7 @@ export function ChurchesToFollowCard({ onFollowToggle }) {
         onPointerCancel={onPointerUp}
       >
         {SAMPLE_CHURCHES.map((c) => {
-          const isFollowing = !!followingMap[c.id];
+          const isFollowing = followedIds.includes(c.id);
           return (
             <div
               key={c.id}
@@ -308,16 +315,21 @@ export function ChurchesToFollowCard({ onFollowToggle }) {
 }
 
 export function PeopleToFollowCard({ onFollowToggle }) {
-  const [followingMap, setFollowingMap] = useState({});
+  const [followedList, setFollowedList] = useState(() => getFollows());
   const [selectedPerson, setSelectedPerson] = useState(null);
   const { ref, onPointerDown, onPointerMove, onPointerUp, dragInfo } = useDragScroll();
 
-  function handleToggle(pId) {
-    setFollowingMap((prev) => {
-      const next = { ...prev, [pId]: !prev[pId] };
-      playSound('reaction');
-      return next;
-    });
+  useEffect(() => {
+    function sync() {
+      setFollowedList(getFollows());
+    }
+    window.addEventListener('shammah:follows-updated', sync);
+    return () => window.removeEventListener('shammah:follows-updated', sync);
+  }, []);
+
+  async function handleToggle(pId) {
+    await toggleFollow(pId);
+    setFollowedList(getFollows());
     onFollowToggle?.(pId);
   }
 
@@ -326,7 +338,7 @@ export function PeopleToFollowCard({ onFollowToggle }) {
       <div className="home-highlight-header">
         <div className="hl-header-title">
           <Users size={17} className="hl-icon people-icon" />
-          <span>Fellowship People to Follow</span>
+          <span>People to Follow</span>
         </div>
         <Link href="/?tab=menu" className="hl-view-all">
           <span>Discover</span>
@@ -343,7 +355,7 @@ export function PeopleToFollowCard({ onFollowToggle }) {
         onPointerCancel={onPointerUp}
       >
         {SAMPLE_PEOPLE.map((p) => {
-          const isFollowing = !!followingMap[p.id];
+          const isFollowing = followedList.includes(p.id);
           return (
             <div
               key={p.id}
@@ -421,7 +433,7 @@ export function TrendingReelsCard({ onSelectSection }) {
       <div className="home-highlight-header">
         <div className="hl-header-title">
           <Video size={17} className="hl-icon video-icon" />
-          <span>Fellowship Reels &amp; Testimonies</span>
+          <span>Reels &amp; Testimonies</span>
         </div>
         <button
           type="button"
@@ -490,7 +502,7 @@ export function ExploreTabsBanner({ onSelectSection }) {
     { id: 'games', label: 'Faith Arcade', icon: Gamepad2, color: '#14b8a6', desc: 'Bible trivia & youth games', type: 'section' },
     { id: 'rss', label: 'Christian RSS', icon: Rss, color: '#f97316', desc: 'Global articles & podcasts', type: 'section' },
     { id: 'churches', label: 'Institutions & Map', icon: Church, color: '#059669', desc: 'Find churches & live routes', type: 'tab', target: 'churches' },
-    { id: 'messages', label: 'Fellowship Inbox', icon: MessageCircle, color: '#3b82f6', desc: 'Direct & group messages', type: 'tab', target: 'messages' },
+    { id: 'messages', label: 'Direct Inbox', icon: MessageCircle, color: '#3b82f6', desc: 'Direct & group messages', type: 'tab', target: 'messages' },
     { id: 'chatbot', label: 'Shammah AI', icon: Flame, color: '#eab308', desc: 'Pastoral study companion', type: 'event', event: 'shammah:open-chatbot' },
     { id: 'projection', label: 'Sanctuary Screen', icon: Tv, color: '#6366f1', desc: 'Project verses & courses', type: 'event', event: 'shammah:open-projection', detail: { type: 'course' } },
     { id: 'offline', label: 'Offline Library', icon: DownloadCloud, color: '#10b981', desc: 'Saved chapters & feeds', type: 'event', event: 'shammah:open-offline-library' },

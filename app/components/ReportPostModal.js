@@ -85,7 +85,7 @@ export default function ReportPostModal({ post, onClose }) {
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Report Fellowship Content"
+      aria-label="Report Content"
     >
       <div
         className="report-modal-card neon-glow-modal"
@@ -98,7 +98,7 @@ export default function ReportPostModal({ post, onClose }) {
               <Flag size={18} className="report-flag-icon" />
             </span>
             <div className="report-header-text">
-              <h3>Report Fellowship Content</h3>
+              <h3>Report Content</h3>
               <p>Keeping Shammah safe, edifying, and Christ-centered</p>
             </div>
           </div>

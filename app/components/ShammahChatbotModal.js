@@ -22,7 +22,7 @@ import { playSound } from '../lib/soundEffects';
 const QUICK_PROMPTS = [
   { icon: '🙏', label: 'Prayer for Peace', prompt: 'Please write a compassionate, uplifting prayer for someone walking through a season of anxiety and seeking God’s peace.' },
   { icon: '📖', label: 'Explain Scripture', prompt: 'Could you explain the context and deeper spiritual meaning of Philippians 4:6-7?' },
-  { icon: '📊', label: 'Fellowship Poll', prompt: 'Suggest 3 engaging, creative poll questions for this Sunday’s church fellowship or youth service.' },
+  { icon: '📊', label: 'Community Poll', prompt: 'Suggest 3 engaging, creative poll questions for this Sunday’s church service or youth gathering.' },
   { icon: '📝', label: 'Sermon Outline', prompt: 'Prepare a 3-point biblical sermon outline on the topic "Faith That Overcomes Fear", with scriptures and illustrations.' },
   { icon: '🕊️', label: 'Morning Devotional', prompt: 'Write a short 2-minute morning devotional on walking in continuous communion with the Holy Spirit.' },
   { icon: '🎓', label: 'Course Outline', prompt: 'Outline a 4-module discipleship curriculum for new believers learning the foundations of the faith.' },
@@ -37,7 +37,7 @@ export default function ShammahChatbotModal({
     {
       id: 'welcome',
       sender: 'bot',
-      text: `🕊️ **Shalom & Welcome to Shammah AI!**\n\nI am your biblically grounded pastoral companion and ministry assistant. How can I serve your walk with Christ today?\n\nFeel free to ask for scripture explanations, sermon notes, prayer, fellowship poll ideas, or discipleship course materials!`,
+      text: `🕊️ **Shalom & Welcome to Shammah AI!**\n\nI am your biblically grounded pastoral companion and ministry assistant. How can I serve your walk with Christ today?\n\nFeel free to ask for scripture explanations, sermon notes, prayer, poll ideas, or discipleship course materials!`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -160,7 +160,7 @@ export default function ShammahChatbotModal({
                 <h4>Shammah AI</h4>
                 <span className="chatbot-verified-chip">Scripture Grounded</span>
               </div>
-              <span className="chatbot-sub">Pastoral Fellowship &amp; Study Companion</span>
+              <span className="chatbot-sub">Pastoral &amp; Study Companion</span>
             </div>
           </div>
 
@@ -254,7 +254,7 @@ export default function ShammahChatbotModal({
                           type="button"
                           className="chatbot-action-tiny-btn"
                           onClick={() => handlePostToFeed(m.text)}
-                          title="Post to Fellowship Feed"
+                          title="Post to Feed"
                         >
                           <PenSquare size={12} />
                         </button>

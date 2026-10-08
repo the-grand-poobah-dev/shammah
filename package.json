@@ -6,7 +6,8 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:push": "node supabase/push-migration.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",

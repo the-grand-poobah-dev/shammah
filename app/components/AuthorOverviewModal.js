@@ -31,8 +31,8 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
 
   const isMe = currentUser?.id && currentUser.id === authorId;
   const isLoggedIn = Boolean(currentUser?.id);
-  const name = author?.display_name || author?.name || 'Fellowship Member';
-  const role = author?.role || 'Christian Fellowship Member';
+  const name = author?.display_name || author?.name || 'Member';
+  const role = author?.role || 'Community Member';
   const badge = author?.badge;
   const verified = author?.badge_verified;
 

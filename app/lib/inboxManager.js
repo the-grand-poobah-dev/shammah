@@ -41,7 +41,7 @@ export async function getInboxConversations(currentUserId) {
         .map((row) => ({
           id: row.conversation_id || `conv-${row.participant_id}`,
           participantId: row.participant_id,
-          participantName: row.participant_name || 'Fellowship Member',
+          participantName: row.participant_name || 'Member',
           participantAvatar: row.participant_avatar || null,
           participantBadge: row.participant_badge || 'member',
           participantVerified: Boolean(row.participant_verified),
@@ -97,7 +97,7 @@ export async function getInboxConversations(currentUserId) {
       return {
         id: `conv-${otherId}`,
         participantId: otherId,
-        participantName: prof?.display_name || 'Fellowship Member',
+        participantName: prof?.display_name || 'Member',
         participantAvatar: prof?.avatar_url || null,
         participantBadge: prof?.badge || 'member',
         participantVerified: Boolean(prof?.badge_verified),
@@ -178,7 +178,7 @@ export async function sendDirectMessage(recipientId, text, senderId) {
     .maybeSingle();
 
   if (recipientProf && recipientProf.inbox_permission === 'no_one') {
-    throw new Error('This fellowship member has closed their inbox to new direct messages.');
+    throw new Error('This member has closed their inbox to new direct messages.');
   }
 
   const { data, error } = await supabase

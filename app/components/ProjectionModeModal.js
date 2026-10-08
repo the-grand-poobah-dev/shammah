@@ -126,8 +126,8 @@ export default function ProjectionModeModal({
     : [
         {
           index: 1,
-          title: data.title || 'Fellowship Teaching & Scripture',
-          courseTitle: data.category || 'Kingdom Fellowship',
+          title: data.title || 'Teaching & Scripture',
+          courseTitle: data.category || 'Kingdom Ministry',
           scripture: 'Romans 12:1-2',
           content:
             data.text_content ||

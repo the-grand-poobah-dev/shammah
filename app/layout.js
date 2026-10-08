@@ -30,8 +30,8 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${workSans.variable}`}>
-      <body>
+    <html lang="en" data-theme="dark" className={`${fraunces.variable} ${workSans.variable} dark`} suppressHydrationWarning>
+      <body className="theme-dark" suppressHydrationWarning>
         <AppClientInit />
         <ScrollProgressIndicator />
         {children}

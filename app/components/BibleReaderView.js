@@ -515,7 +515,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         <div className="sermon-notes-header">
           <div className="snotes-title-group">
             <FileText size={18} className="snotes-icon" />
-            <h3 className="snotes-heading">Sermon & Fellowship Notes ({notes.length})</h3>
+            <h3 className="snotes-heading">Sermon Notes ({notes.length})</h3>
           </div>
           <button
             type="button"
@@ -599,7 +599,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             <div className="note-editor-header">
               <div className="note-ed-title-row">
                 <FileText size={18} className="note-ed-icon" />
-                <h3>{activeNote?.id ? 'Edit Sermon Note' : 'New Sermon & Fellowship Note'}</h3>
+                <h3>{activeNote?.id ? 'Edit Sermon Note' : 'New Sermon Note'}</h3>
               </div>
               <button
                 type="button"

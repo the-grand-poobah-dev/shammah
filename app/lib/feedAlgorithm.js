@@ -62,7 +62,7 @@ export function toggleSavePost(post) {
         media_url: post.media_url,
         media_type: post.media_type,
         category_id: post.category_id,
-        author_name: post.profiles?.display_name || post.profiles?.name || 'Fellowship Member',
+        author_name: post.profiles?.display_name || post.profiles?.name || 'Member',
         author_avatar: post.profiles?.avatar_url,
         saved_at: new Date().toISOString(),
       },

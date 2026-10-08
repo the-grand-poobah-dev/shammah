@@ -212,7 +212,7 @@ function sanitizeDocId(rawId) {
   return cleaned || `doc_${Date.now()}`;
 }
 
-export async function ensureUserProfileInFirestore(user, churchName = 'Shammah Fellowship') {
+export async function ensureUserProfileInFirestore(user, churchName = 'Shammah') {
   if (!user?.uid) return;
   const uid = sanitizeDocId(user.uid);
   const path = `users/${uid}`;
@@ -282,7 +282,7 @@ export async function createPrayerRequestInFirestore({ title, content, category 
   try {
     await setDoc(doc(db, 'prayerRequests', requestId), {
       authorId: sanitizeDocId(user.uid),
-      authorName: String(user.displayName || user.email?.split('@')[0] || 'Fellowship Member').slice(0, 80),
+      authorName: String(user.displayName || user.email?.split('@')[0] || 'Member').slice(0, 80),
       title: String(title || 'Prayer Request').trim().slice(0, 140),
       content: String(content || '').trim().slice(0, 2000),
       category: safeCategory,

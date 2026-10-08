@@ -101,7 +101,7 @@ export async function showServiceWorkerPushNotification(notif) {
  */
 export async function enableFcmPushNotifications({
   churchId = 'nairobi-chapel',
-  displayName = 'Fellowship Member',
+  displayName = 'Member',
   notifyNewPosts = true,
   notifyMentions = true,
 } = {}) {
@@ -161,7 +161,7 @@ export async function enableFcmPushNotifications({
         await setDoc(doc(db, 'fcmTokens', user.uid), {
           userId: user.uid,
           fcmToken: String(fcmToken).slice(0, 512),
-          displayName: String(displayName || user.displayName || 'Fellowship Member').slice(0, 80),
+          displayName: String(displayName || user.displayName || 'Member').slice(0, 80),
           churchId: String(churchId || 'nairobi-chapel').slice(0, 128),
           notifyNewPosts: Boolean(notifyNewPosts),
           notifyMentions: Boolean(notifyMentions),
@@ -206,7 +206,7 @@ export async function dispatchCommunityPushForPost({
   categoryId = 'general',
   churchId = 'nairobi-chapel',
   churchName = 'Shammah Church Community',
-  authorName = 'Fellowship Member',
+  authorName = 'Member',
   authorAvatar = null,
   isPoll = false,
 }) {

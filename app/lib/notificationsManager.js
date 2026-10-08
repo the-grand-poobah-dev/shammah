@@ -163,7 +163,7 @@ export async function fetchRealNotifications(userId) {
       const id = `db-comment-${c.id}`;
       if (deletedIds.has(id)) continue;
       const actor = profileById.get(c.author_id);
-      const actorName = actor?.display_name || 'Fellowship Member';
+      const actorName = actor?.display_name || 'Member';
       derived.push({
         id,
         type: 'comments',
@@ -184,7 +184,7 @@ export async function fetchRealNotifications(userId) {
       const id = `db-reaction-${r.id}`;
       if (deletedIds.has(id)) continue;
       const actor = profileById.get(r.user_id);
-      const actorName = actor?.display_name || 'Fellowship Member';
+      const actorName = actor?.display_name || 'Member';
       const snippet = postSnippetById.get(r.target_id) || 'your post';
       derived.push({
         id,
@@ -206,7 +206,7 @@ export async function fetchRealNotifications(userId) {
       const id = `db-mention-${m.id}`;
       if (deletedIds.has(id)) continue;
       const actor = profileById.get(m.author_id);
-      const actorName = actor?.display_name || 'Fellowship Member';
+      const actorName = actor?.display_name || 'Member';
       derived.push({
         id,
         type: 'mentions',
@@ -227,7 +227,7 @@ export async function fetchRealNotifications(userId) {
       const id = `db-dm-${d.id}`;
       if (deletedIds.has(id)) continue;
       const actor = profileById.get(d.sender_id);
-      const actorName = actor?.display_name || 'Fellowship Member';
+      const actorName = actor?.display_name || 'Member';
       derived.push({
         id,
         type: 'messages',
@@ -248,13 +248,13 @@ export async function fetchRealNotifications(userId) {
       const id = `db-follow-${f.follower_id}`;
       if (deletedIds.has(id)) continue;
       const actor = profileById.get(f.follower_id);
-      const actorName = actor?.display_name || 'Fellowship Member';
+      const actorName = actor?.display_name || 'Member';
       derived.push({
         id,
         type: 'church',
         category: 'church',
         title: `${actorName} started following you`,
-        body: 'Connected with you in fellowship.',
+        body: 'Started following you on Shammah.',
         timestamp: f.created_at,
         isRead: readIds.has(id),
         actorName,
@@ -333,11 +333,11 @@ export function addNotification(notif) {
     id: notif.id || `notif-${Date.now()}`,
     type: notif.type || 'all',
     category: notif.category || notif.type || 'all',
-    title: notif.title || 'Fellowship Alert',
+    title: notif.title || 'Notification Alert',
     body: notif.body || notif.text || '',
     timestamp: new Date().toISOString(),
     isRead: false,
-    actorName: notif.actorName || notif.senderName || 'Fellowship Member',
+    actorName: notif.actorName || notif.senderName || 'Member',
     actorAvatar: notif.actorAvatar || notif.avatar || null,
     actorBadge: notif.actorBadge || null,
     targetLink: notif.targetLink || '/?tab=alerts',

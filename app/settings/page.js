@@ -34,16 +34,18 @@ export default function SettingsPage() {
   const [churchName, setChurchName] = useState('');
   const [isLocked, setIsLocked] = useState(false);
   const [inboxPermission, setInboxPermission] = useState('everyone');
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   const [soundOn, setSoundOn] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   useEffect(() => {
     setSoundOn(isSoundEnabled());
-    const isDark = document.documentElement.classList.contains('dark') ||
-      document.body.classList.contains('theme-dark');
+    const explicitMode = typeof window !== 'undefined' ? localStorage.getItem('shammah-theme-mode') : null;
+    const isDark = explicitMode ? explicitMode === 'dark' : true;
     setDark(isDark);
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    document.documentElement.classList.toggle('dark', isDark);
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -83,15 +85,13 @@ export default function SettingsPage() {
   function handleToggleTheme() {
     const next = !dark;
     setDark(next);
-    if (next) {
-      document.documentElement.classList.add('dark');
-      document.body.classList.add('theme-dark');
-      localStorage.setItem('shammah_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.body.classList.remove('theme-dark');
-      localStorage.setItem('shammah_theme', 'light');
-    }
+    const themeVal = next ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', themeVal);
+    document.documentElement.classList.toggle('dark', next);
+    document.body.classList.toggle('theme-dark', next);
+    localStorage.setItem('shammah-theme', themeVal);
+    localStorage.setItem('shammah-theme-mode', themeVal);
+    localStorage.setItem('shammah_theme', themeVal);
     playSound('reaction');
   }
 
@@ -190,7 +190,7 @@ export default function SettingsPage() {
                 className="inst-search-field"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Your full name or fellowship moniker"
+                placeholder="Your full name or handle"
                 required
               />
             </div>
@@ -225,7 +225,7 @@ export default function SettingsPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                  Local Church Fellowship
+                  Local Church / Ministry
                 </label>
                 <input
                   type="text"
@@ -249,7 +249,7 @@ export default function SettingsPage() {
               <div style={{ minWidth: 0 }}>
                 <strong style={{ fontSize: 13, display: 'block' }}>Private Profile Mode</strong>
                 <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
-                  Only members who follow you can view your detailed fellowship overview
+                  Only members who follow you can view your detailed profile overview
                 </span>
               </div>
               <input
@@ -271,7 +271,7 @@ export default function SettingsPage() {
               >
                 <option value="everyone">Everyone can message me</option>
                 <option value="followers">Followers only</option>
-                <option value="church">Same church fellowship members only</option>
+                <option value="church">Same church members only</option>
                 <option value="none">Nobody (Disable direct messages)</option>
               </select>
             </div>

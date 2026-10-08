@@ -112,7 +112,7 @@ export default function InboxView({ currentUser }) {
         target = {
           id: `conv-${recipientId}`,
           participantId: recipientId,
-          participantName: prof?.display_name || optionalMeta.recipientName || 'Fellowship Member',
+          participantName: prof?.display_name || optionalMeta.recipientName || 'Community Member',
           participantAvatar: prof?.avatar_url || optionalMeta.recipientAvatar || null,
           participantBadge: prof?.badge || optionalMeta.recipientBadge || 'member',
           participantVerified: Boolean(prof?.badge_verified ?? optionalMeta.recipientVerified),
@@ -247,7 +247,7 @@ export default function InboxView({ currentUser }) {
     if (!text || !activeConv || !currentUser?.id || isSending) return;
 
     if (isInboxClosed) {
-      setSendError('This fellowship member has closed their inbox to incoming direct messages.');
+      setSendError('This member has closed their inbox to incoming direct messages.');
       return;
     }
 
@@ -284,9 +284,9 @@ export default function InboxView({ currentUser }) {
             <div className="inbox-gate-icon-wrap">
               <Lock size={36} className="inbox-gate-lock-icon" />
             </div>
-            <h2>Private Fellowship Messages</h2>
+            <h2>Private Messages</h2>
             <p>
-              Direct messaging and personal fellowship conversations are reserved for signed-in members.
+              Direct messaging and personal conversations are reserved for signed-in members.
               Sign in or create an account to securely message pastors, leaders, and friends.
             </p>
             <button
@@ -312,7 +312,7 @@ export default function InboxView({ currentUser }) {
       <div className="inbox-header">
         <div className="inbox-header-title">
           <MessageCircle size={20} className="inbox-title-icon" />
-          <h2>Direct Fellowship Messages</h2>
+          <h2>Direct Messages</h2>
         </div>
         <div
           className="inbox-header-e2ee-tag"
@@ -334,7 +334,7 @@ export default function InboxView({ currentUser }) {
             <strong>Encrypted in Transit · Row-Level Security Protected</strong>
             <p>
               All direct messages are transmitted securely over TLS encryption and guarded by
-              Supabase Row-Level Security (RLS) policies. Only you and your fellowship partner
+              Supabase Row-Level Security (RLS) policies. Only you and your conversation partner
               have permission to read or query these conversations.
             </p>
           </div>
@@ -354,12 +354,12 @@ export default function InboxView({ currentUser }) {
         <div className={`inbox-sidebar${activeConvId ? ' has-active-on-mobile' : ''}`}>
           {loadingConvs ? (
             <div className="inbox-empty-sidebar">
-              <p>Loading fellowship conversations…</p>
+              <p>Loading conversations…</p>
             </div>
           ) : conversations.length === 0 ? (
             <div className="inbox-empty-sidebar">
               <MessageCircle size={32} className="inbox-empty-icon" />
-              <p>No messages yet. Direct messages and fellowship chats will appear here!</p>
+              <p>No messages yet. Direct messages and chats will appear here!</p>
             </div>
           ) : (
             conversations.map((conv) => {
@@ -418,7 +418,7 @@ export default function InboxView({ currentUser }) {
                     <span className="inbox-badge-tag">{activeConv.participantBadge || 'Member'}</span>
                   </div>
                   <div className="inbox-thread-tag-row">
-                    <span className="inbox-thread-tag-text">{activeConv.participantRole || 'Fellowship Member'}</span>
+                    <span className="inbox-thread-tag-text">{activeConv.participantRole || 'Community Member'}</span>
                     <span className="inbox-e2ee-pill" title="Protected by database Row-Level Security">
                       <ShieldCheck size={10} className="text-cyan-400" />
                       <span>RLS Protected</span>
@@ -538,7 +538,7 @@ export default function InboxView({ currentUser }) {
               {isInboxClosed ? (
                 <div className="inbox-closed-banner" style={{ padding: '14px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', background: 'rgba(255,255,255,0.03)' }}>
                   <Lock size={14} style={{ display: 'inline', marginRight: 6 }} />
-                  <span>This fellowship member has closed their inbox to incoming direct messages.</span>
+                  <span>This member has closed their inbox to incoming direct messages.</span>
                 </div>
               ) : (
                 /* Reply Input Form */
@@ -565,8 +565,8 @@ export default function InboxView({ currentUser }) {
           ) : (
             <div className="inbox-empty-thread">
               <MessageCircle size={40} className="inbox-empty-thread-icon" />
-              <h3>Select a fellowship conversation</h3>
-              <p>Direct messages and fellowship conversations will appear here.</p>
+              <h3>Select a conversation</h3>
+              <p>Direct messages and conversations will appear here.</p>
             </div>
           )}
         </div>

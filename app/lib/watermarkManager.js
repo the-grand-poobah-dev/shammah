@@ -10,9 +10,9 @@ export async function generateWatermarkedCanvas(data = {}) {
   if (typeof window === 'undefined') return null;
 
   const {
-    title = 'Shammah Fellowship',
+    title = 'Shammah',
     textContent = '',
-    authorName = 'Fellowship Member',
+    authorName = 'Member',
     churchName = 'Shammah Global Community',
     category = 'General',
     mediaUrl = null,
@@ -87,7 +87,7 @@ export async function generateWatermarkedCanvas(data = {}) {
   // Tagline
   ctx.font = '600 15px "Inter", sans-serif';
   ctx.fillStyle = '#38bdf8';
-  ctx.fillText('CHRISTIAN COMMUNITY & CHURCH FELLOWSHIP', 142, topY + 44);
+  ctx.fillText('CHRISTIAN COMMUNITY PLATFORM', 142, topY + 44);
 
   // Category pill on top right
   ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';

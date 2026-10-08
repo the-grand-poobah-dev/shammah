@@ -172,7 +172,7 @@ export default function NotificationsView({ currentUser, openAuth }) {
               <Bell size={20} className="notif-bell-icon" />
               {unreadCount > 0 && <span className="notif-header-badge">{unreadCount}</span>}
             </span>
-            <h2>Fellowship Notifications &amp; FCM Push</h2>
+            <h2>Notifications &amp; Push Alerts</h2>
           </div>
           <p className="notif-subtext">
             Real-time Firebase Cloud Messaging (FCM) push alerts for new posts and @mentions in your church communities.

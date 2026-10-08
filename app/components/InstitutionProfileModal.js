@@ -24,6 +24,7 @@ import {
   isInstitutionFollowed,
   toggleFollowInstitution,
   getInstitutionSubscription,
+  isInstitutionOwner,
   SUBSCRIPTION_PLANS,
 } from '../lib/institutionManager';
 import { getInstitutionBranch } from '../lib/churchConfig';
@@ -31,6 +32,8 @@ import { playSound } from '../lib/soundEffects';
 
 export default function InstitutionProfileModal({
   institution,
+  session = null,
+  currentUser = null,
   onClose,
   onOpenSubscription = null,
 }) {
@@ -78,8 +81,11 @@ export default function InstitutionProfileModal({
     } catch {}
   }
 
-  const sub = getInstitutionSubscription(institution.id);
-  const planInfo = SUBSCRIPTION_PLANS.find((p) => p.id === sub.planId) || SUBSCRIPTION_PLANS[0];
+  const isOwner = isInstitutionOwner(institution, session?.user || currentUser, currentUser);
+  const sub = isOwner ? getInstitutionSubscription(institution.id) : null;
+  const planInfo = isOwner
+    ? SUBSCRIPTION_PLANS.find((p) => p.id === sub.planId) || SUBSCRIPTION_PLANS[0]
+    : null;
 
   return (
     <div
@@ -144,9 +150,11 @@ export default function InstitutionProfileModal({
           <div className="inst-modal-title-line">
             <h3>{institution.name}</h3>
             {institution.verified && <VerifiedBadge badge="pastor" role="church_admin" size={17} />}
-            <span className="inst-plan-chip" style={{ backgroundColor: planInfo.badgeColor }}>
-              {planInfo.name}
-            </span>
+            {isOwner && planInfo && (
+              <span className="inst-plan-chip" style={{ backgroundColor: planInfo.badgeColor }} title="Subscription plan (visible only to you as page owner)">
+                {planInfo.name}
+              </span>
+            )}
           </div>
 
           {(institution.branch || getInstitutionBranch(institution.id)) && (
@@ -213,11 +221,23 @@ export default function InstitutionProfileModal({
         </div>
 
         {/* Bottom CTA Row */}
-        <div className="inst-modal-footer">
+        <div className="inst-modal-footer" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {isOwner && onOpenSubscription && (
+            <button
+              type="button"
+              className="inst-action-pill"
+              onClick={onOpenSubscription}
+              style={{ flex: 1, justifyContent: 'center' }}
+            >
+              <Shield size={15} />
+              <span>Manage Page Subscription Plan</span>
+            </button>
+          )}
           <Link
             href={`/churches/${institution.id}`}
             className="inst-visit-full-btn"
             onClick={onClose}
+            style={{ flex: 1 }}
           >
             <span>Visit Institution Page</span>
             <ExternalLink size={15} />

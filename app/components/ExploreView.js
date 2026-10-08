@@ -168,7 +168,7 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
             <h2>Explore &amp; App Settings</h2>
           </div>
           <p className="explore-subtext">
-            Discover fellowship categories, configure your app experience, support development, and find answers.
+            Discover categories, configure your app experience, support development, and find answers.
           </p>
         </div>
       </div>
@@ -186,7 +186,7 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
               <h3>{profile?.display_name || session?.user?.email || 'Guest Member'}</h3>
               {profile?.badge && <VerifiedBadge badge={profile.badge} size={15} />}
             </div>
-            <span className="explore-role-tag">{profile?.role || 'Christian Fellowship Member'}</span>
+            <span className="explore-role-tag">{profile?.role || 'Community Member'}</span>
             <span className="explore-email-sub">{session?.user?.email || 'Sign in to sync your church preferences'}</span>
           </div>
         </div>
@@ -610,7 +610,7 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
 
       {/* Footer Info & Developer Contact */}
       <div className="explore-footer">
-        <p>Shammah Christian Fellowship Platform · Built with faith &amp; devotion</p>
+        <p>Shammah Community Platform · Built with faith &amp; devotion</p>
         <p className="developer-tag">
           Lead Engineer: <strong>Julius Thandi</strong> · Nairobi, Kenya
         </p>

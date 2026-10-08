@@ -451,7 +451,7 @@ export default function ChurchMapLocator() {
     return (
       <div className="empty-state">
         <h2>Google Maps API Key Required</h2>
-        <p>Please configure NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to load the interactive Church &amp; Fellowship Map.</p>
+        <p>Please configure NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to load the interactive Church &amp; Ministry Map.</p>
       </div>
     );
   }
@@ -462,7 +462,7 @@ export default function ChurchMapLocator() {
         <div className="inst-shelf-header">
           <div className="shelf-title-wrap">
             <MapPin size={18} className="text-teal-400" />
-            <h3>Google Maps Platform — Live Church &amp; Fellowship Locator</h3>
+            <h3>Google Maps Platform — Live Church &amp; Ministry Locator</h3>
           </div>
           <span className="shelf-hint">Powered by Places API (New), Advanced Markers &amp; Routes API</span>
         </div>

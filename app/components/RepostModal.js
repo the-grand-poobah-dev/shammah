@@ -26,7 +26,7 @@ export default function RepostModal({ post, currentUser, onClose, onConfirm }) {
         <div className="repost-modal-header">
           <div className="repost-modal-title">
             <Repeat size={18} className="repost-icon-gold" />
-            <h3>Fellowship Repost</h3>
+            <h3>Repost</h3>
           </div>
           <button type="button" className="repost-close-btn" onClick={onClose} aria-label="Close">
             <X size={18} />

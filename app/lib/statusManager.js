@@ -73,7 +73,7 @@ export async function fetchActiveStatuses() {
       return {
         id: row.id,
         userId: row.user_id,
-        userName: prof?.display_name || 'Fellowship Member',
+        userName: prof?.display_name || 'Member',
         userAvatar: prof?.avatar_url || null,
         userBadge: prof?.badge || 'believer',
         userRole: prof?.role || 'member',

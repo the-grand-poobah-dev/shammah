@@ -47,7 +47,7 @@ export default function CreatePostModal({
             <span className="cp-icon-wrap">
               <PenSquare size={18} className="cp-icon" />
             </span>
-            <h3>Create Fellowship Post</h3>
+            <h3>Create Post</h3>
           </div>
           <button
             type="button"

@@ -54,8 +54,8 @@ export default function BottomNav() {
     },
     {
       id: 'workspace',
-      label: 'Google Workspace & Firebase Hub',
-      desc: 'Slides, Forms, Keep, Calendar, Meet, Classroom, Tasks & Chat',
+      label: 'My Workspace',
+      desc: 'Calendar, slides, forms, notes, video rooms & prayer wall',
       icon: LayoutGrid,
       color: '#10b981', // Emerald
       action: handleOpenWorkspace,
@@ -288,7 +288,7 @@ export default function BottomNav() {
               <div className="floating-quick-header">
                 <div className="floating-quick-title-wrap">
                   <Sparkles size={15} style={{ color: highlightColor }} />
-                  <span>Quick Fellowship Actions</span>
+                  <span>Quick Actions</span>
                 </div>
                 <button
                   type="button"
@@ -372,7 +372,7 @@ export default function BottomNav() {
               setMenuOpen(!menuOpen);
             }}
             aria-label={menuOpen ? 'Close actions menu' : 'Open actions menu'}
-            title={menuOpen ? 'Close menu' : 'Quick Fellowship Actions & Create Post'}
+            title={menuOpen ? 'Close menu' : 'Quick Actions & Create Post'}
           >
             <span className="floating-neon-ring" aria-hidden="true" />
             <span className="floating-plus-inner">

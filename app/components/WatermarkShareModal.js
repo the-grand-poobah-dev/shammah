@@ -89,7 +89,7 @@ export default function WatermarkShareModal({
   async function handleWebShare() {
     playSound('reaction');
     const text = `${contentData.textContent || ''}\n\nShared via Shammah (Church & Christian Community): https://shammah.faith`;
-    const title = contentData.title || 'Shammah Fellowship';
+    const title = contentData.title || 'Shammah';
 
     if (navigator.share) {
       try {
@@ -132,7 +132,7 @@ export default function WatermarkShareModal({
         </div>
 
         <div className="watermark-modal-intro">
-          <h3>Share to WhatsApp, Instagram &amp; Fellowship</h3>
+          <h3>Share to WhatsApp, Instagram &amp; Socials</h3>
           <p>
             Any content shared outside the app is automatically watermarked with Shammah&apos;s flame logo and website link (<strong>shammah.faith</strong>).
           </p>

@@ -388,7 +388,7 @@ export default function MpesaPaymentModal({
               <div className="p-4 rounded-xl bg-white/[0.04] border border-white/10 max-w-xs mx-auto text-left space-y-2 text-xs">
                 <div className="flex items-center justify-between text-gray-400">
                   <span>Merchant:</span>
-                  <span className="text-white font-medium">Shammah Fellowship</span>
+                  <span className="text-white font-medium">Shammah</span>
                 </div>
                 <div className="flex items-center justify-between text-gray-400">
                   <span>Project:</span>

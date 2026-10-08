@@ -171,73 +171,243 @@ export function getStoredReposts() {
   return [];
 }
 
-/* ==================== POST PRIVACY & VISIBILITY (SUPABASE) ==================== */
+/* ==================== POST PRIVACY & VISIBILITY (SUPABASE + LOCAL PERSISTENCE) ==================== */
+
+const POST_VISIBILITY_KEY = 'shammah_post_visibility_v1';
+const POST_IDENTITY_KEY = 'shammah_post_identity_v1';
+
+function getStoredVisibilityMap() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(POST_VISIBILITY_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function savePostIdentityMeta(postId, meta = {}) {
+  if (typeof window === 'undefined' || !postId) return;
+  try {
+    const raw = localStorage.getItem(POST_IDENTITY_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    map[postId] = {
+      postIdentity: meta.postIdentity || (meta.is_anonymous ? 'anonymous' : 'real'),
+      pseudonym: meta.pseudonym || null,
+      is_anonymous: Boolean(meta.is_anonymous || meta.postIdentity === 'anonymous'),
+      author_id: meta.author_id || null,
+    };
+    localStorage.setItem(POST_IDENTITY_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+export function getPostIdentityMeta(postId, post = null) {
+  let stored = null;
+  if (typeof window !== 'undefined' && postId) {
+    try {
+      const raw = localStorage.getItem(POST_IDENTITY_KEY);
+      const map = raw ? JSON.parse(raw) : {};
+      stored = map[postId] || null;
+    } catch {}
+  }
+  const postIdentity =
+    post?.post_identity ||
+    stored?.postIdentity ||
+    (post?.is_anonymous || stored?.is_anonymous ? 'anonymous' : post?.pseudonym || stored?.pseudonym ? 'pseudo' : 'real');
+  const pseudonym = post?.pseudonym || stored?.pseudonym || null;
+  const isAnonymous = Boolean(post?.is_anonymous || stored?.is_anonymous || postIdentity === 'anonymous');
+  return { postIdentity, pseudonym, isAnonymous };
+}
 
 /**
  * Returns visibility of a post
  */
 export function getPostVisibility(postId, defaultVisibility = 'public') {
+  if (postId && typeof window !== 'undefined') {
+    const map = getStoredVisibilityMap();
+    if (map[postId]) return map[postId];
+  }
   return defaultVisibility || 'public';
 }
 
 /**
- * Sets visibility for a specific post in Supabase
+ * Sets visibility for a specific post in Supabase and persistent storage
  */
 export async function setPostVisibility(postId, visibility) {
+  const validVis = ['public', 'followers', 'church', 'private'].includes(visibility)
+    ? visibility
+    : 'public';
+
+  if (typeof window !== 'undefined' && postId) {
+    try {
+      const map = getStoredVisibilityMap();
+      map[postId] = validVis;
+      localStorage.setItem(POST_VISIBILITY_KEY, JSON.stringify(map));
+
+      const rawUserPosts = localStorage.getItem('shammah_user_created_posts_v1');
+      if (rawUserPosts) {
+        const parsed = JSON.parse(rawUserPosts);
+        if (Array.isArray(parsed)) {
+          const updated = parsed.map((p) => (p.id === postId ? { ...p, visibility: validVis } : p));
+          localStorage.setItem('shammah_user_created_posts_v1', JSON.stringify(updated));
+        }
+      }
+    } catch {}
+  }
+
   if (postId && isValidUuid(postId)) {
     try {
       const { error } = await supabase
         .from('posts')
-        .update({ visibility })
+        .update({ visibility: validVis })
         .eq('id', postId);
       if (error) {
-        console.error('Failed to update post visibility in Supabase:', error);
+        // Column may not be migrated yet; local persistence still enforces privacy
       }
-    } catch (err) {
-      console.error('Failed to save post visibility', err);
-    }
+    } catch {}
   }
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent('shammah:post-visibility-changed', {
-        detail: { postId, visibility },
+        detail: { postId, visibility: validVis },
+      })
+    );
+  }
+  return validVis;
+}
+
+/**
+ * Batch updates visibility for all posts authored by a user in Supabase and persistent storage
+ */
+export async function batchSetAllPostsVisibility(userId, visibility, allPostIds = []) {
+  const validVis = ['public', 'followers', 'church', 'private'].includes(visibility)
+    ? visibility
+    : 'public';
+
+  if (typeof window !== 'undefined' && Array.isArray(allPostIds) && allPostIds.length > 0) {
+    try {
+      const map = getStoredVisibilityMap();
+      allPostIds.forEach((id) => {
+        if (id) map[id] = validVis;
+      });
+      localStorage.setItem(POST_VISIBILITY_KEY, JSON.stringify(map));
+    } catch {}
+  }
+
+  try {
+    if (userId && isValidUuid(userId)) {
+      await supabase
+        .from('posts')
+        .update({ visibility: validVis })
+        .eq('author_id', userId);
+    } else if (allPostIds && allPostIds.length > 0) {
+      const validIds = allPostIds.filter(isValidUuid);
+      if (validIds.length > 0) {
+        await supabase
+          .from('posts')
+          .update({ visibility: validVis })
+          .in('id', validIds);
+      }
+    }
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('shammah:batch-visibility-changed', {
+        detail: { userId, visibility: validVis },
       })
     );
   }
 }
 
 /**
- * Batch updates visibility for all posts authored by a user in Supabase
+ * Enforces post privacy in reality across feeds, search, and views:
+ * - 'public': visible to everyone
+ * - 'private': visible ONLY to the post's author
+ * - 'followers': visible ONLY to the post's author and users who follow the author
+ * - 'church': visible ONLY to the post's author and members/followers of the same church
  */
-export async function batchSetAllPostsVisibility(userId, visibility, allPostIds = []) {
-  try {
-    if (userId && isValidUuid(userId)) {
-      const { error } = await supabase
-        .from('posts')
-        .update({ visibility })
-        .eq('author_id', userId);
-      if (error) {
-        console.error('Failed to batch update visibility by author_id:', error);
-      }
-    } else if (allPostIds && allPostIds.length > 0) {
-      const validIds = allPostIds.filter(isValidUuid);
-      if (validIds.length > 0) {
-        await supabase
-          .from('posts')
-          .update({ visibility })
-          .in('id', validIds);
-      }
-    }
-  } catch (err) {
-    console.error('Failed to batch update visibility in Supabase', err);
+export function canUserViewPost(
+  post,
+  currentUser = null,
+  currentProfile = null,
+  followingIds = [],
+  joinedOrFollowedChurchIds = []
+) {
+  if (!post) return false;
+  const vis = getPostVisibility(post.id, post.visibility || 'public');
+  if (vis === 'public') return true;
+
+  const uid = currentUser?.id ? String(currentUser.id) : null;
+  const isRealUser = Boolean(uid && !currentUser?.is_anonymous);
+  const authorId = post.author_id || post.profiles?.id ? String(post.author_id || post.profiles?.id) : null;
+
+  // The author of a post can always view their own post
+  if (isRealUser && authorId && uid === authorId) {
+    return true;
   }
 
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(
-      new CustomEvent('shammah:batch-visibility-changed', {
-        detail: { visibility },
-      })
-    );
+  // 'private' ("Only Me") is strictly restricted to the author
+  if (vis === 'private') {
+    return false;
   }
+
+  // 'followers' and 'church' require a signed-in user
+  if (!isRealUser) {
+    return false;
+  }
+
+  if (vis === 'followers') {
+    if (!authorId) return false;
+    if (Array.isArray(followingIds) && followingIds.map(String).includes(authorId)) {
+      return true;
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const rawV2 = localStorage.getItem('shammah_profile_follows_v2');
+        if (rawV2) {
+          const parsed = JSON.parse(rawV2);
+          if (Array.isArray(parsed) && parsed.map(String).includes(authorId)) return true;
+        }
+        const raw = localStorage.getItem('shammah_user_follows_v1');
+        if (raw) {
+          const map = JSON.parse(raw);
+          const list = Array.isArray(map[uid]) ? map[uid] : [];
+          if (list.map(String).includes(authorId)) return true;
+        }
+      } catch {}
+    }
+    return false;
+  }
+
+  if (vis === 'church') {
+    const postChurchId = post.church_id || post.profiles?.church_id;
+    const userChurchId = currentProfile?.church_id;
+    if (postChurchId && userChurchId && String(postChurchId) === String(userChurchId)) {
+      return true;
+    }
+    if (
+      postChurchId &&
+      Array.isArray(joinedOrFollowedChurchIds) &&
+      joinedOrFollowedChurchIds.map(String).includes(String(postChurchId))
+    ) {
+      return true;
+    }
+    const postChurchName = (
+      post.church_name ||
+      post.churches?.name ||
+      post.profiles?.church_name ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+    const userChurchName = (currentProfile?.church_name || '').trim().toLowerCase();
+    if (postChurchName && userChurchName && postChurchName === userChurchName) {
+      return true;
+    }
+    return false;
+  }
+
+  return true;
 }

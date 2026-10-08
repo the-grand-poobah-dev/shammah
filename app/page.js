@@ -10,7 +10,14 @@ import Avatar from './components/Avatar';
 import MemberName from './components/MemberName';
 import OnboardingWizard from './components/OnboardingWizard';
 import { uploadPostMedia } from './lib/mediaUpload';
-import { sortPostsWithPinned, isUserAdmin, getSampleFeedPosts } from './lib/pinnedPosts';
+import {
+  sortPostsWithPinned,
+  isUserAdmin,
+  getSampleFeedPosts,
+  saveUserCreatedPost,
+  getUserCreatedPosts,
+  updateUserCreatedPost,
+} from './lib/pinnedPosts';
 import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX, DownloadCloud, X, Search, Home, MessageCircle, Bell, Building2 } from 'lucide-react';
 import TopNav, { TOP_NAV_SECTIONS } from './components/TopNav';
 import StatusTray from './components/StatusTray';
@@ -54,8 +61,19 @@ import ProjectionModeModal from './components/ProjectionModeModal';
 import WatermarkShareModal from './components/WatermarkShareModal';
 import ActivityLogModal from './components/ActivityLogModal';
 import { logActivity } from './lib/activityLogManager';
-import { SAMPLE_INSTITUTIONS } from './lib/institutionManager';
+import {
+  SAMPLE_INSTITUTIONS,
+  getAllInstitutions,
+  getJoinedInstitutionIds,
+  getFollowedInstitutionIds,
+} from './lib/institutionManager';
 import { getOfflineItems } from './lib/offlineSyncManager';
+import {
+  canUserViewPost,
+  setPostVisibility,
+  savePostIdentityMeta,
+  getPostVisibility,
+} from './lib/postInteractions';
 
 const SECTIONS = TOP_NAV_SECTIONS;
 
@@ -116,7 +134,8 @@ export default function Feed() {
   // App shell: bottom tab, content-type pill, theme, search, avatar menu
   const [tab, setTab] = useState('home'); // home | messages | alerts | churches | menu
   const [section, setSection] = useState('all'); // all | videos | podcasts | courses | polls | bible
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
+  const [privacyTick, setPrivacyTick] = useState(0);
   const [soundOn, setSoundOn] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -234,7 +253,7 @@ export default function Feed() {
     function handleOpenInstProfile(e) {
       if (e.detail) {
         const instId = e.detail.institutionId;
-        const matched = SAMPLE_INSTITUTIONS.find((s) => s.id === instId);
+        const matched = getAllInstitutions().find((s) => s.id === instId);
         setActiveInstitutionModal(
           matched || {
             id: instId || 'inst-custom',
@@ -248,11 +267,22 @@ export default function Feed() {
         );
       }
     }
+    function handlePrivacyStateSync() {
+      setPrivacyTick((v) => v + 1);
+    }
     window.addEventListener('shammah:open-profile', handleOpenProfile);
     window.addEventListener('shammah:open-institution-profile', handleOpenInstProfile);
+    window.addEventListener('shammah:post-visibility-changed', handlePrivacyStateSync);
+    window.addEventListener('shammah:batch-visibility-changed', handlePrivacyStateSync);
+    window.addEventListener('shammah:follows-updated', handlePrivacyStateSync);
+    window.addEventListener('shammah:institutions-updated', handlePrivacyStateSync);
     return () => {
       window.removeEventListener('shammah:open-profile', handleOpenProfile);
       window.removeEventListener('shammah:open-institution-profile', handleOpenInstProfile);
+      window.removeEventListener('shammah:post-visibility-changed', handlePrivacyStateSync);
+      window.removeEventListener('shammah:batch-visibility-changed', handlePrivacyStateSync);
+      window.removeEventListener('shammah:follows-updated', handlePrivacyStateSync);
+      window.removeEventListener('shammah:institutions-updated', handlePrivacyStateSync);
     };
   }, []);
 
@@ -262,7 +292,9 @@ export default function Feed() {
       if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         const t = params.get('tab');
-        if (t && ['home', 'messages', 'alerts', 'churches', 'menu'].includes(t)) {
+        if (t === 'institutions') {
+          setTab('churches');
+        } else if (t && ['home', 'messages', 'alerts', 'churches', 'menu'].includes(t)) {
           setTab(t);
         }
         const sec = params.get('section');
@@ -274,6 +306,14 @@ export default function Feed() {
           setActiveCategory(cat === 'all' ? null : cat);
         } else if (params.has('category')) {
           setActiveCategory(null);
+        }
+        if (params.get('compose') === '1') {
+          setShowCreateModal(true);
+        }
+        const instParam = params.get('inst');
+        if (instParam) {
+          const found = getAllInstitutions().find((s) => s.id === instParam);
+          if (found) setActiveInstitutionModal(found);
         }
       }
     }
@@ -301,10 +341,11 @@ export default function Feed() {
     window.dispatchEvent(new CustomEvent('shammah:section-changed', { detail: section }));
   }, [section]);
 
-  // Remember the person's light/dark choice on this device and sync sound profile
+  // Remember the person's light/dark choice on this device (defaulting to Dark Mode) and sync sound profile
   useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('shammah-theme') : null;
-    if (saved === 'dark') setDark(true);
+    const explicitMode = typeof window !== 'undefined' ? localStorage.getItem('shammah-theme-mode') : null;
+    const isDark = explicitMode ? explicitMode === 'dark' : true;
+    setDark(isDark);
     setSoundOn(isSoundEnabled());
 
     function handleSoundToggled(e) {
@@ -331,8 +372,13 @@ export default function Feed() {
   }
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-    if (typeof window !== 'undefined') localStorage.setItem('shammah-theme', dark ? 'dark' : 'light');
+    const themeVal = dark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', themeVal);
+    document.documentElement.classList.toggle('dark', dark);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('shammah-theme', themeVal);
+      localStorage.setItem('shammah-theme-mode', themeVal);
+    }
   }, [dark]);
 
   // Ticker auto-scrolls the category bar a little at a time; stops on its
@@ -561,15 +607,23 @@ export default function Feed() {
       let query = supabase
         .from('posts')
         .select(
-          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, visibility, is_pinned, pinned_at, profiles(display_name, avatar_url, badge, badge_verified, role)'
+          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, profiles(display_name, avatar_url, badge, badge_verified, role)'
         )
-        .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(50);
       if (category) query = query.eq('category_id', category);
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
-        const sorted = sortPostsWithPinned(data);
+        const localUserPosts = getUserCreatedPosts().filter(
+          (lp) => !category || lp.category_id === category || lp.is_pinned
+        );
+        const remoteIds = new Set(data.map((d) => d.id));
+        const enrichedRemote = data.map((d) => ({
+          ...d,
+          visibility: getPostVisibility(d.id, d.visibility || 'public'),
+        }));
+        const merged = [...localUserPosts.filter((lp) => !remoteIds.has(lp.id)), ...enrichedRemote];
+        const sorted = sortPostsWithPinned(merged);
         setPosts(sorted);
         setFeedFromSwCache(false);
         await loadPollData(data.map((p) => p.id));
@@ -786,6 +840,16 @@ export default function Feed() {
     const pollDurationToSave = identityMeta?.pollDuration || '24h';
     const pollExpiresAtToSave = identityMeta?.pollExpiresAt || null;
     const revealResultsAfterVotingToSave = identityMeta?.revealResultsAfterVoting ?? false;
+    const validVisibility = ['public', 'followers', 'church', 'private'].includes(visibility)
+      ? visibility
+      : 'public';
+    const isAnon = identityMeta?.identityMode === 'anonymous';
+    const isPseudo = identityMeta?.identityMode === 'pseudo';
+    const displayName = isAnon
+      ? 'Anonymous Disciple'
+      : isPseudo
+        ? identityMeta?.pseudoName || 'Faith Pilgrim'
+        : profile?.display_name || session?.user?.email || 'Member';
 
     const { data: inserted, error } = await supabase
       .from('posts')
@@ -796,54 +860,57 @@ export default function Feed() {
         text_content: text || null,
         media_url,
         media_type,
-        visibility: visibility || 'public',
-        is_pinned: isPinnedToSave,
-        pinned_at: pinnedAtToSave,
-        poll_duration: pollDurationToSave,
-        poll_expires_at: pollExpiresAtToSave,
-        reveal_results_after_voting: revealResultsAfterVotingToSave,
       })
       .select('id')
       .single();
 
-    if (error) {
-      // In preview or demo mode without active Supabase backend, optimistically append the post
-      const isAnon = identityMeta?.identityMode === 'anonymous';
-      const isPseudo = identityMeta?.identityMode === 'pseudo';
-      const displayName = isAnon
-        ? 'Anonymous Disciple'
-        : isPseudo
-          ? identityMeta?.pseudoName || 'Humble Seeker #402'
-          : profile?.display_name || session?.user?.email || 'Member';
+    const finalPostId = inserted?.id || 'post-' + Date.now();
+    await setPostVisibility(finalPostId, validVisibility);
+    savePostIdentityMeta(finalPostId, {
+      postIdentity: identityMeta?.identityMode || 'real',
+      pseudonym: isPseudo ? displayName : null,
+      is_anonymous: isAnon,
+      author_id: session.user.id,
+    });
 
-      const newPost = {
-        id: 'post-' + Date.now(),
-        text_content: text || null,
-        media_url,
-        media_type,
-        created_at: new Date().toISOString(),
-        category_id: composeCategory,
+    const newPost = {
+      id: finalPostId,
+      text_content: text || null,
+      media_url,
+      media_type,
+      created_at: new Date().toISOString(),
+      category_id: composeCategory,
+      church_id: profile?.church_id ?? null,
+      church_name: profile?.church_name ?? null,
+      author_id: session.user.id,
+      visibility: validVisibility,
+      is_pinned: isPinnedToSave,
+      pinned_at: pinnedAtToSave,
+      poll_duration: pollDurationToSave,
+      poll_expires_at: pollExpiresAtToSave,
+      reveal_results_after_voting: revealResultsAfterVotingToSave,
+      is_anonymous: isAnon,
+      is_pseudo: isPseudo,
+      post_identity: identityMeta?.identityMode || 'real',
+      pseudonym: isPseudo ? displayName : null,
+      is_quiz: Boolean(identityMeta?.isQuiz),
+      quiz_explanation: identityMeta?.quizExplanation || null,
+      correct_option_idx: identityMeta?.correctOptionIdx ?? null,
+      profiles: {
+        id: session.user.id,
+        display_name: displayName,
+        avatar_url: isAnon || isPseudo ? null : profile?.avatar_url || null,
+        badge: isAnon ? null : isPseudo ? 'pilgrim' : profile?.badge || 'member',
+        badge_verified: isAnon || isPseudo ? false : profile?.badge_verified || false,
+        role: isAnon || isPseudo ? 'member' : profile?.role || 'member',
         church_id: profile?.church_id ?? null,
-        author_id: session.user.id,
-        visibility: visibility || 'public',
-        is_pinned: isPinnedToSave,
-        pinned_at: pinnedAtToSave,
-        poll_duration: pollDurationToSave,
-        poll_expires_at: pollExpiresAtToSave,
-        reveal_results_after_voting: revealResultsAfterVotingToSave,
-        is_anonymous: isAnon,
-        is_pseudo: isPseudo,
-        is_quiz: Boolean(identityMeta?.isQuiz),
-        quiz_explanation: identityMeta?.quizExplanation || null,
-        correct_option_idx: identityMeta?.correctOptionIdx ?? null,
-        profiles: {
-          display_name: displayName,
-          avatar_url: isAnon || isPseudo ? null : profile?.avatar_url || null,
-          badge: isAnon ? null : isPseudo ? 'pilgrim' : profile?.badge || 'member',
-          badge_verified: isAnon || isPseudo ? false : profile?.badge_verified || false,
-          role: isAnon || isPseudo ? 'member' : profile?.role || 'member',
-        },
-      };
+        church_name: profile?.church_name ?? null,
+      },
+    };
+
+    saveUserCreatedPost(newPost);
+
+    if (error || !inserted?.id) {
       setPosts((prev) => {
         const nextList = sortPostsWithPinned([newPost, ...prev]);
         cacheMainFeedPosts(activeCategory, nextList, pollOptionsByPost, pollCountsByPost);
@@ -851,7 +918,7 @@ export default function Feed() {
         return nextList;
       });
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        addPendingSyncItem({ type: 'post_sync', label: 'New fellowship post' });
+        addPendingSyncItem({ type: 'post_sync', label: 'New community post' });
       }
 
       if (isPoll && optionsToInsert.length > 0) {
@@ -883,30 +950,27 @@ export default function Feed() {
     playSound('postPublished');
 
     // Sync updated feed posts to Service Worker offline cache & dispatch FCM community/mention push notifications
-    const authorDisplay =
-      identityMeta?.identityMode === 'anonymous'
-        ? 'Anonymous Disciple'
-        : identityMeta?.identityMode === 'pseudo'
-          ? identityMeta?.pseudoName || 'Humble Seeker #402'
-          : profile?.display_name || session?.user?.email || 'Fellowship Member';
+    const authorDisplay = displayName;
 
-    dispatchCommunityPushForPost({
-      text: text || '',
-      categoryId: composeCategory,
-      churchId: profile?.church_id || 'nairobi-chapel',
-      churchName: profile?.location_label || 'Shammah Church Community',
-      authorName: authorDisplay,
-      authorAvatar: profile?.avatar_url || null,
-      isPoll,
-    }).catch(() => {});
+    if (validVisibility === 'public') {
+      dispatchCommunityPushForPost({
+        text: text || '',
+        categoryId: composeCategory,
+        churchId: profile?.church_id || 'nairobi-chapel',
+        churchName: profile?.location_label || 'Shammah Church Community',
+        authorName: authorDisplay,
+        authorAvatar: isAnon || isPseudo ? null : profile?.avatar_url || null,
+        isPoll,
+      }).catch(() => {});
+    }
 
     logActivity({
       type: 'post',
       icon: isPoll ? '📊' : '✍️',
-      title: isPoll ? 'Created Community Poll' : 'Published Fellowship Post',
-      targetTitle: composeCategory ? `${categoryStyle(composeCategory)?.label || composeCategory} Category` : 'Fellowship Post',
-      snippet: text || (isPoll ? 'Interactive church poll question' : 'Shared media in fellowship'),
-      visibility: visibility || 'public',
+      title: isPoll ? 'Created Community Poll' : 'Published Community Post',
+      targetTitle: composeCategory ? `${categoryStyle(composeCategory)?.label || composeCategory} Category` : 'Community Post',
+      snippet: text || (isPoll ? 'Interactive church poll question' : 'Shared media in community'),
+      visibility: validVisibility,
       meta: { category: composeCategory, isPoll },
     });
     setComposeText('');
@@ -1037,13 +1101,22 @@ export default function Feed() {
   }, []);
 
   const headerName = profile?.display_name || session?.user?.email || 'Member';
+  const currentFollows = mounted ? getFollows() : [];
+  const currentChurchIds = mounted
+    ? Array.from(new Set([...getJoinedInstitutionIds(), ...getFollowedInstitutionIds()]))
+    : [];
   const feedPostsWithRss = mounted ? getHomefeedPostsWithRss(posts, session?.user) : posts;
-  const algorithmRankedPosts = mounted
-    ? rankPostsWithAlgorithm(feedPostsWithRss, {
-        blockedUserIds: getBlockedUsers(),
-        followedUserIds: getFollows(),
-      })
+  const privacyFilteredPosts = mounted
+    ? feedPostsWithRss.filter((p) =>
+        canUserViewPost(p, session?.user, profile, currentFollows, currentChurchIds)
+      )
     : feedPostsWithRss;
+  const algorithmRankedPosts = mounted
+    ? rankPostsWithAlgorithm(privacyFilteredPosts, {
+        blockedUserIds: getBlockedUsers(),
+        followedUserIds: currentFollows,
+      })
+    : privacyFilteredPosts;
   const visiblePosts = searchTerm.trim()
     ? algorithmRankedPosts.filter((p) =>
         (p.text_content || '').toLowerCase().includes(searchTerm.trim().toLowerCase())
@@ -1930,6 +2003,8 @@ export default function Feed() {
       {activeInstitutionModal && (
         <InstitutionProfileModal
           institution={activeInstitutionModal}
+          session={session}
+          currentUser={profile}
           onClose={() => setActiveInstitutionModal(null)}
         />
       )}
@@ -1953,7 +2028,7 @@ export default function Feed() {
         />
       )}
 
-      {/* Sanctuary & Fellowship Projection Mode Modal */}
+      {/* Sanctuary Screen Projection Mode Modal */}
       {projectionData && (
         <ProjectionModeModal
           type={projectionData.type || 'course'}

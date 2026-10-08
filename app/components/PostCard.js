@@ -25,9 +25,11 @@ import {
   getPostRepostCount,
   toggleRepost,
   getPostVisibility,
+  getPostIdentityMeta,
 } from '../lib/postInteractions';
 import {
   saveOfflineItem,
+  removeOfflineItem,
   isItemSavedOffline,
   canDownloadOffline,
 } from '../lib/offlineSyncManager';
@@ -330,7 +332,13 @@ export default function PostCard({
   const [isSavedOffline, setIsSavedOffline] = useState(() => (post?.id ? isItemSavedOffline(post.id) : false));
   const [reposted, setReposted] = useState(false);
   const [repostCount, setRepostCount] = useState(post?.reposts_count || 0);
-  const [visibility, setVisibility] = useState(post?.visibility || 'public');
+  const [visibility, setVisibility] = useState(() =>
+    getPostVisibility(post?.id, post?.visibility || 'public')
+  );
+
+  useEffect(() => {
+    setVisibility(getPostVisibility(post?.id, post?.visibility || 'public'));
+  }, [post?.id, post?.visibility]);
 
   const isPollPost = Boolean(
     (pollOptions && pollOptions.length > 0) ||
@@ -340,9 +348,16 @@ export default function PostCard({
 
   const cat = categoryStyle(post.category_id);
   const author = post.profiles;
-  const authorName = author?.name || author?.display_name || 'Member';
   const authorId = post.author_id || post.user_id;
-  const isAuthor = session?.user?.id && session.user.id === authorId;
+  const isAuthor = Boolean(session?.user?.id && !session.user.is_anonymous && session.user.id === authorId);
+  const { postIdentity, pseudonym, isAnonymous } = getPostIdentityMeta(post?.id, post);
+  const isProtectedIdentity = Boolean(isAnonymous || post?.is_pseudo || postIdentity === 'pseudo');
+  const authorName = isAnonymous
+    ? 'Anonymous Disciple'
+    : post?.is_pseudo || postIdentity === 'pseudo'
+      ? pseudonym || author?.display_name || 'Faith Pilgrim'
+      : author?.name || author?.display_name || 'Member';
+  const authorAvatar = isProtectedIdentity ? null : author?.avatar_url;
 
   // Repost status & visible counter (backed by Supabase)
   useEffect(() => {
@@ -396,6 +411,11 @@ export default function PostCard({
 
   function handleRepostClick() {
     if (!session) return requireSignIn();
+    if (visibility === 'private') {
+      setShareMsg('Private ("Only Me") posts cannot be reposted publicly.');
+      setTimeout(() => setShareMsg(''), 2500);
+      return;
+    }
     setShowRepostModal(true);
   }
 
@@ -503,25 +523,29 @@ export default function PostCard({
         <button
           type="button"
           className="post-author-avatar-btn"
-          onClick={() => setShowAuthorModal(true)}
-          title={`View ${authorName}'s fellowship overview`}
+          onClick={() => {
+            if (!isProtectedIdentity) setShowAuthorModal(true);
+          }}
+          title={isProtectedIdentity ? `${authorName} (Identity Protected)` : `View ${authorName}'s profile`}
           aria-label={`View profile for ${authorName}`}
         >
-          <Avatar name={authorName} src={author?.avatar_url} userId={authorId} />
+          <Avatar name={authorName} src={authorAvatar} userId={isProtectedIdentity ? null : authorId} />
         </button>
 
         <div className="post-header-text">
           <button
             type="button"
             className="post-author-name-btn"
-            onClick={() => setShowAuthorModal(true)}
-            title={`View ${authorName}'s fellowship overview`}
+            onClick={() => {
+              if (!isProtectedIdentity) setShowAuthorModal(true);
+            }}
+            title={isProtectedIdentity ? `${authorName} (Identity Protected)` : `View ${authorName}'s profile`}
           >
             <MemberName
               name={authorName}
-              badge={author?.badge}
-              verified={author?.badge_verified}
-              role={author?.role}
+              badge={isProtectedIdentity ? (isAnonymous ? null : 'pilgrim') : author?.badge}
+              verified={isProtectedIdentity ? false : author?.badge_verified}
+              role={isProtectedIdentity ? 'member' : author?.role}
               nameClassName="post-author"
             />
           </button>
@@ -569,7 +593,7 @@ export default function PostCard({
             </span>
 
             {/* Church / Institution Badge */}
-            {(post.church_name || post.churches?.name || author?.church_name) && (
+            {!isProtectedIdentity && (post.church_name || post.churches?.name || author?.church_name) && (
               <button
                 type="button"
                 className="post-church-pill"
@@ -592,8 +616,11 @@ export default function PostCard({
             {/* Post Options Dropdown Menu for every post */}
             <PostOptionsMenu
               post={post}
-              authorId={authorId}
+              authorId={isProtectedIdentity ? null : authorId}
               authorName={authorName}
+              isAuthor={Boolean(isAuthor || isAdmin)}
+              isProtectedIdentity={isProtectedIdentity}
+              onOpenVisibility={() => setShowVisibilityModal(true)}
               onReportClick={() => setShowReportModal(true)}
               onProjectClick={handleProject}
             />
@@ -602,7 +629,12 @@ export default function PostCard({
           {/* Privacy & Visibility State Badge on top right, opposite author name */}
           <span
             className="post-visibility-pill top-right-vis-pill"
-            title={`Privacy & Visibility: ${visibility}`}
+            style={{ cursor: isAuthor || isAdmin ? 'pointer' : 'default' }}
+            title={
+              isAuthor || isAdmin
+                ? `Privacy: ${visibility} (Click to change who can view this post)`
+                : `Visibility: ${visibility === 'followers' ? 'Followers Only' : visibility === 'church' ? 'My Church Only' : visibility === 'private' ? 'Only Me' : 'Public'}`
+            }
             onClick={(e) => {
               e.stopPropagation();
               if (isAuthor || isAdmin) setShowVisibilityModal(true);
@@ -728,12 +760,12 @@ export default function PostCard({
           )}
         </button>
 
-        {/* Retweet / Re-share (Fellowship Repost) with Visible Counter */}
+        {/* Retweet / Re-share (Repost) with Visible Counter */}
         <button
           type="button"
           className={`action-btn repost-btn${reposted ? ' is-reposted' : ''}`}
           onClick={handleRepostClick}
-          title={reposted ? 'You reposted this' : 'Repost to fellowship profile'}
+          title={reposted ? 'You reposted this' : 'Repost to profile'}
           aria-label="Repost"
         >
           <Repeat size={15} className={`action-icon repost-icon${reposted ? ' active' : ''}`} />
@@ -838,13 +870,15 @@ export default function PostCard({
         <InstitutionProfileModal
           institution={{
             id: post.church_id || author?.church_id || 'inst-1',
-            name: post.church_name || post.churches?.name || author?.church_name || 'Fellowship Church',
+            name: post.church_name || post.churches?.name || author?.church_name || 'Community Church',
             categoryLabel: 'Church / Institution',
-            about: 'A Christ-centered fellowship dedicated to worshipping God, preaching the gospel, and serving the community.',
+            about: 'A Christ-centered church dedicated to worshipping God, preaching the gospel, and serving the community.',
             cover_url: null,
             logo_url: null,
             verified: true,
           }}
+          session={session}
+          currentUser={session?.user}
           onClose={() => setShowInstitutionModal(false)}
         />
       )}
@@ -861,11 +895,11 @@ export default function PostCard({
       {showWatermarkModal && (
         <WatermarkShareModal
           contentData={{
-            title: 'Fellowship Post',
+            title: 'Community Post',
             textContent: post.text_content,
             authorName,
             churchName: author?.church_name || 'Shammah Global Community',
-            category: cat.text || 'Fellowship',
+            category: cat.text || 'Community',
             mediaUrl: post.media_url,
             pollOptions,
           }}
@@ -881,7 +915,7 @@ export default function PostCard({
             ...post,
             options: pollOptions,
             counts: pollCounts,
-            churchName: author?.church_name || 'Shammah Fellowship',
+            churchName: author?.church_name || 'Shammah Community',
           }}
           onClose={() => setShowProjectionModal(false)}
         />

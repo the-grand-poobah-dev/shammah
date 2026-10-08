@@ -326,7 +326,7 @@ export default function CreatePostBox({
                     ? 'Platform Administrator'
                     : profile?.role === 'church_admin'
                       ? 'Church Administrator'
-                      : 'Fellowship Community'}
+                      : 'Community Member'}
             </span>
 
             {/* Identity Dropdown Menu */}
@@ -369,7 +369,7 @@ export default function CreatePostBox({
                     <EyeOff size={15} />
                     <div className="ident-opt-text">
                       <strong>Post Anonymously</strong>
-                      <small>Name and avatar hidden from fellowship</small>
+                      <small>Name and avatar hidden from community</small>
                     </div>
                     {postIdentity === 'anonymous' && <Check size={14} className="ident-opt-check" />}
                   </button>
@@ -623,7 +623,7 @@ export default function CreatePostBox({
               </div>
 
               <div className="category-popover-footer">
-                <span>Select a category so fellowship members can easily discover and pray over your post.</span>
+                <span>Select a category so community members can easily discover and pray over your post.</span>
               </div>
             </div>
           </>
@@ -657,8 +657,8 @@ export default function CreatePostBox({
                       : composeCategory === 'lessons'
                         ? 'Share sermon notes, bible lesson, or study insight…'
                         : composeCategory === 'events'
-                          ? 'Share details about an upcoming fellowship or service…'
-                          : `Post into ${cat?.label || 'fellowship'}… What’s on your heart today?`
+                          ? 'Share details about an upcoming event or service…'
+                          : `Post into ${cat?.label || 'community'}… What’s on your heart today?`
           }
           rows={3}
           maxLength={2000}
@@ -877,7 +877,7 @@ export default function CreatePostBox({
                 {[
                   { id: '1h', label: '1 Hour', title: '1 Hour · Quick Pulse' },
                   { id: '24h', label: '24 Hours', title: '24 Hours · 1 Day (Default)' },
-                  { id: '3d', label: '3 Days', title: '3 Days · Weekend Fellowship' },
+                  { id: '3d', label: '3 Days', title: '3 Days · Weekend Poll' },
                   { id: '7d', label: '1 Week', title: '1 Week · Full Week Survey' },
                 ].map((dur) => (
                   <button
@@ -1000,7 +1000,7 @@ export default function CreatePostBox({
                             ? 'Platform Administrator'
                             : profile?.role === 'church_admin'
                               ? 'Church Administrator'
-                              : 'Fellowship Community'}
+                              : 'Community Member'}
                     </span>
                     <span className="post-dot">·</span>
                     <span className="post-time-ago">Just now · Live Feed Preview</span>
@@ -1226,7 +1226,7 @@ export default function CreatePostBox({
                     </strong>
                   ) : (
                     <strong className="text-emerald-500">
-                      Ready to post! Fellowship members can vote anonymously once shared.
+                      Ready to post! Members can vote anonymously once shared.
                     </strong>
                   )}
                 </span>
@@ -1355,7 +1355,7 @@ export default function CreatePostBox({
             type="submit"
             className={`compose-submit-btn${!composeCategory ? ' needs-category' : ''}`}
             disabled={isFormDisabled}
-            title={!composeCategory ? 'Select a category above before posting' : 'Post to fellowship'}
+            title={!composeCategory ? 'Select a category above before posting' : 'Publish post'}
           >
             {mediaUploading || pollUploading ? (
               <span>Uploading…</span>

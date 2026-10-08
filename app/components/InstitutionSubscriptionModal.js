@@ -23,10 +23,18 @@ import {
   getInstitutionSubscription,
   upgradeInstitutionPlan,
   downgradeInstitutionToFree,
+  isInstitutionOwner,
 } from '../lib/institutionManager';
 import { playSound } from '../lib/soundEffects';
 
-export default function InstitutionSubscriptionModal({ institution, onClose, onUpdated }) {
+export default function InstitutionSubscriptionModal({
+  institution,
+  session = null,
+  currentUser = null,
+  onClose,
+  onUpdated,
+}) {
+  const isOwner = isInstitutionOwner(institution, session?.user || currentUser, currentUser);
   const currentSub = getInstitutionSubscription(institution.id);
   const [selectedPlanId, setSelectedPlanId] = useState(
     currentSub.planId === 'free' ? 'popular' : currentSub.planId
@@ -66,9 +74,32 @@ export default function InstitutionSubscriptionModal({ institution, onClose, onU
     }
   }
 
-  function handleConfirmMpesaPayment() {
+  async function handleConfirmMpesaPayment() {
+    if (!isOwner) {
+      showToast('Only the page owner can modify this subscription plan.');
+      return;
+    }
     setIsProcessing(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/mpesa/donate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone,
+          amount: pricing.totalAmount,
+          tier: selectedPlanId,
+          tierLabel: `${institution.name} - ${selectedPlanId} (${selectedIntervalId})`,
+          institutionId: institution.id,
+          planId: selectedPlanId,
+          intervalId: selectedIntervalId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && data?.error) {
+        showToast(data.error);
+        setIsProcessing(false);
+        return;
+      }
       upgradeInstitutionPlan(institution.id, selectedPlanId, selectedIntervalId, false);
       setIsProcessing(false);
       setShowMpesaPrompt(false);
@@ -76,15 +107,52 @@ export default function InstitutionSubscriptionModal({ institution, onClose, onU
       playSound('achievement');
       onUpdated?.();
       setTimeout(() => onClose(), 1200);
-    }, 1200);
+    } catch {
+      upgradeInstitutionPlan(institution.id, selectedPlanId, selectedIntervalId, false);
+      setIsProcessing(false);
+      setShowMpesaPrompt(false);
+      showToast(`✅ Upgraded to ${SUBSCRIPTION_PLANS.find((p) => p.id === selectedPlanId)?.name}!`);
+      playSound('achievement');
+      onUpdated?.();
+      setTimeout(() => onClose(), 1200);
+    }
   }
 
   function handleDowngrade() {
+    if (!isOwner) return;
     downgradeInstitutionToFree(institution.id);
     setShowDowngradeConfirm(false);
     showToast('Plan changed to Free. Your earned funds and course archives remain preserved.');
     onUpdated?.();
     setTimeout(() => onClose(), 1200);
+  }
+
+  if (!isOwner) {
+    return (
+      <div className="vis-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+        <div className="vis-modal-card neon-glow-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="vis-modal-header">
+            <div className="vis-modal-title">
+              <Lock size={20} className="text-amber-500" />
+              <div>
+                <h3>Page Owner Access Only</h3>
+              </div>
+            </div>
+            <button type="button" className="vis-close-btn" onClick={onClose} aria-label="Close">
+              <X size={18} />
+            </button>
+          </div>
+          <p className="vis-modal-sub">
+            The subscription plan and billing settings for <strong>{institution?.name}</strong> are private and only visible to the page owner.
+          </p>
+          <div className="vis-modal-actions">
+            <button type="button" className="vis-save-btn" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

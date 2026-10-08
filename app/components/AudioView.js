@@ -340,7 +340,7 @@ export default function AudioView({ feedPosts = [], session, currentUser, openAu
     ...SAMPLE_AUDIO_TRACKS,
     ...postAudio.map((p) => ({
       ...p,
-      title: p.text_content ? p.text_content.slice(0, 60) + '...' : 'Community Fellowship Audio',
+      title: p.text_content ? p.text_content.slice(0, 60) + '...' : 'Community Audio',
       speaker: p.profiles?.display_name || 'Member',
       type: 'podcast',
       duration_label: '14:20',

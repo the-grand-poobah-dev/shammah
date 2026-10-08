@@ -229,8 +229,8 @@ export default function CommentThread({
     logActivity({
       type: 'comment',
       icon: '💬',
-      title: 'Commented on Fellowship Post',
-      targetTitle: postAuthorName ? `Post by ${postAuthorName}` : 'Fellowship Post',
+      title: 'Commented on Post',
+      targetTitle: postAuthorName ? `Post by ${postAuthorName}` : 'Post',
       snippet: clean,
       authorName: postAuthorName || '',
       visibility: identityMode === 'anonymous' ? 'anonymous' : 'public',
@@ -302,7 +302,7 @@ export default function CommentThread({
                   </span>
                 )}
                 {isAnonymous && (
-                  <span className="anonymous-identity-badge" title="Anonymous fellowship comment">
+                  <span className="anonymous-identity-badge" title="Anonymous comment">
                     Anonymous
                   </span>
                 )}

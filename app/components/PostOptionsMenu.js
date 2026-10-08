@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
   Copy,
   Tv,
+  Shield,
 } from 'lucide-react';
 import {
   isPostSaved,
@@ -32,6 +33,9 @@ export default function PostOptionsMenu({
   post,
   authorId,
   authorName,
+  isAuthor = false,
+  isProtectedIdentity = false,
+  onOpenVisibility = null,
   onReportClick,
   onProjectClick,
 }) {
@@ -195,6 +199,32 @@ export default function PostOptionsMenu({
                   </div>
                 ) : (
                   <div className="post-options-list no-scrollbar">
+                    {/* Post Privacy & Visibility (Strictly for Post Author / Owner) */}
+                    {isAuthor && onOpenVisibility && (
+                      <button
+                        type="button"
+                        className={`post-options-item-card${highlightedOptionId === 'visibility' ? ' is-highlighted' : ''}`}
+                        style={{ '--item-accent': '#14b8a6' }}
+                        onMouseEnter={() => setHighlightedOptionId('visibility')}
+                        onMouseLeave={() => setHighlightedOptionId(null)}
+                        onClick={() => {
+                          handleClose();
+                          onOpenVisibility();
+                        }}
+                      >
+                        <span className="post-options-card-icon-wrap">
+                          <Shield size={17} />
+                        </span>
+                        <div className="post-options-card-text">
+                          <span className="post-options-card-label">Post Privacy &amp; Visibility</span>
+                          <span className="post-options-card-sub">Choose Public, Followers Only, My Church Only, or Only Me</span>
+                        </div>
+                        <span className="item-color-picker-box">
+                          <span className="picker-box-swatch" style={{ background: '#14b8a6' }} />
+                        </span>
+                      </button>
+                    )}
+
                     {/* Project to Screen (Moved from post engagement bar) */}
                     {onProjectClick && (
                       <button
@@ -330,8 +360,8 @@ export default function PostOptionsMenu({
                       </span>
                     </button>
 
-                    {/* Block Author (if available) - Rose Accent */}
-                    {authorId && (
+                    {/* Block Author (if available and not own/anonymous post) - Rose Accent */}
+                    {authorId && !isAuthor && !isProtectedIdentity && (
                       <button
                         type="button"
                         className={`post-options-item-card danger${confirmingBlock ? ' is-confirming' : ''}${highlightedOptionId === 'block' ? ' is-highlighted' : ''}`}
