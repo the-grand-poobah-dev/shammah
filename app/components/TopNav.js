@@ -26,7 +26,6 @@ export const TOP_NAV_SECTIONS = [
   { id: 'podcasts', label: 'Audio', icon: Headphones },
   { id: 'polls', label: 'Polls', icon: BarChart3 },
   { id: 'courses', label: 'Courses', icon: GraduationCap },
-  { id: 'rss', label: 'RSS', icon: Rss },
   { id: 'bible', label: 'Bible', icon: BookOpen },
 ];
 
@@ -46,6 +45,14 @@ export const MORE_DROPDOWN_ITEMS = [
     icon: Compass,
     isCategories: true,
     color: '#0d9488', // Emerald Teal
+  },
+  {
+    id: 'rss',
+    label: 'RSS Feeds',
+    desc: 'Christian news, blogs & devotionals',
+    icon: Rss,
+    isSection: true,
+    color: '#f97316', // Warm Orange
   },
   {
     id: 'challenges',
@@ -197,7 +204,8 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
     }
   }
 
-  const isMoreActive = currentSection === 'challenges' || currentSection === 'games';
+  const isMoreActive =
+    currentSection === 'rss' || currentSection === 'challenges' || currentSection === 'games';
 
   return (
     <nav
@@ -242,14 +250,14 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
               );
             })}
 
-            {/* More Tab with Dropdown Menu containing Category Topics, Challenges & Arcade */}
+            {/* More Tab with Dropdown Menu containing Sermon Note, Category Topics, RSS, Challenges & Arcade */}
             <div className="top-nav-more-container" ref={moreRef}>
               <motion.button
                 type="button"
                 role="button"
                 aria-haspopup="menu"
                 aria-expanded={moreOpen}
-                aria-label="More options including category topics, challenges, and arcade"
+                aria-label="More options including RSS feeds, category topics, challenges, and arcade"
                 className={`section-item-stacked top-nav-more-btn${isMoreActive ? ' active' : ''}${moreOpen ? ' is-open' : ''}`}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
@@ -258,7 +266,7 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                   setMoreOpen((prev) => !prev);
                 }}
                 whileTap={{ scale: 0.92 }}
-                title="More: Topics, Challenges & Arcade"
+                title="More: RSS, Topics, Challenges & Arcade"
               >
                 <motion.span
                   className="top-nav-icon-wrap"
@@ -266,7 +274,9 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                   transition={{ duration: 0.28, ease: 'easeInOut' }}
                 >
                   {isMoreActive ? (
-                    currentSection === 'challenges' ? (
+                    currentSection === 'rss' ? (
+                      <Rss size={18} strokeWidth={2.3} className="top-nav-icon" />
+                    ) : currentSection === 'challenges' ? (
                       <Sparkles size={18} strokeWidth={2.3} className="top-nav-icon" />
                     ) : (
                       <Gamepad2 size={18} strokeWidth={2.3} className="top-nav-icon" />
@@ -276,7 +286,7 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                   )}
                 </motion.span>
                 <span className="top-nav-label-small flex-center-gap">
-                  <span>{isMoreActive ? (currentSection === 'challenges' ? 'Chall.' : 'Arcade') : 'More'}</span>
+                  <span>More</span>
                   <ChevronDown size={10} className={`top-nav-chevron-icon${moreOpen ? ' rotated' : ''}`} />
                 </span>
               </motion.button>

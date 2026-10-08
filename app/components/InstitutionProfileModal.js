@@ -93,30 +93,43 @@ export default function InstitutionProfileModal({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
+      aria-label={institution.name || 'Institution details'}
     >
       <div
         className="inst-profile-modal-card toast-popup-box multicolored-glow-shadow"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Cover Header */}
+        {/* Cover Header with Contained Top-Right Close Button */}
         <div
           className="inst-modal-cover"
           style={institution.cover_url ? { backgroundImage: `url(${institution.cover_url})` } : undefined}
         >
           <div className="inst-modal-cover-gradient" />
-          <button type="button" className="inst-modal-close" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
+          <div className="inst-modal-cover-top-bar">
+            <span className="inst-modal-cover-pill">
+              <Sparkles size={11} />
+              <span>{institution.categoryLabel || 'Christian Institution'}</span>
+            </span>
+            <button
+              type="button"
+              className="inst-modal-close"
+              onClick={onClose}
+              aria-label="Close institution preview"
+              title="Close"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
-        {/* Profile Avatar & Title */}
+        {/* Profile Avatar & Quick Actions */}
         <div className="inst-modal-head-row">
           <div className="inst-modal-logo-wrap">
             {institution.logo_url ? (
-              <img src={institution.logo_url} alt="" className="inst-modal-logo" />
+              <img src={institution.logo_url} alt={institution.name} className="inst-modal-logo" />
             ) : (
               <div className="inst-modal-logo-placeholder">
-                <Building2 size={28} />
+                <Building2 size={26} />
               </div>
             )}
           </div>
@@ -127,7 +140,7 @@ export default function InstitutionProfileModal({
               className={`inst-action-pill${followed ? ' followed' : ''}`}
               onClick={handleFollowToggle}
             >
-              {followed ? <Check size={14} /> : <Plus size={14} />}
+              {followed ? <Check size={13} /> : <Heart size={13} />}
               <span>{followed ? 'Following' : 'Follow'}</span>
             </button>
 
@@ -136,11 +149,18 @@ export default function InstitutionProfileModal({
               className={`inst-action-pill join-btn${joined ? ' joined' : ''}`}
               onClick={handleJoinToggle}
             >
-              <span>{joined ? 'Joined Member ✓' : 'Join Institution'}</span>
+              {joined ? <Check size={13} /> : <Plus size={13} />}
+              <span>{joined ? 'Joined Member' : 'Join Fellowship'}</span>
             </button>
 
-            <button type="button" className="inst-action-icon-btn" onClick={handleShare} title="Share">
-              <Share2 size={16} />
+            <button
+              type="button"
+              className="inst-action-icon-btn"
+              onClick={handleShare}
+              title="Share institution"
+              aria-label="Share institution"
+            >
+              <Share2 size={15} />
             </button>
           </div>
         </div>
@@ -149,9 +169,13 @@ export default function InstitutionProfileModal({
         <div className="inst-modal-details">
           <div className="inst-modal-title-line">
             <h3>{institution.name}</h3>
-            {institution.verified && <VerifiedBadge badge="pastor" role="church_admin" size={17} />}
+            {institution.verified && <VerifiedBadge badge="pastor" role="church_admin" size={16} />}
             {isOwner && planInfo && (
-              <span className="inst-plan-chip" style={{ backgroundColor: planInfo.badgeColor }} title="Subscription plan (visible only to you as page owner)">
+              <span
+                className="inst-plan-chip"
+                style={{ backgroundColor: planInfo.badgeColor }}
+                title="Subscription plan (visible only to you as page owner)"
+              >
                 {planInfo.name}
               </span>
             )}
@@ -160,12 +184,18 @@ export default function InstitutionProfileModal({
           {(institution.branch || getInstitutionBranch(institution.id)) && (
             <div className="inst-modal-branch-chip">
               <Building2 size={13} />
-              <span>Campus / Branch: <strong>{institution.branch || getInstitutionBranch(institution.id)}</strong></span>
+              <span>
+                Campus / Branch: <strong>{institution.branch || getInstitutionBranch(institution.id)}</strong>
+              </span>
             </div>
           )}
 
+          {/* Assimilated Church Info Pills / Stats Grid */}
           <div className="inst-modal-meta-row">
-            <span className="inst-type-badge">{institution.categoryLabel || 'Institution'}</span>
+            <span className="inst-type-badge">
+              <Building2 size={12} />
+              <span>{institution.denomination || institution.categoryLabel || 'Fellowship'}</span>
+            </span>
             {institution.location && (
               <span className="inst-meta-item">
                 <MapPin size={13} />
@@ -184,63 +214,75 @@ export default function InstitutionProfileModal({
           {institution.hasFundraising && institution.activeCampaign && (
             <div className="inst-campaign-box">
               <div className="campaign-top">
-                <Coins size={16} className="text-amber-500" />
-                <strong>{institution.activeCampaign.title}</strong>
+                <span className="campaign-icon-badge">
+                  <Coins size={14} />
+                </span>
+                <div className="campaign-title-wrap">
+                  <strong>{institution.activeCampaign.title}</strong>
+                  <span className="campaign-active-tag">Active Giving</span>
+                </div>
               </div>
               <p className="campaign-purpose">{institution.activeCampaign.purpose}</p>
               <div className="campaign-progress-bar">
                 <div
                   className="campaign-fill"
                   style={{
-                    width: `${Math.min(100, Math.round((institution.activeCampaign.raisedKes / institution.activeCampaign.goalKes) * 100))}%`,
+                    width: `${Math.min(
+                      100,
+                      Math.round((institution.activeCampaign.raisedKes / institution.activeCampaign.goalKes) * 100)
+                    )}%`,
                   }}
                 />
               </div>
               <div className="campaign-stats">
-                <span>Raised: Kes {institution.activeCampaign.raisedKes.toLocaleString()}</span>
-                <span>Goal: Kes {institution.activeCampaign.goalKes.toLocaleString()}</span>
+                <span>
+                  Raised: <strong>KES {institution.activeCampaign.raisedKes.toLocaleString()}</strong>
+                </span>
+                <span>Goal: KES {institution.activeCampaign.goalKes.toLocaleString()}</span>
               </div>
             </div>
           )}
 
           {/* Key offerings / features row */}
-          <div className="inst-features-mini-grid">
-            {institution.coursesCount > 0 && (
-              <div className="inst-feat-chip">
-                <BookOpen size={14} className="text-purple-500" />
-                <span>{institution.coursesCount} Discipleship Courses</span>
-              </div>
-            )}
-            {institution.upcomingEvents && institution.upcomingEvents.length > 0 && (
-              <div className="inst-feat-chip">
-                <Calendar size={14} className="text-teal-500" />
-                <span>{institution.upcomingEvents.length} Upcoming Events</span>
-              </div>
-            )}
-          </div>
+          {(institution.coursesCount > 0 ||
+            (institution.upcomingEvents && institution.upcomingEvents.length > 0)) && (
+            <div className="inst-features-mini-grid">
+              {institution.coursesCount > 0 && (
+                <div className="inst-feat-chip">
+                  <BookOpen size={14} className="inst-feat-icon-purple" />
+                  <span>{institution.coursesCount} Discipleship Courses</span>
+                </div>
+              )}
+              {institution.upcomingEvents && institution.upcomingEvents.length > 0 && (
+                <div className="inst-feat-chip">
+                  <Calendar size={14} className="inst-feat-icon-teal" />
+                  <span>{institution.upcomingEvents.length} Upcoming Events</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Bottom CTA Row */}
-        <div className="inst-modal-footer" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div className="inst-modal-footer">
           {isOwner && onOpenSubscription && (
             <button
               type="button"
-              className="inst-action-pill"
+              className="inst-manage-plan-btn"
               onClick={onOpenSubscription}
-              style={{ flex: 1, justifyContent: 'center' }}
             >
               <Shield size={15} />
-              <span>Manage Page Subscription Plan</span>
+              <span>Manage Plan</span>
             </button>
           )}
           <Link
             href={`/churches/${institution.id}`}
             className="inst-visit-full-btn"
             onClick={onClose}
-            style={{ flex: 1 }}
           >
+            <Building2 size={15} />
             <span>Visit Institution Page</span>
-            <ExternalLink size={15} />
+            <ExternalLink size={14} />
           </Link>
         </div>
 

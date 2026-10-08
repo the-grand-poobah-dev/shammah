@@ -1741,12 +1741,12 @@ export default function Feed() {
             />
 
             {/* Quick Bar: Google Workspace (Calendar, Keep, Meet, Classroom, Tasks, Chat), Firebase & Google Maps */}
-            <div className="my-3 p-3 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-900/70 to-teal-950/50 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2.5 shadow-sm">
-              <div className="flex items-center gap-2.5 min-w-0">
+            <div className="my-3 p-3 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-900/70 to-teal-950/50 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2.5 shadow-sm w-full max-w-full overflow-hidden box-border">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <span className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-sm shrink-0">
                   ☁️
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <strong className="text-xs font-bold text-white">
                       Google Workspace, Firebase &amp; Maps Connected
@@ -1755,12 +1755,12 @@ export default function Feed() {
                       Live Sync
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-300 truncate">
+                  <p className="text-[11px] text-slate-300 truncate max-w-full">
                     Slides · Forms · Keep · Calendar · Meet · Classroom · Tasks · Chat · Firestore · Maps
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto min-w-0 max-w-full">
                 <PWAInstallButton compact />
                 <button
                   type="button"
@@ -1774,7 +1774,7 @@ export default function Feed() {
                       ? `Service Worker cached ${posts.length} posts (${new Date(lastSwCachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
                       : 'Sync current feed posts to Service Worker offline cache'
                   }
-                  className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-emerald-200 hover:bg-white/15 border border-emerald-400/30 transition-all flex items-center gap-1.5"
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-emerald-200 hover:bg-white/15 border border-emerald-400/30 transition-all flex items-center gap-1.5 whitespace-nowrap max-w-full"
                 >
                   {(isDisconnected || hasPendingSyncs || feedFromSwCache) && (
                     <span
@@ -1784,7 +1784,7 @@ export default function Feed() {
                       }`}
                     />
                   )}
-                  <span>
+                  <span className="truncate">
                     {!isOnline || feedFromSwCache
                       ? dotColor === 'yellow'
                         ? `Offline · Pending Sync (${pendingSyncCount || 1})`
@@ -1798,7 +1798,7 @@ export default function Feed() {
                     setSection('workspace');
                     playSound('reaction');
                   }}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition-all shadow-sm"
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition-all shadow-sm whitespace-nowrap max-w-full"
                 >
                   Open Workspace Hub
                 </button>
@@ -1808,7 +1808,7 @@ export default function Feed() {
                     setTab('churches');
                     playSound('reaction');
                   }}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-white hover:bg-white/15 border border-white/15 transition-all"
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-white hover:bg-white/15 border border-white/15 transition-all whitespace-nowrap max-w-full"
                 >
                   🗺️ Church Map
                 </button>

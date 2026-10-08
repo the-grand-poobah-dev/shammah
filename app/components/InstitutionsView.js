@@ -102,20 +102,36 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
 
   return (
     <div className="institutions-page-shell">
-      {/* Hero Banner */}
+      {/* Assimilated Hero Banner */}
       <div className="institutions-hero-card">
-        <div className="inst-hero-badge">
-          <Sparkles size={14} />
-          <span>Christian Institutions Directory &amp; Ministry Hub</span>
+        <div className="inst-hero-top-row">
+          <div className="inst-hero-title-group">
+            <span className="inst-hero-icon-box">
+              <Building2 size={18} />
+            </span>
+            <div className="inst-hero-text-wrap">
+              <div className="inst-hero-heading-line">
+                <h1 className="inst-hero-title">Churches, Ministries &amp; Unions</h1>
+                <span className="inst-hero-badge">
+                  <Sparkles size={11} />
+                  <span>Christian Institutions Directory &amp; Ministry Hub</span>
+                </span>
+              </div>
+              <p className="inst-hero-sub">
+                Explore churches, missionary organizations, school &amp; university Christian Unions, and bible study groups across Kenya.
+              </p>
+            </div>
+          </div>
+
+          <Link href="/churches/new" className="inst-create-btn">
+            <Plus size={14} />
+            <span>Register Institution</span>
+          </Link>
         </div>
-        <h1 className="inst-hero-title">Churches, Ministries &amp; Unions</h1>
-        <p className="inst-hero-sub">
-          Explore churches, missionary organizations, school &amp; university Christian Unions, and bible study groups across Kenya.
-        </p>
 
         {/* Search input */}
         <div className="inst-search-wrapper">
-          <Search size={18} className="inst-search-icon" />
+          <Search size={16} className="inst-search-icon" />
           <input
             type="search"
             value={searchTerm}
@@ -343,7 +359,8 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
             </h3>
           </div>
           <Link href="/churches/new" className="inst-create-btn">
-            + Register Institution
+            <Plus size={14} />
+            <span>Register Institution</span>
           </Link>
         </div>
 
