@@ -537,6 +537,11 @@ export default function Feed() {
     function onOpenWatermark(e) {
       setWatermarkShareData(e.detail);
     }
+    function onPostCreated(e) {
+      if (e.detail?.post) {
+        setPosts((prev) => [e.detail.post, ...prev.filter((p) => p.id !== e.detail.post.id)]);
+      }
+    }
 
     window.addEventListener('shammah:open-create-post', handleOpenCreateModal);
     window.addEventListener('shammah:open-auth', handleAuthEvent);
@@ -548,6 +553,7 @@ export default function Feed() {
     window.addEventListener('shammah:open-offline-library', onOpenOffline);
     window.addEventListener('shammah:open-projection', onOpenProjection);
     window.addEventListener('shammah:open-watermark-share', onOpenWatermark);
+    window.addEventListener('shammah:post-created', onPostCreated);
 
     return () => {
       window.removeEventListener('shammah:open-create-post', handleOpenCreateModal);
@@ -560,6 +566,7 @@ export default function Feed() {
       window.removeEventListener('shammah:open-offline-library', onOpenOffline);
       window.removeEventListener('shammah:open-projection', onOpenProjection);
       window.removeEventListener('shammah:open-watermark-share', onOpenWatermark);
+      window.removeEventListener('shammah:post-created', onPostCreated);
     };
   }, [activeCategory]);
 

@@ -1,5 +1,6 @@
 'use client';
 import { supabase } from '../../lib/supabaseClient';
+import { saveUserCreatedPost } from './pinnedPosts';
 
 export const VISIBILITY_OPTIONS = [
   { id: 'public', label: 'Public', icon: '🌍', desc: 'Anyone on Shammah can view' },
@@ -19,19 +20,37 @@ function isValidUuid(id) {
  * Checks whether a given user has reposted a specific post in Supabase
  */
 export async function isPostReposted(postId, userId) {
-  if (!postId || !userId || !isValidUuid(postId) || !isValidUuid(userId)) {
-    return false;
-  }
-  try {
-    const { data, error } = await supabase
-      .from('post_reposts')
-      .select('id')
-      .eq('post_id', postId)
-      .eq('user_id', userId)
-      .maybeSingle();
+  if (!postId || !userId) return false;
 
-    if (error) return false;
-    return Boolean(data);
+  try {
+    if (isValidUuid(postId) && isValidUuid(userId)) {
+      const { data, error } = await supabase
+        .from('post_reposts')
+        .select('id')
+        .eq('post_id', postId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (!error && data) return true;
+    }
+
+    // Check preview mock store if offline or non-UUID
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('shammah_supabase_post_reposts_db');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const found = list.some(
+              (r) => String(r.post_id) === String(postId) && String(r.user_id) === String(userId)
+            );
+            if (found) return true;
+          }
+        }
+      } catch {}
+    }
+
+    return false;
   } catch {
     return false;
   }
@@ -41,26 +60,44 @@ export async function isPostReposted(postId, userId) {
  * Gets the total repost count for a post from Supabase
  */
 export async function getPostRepostCount(postId, fallbackCount = 0) {
-  if (!postId || !isValidUuid(postId)) {
-    return fallbackCount || 0;
-  }
+  if (!postId) return fallbackCount || 0;
+
   try {
-    const { data, error } = await supabase.rpc('repost_counts', {
-      p_post_ids: [postId],
-    });
-    if (!error && Array.isArray(data) && data[0]) {
-      return Number(data[0].count);
+    if (isValidUuid(postId)) {
+      const { data, error } = await supabase.rpc('repost_counts', {
+        p_post_ids: [postId],
+      });
+      if (!error && Array.isArray(data) && data[0]) {
+        return Number(data[0].count);
+      }
+
+      // Direct count fallback
+      const { count, error: countErr } = await supabase
+        .from('post_reposts')
+        .select('id', { count: 'exact', head: true })
+        .eq('post_id', postId);
+
+      if (!countErr && count !== null && count !== undefined) {
+        return count;
+      }
     }
 
-    // Direct count fallback
-    const { count, error: countErr } = await supabase
-      .from('post_reposts')
-      .select('id', { count: 'exact', head: true })
-      .eq('post_id', postId);
-
-    if (!countErr && count !== null && count !== undefined) {
-      return count;
+    // Direct preview mock count
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('shammah_supabase_post_reposts_db');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const matches = list.filter((r) => String(r.post_id) === String(postId));
+            if (matches.length > 0) {
+              return (fallbackCount || 0) + matches.length;
+            }
+          }
+        }
+      } catch {}
     }
+
     return fallbackCount || 0;
   } catch {
     return fallbackCount || 0;
@@ -68,7 +105,8 @@ export async function getPostRepostCount(postId, fallbackCount = 0) {
 }
 
 /**
- * Toggles a repost in Supabase: inserts row if not present, deletes row if already present
+ * Toggles a repost in Supabase: inserts row if not present, deletes row if already present.
+ * For a quoted repost (quoteText provided), inserts a new quote post and attributes to the reposter in the feed.
  */
 export async function toggleRepost(postId, post, user, quoteText = null) {
   const userId = user?.id;
@@ -78,9 +116,11 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
     return { reposted: false, count: initialFallback };
   }
 
-  if (isValidUuid(postId) && isValidUuid(userId)) {
-    try {
-      // Check if user already reposted
+  let isNowReposted = false;
+
+  try {
+    if (isValidUuid(postId) && isValidUuid(userId)) {
+      // Check existing instant repost
       const { data: existing } = await supabase
         .from('post_reposts')
         .select('id')
@@ -88,9 +128,8 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
         .eq('user_id', userId)
         .maybeSingle();
 
-      let isNowReposted = false;
-      if (existing) {
-        // Remove repost
+      if (existing && !quoteText) {
+        // Toggle OFF instant repost
         await supabase
           .from('post_reposts')
           .delete()
@@ -98,38 +137,137 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
           .eq('user_id', userId);
         isNowReposted = false;
       } else {
-        // Add repost
+        // Add instant repost or quote repost
         await supabase
           .from('post_reposts')
           .insert({
             post_id: postId,
             user_id: userId,
+            comment: quoteText || null,
             quote_text: quoteText || null,
           });
         isNowReposted = true;
-      }
 
-      const count = await getPostRepostCount(postId, initialFallback);
+        if (quoteText) {
+          // Persist quoted post row in posts table with reference to original post
+          try {
+            await supabase.from('posts').insert({
+              author_id: userId,
+              text_content: quoteText,
+              quoted_post_id: postId,
+              category_id: post?.category_id || null,
+              church_id: user?.user_metadata?.church_id || null,
+              visibility: 'public',
+            });
+          } catch (insertErr) {
+            console.warn('Could not insert quoted post to posts table:', insertErr);
+          }
+        }
+      }
+    } else {
+      // Preview or simulated ID fallback
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('shammah_supabase_post_reposts_db');
+        let list = raw ? JSON.parse(raw) : [];
+        const existingIdx = list.findIndex(
+          (r) => String(r.post_id) === String(postId) && String(r.user_id) === String(userId) && !r.comment
+        );
+
+        if (existingIdx >= 0 && !quoteText) {
+          list.splice(existingIdx, 1);
+          isNowReposted = false;
+        } else {
+          list.push({
+            id: 'rep-' + Date.now(),
+            post_id: postId,
+            user_id: userId,
+            comment: quoteText || null,
+            quote_text: quoteText || null,
+            created_at: new Date().toISOString(),
+          });
+          isNowReposted = true;
+        }
+        localStorage.setItem('shammah_supabase_post_reposts_db', JSON.stringify(list));
+      }
+    }
+
+    // If quoteText provided, construct quoted post attributed to the reposter and display in feed
+    if (quoteText) {
+      const reposterName =
+        user?.user_metadata?.display_name ||
+        user?.user_metadata?.name ||
+        user?.name ||
+        user?.email?.split('@')[0] ||
+        'Member';
+      const reposterAvatar = user?.user_metadata?.avatar_url || user?.avatar_url || null;
+
+      const originalAuthorName =
+        post?.profiles?.display_name ||
+        post?.profiles?.name ||
+        post?.author_name ||
+        'Member';
+
+      const quotedPost = {
+        id: `quote-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        text_content: quoteText,
+        author_id: userId,
+        author_name: reposterName,
+        created_at: new Date().toISOString(),
+        category_id: post?.category_id || 'community',
+        church_id: user?.user_metadata?.church_id || null,
+        church_name: user?.user_metadata?.church_name || null,
+        visibility: 'public',
+        profiles: {
+          id: userId,
+          name: reposterName,
+          display_name: reposterName,
+          avatar_url: reposterAvatar,
+          badge: user?.user_metadata?.badge || null,
+          badge_verified: Boolean(user?.user_metadata?.badge_verified),
+          role: user?.user_metadata?.role || 'member',
+        },
+        quoted_post_id: postId,
+        quoted_post: {
+          id: postId,
+          author_id: post?.author_id || post?.profiles?.id,
+          author_name: originalAuthorName,
+          profiles: post?.profiles,
+          text_content: post?.text_content,
+          media_url: post?.media_url,
+          media_type: post?.media_type,
+          church_name: post?.church_name || post?.churches?.name || post?.profiles?.church_name,
+          created_at: post?.created_at,
+          category_id: post?.category_id,
+        },
+        reposts_count: 0,
+      };
+
+      saveUserCreatedPost(quotedPost);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
-          new CustomEvent('shammah:reposts-updated', {
-            detail: { postId, reposted: isNowReposted, count },
+          new CustomEvent('shammah:post-created', {
+            detail: { post: quotedPost },
           })
         );
       }
-
-      return { reposted: isNowReposted, count };
-    } catch (err) {
-      console.error('Failed to toggle repost in Supabase:', err);
     }
-  }
 
-  // Graceful fallback for non-UUID sample/offline posts
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('shammah:reposts-updated'));
+    const count = await getPostRepostCount(postId, initialFallback);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('shammah:reposts-updated', {
+          detail: { postId, reposted: isNowReposted, count },
+        })
+      );
+    }
+
+    return { reposted: isNowReposted, count };
+  } catch (err) {
+    console.error('Failed to toggle repost in Supabase:', err);
+    return { reposted: true, count: initialFallback + 1 };
   }
-  return { reposted: true, count: initialFallback + 1 };
 }
 
 /**
