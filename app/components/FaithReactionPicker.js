@@ -54,7 +54,7 @@ const EMOJI_CATEGORIES = [
   },
 ];
 
-export default function FaithReactionPicker({ onSelect, currentEmoji, onClose }) {
+export default function FaithReactionPicker({ onSelect, currentEmoji, onClose, hideHeader = false }) {
   const [activeCategory, setActiveCategory] = useState('faith');
   const [search, setSearch] = useState('');
 
@@ -70,22 +70,37 @@ export default function FaithReactionPicker({ onSelect, currentEmoji, onClose })
 
   return (
     <div
-      className="faith-reaction-picker-bubble"
+      className={`faith-reaction-picker-bubble${hideHeader ? ' in-modal' : ''}`}
       role="dialog"
       aria-label="Select a faith reaction"
       onClick={(e) => e.stopPropagation()}
+      style={
+        hideHeader
+          ? {
+              width: '100%',
+              maxWidth: '100%',
+              border: 'none',
+              boxShadow: 'none',
+              padding: 0,
+              background: 'transparent',
+              animation: 'none',
+            }
+          : undefined
+      }
     >
-      <div className="picker-header-row">
-        <span className="picker-title">
-          <Sparkles size={14} className="picker-sparkle-icon" />
-          <span>Community Reactions</span>
-        </span>
-        {onClose && (
-          <button type="button" className="picker-close-btn" onClick={onClose} aria-label="Close picker">
-            <X size={14} />
-          </button>
-        )}
-      </div>
+      {!hideHeader && (
+        <div className="picker-header-row">
+          <span className="picker-title">
+            <Sparkles size={14} className="picker-sparkle-icon" />
+            <span>Community Reactions</span>
+          </span>
+          {onClose && (
+            <button type="button" className="picker-close-btn" onClick={onClose} aria-label="Close picker">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Mini search input */}
       <div className="picker-search-bar">
