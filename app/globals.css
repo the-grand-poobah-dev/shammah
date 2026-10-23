@@ -195,6 +195,30 @@ input[type="checkbox"] {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+.header-secondary-collapse-wrapper {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+  opacity: 1;
+}
+
+.header-secondary-collapse-wrapper.is-collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.header-secondary-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-secondary-collapse-wrapper {
+    transition: none !important;
+  }
+}
+
 /* Topbar */
 
 .topbar {
@@ -247,6 +271,8 @@ input[type="checkbox"] {
   margin: 0;
   white-space: nowrap;
   line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .brand-subtext {
@@ -8562,7 +8588,8 @@ button:focus-visible, a:focus-visible {
     gap: 6px !important;
   }
 
-  .topbar-toggle-group {
+  .topbar-toggle-group,
+  .topbar-collapsed-controls {
     gap: 4px !important;
   }
 
@@ -8615,6 +8642,29 @@ button:focus-visible, a:focus-visible {
 }
 
 @media (max-width: 360px) {
+  .brand-subtext {
+    display: none !important;
+  }
+
+  .brand-mark {
+    max-width: 85px !important;
+  }
+
+  .topbar {
+    padding: 8px 6px !important;
+    gap: 4px !important;
+  }
+
+  .topbar-toggle-group,
+  .topbar-collapsed-controls {
+    gap: 3px !important;
+  }
+
+  .topbar-toggle-btn {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
   .section-item-stacked {
     min-height: 42px !important;
     padding: 3px 0.5px !important;

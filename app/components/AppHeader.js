@@ -8,6 +8,7 @@ import { isSoundEnabled, setSoundEnabled, playSound } from '../lib/soundEffects'
 import { getOfflineItems } from '../lib/offlineSyncManager';
 import { useOfflineIndicatorStatus } from '../lib/swFeedCache';
 import TopNav from './TopNav';
+import TopNavCollapsedControls from './TopNavCollapsedControls';
 import UserAccountMenu from './UserAccountMenu';
 import OfflineLibraryModal from './OfflineLibraryModal';
 
@@ -31,12 +32,53 @@ export default function AppHeader() {
   const [activeSection, setActiveSection] = useState('all');
   const [adminMode, setAdminMode] = useState(false);
 
+  // Scroll collapse behavior:
+  // On non-Home routes, the header is ALWAYS collapsed.
+  // On Home, collapses when scrolled down past 96px; restores when scrolled near top (< 16px).
+  const [isScrolledDown, setIsScrolledDown] = useState(false);
+  const isHome = pathname === '/';
+  const isCollapsed = !isHome || isScrolledDown;
+
   const {
     isDisconnected,
     hasPendingSyncs,
     pendingSyncCount,
     dotColor,
   } = useOfflineIndicatorStatus();
+
+  // Scroll listener with requestAnimationFrame and hysteresis to prevent oscillation
+  useEffect(() => {
+    if (pathname !== '/') {
+      setIsScrolledDown(true);
+      return;
+    }
+
+    let rafId = null;
+    let lastCollapsed = typeof window !== 'undefined' ? window.scrollY > 96 : false;
+    setIsScrolledDown(lastCollapsed);
+
+    function handleScroll() {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const scrollY = window.scrollY || window.pageYOffset || 0;
+        // Hysteresis: collapse at > 96px, expand at < 16px
+        if (!lastCollapsed && scrollY > 96) {
+          lastCollapsed = true;
+          setIsScrolledDown(true);
+        } else if (lastCollapsed && scrollY < 16) {
+          lastCollapsed = false;
+          setIsScrolledDown(false);
+        }
+      });
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [pathname]);
 
   // Sync internal adminMode with sessionAdminMode if provided
   useEffect(() => {
@@ -298,6 +340,14 @@ export default function AppHeader() {
                 )}
               </button>
 
+              {/* 4 & 5. Collapsed Search & Section Navigation Buttons (Shown when collapsed) */}
+              {isCollapsed && (
+                <TopNavCollapsedControls
+                  activeSection={activeSection}
+                  onSelectSection={handleSelectSection}
+                />
+              )}
+
               {/* Topbar 'Offline' indicator badge when disconnected */}
               {(isDisconnected || hasPendingSyncs) && (
                 <span
@@ -350,36 +400,43 @@ export default function AppHeader() {
           </div>
         </header>
 
-        {/* Secondary Row: TopNav Sections + Search Bar Widget */}
-        <div className="header-secondary">
-          <TopNav
-            isHome={pathname === '/'}
-            activeSection={activeSection}
-            onSelectSection={handleSelectSection}
-          />
+        {/* Secondary Row: TopNav Sections + Search Bar Widget (collapses smoothly via CSS grid) */}
+        <div
+          className={`header-secondary-collapse-wrapper ${isCollapsed ? 'is-collapsed' : 'is-expanded'}`}
+          aria-hidden={isCollapsed}
+        >
+          <div className="header-secondary-collapse-inner">
+            <div className="header-secondary">
+              <TopNav
+                isHome={pathname === '/'}
+                activeSection={activeSection}
+                onSelectSection={handleSelectSection}
+              />
 
-          <div className="header-search-widget-wrap">
-            <div
-              className="header-search-bar-widget"
-              role="search"
-              tabIndex={0}
-              onClick={handleOpenSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleOpenSearch();
-                }
-              }}
-              aria-label="Search scriptures, sermons, topics, and churches"
-              title="Search scriptures, sermons, topics, and churches (Press / or ⌘K)"
-            >
-              <Search size={16} className="search-bar-widget-icon" />
-              <span className="search-bar-widget-placeholder">
-                Search sermons, scriptures, topics, members...
-              </span>
-              <span className="search-bar-widget-badge">
-                <kbd className="search-kbd">⌘K</kbd>
-              </span>
+              <div className="header-search-widget-wrap">
+                <div
+                  className="header-search-bar-widget"
+                  role="search"
+                  tabIndex={isCollapsed ? -1 : 0}
+                  onClick={handleOpenSearch}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleOpenSearch();
+                    }
+                  }}
+                  aria-label="Search scriptures, sermons, topics, and churches"
+                  title="Search scriptures, sermons, topics, and churches (Press / or ⌘K)"
+                >
+                  <Search size={16} className="search-bar-widget-icon" />
+                  <span className="search-bar-widget-placeholder">
+                    Search sermons, scriptures, topics, members...
+                  </span>
+                  <span className="search-bar-widget-badge">
+                    <kbd className="search-kbd">⌘K</kbd>
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

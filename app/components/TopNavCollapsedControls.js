@@ -17,36 +17,69 @@ import {
   FileText,
   Compass,
   Check,
+  Church,
+  Settings,
+  User,
+  MessageSquare,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
+import PopupSheet from './PopupSheet';
+import { TOP_NAV_SECTIONS, MORE_DROPDOWN_ITEMS } from './TopNav';
 
-export const ALL_NAV_ITEMS = [
-  { id: 'all', label: 'All Feed', desc: 'Home feed & community', icon: Flame, color: '#f59e0b', group: 'sections' },
-  { id: 'videos', label: 'Videos', desc: 'Sermons & worship videos', icon: Video, color: '#ef4444', group: 'sections' },
-  { id: 'podcasts', label: 'Audio', desc: 'Sermons, podcasts & praise audio', icon: Headphones, color: '#8b5cf6', group: 'sections' },
-  { id: 'polls', label: 'Polls', desc: 'Community faith polls & votes', icon: BarChart3, color: '#06b6d4', group: 'sections' },
-  { id: 'courses', label: 'Courses', desc: 'Kingdom discipleship courses', icon: GraduationCap, color: '#10b981', group: 'sections' },
-  { id: 'bible', label: 'Bible', desc: 'Scripture reader & notes', icon: BookOpen, color: '#3b82f6', group: 'sections' },
-  { id: 'sermon-note', label: 'Take Sermon Note', desc: 'Capture points & view scriptures', icon: FileText, color: '#f59e0b', isSermonNote: true, group: 'tools' },
-  { id: 'category-topics', label: 'Category Topics', desc: 'Browse topics & filter feed', icon: Compass, color: '#0d9488', isCategories: true, group: 'tools' },
-  { id: 'rss', label: 'RSS Feeds', desc: 'Christian news & devotionals', icon: Rss, color: '#f97316', isSection: true, group: 'tools' },
-  { id: 'challenges', label: 'Faith Challenges', desc: 'Daily devotion & video challenges', icon: Sparkles, color: '#8b5cf6', isSection: true, group: 'tools' },
-  { id: 'games', label: 'Arcade Games', desc: 'Bible trivia & scripture arcade', icon: Gamepad2, color: '#06b6d4', isSection: true, group: 'tools' },
-];
-
-const SECTION_ICON_MAP = {
-  all: Flame,
-  videos: Video,
-  podcasts: Headphones,
-  polls: BarChart3,
-  courses: GraduationCap,
-  bible: BookOpen,
-  rss: Rss,
-  challenges: Sparkles,
-  games: Gamepad2,
-  'sermon-note': FileText,
-  'category-topics': Compass,
+// Route icon & accent mapping for non-Home routes
+export const ROUTE_ICON_MAP = {
+  '/categories': { icon: Compass, label: 'Categories', color: '#0d9488' },
+  '/churches': { icon: Church, label: 'Churches', color: '#8b5cf6' },
+  '/settings': { icon: Settings, label: 'Settings', color: '#64748b' },
+  '/profile': { icon: User, label: 'Profile', color: '#10b981' },
+  '/post': { icon: MessageSquare, label: 'Discussion', color: '#3b82f6' },
 };
+
+// Section descriptive copy and color accents
+export const SECTION_METADATA = {
+  all: { desc: 'Home feed & community updates', color: '#f59e0b' },
+  videos: { desc: 'Sermons & worship videos', color: '#ef4444' },
+  podcasts: { desc: 'Sermons, podcasts & audio praise', color: '#8b5cf6' },
+  polls: { desc: 'Community faith polls & votes', color: '#06b6d4' },
+  courses: { desc: 'Kingdom discipleship courses', color: '#10b981' },
+  bible: { desc: 'Scripture reader & notes', color: '#3b82f6' },
+};
+
+function getNavDisplayInfo(pathname, currentSection) {
+  if (pathname !== '/') {
+    if (ROUTE_ICON_MAP[pathname]) {
+      return ROUTE_ICON_MAP[pathname];
+    }
+    if (pathname.startsWith('/churches')) {
+      return { icon: Church, label: 'Churches', color: '#8b5cf6' };
+    }
+    if (pathname.startsWith('/settings')) {
+      return { icon: Settings, label: 'Settings', color: '#64748b' };
+    }
+    if (pathname.startsWith('/categories')) {
+      return { icon: Compass, label: 'Categories', color: '#0d9488' };
+    }
+    if (pathname.startsWith('/post')) {
+      return { icon: MessageSquare, label: 'Discussion', color: '#3b82f6' };
+    }
+    if (pathname.startsWith('/profile')) {
+      return { icon: User, label: 'Profile', color: '#10b981' };
+    }
+    return { icon: Compass, label: 'Explore', color: '#0d9488' };
+  }
+
+  // Home route: inspect active section
+  const sec = TOP_NAV_SECTIONS.find((s) => s.id === currentSection);
+  if (sec) {
+    const meta = SECTION_METADATA[sec.id] || { color: '#f59e0b' };
+    return { icon: sec.icon, label: sec.label, color: meta.color };
+  }
+  const more = MORE_DROPDOWN_ITEMS.find((m) => m.id === currentSection);
+  if (more) {
+    return { icon: more.icon, label: more.label, color: more.color || '#0d9488' };
+  }
+  return { icon: Flame, label: 'All Feed', color: '#f59e0b' };
+}
 
 export default function TopNavCollapsedControls({
   activeSection = 'all',
@@ -58,10 +91,17 @@ export default function TopNavCollapsedControls({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 54, right: 12 });
   const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const navBtnRef = useRef(null);
 
   useEffect(() => {
     setMounted(true);
+    function checkMobile() {
+      setIsMobile(window.innerWidth < 640);
+    }
+    checkMobile();
+    window.addEventListener('resize', checkMobile, { passive: true });
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // Keep internal state aligned with prop
@@ -87,18 +127,18 @@ export default function TopNavCollapsedControls({
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const sec = params.get('section');
-      if (sec && SECTION_ICON_MAP[sec]) {
+      if (sec) {
         setCurrentSection(sec);
       }
     }
   }, []);
 
-  const ActiveIcon = SECTION_ICON_MAP[currentSection] || Flame;
-  const activeItem = ALL_NAV_ITEMS.find((item) => item.id === currentSection) || ALL_NAV_ITEMS[0];
+  const navInfo = getNavDisplayInfo(pathname, currentSection);
+  const ActiveIcon = navInfo.icon;
 
-  // Update dropdown position safely anchored to viewport
+  // Update dropdown position safely anchored to viewport (for desktop dropdown)
   useEffect(() => {
-    if (!dropdownOpen || !navBtnRef.current) return;
+    if (!dropdownOpen || isMobile || !navBtnRef.current) return;
 
     function updatePos() {
       if (!navBtnRef.current) return;
@@ -119,11 +159,11 @@ export default function TopNavCollapsedControls({
       window.removeEventListener('resize', updatePos);
       window.removeEventListener('scroll', updatePos);
     };
-  }, [dropdownOpen]);
+  }, [dropdownOpen, isMobile]);
 
-  // Handle outside click & Escape key
+  // Handle outside click & Escape key for desktop floating dropdown
   useEffect(() => {
-    if (!dropdownOpen) return;
+    if (!dropdownOpen || isMobile) return;
 
     function handlePointerDown(e) {
       if (navBtnRef.current && navBtnRef.current.contains(e.target)) {
@@ -148,7 +188,7 @@ export default function TopNavCollapsedControls({
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [dropdownOpen]);
+  }, [dropdownOpen, isMobile]);
 
   function handleSearchClick(e) {
     e.stopPropagation();
@@ -165,7 +205,6 @@ export default function TopNavCollapsedControls({
   function handleItemClick(item) {
     playSound('reaction');
     setDropdownOpen(false);
-    setCurrentSection(item.id);
 
     if (item.isSermonNote) {
       if (pathname === '/') {
@@ -188,6 +227,7 @@ export default function TopNavCollapsedControls({
       return;
     }
 
+    setCurrentSection(item.id);
     if (onSelectSection) {
       onSelectSection(item.id);
     }
@@ -212,11 +252,78 @@ export default function TopNavCollapsedControls({
     }
   }
 
-  const sectionsList = ALL_NAV_ITEMS.filter((i) => i.group === 'sections');
-  const toolsList = ALL_NAV_ITEMS.filter((i) => i.group === 'tools');
+  // Render navigation menu items list
+  const renderMenuItems = () => (
+    <div className="top-nav-dropdown-scrollable">
+      <div className="top-nav-dropdown-header">Navigation Sections</div>
+      {TOP_NAV_SECTIONS.map((s) => {
+        const ItemIcon = s.icon;
+        const meta = SECTION_METADATA[s.id] || { desc: 'Feed view', color: '#f59e0b' };
+        const isActive = pathname === '/' && currentSection === s.id;
+        return (
+          <button
+            key={s.id}
+            type="button"
+            role="menuitem"
+            className={`top-nav-dropdown-item${isActive ? ' is-active' : ''}`}
+            onClick={() => handleItemClick({ id: s.id })}
+          >
+            <span
+              className="top-nav-dropdown-icon-box"
+              style={{
+                background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
+                color: meta.color,
+              }}
+            >
+              <ItemIcon size={16} strokeWidth={2.2} />
+            </span>
+            <div className="top-nav-dropdown-text">
+              <span className="top-nav-dropdown-label">{s.label}</span>
+              <span className="top-nav-dropdown-sub">{meta.desc}</span>
+            </div>
+            {isActive && <Check size={16} className="top-nav-dropdown-check" style={{ color: meta.color }} />}
+          </button>
+        );
+      })}
+
+      <div className="top-nav-dropdown-divider" />
+      <div className="top-nav-dropdown-header">Explore &amp; Tools</div>
+      {MORE_DROPDOWN_ITEMS.map((item) => {
+        const ItemIcon = item.icon;
+        const isActive =
+          (item.isCategories && pathname === '/categories') ||
+          (pathname === '/' && currentSection === item.id);
+        const itemColor = item.color || '#0d9488';
+        return (
+          <button
+            key={item.id}
+            type="button"
+            role="menuitem"
+            className={`top-nav-dropdown-item${isActive ? ' is-active' : ''}`}
+            onClick={() => handleItemClick(item)}
+          >
+            <span
+              className="top-nav-dropdown-icon-box"
+              style={{
+                background: `color-mix(in srgb, ${itemColor} 14%, transparent)`,
+                color: itemColor,
+              }}
+            >
+              <ItemIcon size={16} strokeWidth={2.2} />
+            </span>
+            <div className="top-nav-dropdown-text">
+              <span className="top-nav-dropdown-label">{item.label}</span>
+              <span className="top-nav-dropdown-sub">{item.desc}</span>
+            </div>
+            {isActive && <Check size={16} className="top-nav-dropdown-check" style={{ color: itemColor }} />}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
-    <div className="topbar-collapsed-controls" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+    <div className="topbar-collapsed-controls" style={{ display: 'inline-flex', alignItems: 'center' }}>
       {/* 1. Circular Search Button */}
       <motion.button
         type="button"
@@ -230,23 +337,23 @@ export default function TopNavCollapsedControls({
         <Search size={16} strokeWidth={2.2} />
       </motion.button>
 
-      {/* 2. Circular Top-Nav Section Button */}
+      {/* 2. Circular Top-Nav Section / Route Button */}
       <div className="section-nav-btn-wrap" ref={navBtnRef} style={{ position: 'relative' }}>
         <motion.button
           type="button"
           className={`topbar-toggle-btn section-nav-toggle-btn${dropdownOpen ? ' is-open' : ''}`}
           onClick={handleToggleDropdown}
-          aria-label={`Navigation sections (Current: ${activeItem.label}). Click to open section menu`}
-          title={`Active Section: ${activeItem.label} (Click to browse all sections)`}
+          aria-label={`Navigation sections (Current: ${navInfo.label}). Click to open section menu`}
+          title={`Active Navigation: ${navInfo.label} (Click to browse all sections)`}
           aria-haspopup="menu"
           aria-expanded={dropdownOpen}
           style={{
-            background: `color-mix(in srgb, ${activeItem.color} 15%, transparent)`,
-            borderColor: `color-mix(in srgb, ${activeItem.color} 45%, transparent)`,
-            color: activeItem.color,
+            background: `color-mix(in srgb, ${navInfo.color} 15%, transparent)`,
+            borderColor: `color-mix(in srgb, ${navInfo.color} 45%, transparent)`,
+            color: navInfo.color,
             boxShadow: dropdownOpen
-              ? `0 0 16px ${activeItem.color}`
-              : `0 0 10px color-mix(in srgb, ${activeItem.color} 25%, transparent)`,
+              ? `0 0 16px ${navInfo.color}`
+              : `0 0 10px color-mix(in srgb, ${navInfo.color} 25%, transparent)`,
           }}
           whileTap={{ scale: 0.92 }}
           whileHover={{ scale: 1.05 }}
@@ -254,8 +361,20 @@ export default function TopNavCollapsedControls({
           <ActiveIcon size={16} strokeWidth={2.2} />
         </motion.button>
 
-        {/* Dropdown Menu Portaled to document.body */}
-        {mounted && createPortal(
+        {/* Small Screen: PopupSheet Modal (Full canonical popup primitive with focus-trap & safe-area) */}
+        {mounted && isMobile && (
+          <PopupSheet
+            open={dropdownOpen}
+            onClose={() => setDropdownOpen(false)}
+            title="Navigation & Explore"
+            size="sm"
+          >
+            {renderMenuItems()}
+          </PopupSheet>
+        )}
+
+        {/* Desktop Screen: Anchored Portaled Dropdown with Backdrop */}
+        {mounted && !isMobile && createPortal(
           <AnimatePresence>
             {dropdownOpen && (
               <>
@@ -281,68 +400,7 @@ export default function TopNavCollapsedControls({
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="top-nav-dropdown-scrollable">
-                    <div className="top-nav-dropdown-header">Navigation Sections</div>
-                    {sectionsList.map((item) => {
-                      const ItemIcon = item.icon;
-                      const isActive = currentSection === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="menuitem"
-                          className={`top-nav-dropdown-item${isActive ? ' is-active' : ''}`}
-                          onClick={() => handleItemClick(item)}
-                        >
-                          <span
-                            className="top-nav-dropdown-icon-box"
-                            style={{
-                              background: `color-mix(in srgb, ${item.color} 14%, transparent)`,
-                              color: item.color,
-                            }}
-                          >
-                            <ItemIcon size={16} strokeWidth={2.2} />
-                          </span>
-                          <div className="top-nav-dropdown-text">
-                            <span className="top-nav-dropdown-label">{item.label}</span>
-                            <span className="top-nav-dropdown-sub">{item.desc}</span>
-                          </div>
-                          {isActive && <Check size={16} className="top-nav-dropdown-check" style={{ color: item.color }} />}
-                        </button>
-                      );
-                    })}
-
-                    <div className="top-nav-dropdown-divider" />
-                    <div className="top-nav-dropdown-header">Explore &amp; Tools</div>
-                    {toolsList.map((item) => {
-                      const ItemIcon = item.icon;
-                      const isActive = currentSection === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="menuitem"
-                          className={`top-nav-dropdown-item${isActive ? ' is-active' : ''}`}
-                          onClick={() => handleItemClick(item)}
-                        >
-                          <span
-                            className="top-nav-dropdown-icon-box"
-                            style={{
-                              background: `color-mix(in srgb, ${item.color} 14%, transparent)`,
-                              color: item.color,
-                            }}
-                          >
-                            <ItemIcon size={16} strokeWidth={2.2} />
-                          </span>
-                          <div className="top-nav-dropdown-text">
-                            <span className="top-nav-dropdown-label">{item.label}</span>
-                            <span className="top-nav-dropdown-sub">{item.desc}</span>
-                          </div>
-                          {isActive && <Check size={16} className="top-nav-dropdown-check" style={{ color: item.color }} />}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {renderMenuItems()}
                 </motion.div>
               </>
             )}
