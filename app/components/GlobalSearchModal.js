@@ -503,11 +503,20 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
   if (!isOpen) return null;
 
   return (
-    <div className="global-search-overlay" onClick={onClose}>
+    <div
+      className="global-search-overlay"
+      onClick={() => {
+        playSound('reaction');
+        onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Global search"
+    >
       <div className="global-search-modal neon-glow-modal" onClick={(e) => e.stopPropagation()}>
         {/* Search Input Bar */}
         <div className="global-search-bar">
-          <Search size={19} className="global-search-icon" />
+          <Search size={18} className="global-search-icon" aria-hidden="true" />
           <input
             ref={inputRef}
             type="text"
@@ -530,13 +539,23 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                 setQuery('');
                 inputRef.current?.focus();
               }}
-              title="Clear search"
+              title="Clear search input"
+              aria-label="Clear search input"
             >
-              <X size={15} />
+              <X size={14} />
             </button>
           )}
-          <button type="button" className="global-search-close-btn" onClick={onClose}>
-            Done
+          <button
+            type="button"
+            className="global-search-exit-btn"
+            onClick={() => {
+              playSound('reaction');
+              onClose();
+            }}
+            aria-label="Close search dialog"
+            title="Close search (Esc)"
+          >
+            <X size={17} strokeWidth={2.4} />
           </button>
         </div>
 

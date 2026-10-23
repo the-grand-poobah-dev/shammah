@@ -7,6 +7,7 @@ import CreatePostBox from './components/CreatePostBox';
 import CreatePostModal from './components/CreatePostModal';
 import Link from 'next/link';
 import Avatar from './components/Avatar';
+import UserAccountMenu from './components/UserAccountMenu';
 import MemberName from './components/MemberName';
 import OnboardingWizard from './components/OnboardingWizard';
 import { uploadPostMedia } from './lib/mediaUpload';
@@ -137,7 +138,6 @@ export default function Feed() {
   const [dark, setDark] = useState(true);
   const [privacyTick, setPrivacyTick] = useState(0);
   const [soundOn, setSoundOn] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -160,7 +160,6 @@ export default function Feed() {
   const [isPinnedAnnouncement, setIsPinnedAnnouncement] = useState(false);
   const [canModerate, setCanModerate] = useState(false);
   const [ownedChurches, setOwnedChurches] = useState([]);
-  const avatarMenuRef = useRef(null);
   const isAdmin = Boolean(
     canModerate && (adminMode || profile?.role === 'platform_admin' || profile?.role === 'church_admin')
   );
@@ -212,21 +211,6 @@ export default function Feed() {
 
     return () => subscription.unsubscribe();
   }, []);
-
-  // Close avatar menu on click outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (avatarMenuRef.current && !avatarMenuRef.current.contains(event.target)) {
-        setMenuOpen(false);
-      }
-    }
-    if (menuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [menuOpen]);
 
   // Sync tab state with global BottomNav
   useEffect(() => {
@@ -1228,138 +1212,18 @@ export default function Feed() {
               </div>
 
               {session ? (
-                <div className="avatar-menu" ref={avatarMenuRef}>
-                  <button
-                    className="me-btn"
-                    onClick={() => setMenuOpen((o) => !o)}
-                    aria-expanded={menuOpen}
-                    aria-label="User account menu"
-                  >
-                    <Avatar name={headerName} src={profile?.avatar_url} className="avatar-sm">
-                      <i className="status-dot" />
-                    </Avatar>
-                    <span className="me-name">{headerName}</span>
-                  </button>
-
-                  {menuOpen && (
-                    <div className="dropdown avatar-dropdown-menu">
-                      <div className="dropdown-user-header">
-                        <Avatar name={headerName} src={profile?.avatar_url} className="avatar-sm" />
-                        <div className="dropdown-user-info">
-                          <span className="dropdown-user-name">{headerName}</span>
-                          <span className="dropdown-user-email">{session?.user?.email}</span>
-                          {canModerate ? (
-                            <span className="dropdown-user-role-badge admin">
-                              <ShieldCheck size={11} />
-                              <span>{profile?.role === 'platform_admin' ? 'Platform Admin' : 'Church Leader'}</span>
-                            </span>
-                          ) : (
-                            <span className="dropdown-user-role-badge member">
-                              <User size={11} />
-                              <span>Member</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="dropdown-divider" />
-
-                      <button
-                        type="button"
-                        className="dropdown-item"
-                        onClick={() => {
-                          focusCompose();
-                          setMenuOpen(false);
-                        }}
-                      >
-                        <PenSquare size={16} className="dropdown-item-icon" />
-                        <span>Create a post</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="dropdown-item"
-                        onClick={() => {
-                          setShowProfile(true);
-                          setMenuOpen(false);
-                        }}
-                      >
-                        <User size={16} className="dropdown-item-icon" />
-                        <span>View profile</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="dropdown-item"
-                        onClick={() => {
-                          setShowActivityLogModal(true);
-                          setMenuOpen(false);
-                        }}
-                      >
-                        <ShieldCheck size={16} className="dropdown-item-icon text-teal-400" />
-                        <span>Activity Log &amp; Transparency</span>
-                      </button>
-
-                      {/* Admin Mode Toggle: ONLY for members/admins who own a church page or are approved to moderate/administer */}
-                      {canModerate && (
-                        <>
-                          <div className="dropdown-divider" />
-                          <div className="dropdown-section-label">Church Administration</div>
-                          <button
-                            type="button"
-                            className={`dropdown-item dropdown-toggle-item ${adminMode ? 'is-active' : ''}`}
-                            onClick={() => setAdminMode((m) => !m)}
-                            title="Toggle admin pinning privileges"
-                          >
-                            <div className="dropdown-item-left">
-                              <Pin size={16} className="dropdown-item-icon" />
-                              <div className="dropdown-item-titles">
-                                <span className="dropdown-item-main">Admin Pinning Mode</span>
-                                <span className="dropdown-item-sub">
-                                  {adminMode ? 'Pin privileges active' : 'Switch to admin view'}
-                                </span>
-                              </div>
-                            </div>
-                            <span className={`dropdown-toggle-pill ${adminMode ? 'on' : 'off'}`}>
-                              <span className="dropdown-toggle-dot" />
-                              <span>{adminMode ? 'Admin' : 'Member'}</span>
-                            </span>
-                          </button>
-
-                          {ownedChurches.length > 0 && (
-                            <Link
-                              className="dropdown-item"
-                              href={`/churches/${ownedChurches[0].id}`}
-                              onClick={() => setMenuOpen(false)}
-                            >
-                              <Church size={16} className="dropdown-item-icon" />
-                              <span>Manage My Church</span>
-                            </Link>
-                          )}
-                        </>
-                      )}
-
-                      <div className="dropdown-divider" />
-
-                      <Link className="dropdown-item" href="/settings" onClick={() => setMenuOpen(false)}>
-                        <Settings size={16} className="dropdown-item-icon" />
-                        <span>Profile settings</span>
-                      </Link>
-
-                      <Link className="dropdown-item" href="/categories" onClick={() => setMenuOpen(false)}>
-                        <Compass size={16} className="dropdown-item-icon" />
-                        <span>Browse categories</span>
-                      </Link>
-
-                      <div className="dropdown-divider" />
-
-                      <button type="button" className="dropdown-item danger" onClick={handleSignOut}>
-                        <LogOut size={16} className="dropdown-item-icon" />
-                        <span>Log out</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <UserAccountMenu
+                  session={session}
+                  profile={profile}
+                  canModerate={canModerate}
+                  adminMode={adminMode}
+                  setAdminMode={setAdminMode}
+                  ownedChurches={ownedChurches}
+                  onOpenCreatePost={focusCompose}
+                  onOpenProfile={() => setShowProfile(true)}
+                  onOpenActivityLog={() => setShowActivityLogModal(true)}
+                  onSignOut={handleSignOut}
+                />
               ) : (
                 <div className="auth-header-actions">
                   <button className="signin-btn" onClick={() => openAuth('signin')}>

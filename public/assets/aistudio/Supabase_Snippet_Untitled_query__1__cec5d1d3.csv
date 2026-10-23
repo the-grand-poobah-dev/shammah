@@ -1,0 +1,49 @@
+tablename,policyname,cmd,qual,with_check
+badge_requests,people file their own badge requests,INSERT,null,((auth.uid() = user_id) AND (status = 'pending'::text))
+badge_requests,people read their own badge requests,SELECT,(auth.uid() = user_id),null
+badges,badges are readable,SELECT,true,null
+blocks,Users can manage own blocks,ALL,(auth.uid() = blocker_id),(auth.uid() = blocker_id)
+churches,church creators can edit their church,UPDATE,"((created_by = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'platform_admin'::text)))))","((created_by = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'platform_admin'::text)))))"
+churches,churches are readable by signed-in users,SELECT,(auth.role() = 'authenticated'::text),null
+churches,onboarded members can create a church,INSERT,null,"((created_by = auth.uid()) AND (EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.onboarding_completed_at IS NOT NULL)))))"
+comments,comments are publicly readable,SELECT,true,null
+comments,signed-in users can add comments,INSERT,null,(auth.uid() = author_id)
+follows,Users can manage own follows,ALL,(auth.uid() = follower_id),(auth.uid() = follower_id)
+follows,Users can read follows,SELECT,true,null
+mpesa_transactions,Anyone can insert mpesa transactions,INSERT,null,true
+mpesa_transactions,Users can view own mpesa transactions,SELECT,(auth.uid() = user_id),null
+poll_options,poll options readable by signed-in users,SELECT,(auth.role() = 'authenticated'::text),null
+poll_options,post author can add poll options,INSERT,null,"(auth.uid() = ( SELECT posts.author_id
+   FROM posts
+  WHERE (posts.id = poll_options.post_id)))"
+poll_votes,members can change their own vote,UPDATE,(auth.uid() = voter_id),(auth.uid() = voter_id)
+poll_votes,members see only their own vote,SELECT,(auth.uid() = voter_id),null
+poll_votes,members vote as themselves,INSERT,null,(auth.uid() = voter_id)
+posts,Authors can update own post visibility,UPDATE,(auth.uid() = author_id),(auth.uid() = author_id)
+posts,Enforce real post visibility on select,SELECT,"((visibility = 'public'::text) OR (auth.uid() = author_id) OR ((visibility = 'followers'::text) AND (auth.uid() IS NOT NULL) AND (EXISTS ( SELECT 1
+   FROM follows f
+  WHERE ((f.follower_id = auth.uid()) AND (f.followed_id = posts.author_id))))) OR ((visibility = 'church'::text) AND (auth.uid() IS NOT NULL) AND (EXISTS ( SELECT 1
+   FROM profiles viewer
+  WHERE ((viewer.id = auth.uid()) AND (viewer.church_id IS NOT NULL) AND (viewer.church_id = posts.church_id))))))",null
+posts,posts are publicly readable,SELECT,true,null
+posts,users can insert their own posts,INSERT,null,(auth.uid() = author_id)
+profile_private,owner inserts private profile,INSERT,null,(auth.uid() = id)
+profile_private,owner reads private profile,SELECT,(auth.uid() = id),null
+profile_private,owner updates private profile,UPDATE,(auth.uid() = id),(auth.uid() = id)
+profiles,profiles are publicly readable,SELECT,true,null
+profiles,users can insert their own profile,INSERT,null,(auth.uid() = id)
+profiles,users manage their own profile,UPDATE,(auth.uid() = id),(auth.uid() = id)
+reactions,reactions are publicly readable,SELECT,true,null
+reactions,users manage their own reactions,ALL,(auth.uid() = user_id),(auth.uid() = user_id)
+rss_feeds,rss feeds readable,SELECT,(auth.role() = 'authenticated'::text),null
+rss_feeds,rss feeds writable by admin or owner,ALL,"((created_by = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'platform_admin'::text)))))","((created_by = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'platform_admin'::text)))))"

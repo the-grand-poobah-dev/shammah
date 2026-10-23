@@ -1,0 +1,101 @@
+table_name,column_name,data_type,is_nullable
+badge_requests,id,uuid,NO
+badge_requests,user_id,uuid,NO
+badge_requests,current_badge,text,YES
+badge_requests,requested_badge,text,NO
+badge_requests,reason,text,NO
+badge_requests,status,text,NO
+badge_requests,created_at,timestamp with time zone,NO
+badge_requests,reviewed_at,timestamp with time zone,YES
+badges,id,text,NO
+badges,label,text,NO
+badges,sort_order,integer,NO
+blocks,id,uuid,NO
+blocks,blocker_id,uuid,NO
+blocks,blocked_id,uuid,NO
+blocks,created_at,timestamp with time zone,NO
+categories,id,text,NO
+categories,name,text,NO
+churches,id,uuid,NO
+churches,name,text,NO
+churches,created_at,timestamp with time zone,YES
+churches,subscription_status,text,YES
+churches,onboarded_at,timestamp with time zone,YES
+churches,description,text,YES
+churches,denomination,text,YES
+churches,logo_url,text,YES
+churches,cover_url,text,YES
+churches,location_label,text,YES
+churches,location_place_id,text,YES
+churches,location_lat,double precision,YES
+churches,location_lng,double precision,YES
+churches,website,text,YES
+churches,created_by,uuid,YES
+churches,subscription_plan,text,NO
+churches,subscription_interval,text,NO
+churches,trial_ends_at,timestamp with time zone,YES
+churches,renews_at,timestamp with time zone,YES
+churches,courses_paused,boolean,NO
+comments,id,uuid,NO
+comments,post_id,uuid,NO
+comments,author_id,uuid,NO
+comments,parent_id,uuid,YES
+comments,text_content,text,NO
+comments,mentioned_user_ids,ARRAY,NO
+comments,created_at,timestamp with time zone,NO
+follows,id,uuid,NO
+follows,follower_id,uuid,NO
+follows,followed_id,uuid,NO
+follows,created_at,timestamp with time zone,NO
+mpesa_transactions,id,uuid,NO
+mpesa_transactions,user_id,uuid,YES
+mpesa_transactions,donor_name,text,YES
+mpesa_transactions,phone,text,NO
+mpesa_transactions,amount_kes,integer,NO
+mpesa_transactions,receipt_code,text,NO
+mpesa_transactions,checkout_request_id,text,YES
+mpesa_transactions,project_id,text,YES
+mpesa_transactions,project_name,text,YES
+mpesa_transactions,institution_id,text,YES
+mpesa_transactions,plan_id,text,YES
+mpesa_transactions,interval_id,text,YES
+mpesa_transactions,status,text,NO
+mpesa_transactions,created_at,timestamp with time zone,NO
+poll_options,id,uuid,NO
+poll_options,post_id,uuid,NO
+poll_options,label,text,NO
+poll_options,position,integer,NO
+poll_options,image_url,text,YES
+poll_votes,id,uuid,NO
+poll_votes,post_id,uuid,NO
+poll_votes,option_id,uuid,NO
+poll_votes,voter_id,uuid,NO
+poll_votes,created_at,timestamp with time zone,YES
+posts,id,uuid,NO
+posts,author_id,uuid,YES
+posts,church_id,uuid,YES
+posts,category_id,text,NO
+posts,text_content,text,YES
+posts,media_url,text,YES
+posts,media_type,text,YES
+posts,created_at,timestamp with time zone,YES
+posts,source,text,NO
+posts,external_guid,text,YES
+posts,media_duration_seconds,integer,YES
+posts,media_thumbnail_url,text,YES
+posts,visibility,text,NO
+posts,is_pinned,boolean,NO
+posts,pinned_at,timestamp with time zone,YES
+posts,post_identity,text,NO
+posts,pseudonym,text,YES
+posts,is_anonymous,boolean,NO
+profile_private,id,uuid,NO
+profile_private,date_of_birth,date,YES
+profile_private,updated_at,timestamp with time zone,YES
+profiles,id,uuid,NO
+profiles,display_name,text,YES
+profiles,role,text,YES
+profiles,church_id,uuid,YES
+profiles,created_at,timestamp with time zone,YES
+profiles,badge,text,YES
+profiles,badge_verified,boolean,NO

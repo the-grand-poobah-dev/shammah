@@ -11,6 +11,7 @@ export default function Avatar({
   src,
   userId = null,
   hasStatus = null,
+  activityStatus = null, // 'online' | 'busy' | 'offline' | null
   className = '',
   children,
   onClick,
@@ -92,6 +93,12 @@ export default function Avatar({
       <span className="avatar-inner">
         {src ? <img src={src} alt="" className="avatar-img" /> : initials(name)}
       </span>
+      {activityStatus && (
+        <i
+          className={`status-dot status-${activityStatus}`}
+          aria-hidden="true"
+        />
+      )}
       {children}
     </span>
   );
