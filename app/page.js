@@ -20,7 +20,9 @@ import {
   updateUserCreatedPost,
 } from './lib/pinnedPosts';
 import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX, DownloadCloud, X, Search, Home, MessageCircle, Bell, Building2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import TopNav, { TOP_NAV_SECTIONS } from './components/TopNav';
+import TopNavCollapsedControls from './components/TopNavCollapsedControls';
 import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
 import VideosView from './components/VideosView';
@@ -146,6 +148,7 @@ export default function Feed() {
   // and stops the moment the person interacts or a few seconds after login.
   const categoryBarRef = useRef(null);
   const [tickerOn, setTickerOn] = useState(true);
+  const [isScrolledDown, setIsScrolledDown] = useState(false);
 
   // Polls
   const [isPoll, setIsPoll] = useState(false);
@@ -182,6 +185,28 @@ export default function Feed() {
     }
     window.addEventListener('shammah:offline-updated', onOfflineUpdate);
     return () => window.removeEventListener('shammah:offline-updated', onOfflineUpdate);
+  }, []);
+
+  // Smooth topbar collapse/expand tracking on home page
+  useEffect(() => {
+    let ticking = false;
+    function onScroll() {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const y = window.scrollY || document.documentElement.scrollTop || 0;
+          setIsScrolledDown((prev) => {
+            if (!prev && y > 24) return true;
+            if (prev && y <= 10) return false;
+            return prev;
+          });
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   useEffect(() => {
@@ -1185,6 +1210,28 @@ export default function Feed() {
                   )}
                 </button>
 
+                {/* Collapsed Search & Section Navigation circular buttons when scrolled down or on non-home tabs */}
+                <AnimatePresence>
+                  {(tab !== 'home' || isScrolledDown) && (
+                    <motion.div
+                      key="topbar-collapsed-controls"
+                      initial={{ opacity: 0, scale: 0.8, width: 0 }}
+                      animate={{ opacity: 1, scale: 1, width: 'auto' }}
+                      exit={{ opacity: 0, scale: 0.8, width: 0 }}
+                      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                      style={{ display: 'inline-flex', alignItems: 'center', overflow: 'hidden' }}
+                    >
+                      <TopNavCollapsedControls
+                        activeSection={section}
+                        onSelectSection={(sec) => {
+                          setTab('home');
+                          setSection(sec);
+                        }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {/* Topbar 'Offline' indicator badge when Service Worker detects network loss or pending syncs */}
                 {(isDisconnected || hasPendingSyncs) && (
                   <span
@@ -1238,49 +1285,61 @@ export default function Feed() {
         </header>
 
         {tab === 'home' && (
-          <div className="header-secondary">
-            <TopNav
-              isHome={true}
-              activeSection={section}
-              onSelectSection={(sec) => {
-                setTab('home');
-                setSection(sec);
-                if (typeof window !== 'undefined') {
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-              }}
-            />
-
-            {/* Search Input Bar Widget panning across screen directly below top navigation bar */}
-            <div className="header-search-widget-wrap">
-              <div
-                className="header-search-bar-widget"
-                role="search"
-                tabIndex={0}
-                onClick={() => {
-                  playSound('reaction');
-                  window.dispatchEvent(new CustomEvent('shammah:open-search', { detail: { query: '' } }));
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    playSound('reaction');
-                    window.dispatchEvent(new CustomEvent('shammah:open-search', { detail: { query: '' } }));
-                  }
-                }}
-                aria-label="Search scriptures, sermons, topics, and churches"
-                title="Search scriptures, sermons, topics, and churches (Press / or ⌘K)"
+          <AnimatePresence initial={false}>
+            {!isScrolledDown && (
+              <motion.div
+                key="header-secondary-expanded"
+                className="header-secondary"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                style={{ overflow: 'hidden' }}
               >
-                <Search size={16} className="search-bar-widget-icon" />
-                <span className="search-bar-widget-placeholder">
-                  Search sermons, scriptures, topics, members...
-                </span>
-                <span className="search-bar-widget-badge">
-                  <kbd className="search-kbd">⌘K</kbd>
-                </span>
-              </div>
-            </div>
-          </div>
+                <TopNav
+                  isHome={true}
+                  activeSection={section}
+                  onSelectSection={(sec) => {
+                    setTab('home');
+                    setSection(sec);
+                    if (typeof window !== 'undefined') {
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                  }}
+                />
+
+                {/* Search Input Bar Widget panning across screen directly below top navigation bar */}
+                <div className="header-search-widget-wrap">
+                  <div
+                    className="header-search-bar-widget"
+                    role="search"
+                    tabIndex={0}
+                    onClick={() => {
+                      playSound('reaction');
+                      window.dispatchEvent(new CustomEvent('shammah:open-search', { detail: { query: '' } }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        playSound('reaction');
+                        window.dispatchEvent(new CustomEvent('shammah:open-search', { detail: { query: '' } }));
+                      }
+                    }}
+                    aria-label="Search scriptures, sermons, topics, and churches"
+                    title="Search scriptures, sermons, topics, and churches (Press / or ⌘K)"
+                  >
+                    <Search size={16} className="search-bar-widget-icon" />
+                    <span className="search-bar-widget-placeholder">
+                      Search sermons, scriptures, topics, members...
+                    </span>
+                    <span className="search-bar-widget-badge">
+                      <kbd className="search-kbd">⌘K</kbd>
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         )}
       </div>
 

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -16,7 +17,6 @@ import {
   FileText,
   Compass,
   Check,
-  ChevronDown,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 
@@ -54,12 +54,47 @@ export default function TopNavCollapsedControls({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const [currentSection, setCurrentSection] = useState(activeSection || 'all');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 54, right: 12 });
+  const [mounted, setMounted] = useState(false);
   const navBtnRef = useRef(null);
 
-  const ActiveIcon = SECTION_ICON_MAP[activeSection] || Flame;
-  const activeItem = ALL_NAV_ITEMS.find((item) => item.id === activeSection) || ALL_NAV_ITEMS[0];
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Keep internal state aligned with prop
+  useEffect(() => {
+    if (activeSection) {
+      setCurrentSection(activeSection);
+    }
+  }, [activeSection]);
+
+  // Keep internal state aligned with global event
+  useEffect(() => {
+    function handleSectionChange(e) {
+      if (e.detail) {
+        setCurrentSection(e.detail);
+      }
+    }
+    window.addEventListener('shammah:set-section', handleSectionChange);
+    return () => window.removeEventListener('shammah:set-section', handleSectionChange);
+  }, []);
+
+  // Read URL query parameter on load
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sec = params.get('section');
+      if (sec && SECTION_ICON_MAP[sec]) {
+        setCurrentSection(sec);
+      }
+    }
+  }, []);
+
+  const ActiveIcon = SECTION_ICON_MAP[currentSection] || Flame;
+  const activeItem = ALL_NAV_ITEMS.find((item) => item.id === currentSection) || ALL_NAV_ITEMS[0];
 
   // Update dropdown position safely anchored to viewport
   useEffect(() => {
@@ -68,10 +103,12 @@ export default function TopNavCollapsedControls({
     function updatePos() {
       if (!navBtnRef.current) return;
       const rect = navBtnRef.current.getBoundingClientRect();
-      const rightOffset = Math.max(10, Math.min(window.innerWidth - 300, window.innerWidth - rect.right - 10));
+      const menuWidth = Math.min(340, window.innerWidth - 20);
+      const idealRight = window.innerWidth - rect.right;
+      const clampedRight = Math.max(10, Math.min(window.innerWidth - menuWidth - 10, idealRight));
       setDropdownPos({
-        top: rect.bottom + 8,
-        right: Math.max(10, rightOffset),
+        top: Math.round(rect.bottom + 8),
+        right: Math.round(clampedRight),
       });
     }
 
@@ -89,9 +126,10 @@ export default function TopNavCollapsedControls({
     if (!dropdownOpen) return;
 
     function handlePointerDown(e) {
-      if (navBtnRef.current && !navBtnRef.current.contains(e.target)) {
-        setDropdownOpen(false);
+      if (navBtnRef.current && navBtnRef.current.contains(e.target)) {
+        return;
       }
+      setDropdownOpen(false);
     }
 
     function handleKeyDown(e) {
@@ -127,6 +165,7 @@ export default function TopNavCollapsedControls({
   function handleItemClick(item) {
     playSound('reaction');
     setDropdownOpen(false);
+    setCurrentSection(item.id);
 
     if (item.isSermonNote) {
       if (pathname === '/') {
@@ -201,104 +240,115 @@ export default function TopNavCollapsedControls({
           title={`Active Section: ${activeItem.label} (Click to browse all sections)`}
           aria-haspopup="menu"
           aria-expanded={dropdownOpen}
+          style={{
+            background: `color-mix(in srgb, ${activeItem.color} 15%, transparent)`,
+            borderColor: `color-mix(in srgb, ${activeItem.color} 45%, transparent)`,
+            color: activeItem.color,
+            boxShadow: dropdownOpen
+              ? `0 0 16px ${activeItem.color}`
+              : `0 0 10px color-mix(in srgb, ${activeItem.color} 25%, transparent)`,
+          }}
           whileTap={{ scale: 0.92 }}
           whileHover={{ scale: 1.05 }}
         >
           <ActiveIcon size={16} strokeWidth={2.2} />
         </motion.button>
 
-        {/* Dropdown Menu */}
-        <AnimatePresence>
-          {dropdownOpen && (
-            <>
-              <div
-                className="top-nav-dropdown-backdrop"
-                onClick={() => setDropdownOpen(false)}
-                aria-hidden="true"
-              />
-              <motion.div
-                className="top-nav-dropdown-menu neon-glow-modal"
-                role="menu"
-                aria-label="Navigation sections and explore tools"
-                style={{
-                  position: 'fixed',
-                  top: dropdownPos.top,
-                  right: dropdownPos.right,
-                  zIndex: 100,
-                }}
-                initial={{ opacity: 0, y: -6, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -6, scale: 0.96 }}
-                transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="top-nav-dropdown-scrollable">
-                  <div className="top-nav-dropdown-header">Navigation Sections</div>
-                  {sectionsList.map((item) => {
-                    const ItemIcon = item.icon;
-                    const isActive = activeSection === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        role="menuitem"
-                        className={`top-nav-dropdown-item${isActive ? ' is-active' : ''}`}
-                        onClick={() => handleItemClick(item)}
-                      >
-                        <span
-                          className="top-nav-dropdown-icon-box"
-                          style={{
-                            background: `color-mix(in srgb, ${item.color} 14%, transparent)`,
-                            color: item.color,
-                          }}
+        {/* Dropdown Menu Portaled to document.body */}
+        {mounted && createPortal(
+          <AnimatePresence>
+            {dropdownOpen && (
+              <>
+                <div
+                  className="top-nav-dropdown-backdrop"
+                  onClick={() => setDropdownOpen(false)}
+                  aria-hidden="true"
+                />
+                <motion.div
+                  className="top-nav-dropdown-menu neon-glow-modal"
+                  role="menu"
+                  aria-label="Navigation sections and explore tools"
+                  style={{
+                    position: 'fixed',
+                    top: dropdownPos.top,
+                    right: dropdownPos.right,
+                    zIndex: 9999,
+                  }}
+                  initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="top-nav-dropdown-scrollable">
+                    <div className="top-nav-dropdown-header">Navigation Sections</div>
+                    {sectionsList.map((item) => {
+                      const ItemIcon = item.icon;
+                      const isActive = currentSection === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="menuitem"
+                          className={`top-nav-dropdown-item${isActive ? ' is-active' : ''}`}
+                          onClick={() => handleItemClick(item)}
                         >
-                          <ItemIcon size={16} strokeWidth={2.2} />
-                        </span>
-                        <div className="top-nav-dropdown-text">
-                          <span className="top-nav-dropdown-label">{item.label}</span>
-                          <span className="top-nav-dropdown-sub">{item.desc}</span>
-                        </div>
-                        {isActive && <Check size={16} className="top-nav-dropdown-check" style={{ color: item.color }} />}
-                      </button>
-                    );
-                  })}
+                          <span
+                            className="top-nav-dropdown-icon-box"
+                            style={{
+                              background: `color-mix(in srgb, ${item.color} 14%, transparent)`,
+                              color: item.color,
+                            }}
+                          >
+                            <ItemIcon size={16} strokeWidth={2.2} />
+                          </span>
+                          <div className="top-nav-dropdown-text">
+                            <span className="top-nav-dropdown-label">{item.label}</span>
+                            <span className="top-nav-dropdown-sub">{item.desc}</span>
+                          </div>
+                          {isActive && <Check size={16} className="top-nav-dropdown-check" style={{ color: item.color }} />}
+                        </button>
+                      );
+                    })}
 
-                  <div className="top-nav-dropdown-divider" />
-                  <div className="top-nav-dropdown-header">Explore &amp; Tools</div>
-                  {toolsList.map((item) => {
-                    const ItemIcon = item.icon;
-                    const isActive = activeSection === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        role="menuitem"
-                        className={`top-nav-dropdown-item${isActive ? ' is-active' : ''}`}
-                        onClick={() => handleItemClick(item)}
-                      >
-                        <span
-                          className="top-nav-dropdown-icon-box"
-                          style={{
-                            background: `color-mix(in srgb, ${item.color} 14%, transparent)`,
-                            color: item.color,
-                          }}
+                    <div className="top-nav-dropdown-divider" />
+                    <div className="top-nav-dropdown-header">Explore &amp; Tools</div>
+                    {toolsList.map((item) => {
+                      const ItemIcon = item.icon;
+                      const isActive = currentSection === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="menuitem"
+                          className={`top-nav-dropdown-item${isActive ? ' is-active' : ''}`}
+                          onClick={() => handleItemClick(item)}
                         >
-                          <ItemIcon size={16} strokeWidth={2.2} />
-                        </span>
-                        <div className="top-nav-dropdown-text">
-                          <span className="top-nav-dropdown-label">{item.label}</span>
-                          <span className="top-nav-dropdown-sub">{item.desc}</span>
-                        </div>
-                        {isActive && <Check size={16} className="top-nav-dropdown-check" style={{ color: item.color }} />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+                          <span
+                            className="top-nav-dropdown-icon-box"
+                            style={{
+                              background: `color-mix(in srgb, ${item.color} 14%, transparent)`,
+                              color: item.color,
+                            }}
+                          >
+                            <ItemIcon size={16} strokeWidth={2.2} />
+                          </span>
+                          <div className="top-nav-dropdown-text">
+                            <span className="top-nav-dropdown-label">{item.label}</span>
+                            <span className="top-nav-dropdown-sub">{item.desc}</span>
+                          </div>
+                          {isActive && <Check size={16} className="top-nav-dropdown-check" style={{ color: item.color }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
       </div>
     </div>
   );

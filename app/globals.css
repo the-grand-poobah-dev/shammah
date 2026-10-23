@@ -7538,6 +7538,177 @@ button:focus-visible, a:focus-visible {
   50% { transform: scale(1.3); opacity: 0.75; }
 }
 
+/* Subpage navigation bar placed right beneath sticky TopNavGlobal */
+.subpage-nav-header {
+  position: relative;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 10;
+}
+
+/* Topbar Collapsed Controls (Circular Search & Section Nav buttons) */
+.topbar-collapsed-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-toggle-btn {
+  background: rgba(6, 182, 212, 0.12) !important;
+  border-color: rgba(6, 182, 212, 0.38) !important;
+  color: #06b6d4 !important;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.22) !important;
+}
+
+[data-theme='light'] .search-toggle-btn {
+  background: rgba(6, 182, 212, 0.10) !important;
+  border-color: rgba(6, 182, 212, 0.35) !important;
+  color: #0891b2 !important;
+  box-shadow: 0 1px 4px rgba(6, 182, 212, 0.15) !important;
+}
+
+.search-toggle-btn:hover {
+  background: rgba(6, 182, 212, 0.22) !important;
+  border-color: rgba(6, 182, 212, 0.70) !important;
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.45) !important;
+  color: #22d3ee !important;
+}
+
+.section-nav-toggle-btn {
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.section-nav-toggle-btn.is-open {
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.45) !important;
+  transform: scale(1.05);
+}
+
+.top-nav-dropdown-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background: transparent;
+}
+
+.top-nav-dropdown-menu {
+  position: fixed;
+  width: min(340px, calc(100vw - 20px));
+  max-height: 80vh;
+  border-radius: 16px;
+  background: rgba(18, 24, 27, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-theme='light'] .top-nav-dropdown-menu {
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.top-nav-dropdown-scrollable {
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-height: calc(80vh - 16px);
+}
+
+.top-nav-dropdown-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  padding: 8px 12px 4px;
+}
+
+.top-nav-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.18s ease;
+}
+
+.top-nav-dropdown-item:hover {
+  background: var(--surface);
+  border-color: var(--border);
+  transform: translateX(2px);
+}
+
+.top-nav-dropdown-item.is-active {
+  background: rgba(245, 158, 11, 0.10);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+[data-theme='light'] .top-nav-dropdown-item.is-active {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.40);
+}
+
+.top-nav-dropdown-icon-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.top-nav-dropdown-item:hover .top-nav-dropdown-icon-box {
+  transform: scale(1.08);
+}
+
+.top-nav-dropdown-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.top-nav-dropdown-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.top-nav-dropdown-sub {
+  font-size: 11px;
+  color: var(--ink-muted);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-nav-dropdown-check {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.top-nav-dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 8px;
+}
+
 .theme-switch {
   width: 42px;
   height: 24px;

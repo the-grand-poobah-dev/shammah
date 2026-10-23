@@ -133,7 +133,7 @@ export default function SettingsPage() {
 
   return (
     <main className="shell">
-      <div className="sticky-header">
+      <div className="subpage-nav-header">
         <header className="topbar">
           <div className="brand" style={{ gap: 10 }}>
             <Link
