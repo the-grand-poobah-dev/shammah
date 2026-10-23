@@ -23,6 +23,7 @@ import {
   Legend,
 } from 'recharts';
 import { playSound } from '../lib/soundEffects';
+import { usePollCountdown } from '../lib/useNow';
 
 const PALETTE = [
   '#06b6d4', // cyan
@@ -40,6 +41,9 @@ export default function PollAnalyticsModal({
   onClose,
 }) {
   const [viewMode, setViewMode] = useState('cumulative'); // cumulative | hourly
+  const { isExpired, label, hasExpiration } = usePollCountdown(
+    poll?.poll_expires_at || poll?.expires_at
+  );
 
   const options = useMemo(() => {
     if (pollOptions && pollOptions.length > 0) return pollOptions;
@@ -138,11 +142,22 @@ export default function PollAnalyticsModal({
               <TrendingUp size={18} />
             </span>
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <h3 className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
                 <span>Poll Analytics</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                   Creator View
                 </span>
+                {hasExpiration && isExpired && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-1">
+                    🏁 Poll Closed
+                  </span>
+                )}
+                {hasExpiration && !isExpired && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
+                    <Clock size={10} />
+                    <span>{label}</span>
+                  </span>
+                )}
               </h3>
               <p className="text-xs text-gray-400 truncate max-w-sm">
                 {poll?.question || poll?.text_content || 'Voting patterns & response progression'}
@@ -161,6 +176,36 @@ export default function PollAnalyticsModal({
 
         {/* Modal Body */}
         <div className="p-5 max-h-[80vh] overflow-y-auto space-y-4 text-sm text-gray-200">
+          {/* Expiration Status Banner */}
+          {hasExpiration && isExpired && (
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-between text-xs text-rose-200">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🏁</span>
+                <div>
+                  <p className="font-bold text-rose-300">Poll Closed · Final Results</p>
+                  <p className="text-[11px] text-rose-200/70">
+                    Voting has officially concluded for this poll. Results are locked and finalized.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider font-semibold">
+                Concluded
+              </span>
+            </div>
+          )}
+
+          {hasExpiration && !isExpired && (
+            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-xs text-amber-200">
+              <div className="flex items-center gap-2">
+                <Clock size={13} className="text-amber-400 shrink-0" />
+                <span className="text-amber-300 font-medium">Actively accepting votes ({label})</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider font-semibold">
+                Live
+              </span>
+            </div>
+          )}
+
           {/* Quick Metrics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">

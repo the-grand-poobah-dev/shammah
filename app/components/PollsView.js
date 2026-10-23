@@ -122,9 +122,13 @@ export default function PollsView({
   const displayedPolls = allPolls.filter((p) => {
     const hasVoted = myVoteByPost[p.id] != null;
     const isQuizPoll = Boolean(p.is_quiz || p.poll_type === 'quiz' || (p.options && p.options.some((o) => o.is_correct)) || (pollOptionsByPost[p.id] && pollOptionsByPost[p.id].some((o) => o.is_correct)));
+    const expiresAt = p.poll_expires_at || p.expires_at;
+    const isExpired = expiresAt ? new Date(expiresAt).getTime() <= Date.now() : false;
+
     if (filter === 'quiz') return isQuizPoll;
     if (filter === 'voted') return hasVoted;
-    if (filter === 'active') return !hasVoted;
+    if (filter === 'active') return !hasVoted && !isExpired;
+    if (filter === 'closed') return isExpired;
     return true;
   });
 
@@ -221,6 +225,16 @@ export default function PollsView({
           >
             <Check size={13} />
             <span>My Votes</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={filter === 'closed'}
+            className={`video-subnav-pill${filter === 'closed' ? ' active' : ''}`}
+            onClick={() => setFilter('closed')}
+          >
+            <span>🏁 Closed</span>
           </button>
         </div>
 

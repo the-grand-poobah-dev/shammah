@@ -35,6 +35,7 @@ import {
 } from '../lib/offlineSyncManager';
 import { playSound } from '../lib/soundEffects';
 import { Clock, TrendingUp } from 'lucide-react';
+import { usePollCountdown } from '../lib/useNow';
 
 function PollBlock({
   options,
@@ -59,26 +60,9 @@ function PollBlock({
   const myOpt = options.find((o) => o.id === myVote);
   const isMyVoteCorrect = myOpt ? Boolean(myOpt.is_correct) : false;
 
-  // Check if poll is expired
-  const isExpired = pollExpiresAt ? new Date(pollExpiresAt).getTime() < Date.now() : false;
+  // Live countdown backed by shared single-interval timer
+  const { hasExpiration, isExpired, label, fullBadgeText } = usePollCountdown(pollExpiresAt);
   const canSeeResults = !revealOnlyAfterVote || hasVoted || isExpired;
-
-  function formatTimeRemaining(isoDate) {
-    if (!isoDate) {
-      if (pollDuration === '1h') return '1h remaining';
-      if (pollDuration === '3d') return '3d remaining';
-      if (pollDuration === '7d') return '7d remaining';
-      return '24h remaining';
-    }
-    const diff = new Date(isoDate).getTime() - Date.now();
-    if (diff <= 0) return 'Closed';
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    if (days >= 1) return `${days}d ${hours % 24}h left`;
-    const minutes = Math.floor(diff / (1000 * 60));
-    if (hours >= 1) return `${hours}h ${minutes % 60}m left`;
-    return `${Math.max(1, minutes)}m left`;
-  }
 
   if (hasImages) {
     return (
@@ -86,15 +70,17 @@ function PollBlock({
         {/* Poll Header Bar: Expiration Countdown & Reveal Results Toggle */}
         <div className="poll-card-meta-bar">
           <div className="poll-status-tag-group">
-            {isExpired ? (
-              <span className="poll-badge-closed">
-                <span>🏁 Poll Closed · Final Results</span>
-              </span>
-            ) : (
-              <span className="poll-badge-active" title={pollExpiresAt || 'Active Poll'}>
-                <Clock size={11} />
-                <span>{formatTimeRemaining(pollExpiresAt)}</span>
-              </span>
+            {hasExpiration && (
+              isExpired ? (
+                <span className="poll-badge-closed">
+                  <span>{fullBadgeText || '🏁 Poll Closed · Final Results'}</span>
+                </span>
+              ) : (
+                <span className="poll-badge-active" title={pollExpiresAt ? `Closes: ${new Date(pollExpiresAt).toLocaleString()}` : 'Active Poll'}>
+                  <Clock size={11} />
+                  <span>{label}</span>
+                </span>
+              )
             )}
           </div>
 
@@ -180,16 +166,18 @@ function PollBlock({
               {isMyVoteCorrect ? 'Score: 100/100 · Correct 🏆' : 'Score: 0/100 · Incorrect'}
             </span>
           )}
-          {isExpired ? (
-            <span className="poll-badge-closed">
-              <span>🏁 Poll Closed · Final Results</span>
-            </span>
-          ) : (
-            <span className="poll-badge-active" title={pollExpiresAt || 'Active Poll'}>
-              <Clock size={11} />
-              <span>{formatTimeRemaining(pollExpiresAt)}</span>
-            </span>
-          )}
+            {hasExpiration && (
+              isExpired ? (
+                <span className="poll-badge-closed">
+                  <span>{fullBadgeText || '🏁 Poll Closed · Final Results'}</span>
+                </span>
+              ) : (
+                <span className="poll-badge-active" title={pollExpiresAt ? `Closes: ${new Date(pollExpiresAt).toLocaleString()}` : 'Active Poll'}>
+                  <Clock size={11} />
+                  <span>{label}</span>
+                </span>
+              )
+            )}
         </div>
 
         <button

@@ -628,7 +628,7 @@ export default function Feed() {
       let query = supabase
         .from('posts')
         .select(
-          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, profiles(display_name, avatar_url, badge, badge_verified, role)'
+          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, poll_expires_at, profiles(display_name, avatar_url, badge, badge_verified, role)'
         )
         .order('created_at', { ascending: false })
         .limit(50);
@@ -738,13 +738,24 @@ export default function Feed() {
 
   async function handleVote(postId, optionId) {
     if (!session) return;
+
+    // Check if poll is already closed
+    const targetPost = posts.find((p) => p.id === postId);
+    const expiresAt = targetPost?.poll_expires_at || targetPost?.expires_at;
+    if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) {
+      return;
+    }
+
     const { error } = await supabase
       .from('poll_votes')
       .upsert(
         { post_id: postId, option_id: optionId, voter_id: session.user.id },
         { onConflict: 'post_id,voter_id' }
       );
-    if (error) return;
+    if (error) {
+      console.warn('Vote rejected by server (poll may be closed):', error.message);
+      return;
+    }
     setMyVoteByPost((v) => ({ ...v, [postId]: optionId }));
     logActivity({
       type: 'poll_vote',
@@ -881,6 +892,7 @@ export default function Feed() {
         text_content: text || null,
         media_url,
         media_type,
+        poll_expires_at: pollExpiresAtToSave,
       })
       .select('id')
       .single();

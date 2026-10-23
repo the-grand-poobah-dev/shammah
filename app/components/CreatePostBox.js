@@ -270,13 +270,15 @@ export default function CreatePostBox({
     }
     setCategoryError(false);
     const durationMs =
-      pollDuration === '1h'
-        ? 1000 * 60 * 60
-        : pollDuration === '3d'
-          ? 1000 * 60 * 60 * 24 * 3
-          : pollDuration === '7d'
-            ? 1000 * 60 * 60 * 24 * 7
-            : 1000 * 60 * 60 * 24; // 24h default
+      pollDuration === '1m'
+        ? 1000 * 60
+        : pollDuration === '1h'
+          ? 1000 * 60 * 60
+          : pollDuration === '3d'
+            ? 1000 * 60 * 60 * 24 * 3
+            : pollDuration === '7d'
+              ? 1000 * 60 * 60 * 24 * 7
+              : 1000 * 60 * 60 * 24; // 24h default
 
     const pollExpiresAt = isPoll ? new Date(Date.now() + durationMs).toISOString() : null;
 
@@ -875,6 +877,7 @@ export default function CreatePostBox({
               </label>
               <div className="poll-duration-pills" role="radiogroup" aria-label="Poll expiration duration">
                 {[
+                  { id: '1m', label: '1 Min (Test)', title: '1 Minute · Instant Closing Test' },
                   { id: '1h', label: '1 Hour', title: '1 Hour · Quick Pulse' },
                   { id: '24h', label: '24 Hours', title: '24 Hours · 1 Day (Default)' },
                   { id: '3d', label: '3 Days', title: '3 Days · Weekend Poll' },
@@ -929,7 +932,7 @@ export default function CreatePostBox({
                 <span className="poll-preview-badge">Live Feed Look</span>
                 <span className="poll-preview-duration-badge" title="Selected poll expiration">
                   <Clock size={10} />
-                  <span>Closes in {pollDuration === '1h' ? '1 hour' : pollDuration === '24h' ? '24 hours' : pollDuration === '3d' ? '3 days' : '1 week'}</span>
+                  <span>Closes in {pollDuration === '1m' ? '1 minute' : pollDuration === '1h' ? '1 hour' : pollDuration === '24h' ? '24 hours' : pollDuration === '3d' ? '3 days' : '1 week'}</span>
                 </span>
               </div>
               <div className="poll-preview-controls">

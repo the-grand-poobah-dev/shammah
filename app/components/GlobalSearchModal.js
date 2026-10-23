@@ -22,6 +22,7 @@ import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import { playSound } from '../lib/soundEffects';
 import { timeAgo, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
+import { formatPollTimeRemaining } from '../lib/useNow';
 
 const RECENT_SEARCHES_KEY = 'shammah_recent_searches_v1';
 
@@ -324,7 +325,7 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
         // Query Posts
         const { data: postsData } = await supabase
           .from('posts')
-          .select('id, text_content, created_at, category_id, profiles(display_name, avatar_url, role)')
+          .select('id, text_content, created_at, category_id, poll_expires_at, profiles(display_name, avatar_url, role)')
           .ilike('text_content', `%${q}%`)
           .limit(10);
 
@@ -825,6 +826,10 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                   </div>
                   {filteredPosts.map((p) => {
                     const authorName = p.profiles?.display_name || 'Fellowship Member';
+                    const pollExpiry = p.poll_expires_at ? formatPollTimeRemaining(p.poll_expires_at, now) : null;
+                    const isPollExpired = Boolean(pollExpiry?.isClosed);
+                    const pollExpiryLabel = pollExpiry?.label || null;
+
                     return (
                       <motion.div
                         key={p.id}
@@ -838,6 +843,17 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                         <div className="search-result-meta">
                           <div className="search-title-row">
                             <strong>{authorName}</strong>
+                            {p.poll_expires_at && (
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold inline-flex items-center gap-1 ${
+                                  isPollExpired
+                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                }`}
+                              >
+                                {isPollExpired ? '🏁 Poll Closed' : `⏳ ${pollExpiryLabel}`}
+                              </span>
+                            )}
                             {p.created_at && (
                               <span
                                 className="search-time"
