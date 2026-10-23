@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check, Eye, EyeOff, BookOpen, AlertCircle, Sparkles, MessageCircle, Share2, Pin } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
-import { categoryStyle, timeAgo } from '../lib/postDisplay';
+import { categoryStyle, timeAgo, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
 import ReactionBar from './ReactionBar';
@@ -314,6 +314,7 @@ export default function PostCard({
   onOpenDirectMessage,
 }) {
   const router = useRouter();
+  const now = useRelativeTimeTick();
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(null);
   const [shareMsg, setShareMsg] = useState('');
@@ -586,10 +587,11 @@ export default function PostCard({
             {/* Posting Date / Time */}
             <span
               className="post-timestamp-pill"
-              title={post.created_at ? new Date(post.created_at).toLocaleString() : 'Recently posted'}
+              title={getPostDateTitle(post.created_at) || 'Recently posted'}
+              suppressHydrationWarning
             >
               <Clock size={11} className="post-time-icon" />
-              <span>{timeAgo(post.created_at)}</span>
+              <span>{timeAgo(post.created_at, now)}</span>
             </span>
 
             {/* Church / Institution Badge */}

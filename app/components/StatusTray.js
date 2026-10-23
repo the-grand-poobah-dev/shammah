@@ -5,10 +5,12 @@ import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
 import { getActiveStatuses, fetchActiveStatuses } from '../lib/statusManager';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 import StatusViewerModal from './StatusViewerModal';
 import StatusCreatorModal from './StatusCreatorModal';
 
 export default function StatusTray({ currentUser }) {
+  const now = useRelativeTimeTick();
   const [statuses, setStatuses] = useState([]);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
@@ -210,11 +212,6 @@ export default function StatusTray({ currentUser }) {
         {statuses.map((status, index) => {
           if (hasMyStatus && index === myStatusIndex) return null;
 
-          const hoursAgo = Math.max(
-            1,
-            Math.round((Date.now() - new Date(status.createdAt).getTime()) / (1000 * 60 * 60))
-          );
-
           return (
             <div
               key={status.id}
@@ -286,7 +283,13 @@ export default function StatusTray({ currentUser }) {
                     <VerifiedBadge badge={status.userBadge} role={status.userRole} size={13} />
                   )}
                 </div>
-                <span className="status-card-time">{hoursAgo}h ago</span>
+                <span
+                  className="status-card-time"
+                  title={getPostDateTitle(status.createdAt)}
+                  suppressHydrationWarning
+                >
+                  {formatPostDate(status.createdAt, now)}
+                </span>
               </div>
             </div>
           );

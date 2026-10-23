@@ -32,8 +32,10 @@ import {
   dispatchCommunityPushForPost,
 } from '../lib/fcmClient';
 import { isSoundEnabled, setSoundEnabled, playSound } from '../lib/soundEffects';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 export default function NotificationsView({ currentUser, openAuth }) {
+  const now = useRelativeTimeTick();
   const [notifications, setNotifications] = useState([]);
   const [activeCategory, setActiveCategory] = useState('all');
   const [pushConfig, setPushConfig] = useState({
@@ -355,13 +357,12 @@ export default function NotificationsView({ currentUser, openAuth }) {
                     <strong className="notif-actor-name">{item.actorName}</strong>
                     {item.actorBadge && <VerifiedBadge badge={item.actorBadge} size={13} />}
                   </div>
-                  <span className="notif-card-time">
-                    {item.timestamp
-                      ? new Date(item.timestamp).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : 'Now'}
+                  <span
+                    className="notif-card-time"
+                    title={getPostDateTitle(item.timestamp)}
+                    suppressHydrationWarning
+                  >
+                    {item.timestamp ? formatPostDate(item.timestamp, now) : 'Just now'}
                   </span>
                 </div>
 

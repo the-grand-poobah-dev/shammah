@@ -28,9 +28,11 @@ import {
 } from '../lib/offlineSyncManager';
 import Avatar from './Avatar';
 import { playSound } from '../lib/soundEffects';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 export default function OfflineLibraryModal({ onClose, onOpenItem }) {
   const router = useRouter();
+  const now = useRelativeTimeTick();
   const [offlineItems, setOfflineItems] = useState([]);
   const [activeFilter, setActiveFilter] = useState('all'); // all | church_feed | bible_chapter | courses | audio | posts
   const [expandedItemId, setExpandedItemId] = useState(null);
@@ -268,7 +270,13 @@ export default function OfflineLibraryModal({ onClose, onOpenItem }) {
                             <div key={post.id || pIdx} className="offline-cached-post-item">
                               <div className="cached-post-header">
                                 <span className="cached-author">{post.profiles?.display_name || churchFeed.churchName}</span>
-                                <span className="cached-date">{new Date(post.created_at || Date.now()).toLocaleDateString()}</span>
+                                <span
+                                  className="cached-date"
+                                  title={getPostDateTitle(post.created_at)}
+                                  suppressHydrationWarning
+                                >
+                                  {formatPostDate(post.created_at, now)}
+                                </span>
                               </div>
                               <p className="cached-post-text">{post.text_content || 'Shared media/announcement'}</p>
                             </div>

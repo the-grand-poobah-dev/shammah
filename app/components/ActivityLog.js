@@ -25,23 +25,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
-
-function formatActivityTime(isoString) {
-  if (!isoString) return 'Recent';
-  const now = Date.now();
-  const past = new Date(isoString).getTime();
-  const diffSec = Math.floor((now - past) / 1000);
-
-  if (diffSec < 60) return 'Just now';
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
-  if (diffSec < 86400 * 7) return `${Math.floor(diffSec / 86400)}d ago`;
-
-  return new Date(isoString).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
-}
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 const TYPE_ICONS = {
   post: PenSquare,
@@ -60,6 +44,7 @@ const TYPE_COLORS = {
 };
 
 export default function ActivityLog({ onSelectPost = null, onClose = null }) {
+  const now = useRelativeTimeTick();
   const [activities, setActivities] = useState([]);
   const [filterType, setFilterType] = useState('all'); // all | post | reaction | comment | poll_vote
   const [searchQuery, setSearchQuery] = useState('');
@@ -434,8 +419,12 @@ export default function ActivityLog({ onSelectPost = null, onClose = null }) {
 
                       <div className="activity-time-group">
                         <Clock size={11} className="time-icon" />
-                        <span className="activity-time-ago" title={item.timestamp}>
-                          {formatActivityTime(item.timestamp)}
+                        <span
+                          className="activity-time-ago"
+                          title={getPostDateTitle(item.timestamp)}
+                          suppressHydrationWarning
+                        >
+                          {formatPostDate(item.timestamp, now)}
                         </span>
                         <button
                           type="button"

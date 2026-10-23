@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { timeAgo } from '../lib/postDisplay';
+import { timeAgo, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
 import { detectMentionQuery, insertMention, splitMentions } from '../lib/mentions';
@@ -26,6 +26,7 @@ export default function CommentThread({
   postAuthorId = null,
   postAuthorName = null,
 }) {
+  const now = useRelativeTimeTick();
   const [state, setState] = useState('loading'); // loading | ready | error
   const [comments, setComments] = useState([]); // flat, newest replies included
   const [blockedUserIds, setBlockedUserIds] = useState(() => getBlockedUsers());
@@ -322,7 +323,13 @@ export default function CommentThread({
             </div>
 
             <div className="comment-meta">
-              <span className="mut-light">{timeAgo(comment.created_at)}</span>
+              <span
+                className="mut-light"
+                title={getPostDateTitle(comment.created_at)}
+                suppressHydrationWarning
+              >
+                {timeAgo(comment.created_at, now)}
+              </span>
 
               {/* Author reaction attribution badge */}
               {authorReaction && (

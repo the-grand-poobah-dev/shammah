@@ -5,11 +5,13 @@ import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
 import { reactToStatus, commentOnStatus } from '../lib/statusManager';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 import FaithReactionPicker from './FaithReactionPicker';
 
 const QUICK_EMOJIS = ['🙏', '❤️', '🙌', '🔥', '✨', '👏'];
 
 export default function StatusViewerModal({ statuses = [], initialIndex = 0, currentUser, onClose }) {
+  const now = useRelativeTimeTick();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [commentText, setCommentText] = useState('');
   const [sentFeedback, setSentFeedback] = useState(false);
@@ -244,11 +246,6 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
     }
   }
 
-  const hoursAgo = Math.max(
-    1,
-    Math.round((Date.now() - new Date(currentStatus.createdAt).getTime()) / (1000 * 60 * 60))
-  );
-
   return (
     <div
       className="status-viewer-fullscreen"
@@ -333,7 +330,13 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
                   />
                 )}
               </div>
-              <span className="status-viewer-time">{hoursAgo}h ago · 24h Status Story</span>
+              <span
+                className="status-viewer-time"
+                title={getPostDateTitle(currentStatus.createdAt)}
+                suppressHydrationWarning
+              >
+                {formatPostDate(currentStatus.createdAt, now)} · 24h Status Story
+              </span>
             </div>
           </div>
 

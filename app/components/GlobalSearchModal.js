@@ -21,7 +21,7 @@ import { supabase } from '../../lib/supabaseClient';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import { playSound } from '../lib/soundEffects';
-import { timeAgo } from '../lib/postDisplay';
+import { timeAgo, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 const RECENT_SEARCHES_KEY = 'shammah_recent_searches_v1';
 
@@ -225,6 +225,7 @@ const FALLBACK_POSTS = [
 
 export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }) {
   const router = useRouter();
+  const now = useRelativeTimeTick();
   const [query, setQuery] = useState(initialQuery);
   const [activeTab, setActiveTab] = useState('all'); // all | posts | churches | members
   const [isLoading, setIsLoading] = useState(false);
@@ -838,9 +839,13 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                           <div className="search-title-row">
                             <strong>{authorName}</strong>
                             {p.created_at && (
-                              <span className="search-time">
+                              <span
+                                className="search-time"
+                                title={getPostDateTitle(p.created_at)}
+                                suppressHydrationWarning
+                              >
                                 <Clock size={10} />
-                                {timeAgo(p.created_at)}
+                                {timeAgo(p.created_at, now)}
                               </span>
                             )}
                           </div>
