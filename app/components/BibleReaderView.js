@@ -39,8 +39,10 @@ import {
   getOfflineBibleChapter,
 } from '../lib/offlineSyncManager';
 import { playSound } from '../lib/soundEffects';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 export default function BibleReaderView({ session, currentUser, openAuth }) {
+  const now = useRelativeTimeTick();
   const [selectedBookId, setSelectedBookId] = useState('PSA');
   const [selectedChapter, setSelectedChapter] = useState(23);
   const [translation, setTranslation] = useState('NIV');
@@ -582,8 +584,12 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
                       <span key={idx} className="sn-tag-pill">{t}</span>
                     ))}
                   </div>
-                  <span className="sn-date">
-                    {new Date(n.updatedAt || n.createdAt).toLocaleDateString()}
+                  <span
+                    className="sn-date"
+                    title={getPostDateTitle(n.updatedAt || n.createdAt)}
+                    suppressHydrationWarning
+                  >
+                    {formatPostDate(n.updatedAt || n.createdAt, now)}
                   </span>
                 </div>
               </div>

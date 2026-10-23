@@ -23,9 +23,11 @@ import MemberBadge from './MemberBadge';
 import ReactionBar from './ReactionBar';
 import CommentThread from './CommentThread';
 import RepostModal from './RepostModal';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 import { isPostReposted, getPostRepostCount, toggleRepost } from '../lib/postInteractions';
 
 export default function ReelViewerModal({ reels = [], initialIndex = 0, currentUser, session, onClose, openAuth }) {
+  const now = useRelativeTimeTick();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
@@ -305,6 +307,15 @@ export default function ReelViewerModal({ reels = [], initialIndex = 0, currentU
               )}
               {currentReel.profiles?.badge_verified && (
                 <VerifiedBadge badge={currentReel.profiles.badge} size={14} />
+              )}
+              {currentReel.created_at && (
+                <span
+                  className="reel-pub-time"
+                  title={getPostDateTitle(currentReel.created_at)}
+                  suppressHydrationWarning
+                >
+                  · {formatPostDate(currentReel.created_at, now)}
+                </span>
               )}
             </div>
           </div>

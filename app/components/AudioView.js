@@ -28,6 +28,7 @@ import ReactionBar from './ReactionBar';
 import CommentThread from './CommentThread';
 import RepostModal from './RepostModal';
 import { isPostReposted, getPostRepostCount, toggleRepost } from '../lib/postInteractions';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 const SAMPLE_AUDIO_TRACKS = [
   {
@@ -199,6 +200,7 @@ function AudioTrackCard({
   }
 
   const isCurrentPlaying = isActiveTrack && isPlaying;
+  const now = useRelativeTimeTick();
 
   return (
     <article className={`post-card audio-track-card${isCurrentPlaying ? ' is-active-playing' : ''}`}>
@@ -224,7 +226,13 @@ function AudioTrackCard({
             ) : (
               <span className="audio-type-chip podcast"><Headphones size={11} /> Sermon Podcast</span>
             )}
-            <span className="audio-duration-meta">{track.duration_label}</span>
+            <span
+              className="audio-duration-meta"
+              title={getPostDateTitle(track.created_at)}
+              suppressHydrationWarning
+            >
+              {track.duration_label}{track.created_at ? ` · ${formatPostDate(track.created_at, now)}` : ''}
+            </span>
           </div>
 
           <h3 className="audio-track-title">{track.title}</h3>

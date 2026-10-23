@@ -24,8 +24,10 @@ import {
   subscribeToDirectMessages,
 } from '../lib/inboxManager';
 import { supabase } from '../../lib/supabaseClient';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 export default function InboxView({ currentUser }) {
+  const now = useRelativeTimeTick();
   const [conversations, setConversations] = useState([]);
   const [activeConvId, setActiveConvId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -387,7 +389,17 @@ export default function InboxView({ currentUser }) {
                     )}
                     <span className="inbox-conv-snippet">{conv.lastMessage || 'New conversation'}</span>
                   </div>
-                  <div className="inbox-conv-meta">
+                  <div className="inbox-conv-meta" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {conv.lastMessageTime && (
+                      <span
+                        className="inbox-conv-time"
+                        title={getPostDateTitle(conv.lastMessageTime)}
+                        suppressHydrationWarning
+                        style={{ fontSize: 11, color: 'var(--ink-faint)', whiteSpace: 'nowrap' }}
+                      >
+                        {formatPostDate(conv.lastMessageTime, now)}
+                      </span>
+                    )}
                     <ShieldCheck size={11} className="inbox-mini-lock text-cyan-400" title="RLS Protected" />
                   </div>
                 </div>

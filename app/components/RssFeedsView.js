@@ -41,8 +41,10 @@ import {
   PRESET_RSS_FEEDS,
 } from '../lib/rssManager';
 import { isPostReposted, getPostRepostCount, toggleRepost } from '../lib/postInteractions';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 function RssItemCard({ item, feed, session, currentUser, openAuth, isDeveloper }) {
+  const now = useRelativeTimeTick();
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(item.commentsCount || 4);
@@ -116,7 +118,13 @@ function RssItemCard({ item, feed, session, currentUser, openAuth, isDeveloper }
           <Rss size={13} className="rss-icon-orange" />
           <span className="rss-source-name">{feed.sourceName || item.source}</span>
           <span className="rss-dot">·</span>
-          <span className="rss-pub-date">{item.pubDate}</span>
+          <span
+            className="rss-pub-date"
+            title={getPostDateTitle(item.pubDate || item.created_at)}
+            suppressHydrationWarning
+          >
+            {formatPostDate(item.pubDate || item.created_at, now)}
+          </span>
         </div>
 
         {item.sourceUrl && (
@@ -237,6 +245,7 @@ function RssItemCard({ item, feed, session, currentUser, openAuth, isDeveloper }
 }
 
 export default function RssFeedsView({ session, currentUser, openAuth }) {
+  const now = useRelativeTimeTick();
   const [subscribedFeeds, setSubscribedFeeds] = useState([]);
   const [broadcastFeeds, setBroadcastFeeds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -551,7 +560,12 @@ export default function RssFeedsView({ session, currentUser, openAuth }) {
                             />
                             <div className="rss-check-text">
                               <strong>{item.title}</strong>
-                              <small>{item.author ? `By ${item.author} · ` : ''}{item.pubDate}</small>
+                              <small
+                                title={getPostDateTitle(item.pubDate)}
+                                suppressHydrationWarning
+                              >
+                                {item.author ? `By ${item.author} · ` : ''}{formatPostDate(item.pubDate, now)}
+                              </small>
                             </div>
                           </label>
                         );

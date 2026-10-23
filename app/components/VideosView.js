@@ -26,6 +26,7 @@ import CommentThread from './CommentThread';
 import RepostModal from './RepostModal';
 import ReelViewerModal from './ReelViewerModal';
 import { isPostReposted, getPostRepostCount, toggleRepost } from '../lib/postInteractions';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 // Sample church longform and shortform video content
 const SAMPLE_VIDEOS = [
@@ -141,6 +142,7 @@ const VIDEO_PLAYLISTS = [
 ];
 
 function VideoCard({ video, session, currentUser, openAuth, onOpenReelViewer }) {
+  const now = useRelativeTimeTick();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -248,7 +250,14 @@ function VideoCard({ video, session, currentUser, openAuth, onOpenReelViewer }) 
                   <VerifiedBadge badge={video.profiles.badge} size={14} />
                 )}
               </div>
-              <span className="video-pub-time">{video.duration_label} · Short-form Reel</span>
+              <span
+                className="video-pub-time"
+                title={getPostDateTitle(video.created_at)}
+                suppressHydrationWarning
+              >
+                {video.created_at ? `${formatPostDate(video.created_at, now)} · ` : ''}
+                {video.duration_label} · Short-form Reel
+              </span>
             </div>
           </div>
 
@@ -394,7 +403,14 @@ function VideoCard({ video, session, currentUser, openAuth, onOpenReelViewer }) 
                 <VerifiedBadge badge={video.profiles.badge} size={14} />
               )}
             </div>
-            <span className="video-pub-time">{video.duration_label} · Sermon &amp; Teaching</span>
+            <span
+              className="video-pub-time"
+              title={getPostDateTitle(video.created_at)}
+              suppressHydrationWarning
+            >
+              {video.created_at ? `${formatPostDate(video.created_at, now)} · ` : ''}
+              {video.duration_label} · Sermon &amp; Teaching
+            </span>
           </div>
         </div>
 
