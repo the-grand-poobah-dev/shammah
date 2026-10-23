@@ -7,7 +7,6 @@ import CreatePostBox from './components/CreatePostBox';
 import CreatePostModal from './components/CreatePostModal';
 import Link from 'next/link';
 import Avatar from './components/Avatar';
-import UserAccountMenu from './components/UserAccountMenu';
 import MemberName from './components/MemberName';
 import OnboardingWizard from './components/OnboardingWizard';
 import { uploadPostMedia } from './lib/mediaUpload';
@@ -21,8 +20,7 @@ import {
 } from './lib/pinnedPosts';
 import { PenSquare, User, ShieldCheck, Settings, Compass, LogOut, Church, Pin, Sun, Moon, Volume2, VolumeX, DownloadCloud, X, Search, Home, MessageCircle, Bell, Building2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import TopNav, { TOP_NAV_SECTIONS } from './components/TopNav';
-import TopNavCollapsedControls from './components/TopNavCollapsedControls';
+import { TOP_NAV_SECTIONS } from './components/TopNav';
 import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
 import VideosView from './components/VideosView';
@@ -255,8 +253,10 @@ export default function Feed() {
   // Global modal event listeners for profile and institution popups with neon glow borders
   useEffect(() => {
     function handleOpenProfile(e) {
-      if (e.detail) {
+      if (e?.detail) {
         setActiveProfileModal(e.detail);
+      } else {
+        setShowProfile(true);
       }
     }
     function handleOpenInstProfile(e) {
@@ -279,12 +279,18 @@ export default function Feed() {
     function handlePrivacyStateSync() {
       setPrivacyTick((v) => v + 1);
     }
+    function handleAdminModeToggled(e) {
+      if (typeof e.detail === 'boolean') {
+        setAdminMode(e.detail);
+      }
+    }
     window.addEventListener('shammah:open-profile', handleOpenProfile);
     window.addEventListener('shammah:open-institution-profile', handleOpenInstProfile);
     window.addEventListener('shammah:post-visibility-changed', handlePrivacyStateSync);
     window.addEventListener('shammah:batch-visibility-changed', handlePrivacyStateSync);
     window.addEventListener('shammah:follows-updated', handlePrivacyStateSync);
     window.addEventListener('shammah:institutions-updated', handlePrivacyStateSync);
+    window.addEventListener('shammah:admin-mode-toggled', handleAdminModeToggled);
     return () => {
       window.removeEventListener('shammah:open-profile', handleOpenProfile);
       window.removeEventListener('shammah:open-institution-profile', handleOpenInstProfile);
@@ -292,6 +298,7 @@ export default function Feed() {
       window.removeEventListener('shammah:batch-visibility-changed', handlePrivacyStateSync);
       window.removeEventListener('shammah:follows-updated', handlePrivacyStateSync);
       window.removeEventListener('shammah:institutions-updated', handlePrivacyStateSync);
+      window.removeEventListener('shammah:admin-mode-toggled', handleAdminModeToggled);
     };
   }, []);
 
@@ -300,6 +307,11 @@ export default function Feed() {
     function syncUrlParams() {
       if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
+        const authParam = params.get('auth');
+        if (authParam && ['signin', 'signup', 'forgot', 'oauth'].includes(authParam)) {
+          setAuthMode(authParam);
+          setShowAuth(true);
+        }
         const t = params.get('tab');
         if (t === 'institutions') {
           setTab('churches');
@@ -1134,215 +1146,6 @@ export default function Feed() {
 
   return (
     <div className="shell">
-      <div className="sticky-header">
-        <header className="topbar">
-          <div className="brand">
-            <div className="brand-text-wrap">
-              <h1 className="brand-mark">Shammah</h1>
-              <span className="brand-subtext">The Lord is Here</span>
-            </div>
-          </div>
-
-          <div className="topbar-right">
-            <div className="topbar-toggle-group">
-              {/* Sun icon for light mode / Moon icon for dark mode toggle at same location */}
-              <button
-                type="button"
-                className={`topbar-toggle-btn theme-toggle-btn ${dark ? 'is-dark' : 'is-light'}`}
-                role="switch"
-                aria-checked={dark}
-                aria-label={dark ? 'Light mode (tap to switch to light mode)' : 'Dark mode (tap to switch to dark mode)'}
-                title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                onClick={handleToggleTheme}
-              >
-                {dark ? (
-                  <Moon size={18} className="theme-toggle-icon moon-icon text-amber-300" />
-                ) : (
-                  <Sun size={18} className="theme-toggle-icon sun-icon text-amber-500" />
-                )}
-              </button>
-
-              {/* Sound profile on/off toggle beside it */}
-              <button
-                type="button"
-                className={`topbar-toggle-btn sound-toggle-btn ${soundOn ? 'sound-on' : 'sound-off'}`}
-                role="switch"
-                aria-checked={soundOn}
-                aria-label={soundOn ? 'Sound alerts on (tap to mute)' : 'Sound alerts muted (tap to enable)'}
-                title={soundOn ? 'Mute sound alerts' : 'Enable sound alerts'}
-                onClick={handleToggleSound}
-              >
-                {soundOn ? (
-                  <Volume2 size={18} className="sound-toggle-icon sound-icon-active text-amber-600 dark:text-amber-400" />
-                ) : (
-                  <VolumeX size={18} className="sound-toggle-icon sound-icon-muted text-gray-400" />
-                )}
-              </button>
-
-                {/* Small status icon in top navigation bar to inform users when content is cached & available offline */}
-                <button
-                  type="button"
-                  className={`topbar-toggle-btn offline-cache-toggle-btn${offlineCount > 0 ? ' is-cached' : ''}`}
-                  title={
-                    isDisconnected || hasPendingSyncs
-                      ? hasPendingSyncs
-                        ? `Offline — ${pendingSyncCount || 1} pending sync(s) queued (yellow indicator). Click to open library.`
-                        : 'Offline — Complete network disconnection detected by Service Worker (red indicator). Click to open library.'
-                      : offlineCount > 0
-                        ? `✓ ${offlineCount} item${offlineCount > 1 ? 's' : ''} cached & available for offline viewing (30-day cache). Click to open library.`
-                        : 'Offline Library: Save feeds & chapters for offline viewing'
-                  }
-                  aria-label="Offline Cached Content Status"
-                  onClick={() => {
-                    playSound('reaction');
-                    setShowOfflineLibrary(true);
-                  }}
-                >
-                  <DownloadCloud size={17} className={offlineCount > 0 ? 'text-emerald-400' : 'text-gray-400'} />
-                  {(isDisconnected || hasPendingSyncs) ? (
-                    <span
-                      className={`inline-block w-2 h-2 rounded-full ml-1 animate-pulse ${
-                        dotColor === 'yellow' ? 'bg-yellow-400' : 'bg-red-500'
-                      }`}
-                    />
-                  ) : (
-                    offlineCount > 0 && <span className="topbar-offline-dot" />
-                  )}
-                </button>
-
-                {/* Collapsed Search & Section Navigation circular buttons when scrolled down or on non-home tabs */}
-                <AnimatePresence>
-                  {(tab !== 'home' || isScrolledDown) && (
-                    <motion.div
-                      key="topbar-collapsed-controls"
-                      initial={{ opacity: 0, scale: 0.8, width: 0 }}
-                      animate={{ opacity: 1, scale: 1, width: 'auto' }}
-                      exit={{ opacity: 0, scale: 0.8, width: 0 }}
-                      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                      style={{ display: 'inline-flex', alignItems: 'center', overflow: 'hidden' }}
-                    >
-                      <TopNavCollapsedControls
-                        activeSection={section}
-                        onSelectSection={(sec) => {
-                          setTab('home');
-                          setSection(sec);
-                        }}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Topbar 'Offline' indicator badge when Service Worker detects network loss or pending syncs */}
-                {(isDisconnected || hasPendingSyncs) && (
-                  <span
-                    role="status"
-                    className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-900/90 text-white border border-white/15 shadow-sm"
-                    title={
-                      dotColor === 'yellow'
-                        ? 'Yellow dot: Pending syncs waiting for network reconnection'
-                        : 'Red dot: Complete network disconnection detected by Service Worker'
-                    }
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
-                        dotColor === 'yellow' ? 'bg-yellow-400' : 'bg-red-500'
-                      }`}
-                    />
-                    <span>
-                      {dotColor === 'yellow'
-                        ? `Offline · Pending (${pendingSyncCount || 1})`
-                        : 'Offline'}
-                    </span>
-                  </span>
-                )}
-              </div>
-
-              {session ? (
-                <UserAccountMenu
-                  session={session}
-                  profile={profile}
-                  canModerate={canModerate}
-                  adminMode={adminMode}
-                  setAdminMode={setAdminMode}
-                  ownedChurches={ownedChurches}
-                  onOpenCreatePost={focusCompose}
-                  onOpenProfile={() => setShowProfile(true)}
-                  onOpenActivityLog={() => setShowActivityLogModal(true)}
-                  onSignOut={handleSignOut}
-                />
-              ) : (
-                <div className="auth-header-actions">
-                  <button className="signin-btn" onClick={() => openAuth('signin')}>
-                    Sign in
-                  </button>
-                  <button className="signup-btn" onClick={() => openAuth('signup')}>
-                    Sign up
-                  </button>
-                </div>
-              )}
-            </div>
-        </header>
-
-        {tab === 'home' && (
-          <AnimatePresence initial={false}>
-            {!isScrolledDown && (
-              <motion.div
-                key="header-secondary-expanded"
-                className="header-secondary"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-                style={{ overflow: 'hidden' }}
-              >
-                <TopNav
-                  isHome={true}
-                  activeSection={section}
-                  onSelectSection={(sec) => {
-                    setTab('home');
-                    setSection(sec);
-                    if (typeof window !== 'undefined') {
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }
-                  }}
-                />
-
-                {/* Search Input Bar Widget panning across screen directly below top navigation bar */}
-                <div className="header-search-widget-wrap">
-                  <div
-                    className="header-search-bar-widget"
-                    role="search"
-                    tabIndex={0}
-                    onClick={() => {
-                      playSound('reaction');
-                      window.dispatchEvent(new CustomEvent('shammah:open-search', { detail: { query: '' } }));
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        playSound('reaction');
-                        window.dispatchEvent(new CustomEvent('shammah:open-search', { detail: { query: '' } }));
-                      }
-                    }}
-                    aria-label="Search scriptures, sermons, topics, and churches"
-                    title="Search scriptures, sermons, topics, and churches (Press / or ⌘K)"
-                  >
-                    <Search size={16} className="search-bar-widget-icon" />
-                    <span className="search-bar-widget-placeholder">
-                      Search sermons, scriptures, topics, members...
-                    </span>
-                    <span className="search-bar-widget-badge">
-                      <kbd className="search-kbd">⌘K</kbd>
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        )}
-      </div>
-
       {showProfile && session && (
         <div className="auth-overlay" onClick={() => setShowProfile(false)}>
           <div className="auth-panel" onClick={(e) => e.stopPropagation()}>

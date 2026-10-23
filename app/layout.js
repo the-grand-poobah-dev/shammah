@@ -4,7 +4,7 @@ import './cx.css';
 import AppClientInit from './components/AppClientInit';
 import BottomNav from './components/BottomNav';
 import ScrollProgressIndicator from './components/ScrollProgressIndicator';
-import TopNavGlobal from './components/TopNavGlobal';
+import AppHeader from './components/AppHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +37,7 @@ export default function RootLayout({ children }) {
       <body className="theme-dark" suppressHydrationWarning>
         <AppClientInit />
         <ScrollProgressIndicator />
-        <TopNavGlobal />
+        <AppHeader />
         {children}
         <BottomNav />
       </body>
