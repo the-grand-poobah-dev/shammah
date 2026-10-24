@@ -11,6 +11,7 @@ import ReactionBar from './ReactionBar';
 import CommentThread from './CommentThread';
 import PinIcon from './PinIcon';
 import RepostModal from './RepostModal';
+import VerifiedBadge from './VerifiedBadge';
 import PostVisibilityModal from './PostVisibilityModal';
 import AuthorOverviewModal from './AuthorOverviewModal';
 import InstitutionProfileModal from './InstitutionProfileModal';
@@ -348,6 +349,46 @@ export default function PostCard({
       : author?.name || author?.display_name || 'Member';
   const authorAvatar = isProtectedIdentity ? null : author?.avatar_url;
 
+  // Hydrate quoted post if this post is a quote repost
+  const [quotedPostData, setQuotedPostData] = useState(() => post?.quoted_post || null);
+
+  useEffect(() => {
+    if (post?.quoted_post) {
+      setQuotedPostData(post.quoted_post);
+      return;
+    }
+    if (post?.quoted_post_id) {
+      let cancelled = false;
+      supabase
+        .from('posts')
+        .select(
+          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, profiles(display_name, avatar_url, badge, badge_verified, role)'
+        )
+        .eq('id', post.quoted_post_id)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (!cancelled && !error && data) {
+            setQuotedPostData(data);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [post?.quoted_post, post?.quoted_post_id]);
+
+  const quotedAuthorName =
+    quotedPostData?.profiles?.display_name ||
+    quotedPostData?.profiles?.name ||
+    quotedPostData?.author_name ||
+    'Member';
+  const quotedAuthorAvatar = quotedPostData?.profiles?.avatar_url || quotedPostData?.author_avatar;
+  const quotedIsVerified = Boolean(quotedPostData?.profiles?.badge_verified);
+  const quotedChurchName =
+    quotedPostData?.church_name ||
+    quotedPostData?.churches?.name ||
+    quotedPostData?.profiles?.church_name;
+
   // Repost status & visible counter (backed by Supabase)
   useEffect(() => {
     if (!post?.id) return;
@@ -657,6 +698,42 @@ export default function PostCard({
             >
               {textExpanded ? 'Show less' : 'Read more...'}
             </button>
+          )}
+        </div>
+      )}
+
+      {/* Quoted Post Card (when post is a repost with thoughts / quote post) */}
+      {quotedPostData && (
+        <div className="quoted-post-card">
+          <div className="quoted-post-header">
+            <Avatar name={quotedAuthorName} src={quotedAuthorAvatar} className="avatar-xs" />
+            <span className="quoted-author-name">{quotedAuthorName}</span>
+            {quotedIsVerified && <VerifiedBadge badge={quotedPostData.profiles?.badge} size={12} />}
+            {quotedChurchName && (
+              <span className="quoted-church-pill">
+                <Church size={10} />
+                <span>{quotedChurchName}</span>
+              </span>
+            )}
+            <span className="quoted-post-dot">·</span>
+            <span className="quoted-post-time">
+              {quotedPostData.created_at ? timeAgo(quotedPostData.created_at, now) : 'Recently'}
+            </span>
+          </div>
+
+          {quotedPostData.text_content && (
+            <p className="quoted-post-text">{quotedPostData.text_content}</p>
+          )}
+
+          {quotedPostData.media_url && quotedPostData.media_type === 'image' && (
+            <div className="quoted-post-media-wrap">
+              <img
+                src={quotedPostData.media_url}
+                alt=""
+                className="quoted-post-media"
+                loading="lazy"
+              />
+            </div>
           )}
         </div>
       )}

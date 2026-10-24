@@ -120,48 +120,60 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
 
   try {
     if (isValidUuid(postId) && isValidUuid(userId)) {
-      // Check existing instant repost
-      const { data: existing } = await supabase
-        .from('post_reposts')
-        .select('id')
-        .eq('post_id', postId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (existing && !quoteText) {
-        // Toggle OFF instant repost
-        await supabase
+      if (!quoteText) {
+        // Check existing instant repost
+        const { data: existing } = await supabase
           .from('post_reposts')
-          .delete()
+          .select('id')
           .eq('post_id', postId)
-          .eq('user_id', userId);
-        isNowReposted = false;
+          .eq('user_id', userId)
+          .or('comment.is.null,comment.eq.')
+          .maybeSingle();
+
+        if (existing) {
+          // Toggle OFF instant repost
+          await supabase
+            .from('post_reposts')
+            .delete()
+            .eq('id', existing.id);
+          isNowReposted = false;
+        } else {
+          // Add instant repost
+          await supabase
+            .from('post_reposts')
+            .insert({
+              post_id: postId,
+              user_id: userId,
+              comment: null,
+              quote_text: null,
+            });
+          isNowReposted = true;
+        }
       } else {
-        // Add instant repost or quote repost
+        // Add quote repost with thoughts
+        const trimmedQuote = quoteText.trim();
         await supabase
           .from('post_reposts')
           .insert({
             post_id: postId,
             user_id: userId,
-            comment: quoteText || null,
-            quote_text: quoteText || null,
+            comment: trimmedQuote,
+            quote_text: trimmedQuote,
           });
         isNowReposted = true;
 
-        if (quoteText) {
-          // Persist quoted post row in posts table with reference to original post
-          try {
-            await supabase.from('posts').insert({
-              author_id: userId,
-              text_content: quoteText,
-              quoted_post_id: postId,
-              category_id: post?.category_id || null,
-              church_id: user?.user_metadata?.church_id || null,
-              visibility: 'public',
-            });
-          } catch (insertErr) {
-            console.warn('Could not insert quoted post to posts table:', insertErr);
-          }
+        // Persist quoted post row in posts table with reference to original post
+        try {
+          await supabase.from('posts').insert({
+            author_id: userId,
+            text_content: trimmedQuote,
+            quoted_post_id: postId,
+            category_id: post?.category_id || null,
+            church_id: user?.user_metadata?.church_id || null,
+            visibility: 'public',
+          });
+        } catch (insertErr) {
+          console.warn('Could not insert quoted post to posts table:', insertErr);
         }
       }
     } else {

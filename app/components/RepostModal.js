@@ -138,10 +138,9 @@ export default function RepostModal({ post, currentUser, onClose, onConfirm }) {
                 className="repost-back-btn"
                 onClick={() => setSelectedOption('instant')}
                 aria-label="Back to Instant Repost"
-                title="Switch back to Instant Repost"
+                title="Back to Instant Repost"
               >
-                <ArrowLeft size={15} />
-                <span>Instant</span>
+                <ArrowLeft size={16} />
               </button>
               <label htmlFor="repost-quote-input" className="repost-thoughts-label">
                 Your Reflection

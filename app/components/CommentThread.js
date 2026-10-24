@@ -14,9 +14,10 @@ import {
   setAuthorCommentReaction,
 } from '../lib/commentPinManager';
 import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousManager';
+import { saveCommentIdentity, getCommentIdentity, removeCommentIdentity } from '../lib/commentIdentityManager';
 import { logActivity } from '../lib/activityLogManager';
 import { getBlockedUsers } from '../lib/profileManager';
-import { Pin, Sparkles, User, RefreshCw, EyeOff } from 'lucide-react';
+import { Pin, Sparkles, RefreshCw, EyeOff, Trash2 } from 'lucide-react';
 
 export default function CommentThread({
   postId,
@@ -25,6 +26,7 @@ export default function CommentThread({
   onCountChange,
   postAuthorId = null,
   postAuthorName = null,
+  profile: initialProfile = null,
 }) {
   const now = useRelativeTimeTick();
   const [state, setState] = useState('loading'); // loading | ready | error
@@ -40,10 +42,46 @@ export default function CommentThread({
   const [pinnedId, setPinnedId] = useState(() => getPinnedCommentId(postId));
   const [authorReactions, setAuthorReactions] = useState(() => getAuthorCommentReactions(postId));
 
+  // Current session user profile for "You" identity card
+  const [currentUserProfile, setCurrentUserProfile] = useState(initialProfile || null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!session?.user?.id) {
+      setCurrentUserProfile(null);
+      return;
+    }
+    if (initialProfile) {
+      setCurrentUserProfile(initialProfile);
+      return;
+    }
+    async function loadMyProfile() {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url, badge, badge_verified, role')
+        .eq('id', session.user.id)
+        .single();
+      if (!cancelled && data) {
+        setCurrentUserProfile(data);
+      }
+    }
+    loadMyProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, initialProfile]);
+
+  const myDisplayName =
+    currentUserProfile?.display_name ||
+    session?.user?.user_metadata?.full_name ||
+    session?.user?.email?.split('@')[0] ||
+    'You';
+  const myAvatarUrl = currentUserProfile?.avatar_url || null;
+  const myBadge = currentUserProfile?.badge || null;
+
   // Identity state: 'real' | 'anonymous' | 'pseudo'
   const [identityMode, setIdentityMode] = useState('real');
   const [pseudoIdentity, setPseudoIdentity] = useState(() => generatePseudoIdentity());
-  const [showIdentityMenu, setShowIdentityMenu] = useState(false);
 
   const inputRef = useRef(null);
   const isPostAuthor = Boolean(session?.user?.id && postAuthorId && session.user.id === postAuthorId);
@@ -91,16 +129,31 @@ export default function CommentThread({
         setState('error');
         return;
       }
-      setComments(data || []);
+
+      // Merge local identity meta if comment was posted with pseudonym or anonymous flag
+      const mapped = (data || []).map((c) => {
+        const meta = getCommentIdentity(c.id);
+        if (meta) {
+          return {
+            ...c,
+            is_anonymous: Boolean(meta.is_anonymous),
+            is_pseudo: Boolean(meta.is_pseudo),
+            pseudo_name: meta.pseudo_name || null,
+          };
+        }
+        return c;
+      });
+
+      setComments(mapped);
       setState('ready');
-      onCountChange((data || []).length);
+      onCountChange(mapped.length);
 
       const known = {};
-      (data || []).forEach((c) => {
+      mapped.forEach((c) => {
         if (c.author_id) known[c.author_id] = (c.profiles && c.profiles.display_name) || 'Someone';
       });
       const missing = new Set();
-      (data || []).forEach((c) => (c.mentioned_user_ids || []).forEach((id) => {
+      mapped.forEach((c) => (c.mentioned_user_ids || []).forEach((id) => {
         if (!known[id]) missing.add(id);
       }));
       if (missing.size > 0) {
@@ -185,6 +238,23 @@ export default function CommentThread({
     }, 0);
   }
 
+  async function handleDeleteComment(commentId) {
+    if (!window.confirm('Delete this comment?')) return;
+    removeCommentIdentity(commentId);
+    setComments((prev) => {
+      const next = prev.filter((c) => c.id !== commentId && c.parent_id !== commentId);
+      onCountChange(next.length);
+      return next;
+    });
+    const { error: delErr } = await supabase.from('comments').delete().eq('id', commentId);
+    if (delErr) {
+      console.error('Failed to delete comment:', delErr);
+      setError(delErr.message);
+    } else {
+      playSound('reaction');
+    }
+  }
+
   async function submit(e) {
     e.preventDefault();
     if (!session) return onRequireSignIn();
@@ -208,19 +278,45 @@ export default function CommentThread({
       setError(insertErr.message);
       return;
     }
+
+    const isAnon = identityMode === 'anonymous';
+    const isPsd = identityMode === 'pseudo';
+    const effectivePseudoName = pseudoIdentity.name?.trim() || 'Faith Pilgrim';
+
+    if (isAnon || isPsd) {
+      saveCommentIdentity(data.id, {
+        is_anonymous: isAnon,
+        is_pseudo: isPsd,
+        pseudo_name: isPsd ? effectivePseudoName : null,
+        author_id: session.user.id,
+      });
+    }
+
     const withProfile = {
       ...data,
-      is_anonymous: identityMode === 'anonymous',
-      is_pseudo: identityMode === 'pseudo',
-      pseudo_name: identityMode === 'pseudo' ? pseudoIdentity.name : null,
-      profiles: {
-        display_name:
-          identityMode === 'anonymous'
-            ? ANONYMOUS_IDENTITY.name
-            : identityMode === 'pseudo'
-              ? pseudoIdentity.name
-              : null,
-      },
+      is_anonymous: isAnon,
+      is_pseudo: isPsd,
+      pseudo_name: isPsd ? effectivePseudoName : null,
+      profiles: isAnon
+        ? {
+            display_name: ANONYMOUS_IDENTITY.name,
+            avatar_url: null,
+            badge: null,
+            badge_verified: false,
+          }
+        : isPsd
+        ? {
+            display_name: effectivePseudoName,
+            avatar_url: null,
+            badge: 'pilgrim',
+            badge_verified: false,
+          }
+        : currentUserProfile || {
+            display_name: myDisplayName,
+            avatar_url: myAvatarUrl,
+            badge: myBadge,
+            badge_verified: currentUserProfile?.badge_verified || false,
+          },
     };
     setComments((prev) => {
       const next = [...prev, withProfile];
@@ -230,11 +326,11 @@ export default function CommentThread({
     logActivity({
       type: 'comment',
       icon: '💬',
-      title: 'Commented on Post',
+      title: isAnon ? 'Commented with name hidden' : 'Commented on Post',
       targetTitle: postAuthorName ? `Post by ${postAuthorName}` : 'Post',
       snippet: clean,
       authorName: postAuthorName || '',
-      visibility: identityMode === 'anonymous' ? 'anonymous' : 'public',
+      visibility: isAnon ? 'anonymous' : 'public',
       meta: { postId, parentId: replyTo?.id },
     });
     playSound('commented');
@@ -245,8 +341,8 @@ export default function CommentThread({
   }
 
   function CommentRow({ comment, isReply }) {
-    const isAnonymous = comment.is_anonymous;
-    const isPseudo = comment.is_pseudo;
+    const isAnonymous = Boolean(comment.is_anonymous);
+    const isPseudo = Boolean(comment.is_pseudo);
     const cAuthor = Array.isArray(comment.profiles) ? comment.profiles[0] : comment.profiles;
 
     let authorName =
@@ -261,9 +357,11 @@ export default function CommentThread({
     }
 
     const mentionNames = (comment.mentioned_user_ids || []).map((id) => nameById[id]).filter(Boolean);
-    const isThisCommentAuthorThePostAuthor = !isAnonymous && postAuthorId && comment.author_id === postAuthorId;
+    const isThisCommentAuthorThePostAuthor = !isAnonymous && !isPseudo && postAuthorId && comment.author_id === postAuthorId;
     const isPinned = !isReply && comment.id === pinnedId;
     const authorReaction = authorReactions[comment.id];
+    const isMyComment = Boolean(session?.user?.id && comment.author_id === session.user.id);
+    const canDelete = Boolean(isMyComment || isPostAuthor);
 
     return (
       <div className={`comment-row${isReply ? ' comment-reply' : ''}${isPinned ? ' is-pinned' : ''}`}>
@@ -275,12 +373,31 @@ export default function CommentThread({
         )}
 
         <div className="comment-main-flex">
-          <Avatar
-            name={authorName}
-            src={isAnonymous || isPseudo ? null : cAuthor?.avatar_url}
-            userId={isAnonymous || isPseudo ? null : comment.author_id}
-            className="comment-avatar"
-          />
+          {isAnonymous ? (
+            <div
+              className="comment-masked-avatar"
+              title="Other members cannot see this author's name"
+              aria-label="Anonymous commenter"
+            >
+              <EyeOff size={13} />
+            </div>
+          ) : isPseudo ? (
+            <div
+              className="comment-pseudo-avatar-badge"
+              title={`Pseudo identity: ${authorName}`}
+              aria-label="Pseudo commenter"
+            >
+              <span>{comment.pseudo_name ? comment.pseudo_name.slice(0, 2).toUpperCase() : 'FP'}</span>
+            </div>
+          ) : (
+            <Avatar
+              name={authorName}
+              src={cAuthor?.avatar_url}
+              userId={comment.author_id}
+              className="comment-avatar"
+            />
+          )}
+
           <div className="comment-body">
             <div className="comment-bubble">
               <div className="comment-author-line">
@@ -289,8 +406,9 @@ export default function CommentThread({
                   badge={isAnonymous ? null : cAuthor?.badge}
                   verified={isAnonymous || isPseudo ? false : cAuthor?.badge_verified}
                   userId={isAnonymous || isPseudo ? null : comment.author_id}
-                  author={cAuthor}
+                  author={isAnonymous || isPseudo ? null : cAuthor}
                   nameClassName="comment-author"
+                  onClick={isAnonymous || isPseudo ? (e) => e.stopPropagation() : null}
                 />
                 {isThisCommentAuthorThePostAuthor && (
                   <span className="post-author-badge" title="Author of this post">
@@ -298,13 +416,13 @@ export default function CommentThread({
                   </span>
                 )}
                 {isPseudo && (
-                  <span className="pseudo-identity-badge" title="Pseudonym protected">
+                  <span className="pseudo-identity-badge" title="Pseudonym active">
                     Pseudo
                   </span>
                 )}
                 {isAnonymous && (
-                  <span className="anonymous-identity-badge" title="Anonymous comment">
-                    Anonymous
+                  <span className="anonymous-identity-badge" title="Other members cannot see this believer's name">
+                    Name Hidden
                   </span>
                 )}
               </div>
@@ -370,6 +488,20 @@ export default function CommentThread({
                   <span>{isPinned ? 'Unpin' : 'Pin'}</span>
                 </button>
               )}
+
+              {/* Delete button: Author or Post Author can delete */}
+              {canDelete && (
+                <button
+                  type="button"
+                  className="comment-delete-btn"
+                  onClick={() => handleDeleteComment(comment.id)}
+                  title={isMyComment ? 'Delete your comment' : 'Delete comment as post author'}
+                  aria-label="Delete comment"
+                >
+                  <Trash2 size={11} />
+                  <span>Delete</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -420,88 +552,263 @@ export default function CommentThread({
           </div>
         )}
 
-        {/* Identity bar: Real, Anonymous, Pseudo Name */}
+        {/* Identity Segmented Control: Real, Anonymous, Pseudo Name */}
         {session && (
-          <div className="comment-identity-bar">
-            <span className="comment-as-label">Comment as:</span>
-            <div className="comment-identity-pills">
+          <div className="comment-identity-card">
+            <div className="comment-identity-header">
+              <span className="comment-as-label">Comment identity</span>
+              <span className="comment-identity-hint">
+                {identityMode === 'anonymous'
+                  ? "Other members won't see your name (you can still delete your comment)"
+                  : identityMode === 'pseudo'
+                  ? 'Speaking under a randomized pilgrim identity'
+                  : 'Posting with your public believer profile'}
+              </span>
+            </div>
+
+            <div className="comment-segmented-control" role="radiogroup" aria-label="Comment identity chooser">
+              {/* Option 1: You */}
               <button
                 type="button"
-                className={`ident-pill${identityMode === 'real' ? ' active' : ''}`}
-                onClick={() => setIdentityMode('real')}
+                role="radio"
+                aria-checked={identityMode === 'real'}
+                className={`ident-segment${identityMode === 'real' ? ' active is-highlighted' : ''}`}
+                style={{ '--segment-accent': 'var(--teal)' }}
+                onClick={() => {
+                  setIdentityMode('real');
+                  playSound('reaction');
+                }}
               >
-                <User size={12} />
-                <span>You</span>
+                <div className="ident-segment-avatar-wrap">
+                  <Avatar
+                    name={myDisplayName}
+                    src={myAvatarUrl}
+                    userId={session.user.id}
+                    className="ident-segment-avatar"
+                  />
+                </div>
+                <div className="ident-segment-info">
+                  <div className="ident-segment-name-row">
+                    <span className="ident-segment-name">{myDisplayName}</span>
+                    {myBadge && (
+                      <span className="ident-segment-badge-pill" title={`Badge: ${myBadge}`}>
+                        {myBadge}
+                      </span>
+                    )}
+                  </div>
+                  <span className="ident-segment-sub">Your public profile</span>
+                </div>
               </button>
 
+              {/* Option 2: Anonymous */}
               <button
                 type="button"
-                className={`ident-pill${identityMode === 'anonymous' ? ' active' : ''}`}
-                onClick={() => setIdentityMode('anonymous')}
-                title="Post anonymously without revealing your profile"
+                role="radio"
+                aria-checked={identityMode === 'anonymous'}
+                className={`ident-segment${identityMode === 'anonymous' ? ' active is-highlighted' : ''}`}
+                style={{ '--segment-accent': 'var(--gold)' }}
+                onClick={() => {
+                  setIdentityMode('anonymous');
+                  playSound('reaction');
+                }}
+                title="Other members won't see your name. You can still delete your comment."
               >
-                <EyeOff size={12} />
-                <span>Anonymous</span>
+                <div className="ident-segment-avatar-wrap">
+                  <span className="ident-mask-avatar" aria-hidden="true">
+                    <EyeOff size={14} />
+                  </span>
+                </div>
+                <div className="ident-segment-info">
+                  <div className="ident-segment-name-row">
+                    <span className="ident-segment-name">Anonymous</span>
+                  </div>
+                  <span className="ident-segment-sub">Other members won&apos;t see your name</span>
+                </div>
               </button>
 
-              <button
-                type="button"
-                className={`ident-pill${identityMode === 'pseudo' ? ' active' : ''}`}
-                onClick={() => setIdentityMode('pseudo')}
-                title="Post with auto-generated pseudo identity"
+              {/* Option 3: Pseudo-name */}
+              <div
+                className={`ident-segment ident-segment-pseudo${identityMode === 'pseudo' ? ' active is-highlighted' : ''}`}
+                style={{ '--segment-accent': '#8b5cf6' }}
+                onClick={() => {
+                  if (identityMode !== 'pseudo') {
+                    setIdentityMode('pseudo');
+                    playSound('reaction');
+                  }
+                }}
               >
-                <Sparkles size={12} />
-                <span>{pseudoIdentity.name}</span>
-              </button>
-
-              {identityMode === 'pseudo' && (
                 <button
                   type="button"
-                  className="ident-reroll-btn"
-                  onClick={() => {
-                    setPseudoIdentity(generatePseudoIdentity());
+                  role="radio"
+                  aria-checked={identityMode === 'pseudo'}
+                  className="ident-segment-pseudo-header-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIdentityMode('pseudo');
                     playSound('reaction');
                   }}
-                  title="Generate a new pseudo name"
                 >
-                  <RefreshCw size={11} />
+                  <div className="ident-segment-avatar-wrap">
+                    <span
+                      className="ident-pseudo-avatar"
+                      style={{
+                        backgroundColor: pseudoIdentity.palette?.bg || '#0d9488',
+                        color: pseudoIdentity.palette?.text || '#ffffff',
+                      }}
+                    >
+                      {pseudoIdentity.initials || 'FP'}
+                    </span>
+                  </div>
+                  <div className="ident-segment-info">
+                    <div className="ident-segment-name-row">
+                      <span className="ident-segment-name">Pseudo-name</span>
+                      <Sparkles size={11} className="text-amber-400" />
+                    </div>
+                    <span className="ident-segment-sub">Pilgrim identity</span>
+                  </div>
                 </button>
-              )}
+
+                <div className="ident-pseudo-inline-controls" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="text"
+                    className="ident-pseudo-input"
+                    value={pseudoIdentity.name}
+                    onChange={(e) => {
+                      const val = e.target.value.slice(0, 32);
+                      setPseudoIdentity((prev) => ({
+                        ...prev,
+                        name: val,
+                        initials: val.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'P',
+                      }));
+                    }}
+                    placeholder="Pseudonym…"
+                    maxLength={32}
+                    aria-label="Pseudonym name"
+                    onFocus={() => {
+                      if (identityMode !== 'pseudo') setIdentityMode('pseudo');
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="ident-reroll-btn"
+                    onClick={() => {
+                      setPseudoIdentity(generatePseudoIdentity());
+                      playSound('reaction');
+                    }}
+                    title="Generate a new pseudonym"
+                    aria-label="Generate new pseudonym"
+                  >
+                    <RefreshCw size={12} />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        <div className="comment-input-wrap">
-          <input
-            ref={inputRef}
-            type="text"
-            value={text}
-            onChange={handleTextChange}
-            placeholder={
-              session
-                ? identityMode === 'anonymous'
-                  ? 'Comment anonymously…'
-                  : identityMode === 'pseudo'
+        <div className="comment-compose-wrap">
+          <div className="comment-input-wrap">
+            <input
+              ref={inputRef}
+              type="text"
+              value={text}
+              onChange={handleTextChange}
+              placeholder={
+                session
+                  ? identityMode === 'anonymous'
+                    ? "Comment (other members won't see your name)…"
+                    : identityMode === 'pseudo'
                     ? `Comment as ${pseudoIdentity.name}…`
                     : 'Write a comment… (@ to mention someone)'
-                : 'Sign in to comment'
-            }
-            maxLength={1000}
-            disabled={!session}
-            onFocus={() => {
-              if (!session) onRequireSignIn();
-            }}
-          />
-          <button type="submit" className="comment-send" disabled={busy || !text.trim()}>
-            Send
-          </button>
-          {suggestions.length > 0 && (
-            <div className="mention-suggestions" role="listbox">
-              {suggestions.map((p) => (
-                <button key={p.id} type="button" onClick={() => pickSuggestion(p)}>
-                  {p.display_name}
-                </button>
-              ))}
+                  : 'Sign in to comment'
+              }
+              maxLength={1000}
+              disabled={!session}
+              onFocus={() => {
+                if (!session) onRequireSignIn();
+              }}
+            />
+            {suggestions.length > 0 && (
+              <div className="mention-suggestions" role="listbox">
+                {suggestions.map((p) => (
+                  <button key={p.id} type="button" onClick={() => pickSuggestion(p)}>
+                    {p.display_name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Live Preview directly next to the Send button */}
+          {session && (
+            <div className="comment-compose-footer">
+              <div
+                className="comment-live-preview-pill"
+                title="Live preview of how your comment will appear to believers"
+              >
+                <span className="preview-label">Preview:</span>
+                <div className="preview-author-avatar-wrap">
+                  {identityMode === 'anonymous' ? (
+                    <span className="preview-mask-avatar" aria-hidden="true">
+                      <EyeOff size={11} />
+                    </span>
+                  ) : identityMode === 'pseudo' ? (
+                    <span
+                      className="preview-pseudo-avatar"
+                      style={{
+                        backgroundColor: pseudoIdentity.palette?.bg || '#0d9488',
+                        color: pseudoIdentity.palette?.text || '#ffffff',
+                      }}
+                    >
+                      {pseudoIdentity.initials || 'P'}
+                    </span>
+                  ) : (
+                    <Avatar
+                      name={myDisplayName}
+                      src={myAvatarUrl}
+                      size="xs"
+                      className="preview-user-avatar"
+                    />
+                  )}
+                </div>
+                <div className="preview-content">
+                  <span className="preview-name">
+                    {identityMode === 'anonymous'
+                      ? ANONYMOUS_IDENTITY.name
+                      : identityMode === 'pseudo'
+                      ? pseudoIdentity.name
+                      : myDisplayName}
+                  </span>
+                  {identityMode === 'anonymous' ? (
+                    <span className="preview-badge-anon">Name Hidden</span>
+                  ) : identityMode === 'pseudo' ? (
+                    <span className="preview-badge-pseudo">Pseudo</span>
+                  ) : myBadge ? (
+                    <span className="preview-badge-member">{myBadge}</span>
+                  ) : null}
+                  <span className="preview-snippet">
+                    {text.trim()
+                      ? `“${text.trim().length > 50 ? text.trim().slice(0, 47) + '…' : text.trim()}”`
+                      : '“Your comment text…”'}
+                  </span>
+                </div>
+              </div>
+
+              <button type="submit" className="comment-send" disabled={busy || !text.trim()}>
+                {busy ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          )}
+
+          {!session && (
+            <div className="comment-compose-footer">
+              <button
+                type="button"
+                className="comment-send"
+                onClick={onRequireSignIn}
+              >
+                Sign in to comment
+              </button>
             </div>
           )}
         </div>

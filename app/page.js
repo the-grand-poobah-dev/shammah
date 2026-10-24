@@ -635,7 +635,7 @@ export default function Feed() {
       let query = supabase
         .from('posts')
         .select(
-          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, poll_expires_at, profiles(display_name, avatar_url, badge, badge_verified, role)'
+          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, poll_expires_at, quoted_post_id, profiles(display_name, avatar_url, badge, badge_verified, role)'
         )
         .order('created_at', { ascending: false })
         .limit(50);

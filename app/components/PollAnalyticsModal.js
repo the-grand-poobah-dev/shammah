@@ -216,7 +216,7 @@ export default function PollAnalyticsModal({
               <div className="text-xl font-extrabold text-white">
                 {totalVotes.toLocaleString()}
               </div>
-              <p className="text-[10px] text-emerald-400 mt-0.5">100% Verified Anonymous</p>
+              <p className="text-[10px] text-emerald-400 mt-0.5">Voter names hidden from other members</p>
             </div>
 
             <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
