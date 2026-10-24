@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Share2,
   Download,
@@ -7,15 +7,20 @@ import {
   Check,
   X,
   Sparkles,
-  ExternalLink,
   Flame,
   Globe,
+  AlertCircle,
 } from 'lucide-react';
 import {
   generateWatermarkedCanvas,
   downloadWatermarkedImage,
   copyWatermarkedImage,
 } from '../lib/watermarkManager';
+import {
+  BRAND,
+  getPostShareUrl,
+  formatShareText,
+} from '../lib/brand';
 import { playSound } from '../lib/soundEffects';
 
 export default function WatermarkShareModal({
@@ -27,18 +32,28 @@ export default function WatermarkShareModal({
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [toast, setToast] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     let active = true;
     (async () => {
       setLoading(true);
+      setErrorMsg('');
       try {
         const canvas = await generateWatermarkedCanvas(contentData);
         if (canvas && active) {
-          setPreviewUrl(canvas.toDataURL('image/png'));
+          try {
+            setPreviewUrl(canvas.toDataURL('image/png'));
+          } catch (exportErr) {
+            console.error('Canvas export failed due to security/CORS restriction:', exportErr);
+            setErrorMsg('Could not export canvas image due to cross-origin media security restrictions.');
+          }
+        } else if (active) {
+          setErrorMsg('Failed to build card preview.');
         }
       } catch (err) {
         console.error('Failed to generate watermark canvas preview', err);
+        if (active) setErrorMsg('Error generating preview card.');
       } finally {
         if (active) setLoading(false);
       }
@@ -55,7 +70,7 @@ export default function WatermarkShareModal({
 
   async function handleDownload() {
     playSound('reaction');
-    const safeTitle = (contentData.title || contentData.authorName || 'shammah-share')
+    const safeTitle = (contentData?.title || contentData?.authorName || 'shammah-share')
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '-')
       .slice(0, 24);
@@ -64,6 +79,8 @@ export default function WatermarkShareModal({
       setDownloaded(true);
       showToast('Watermarked image downloaded!');
       setTimeout(() => setDownloaded(false), 2000);
+    } else {
+      showToast('Could not download image. Cross-origin security error.');
     }
   }
 
@@ -75,28 +92,46 @@ export default function WatermarkShareModal({
       showToast('Watermarked image copied to clipboard!');
       setTimeout(() => setCopied(false), 2000);
     } else {
-      // Fallback: copy link and text
+      // Fallback: copy standardized brand text and post URL
       try {
-        const text = `${contentData.textContent || ''}\n\nShared via Shammah: https://shammah.faith`;
+        const shareUrl = contentData?.postId ? getPostShareUrl(contentData.postId) : BRAND.appUrl;
+        const text = formatShareText({
+          title: contentData?.title,
+          textContent: contentData?.textContent,
+          authorName: contentData?.authorName,
+          churchName: contentData?.churchName,
+          postId: contentData?.postId,
+          postUrl: shareUrl,
+        });
         await navigator.clipboard.writeText(text);
         setCopied(true);
         showToast('Link & text copied to clipboard!');
         setTimeout(() => setCopied(false), 2000);
-      } catch {}
+      } catch {
+        showToast('Unable to copy to clipboard.');
+      }
     }
   }
 
   async function handleWebShare() {
     playSound('reaction');
-    const text = `${contentData.textContent || ''}\n\nShared via Shammah (Church & Christian Community): https://shammah.faith`;
-    const title = contentData.title || 'Shammah';
+    const shareUrl = contentData?.postId ? getPostShareUrl(contentData.postId) : BRAND.appUrl;
+    const text = formatShareText({
+      title: contentData?.title,
+      textContent: contentData?.textContent,
+      authorName: contentData?.authorName,
+      churchName: contentData?.churchName,
+      postId: contentData?.postId,
+      postUrl: shareUrl,
+    });
+    const title = `${BRAND.appName} - ${contentData?.title || 'Fellowship Post'}`;
 
-    if (navigator.share) {
+    if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
           title,
           text,
-          url: 'https://shammah.faith',
+          url: shareUrl,
         });
         showToast('Shared successfully!');
       } catch (err) {
@@ -110,7 +145,7 @@ export default function WatermarkShareModal({
   }
 
   return (
-    <div className="vis-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+    <div className="vis-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="Watermarked Share Card">
       <div
         className="vis-modal-card neon-glow-modal watermark-modal-container"
         onClick={(e) => e.stopPropagation()}
@@ -134,7 +169,7 @@ export default function WatermarkShareModal({
         <div className="watermark-modal-intro">
           <h3>Share to WhatsApp, Instagram &amp; Socials</h3>
           <p>
-            Any content shared outside the app is automatically watermarked with Shammah&apos;s flame logo and website link (<strong>shammah.faith</strong>).
+            Any content shared outside the app is automatically watermarked with {BRAND.appName}&apos;s flame logo, &ldquo;{BRAND.tagline}&rdquo; tagline, and verified website link (<strong>{BRAND.domain}</strong>).
           </p>
         </div>
 
@@ -155,7 +190,8 @@ export default function WatermarkShareModal({
             </div>
           ) : (
             <div className="watermark-loading-state">
-              <span>Could not generate preview</span>
+              <AlertCircle size={28} className="text-amber-400 mb-2" />
+              <span className="text-rose-400 font-medium">{errorMsg || 'Could not generate preview'}</span>
             </div>
           )}
         </div>
@@ -166,7 +202,7 @@ export default function WatermarkShareModal({
             type="button"
             className="watermark-btn primary"
             onClick={handleDownload}
-            disabled={loading}
+            disabled={loading || Boolean(errorMsg)}
           >
             {downloaded ? <Check size={16} /> : <Download size={16} />}
             <span>{downloaded ? 'Downloaded ✓' : 'Download Image'}</span>
@@ -195,7 +231,7 @@ export default function WatermarkShareModal({
 
         <div className="watermark-footer-note">
           <Globe size={13} className="text-sky-400" />
-          <span>Includes verified watermark: <strong>shammah.faith</strong></span>
+          <span>Includes verified watermark: <strong>{BRAND.domain}</strong></span>
         </div>
 
         {toast && <div className="inst-modal-toast">{toast}</div>}

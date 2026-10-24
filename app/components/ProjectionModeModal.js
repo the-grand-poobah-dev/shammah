@@ -19,6 +19,7 @@ import {
   Users,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
+import { BRAND } from '../lib/brand';
 
 export default function ProjectionModeModal({
   type = 'course', // 'course' | 'poll' | 'scripture'
@@ -399,7 +400,7 @@ export default function ProjectionModeModal({
               <div className="qr-text-meta">
                 <strong>Scan with Phone</strong>
                 <span>Join &amp; vote live</span>
-                <span className="qr-link-badge">shammah.faith</span>
+                <span className="qr-link-badge">{BRAND.domain}</span>
               </div>
               <button
                 type="button"

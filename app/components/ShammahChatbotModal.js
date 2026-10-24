@@ -115,10 +115,10 @@ export default function ShammahChatbotModal({
   function handleShare(text) {
     if (onShareContent) {
       onShareContent({
-        title: 'Shammah AI Word of Faith',
+        title: 'Shammah Pastoral Word of Faith',
         textContent: text,
-        authorName: 'Shammah Pastoral AI',
-        churchName: 'Shammah Global Community',
+        authorName: 'Pastoral Word',
+        churchName: null,
         category: 'Faith & Devotion',
       });
     }

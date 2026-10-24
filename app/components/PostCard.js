@@ -962,13 +962,19 @@ export default function PostCard({
       {showWatermarkModal && (
         <WatermarkShareModal
           contentData={{
-            title: 'Community Post',
+            postId: post.id,
+            title: post.title || 'Fellowship Post',
             textContent: post.text_content,
             authorName,
-            churchName: author?.church_name || 'Shammah Global Community',
-            category: cat.text || 'Community',
+            authorBadge: isProtectedIdentity ? (isAnonymous ? null : 'pilgrim') : (author?.badge || (author?.role === 'pastor' ? 'pastor' : null)),
+            authorVerified: isProtectedIdentity ? false : Boolean(author?.badge_verified),
+            churchName: post.church_name || post.churches?.name || author?.church_name || null,
+            category: cat.label || cat.text || 'Community',
+            createdAt: post.created_at,
             mediaUrl: post.media_url,
-            pollOptions,
+            mediaType: post.media_type,
+            pollOptions: pollOptions && pollOptions.length > 0 ? pollOptions : null,
+            pollCounts: pollCounts || null,
           }}
           onClose={() => setShowWatermarkModal(false)}
         />

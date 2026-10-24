@@ -121,9 +121,11 @@ export default function UserProfileView({
   function handleShareProfile() {
     setWatermarkData({
       title: `${authorName}'s Profile & Ministry`,
-      textContent: targetProfile?.about || `${authorName} is a fellowship member at ${targetProfile?.church_name || 'Shammah Global Community'}.`,
+      textContent: targetProfile?.about || `${authorName} is a fellowship member in the Shammah faith community.`,
       authorName,
-      churchName: targetProfile?.church_name || 'Shammah Global Community',
+      authorBadge: targetProfile?.badge || null,
+      authorVerified: Boolean(targetProfile?.badge_verified),
+      churchName: targetProfile?.church_name || null,
       category: 'Profile Overview',
     });
     setShowWatermarkModal(true);

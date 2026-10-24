@@ -13,6 +13,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
+import { BRAND, getPostShareUrl, formatShareText } from '../lib/brand';
 
 async function copyToClipboard(text) {
   try {
@@ -67,12 +68,17 @@ export default function ShareMenuModal({
   const [toastMessage, setToastMessage] = useState('');
   const [activeItem, setActiveItem] = useState(null);
 
-  const authorName = post?.profiles?.name || post?.profiles?.display_name || post?.author_name || 'Shammah Member';
-  const postSnippet = post?.text_content ? post.text_content.slice(0, 160) : 'Check out this publication';
-  const shareUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/?post=${post?.id || ''}`
-    : `https://shammah.faith/?post=${post?.id || ''}`;
-  const shareText = `"${postSnippet}" — ${authorName} on Shammah: ${shareUrl}`;
+  const authorName = post?.profiles?.name || post?.profiles?.display_name || post?.author_name || 'Member';
+  const churchName = post?.church_name || post?.churches?.name || post?.profiles?.church_name || null;
+  const shareUrl = getPostShareUrl(post?.id);
+  const shareText = formatShareText({
+    title: 'Fellowship Post',
+    textContent: post?.text_content,
+    authorName,
+    churchName,
+    postId: post?.id,
+    postUrl: shareUrl,
+  });
 
   function triggerToast(msg, duration = 1500) {
     setToastMessage(msg);

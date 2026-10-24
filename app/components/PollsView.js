@@ -148,12 +148,17 @@ export default function PollsView({
     playSound('reaction');
     const options = poll.options || pollOptionsByPost[poll.id] || [];
     setWatermarkShareData({
+      postId: poll.id,
       title: 'Interactive Poll',
       textContent: poll.text_content,
-      authorName: poll.profiles?.name || poll.profiles?.display_name || 'Church Admin',
-      churchName: 'Shammah Global Community',
+      authorName: poll.profiles?.name || poll.profiles?.display_name || 'Disciple',
+      authorBadge: poll.profiles?.badge || null,
+      authorVerified: Boolean(poll.profiles?.badge_verified),
+      churchName: poll.church_name || poll.churches?.name || poll.profiles?.church_name || null,
       category: 'Community Poll',
       pollOptions: options,
+      pollCounts: pollCountsByPost[poll.id] || null,
+      createdAt: poll.created_at,
     });
   }
 
