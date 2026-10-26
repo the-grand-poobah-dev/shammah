@@ -11,7 +11,9 @@
   "dependencies": {
     "@google/genai": "latest",
     "@supabase/supabase-js": "^2.45.4",
+    "@vis.gl/react-google-maps": "^1.10.1",
     "canvas-confetti": "^1.9.3",
+    "firebase": "^13.1.0",
     "lucide-react": "^0.453.0",
     "motion": "^11.11.17",
     "next": "14.2.15",
