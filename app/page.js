@@ -1,7 +1,7 @@
 'use client';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { CATEGORY_STYLES, categoryStyle, initials } from './lib/postDisplay';
+import { CATEGORY_STYLES, categoryStyle, initials, cleanDisplayName } from './lib/postDisplay';
 import PostCard from './components/PostCard';
 import CreatePostBox from './components/CreatePostBox';
 import CreatePostModal from './components/CreatePostModal';
@@ -1157,7 +1157,7 @@ export default function Feed() {
     };
   }, []);
 
-  const headerName = profile?.display_name || session?.user?.email || 'Member';
+  const headerName = cleanDisplayName(profile?.display_name || (session?.user?.email ? session.user.email.split('@')[0] : 'Member'), 'Member');
   const currentFollows = mounted ? getFollows() : [];
   const currentChurchIds = mounted
     ? Array.from(new Set([...getJoinedInstitutionIds(), ...getFollowedInstitutionIds()]))

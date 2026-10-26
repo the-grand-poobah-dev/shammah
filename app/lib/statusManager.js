@@ -1,6 +1,7 @@
 'use client';
 import { supabase } from '../../lib/supabaseClient';
 import { sendStatusReplyToInbox } from './inboxManager';
+import { cleanDisplayName } from './postDisplay';
 
 const STATUS_STORAGE_KEY = 'shammah_24h_statuses_v2';
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
@@ -57,7 +58,7 @@ export async function fetchActiveStatuses() {
     const { data, error } = await supabase
       .from('statuses')
       .select(
-        'id, user_id, text_content, scripture_tag, bg_style, media_url, created_at, expires_at, profiles(id, display_name, avatar_url, badge, badge_verified, role)'
+        'id, user_id, text_content, scripture_tag, bg_style, media_url, media_type, created_at, expires_at, profiles(id, display_name, avatar_url, badge, badge_verified, role)'
       )
       .gt('expires_at', nowIso)
       .order('created_at', { ascending: false })
@@ -70,10 +71,11 @@ export async function fetchActiveStatuses() {
 
     const mapped = (data || []).map((row) => {
       const prof = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      const resolvedMediaType = row.media_type || (row.media_url ? 'image' : null);
       return {
         id: row.id,
         userId: row.user_id,
-        userName: prof?.display_name || 'Member',
+        userName: cleanDisplayName(prof?.display_name, 'Member'),
         userAvatar: prof?.avatar_url || null,
         userBadge: prof?.badge || 'believer',
         userRole: prof?.role || 'member',
@@ -82,6 +84,7 @@ export async function fetchActiveStatuses() {
         scriptureTag: row.scripture_tag || null,
         bgStyle: row.bg_style || 'emerald',
         mediaUrl: row.media_url || null,
+        mediaType: resolvedMediaType,
         createdAt: row.created_at,
         expiresAt: row.expires_at,
         isPublic: true,
@@ -129,12 +132,14 @@ export async function createStatusUpdate({
   userVerified = false,
   text,
   mediaUrl = null,
+  mediaType = null,
   bgStyle = 'emerald',
   scriptureTag = null,
 }) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + TWENTY_FOUR_HOURS_MS);
   const cleanText = (text || '').trim();
+  const resolvedMediaType = mediaType || (mediaUrl ? 'image' : null);
 
   let activeUserId = userId;
   if (!isValidUuid(activeUserId)) {
@@ -147,13 +152,14 @@ export async function createStatusUpdate({
   let newStatus = {
     id: `status-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
     userId: activeUserId || 'my-user',
-    userName: userName || 'You',
+    userName: cleanDisplayName(userName, 'You'),
     userAvatar: userAvatar || null,
     userBadge: userBadge || 'believer',
     userRole: userRole || 'member',
     userVerified: Boolean(userVerified),
     text: cleanText,
     mediaUrl,
+    mediaType: resolvedMediaType,
     bgStyle: bgStyle || 'emerald',
     scriptureTag: scriptureTag || null,
     createdAt: now.toISOString(),
@@ -174,6 +180,7 @@ export async function createStatusUpdate({
           scripture_tag: scriptureTag || null,
           bg_style: bgStyle || 'emerald',
           media_url: mediaUrl || null,
+          media_type: resolvedMediaType || null,
           expires_at: expiresAt.toISOString(),
         })
         .select('id, created_at, expires_at')

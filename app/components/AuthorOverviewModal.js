@@ -18,6 +18,7 @@ import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import { isFollowing, toggleFollow, isBlocked, toggleBlock, getProfileSettings, fetchFollowStats } from '../lib/profileManager';
 import { playSound } from '../lib/soundEffects';
+import { cleanDisplayName, formatRoleLabel } from '../lib/postDisplay';
 
 export default function AuthorOverviewModal({ author, authorId, currentUser, onClose, onOpenDirectMessage }) {
   const router = useRouter();
@@ -31,8 +32,8 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
 
   const isMe = currentUser?.id && currentUser.id === authorId;
   const isLoggedIn = Boolean(currentUser?.id);
-  const name = author?.display_name || author?.name || 'Member';
-  const role = author?.role || 'Community Member';
+  const name = cleanDisplayName(author?.display_name || author?.name || 'Member', 'Member');
+  const role = formatRoleLabel(author?.role);
   const badge = author?.badge;
   const verified = author?.badge_verified;
 

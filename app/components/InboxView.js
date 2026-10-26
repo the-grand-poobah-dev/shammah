@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
+import MemberBadge from './MemberBadge';
 import {
   getInboxConversations,
   getConversationMessages,
@@ -24,7 +25,7 @@ import {
   subscribeToDirectMessages,
 } from '../lib/inboxManager';
 import { supabase } from '../../lib/supabaseClient';
-import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick, cleanDisplayName, formatRoleLabel } from '../lib/postDisplay';
 
 export default function InboxView({ currentUser }) {
   const now = useRelativeTimeTick();
@@ -376,16 +377,16 @@ export default function InboxView({ currentUser }) {
                   tabIndex={0}
                 >
                   <div className="inbox-conv-avatar-wrap">
-                    <Avatar name={conv.participantName} src={conv.participantAvatar} className="avatar-sm" />
+                    <Avatar name={cleanDisplayName(conv.participantName)} src={conv.participantAvatar} className="avatar-sm" />
                     {unread > 0 && <span className="inbox-unread-count-dot">{unread}</span>}
                   </div>
                   <div className="inbox-conv-info">
                     <div className="inbox-conv-name-row">
-                      <span className="inbox-conv-name">{conv.participantName}</span>
+                      <span className="inbox-conv-name">{cleanDisplayName(conv.participantName)}</span>
                       {conv.participantVerified && <VerifiedBadge badge={conv.participantBadge} size={14} />}
                     </div>
                     {conv.participantRole && (
-                      <span className="inbox-conv-member-tag">{conv.participantRole}</span>
+                      <span className="inbox-conv-member-tag">{formatRoleLabel(conv.participantRole)}</span>
                     )}
                     <span className="inbox-conv-snippet">{conv.lastMessage || 'New conversation'}</span>
                   </div>
@@ -422,15 +423,17 @@ export default function InboxView({ currentUser }) {
                 >
                   <ArrowLeft size={16} />
                 </button>
-                <Avatar name={activeConv.participantName} src={activeConv.participantAvatar} className="avatar-sm" />
+                <Avatar name={cleanDisplayName(activeConv.participantName)} src={activeConv.participantAvatar} className="avatar-sm" />
                 <div className="inbox-thread-user-meta">
                   <div className="inbox-thread-name-row">
-                    <span className="inbox-thread-name">{activeConv.participantName}</span>
+                    <span className="inbox-thread-name">{cleanDisplayName(activeConv.participantName)}</span>
                     {activeConv.participantVerified && <VerifiedBadge badge={activeConv.participantBadge} size={14} />}
-                    <span className="inbox-badge-tag">{activeConv.participantBadge || 'Member'}</span>
+                    {activeConv.participantBadge && (
+                      <MemberBadge badgeId={activeConv.participantBadge} size="sm" />
+                    )}
                   </div>
                   <div className="inbox-thread-tag-row">
-                    <span className="inbox-thread-tag-text">{activeConv.participantRole || 'Community Member'}</span>
+                    <span className="inbox-thread-tag-text">{formatRoleLabel(activeConv.participantRole)}</span>
                     <span className="inbox-e2ee-pill" title="Protected by database Row-Level Security">
                       <ShieldCheck size={10} className="text-cyan-400" />
                       <span>RLS Protected</span>

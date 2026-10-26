@@ -1,11 +1,11 @@
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Send, Sparkles, ArrowLeft, Plus } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Send, Sparkles, ArrowLeft, Plus, Music } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
 import { reactToStatus, commentOnStatus } from '../lib/statusManager';
-import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick, cleanDisplayName } from '../lib/postDisplay';
 import FaithReactionPicker from './FaithReactionPicker';
 
 const QUICK_EMOJIS = ['🙏', '❤️', '🙌', '🔥', '✨', '👏'];
@@ -306,19 +306,17 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
             }}
             role="button"
             tabIndex={0}
-            title={`View profile for ${currentStatus.userName}`}
+            title={`View profile for ${cleanDisplayName(currentStatus.userName, 'Member')}`}
           >
             <Avatar
-              name={currentStatus.userName}
+              name={cleanDisplayName(currentStatus.userName, 'Member')}
               src={currentStatus.userAvatar}
               hasStatus={true}
               className="avatar-sm status-author-avatar"
             />
             <div className="status-viewer-author-meta">
               <div className="status-author-name-row">
-                {/* Names users input are the ones shown */}
-                <span className="status-author-name">{currentStatus.userName}</span>
-                {/* Titles are shown by the member badges */}
+                <span className="status-author-name">{cleanDisplayName(currentStatus.userName, 'Member')}</span>
                 {currentStatus.userBadge && (
                   <MemberBadge badgeId={currentStatus.userBadge} size="sm" />
                 )}
@@ -368,7 +366,36 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
 
           {currentStatus.mediaUrl && (
             <div className="status-viewer-media-wrap">
-              <img src={currentStatus.mediaUrl} alt="" className="status-viewer-media" />
+              {currentStatus.mediaType === 'video' ? (
+                <video
+                  src={currentStatus.mediaUrl}
+                  controls
+                  playsInline
+                  autoPlay
+                  className="status-viewer-media status-viewer-video"
+                  onPlay={() => setIsPaused(true)}
+                  onPause={() => setIsPaused(false)}
+                  onEnded={() => setIsPaused(false)}
+                />
+              ) : currentStatus.mediaType === 'audio' ? (
+                <div className="status-viewer-audio-box">
+                  <div className="status-viewer-audio-meta">
+                    <Music size={20} className="text-emerald-400 shrink-0" />
+                    <span>Audio Testimony / Recording</span>
+                  </div>
+                  <audio
+                    src={currentStatus.mediaUrl}
+                    controls
+                    autoPlay
+                    className="status-viewer-audio-elem"
+                    onPlay={() => setIsPaused(true)}
+                    onPause={() => setIsPaused(false)}
+                    onEnded={() => setIsPaused(false)}
+                  />
+                </div>
+              ) : (
+                <img src={currentStatus.mediaUrl} alt="" className="status-viewer-media" />
+              )}
             </div>
           )}
         </div>
@@ -415,7 +442,7 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
         <div className="status-viewer-footer" onClick={(e) => e.stopPropagation()}>
           {sentFeedback && (
             <div className="status-sent-banner">
-              ✓ Sent directly to {currentStatus.userName}&apos;s inbox!
+              ✓ Sent directly to {cleanDisplayName(currentStatus.userName, 'Member')}&apos;s inbox!
             </div>
           )}
           {replyError && (
@@ -469,7 +496,7 @@ export default function StatusViewerModal({ statuses = [], initialIndex = 0, cur
           <form className="status-comment-form" onSubmit={handleSendComment}>
             <input
               type="text"
-              placeholder={`Reply to ${currentStatus.userName}'s inbox...`}
+              placeholder={`Reply to ${cleanDisplayName(currentStatus.userName, 'Member')}'s inbox...`}
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
               onFocus={() => setIsPaused(true)}

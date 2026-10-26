@@ -1,18 +1,11 @@
-process.env.NEXT_IGNORE_INCORRECT_LOCKFILE = '1';
-
-const { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD } = require('next/constants');
-
 /** @type {import('next').NextConfig} */
-module.exports = (phase) => {
-  const isDev = phase === PHASE_DEVELOPMENT_SERVER;
-
-  if (phase === PHASE_PRODUCTION_BUILD) {
-    process.env.NODE_ENV = 'production';
-  }
-
-  return {
-    distDir: isDev ? '.next-dev' : '.next',
-    output: isDev ? undefined : 'standalone',
-    transpilePackages: ['lucide-react'],
-  };
+const nextConfig = {
+  reactStrictMode: true,
+  output: 'standalone',
+  transpilePackages: ['lucide-react', 'motion'],
+  images: {
+    unoptimized: true,
+  },
 };
+
+module.exports = nextConfig;

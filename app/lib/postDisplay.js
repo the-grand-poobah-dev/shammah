@@ -33,9 +33,43 @@ export function categoryStyle(categoryId) {
   );
 }
 
+export function cleanDisplayName(raw, fallback = 'Member') {
+  if (!raw || typeof raw !== 'string') return fallback;
+  let str = raw.trim();
+  if (!str) return fallback;
+
+  // 1. If an email address was passed, use the local username portion
+  if (str.includes('@')) {
+    str = str.split('@')[0];
+  }
+
+  // 2. Strip bracketed or parenthesized IDs / hashes e.g. "Name (id-123)" or "Name [8f9a]"
+  str = str.replace(/\s*[\(\[][a-f0-9_\-#:]{3,}[\)\]]/gi, '').trim();
+
+  // 3. Strip trailing hex tokens or random ID hashes e.g. "-8f9a2b", "_a1b2c3d4", " 7f8a9b"
+  str = str.replace(/[-_#][a-f0-9]{4,36}$/i, '').trim();
+
+  // 4. Strip raw full UUIDs if someone's raw user_id was passed
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str)) {
+    return fallback;
+  }
+
+  return str || fallback;
+}
+
+export function formatRoleLabel(role) {
+  if (!role || typeof role !== 'string') return 'Community Member';
+  const r = role.toLowerCase().trim();
+  if (r === 'platform_admin') return 'Platform Administrator';
+  if (r === 'church_admin') return 'Church Administrator';
+  if (r === 'member' || r === 'believer') return 'Community Member';
+  return role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function initials(name) {
   if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
+  const cleaned = cleanDisplayName(name);
+  const parts = cleaned.trim().split(/\s+/);
   const chars = parts.length > 1 ? [parts[0][0], parts[1][0]] : [parts[0][0]];
   return chars.join('').toUpperCase();
 }

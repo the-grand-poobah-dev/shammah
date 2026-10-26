@@ -5,7 +5,7 @@ import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
 import { getActiveStatuses, fetchActiveStatuses } from '../lib/statusManager';
-import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
+import { formatPostDate, getPostDateTitle, useRelativeTimeTick, cleanDisplayName } from '../lib/postDisplay';
 import StatusViewerModal from './StatusViewerModal';
 import StatusCreatorModal from './StatusCreatorModal';
 
@@ -166,7 +166,7 @@ export default function StatusTray({ currentUser }) {
         onPointerCancel={onPointerUp}
         role="list"
       >
-        {/* Card 1: Add Story / Your Status */}
+        {/* Card 1: Always available Add Status action (never blocks adding another) */}
         <div
           role="listitem"
           className="status-card-item status-card-create"
@@ -175,20 +175,25 @@ export default function StatusTray({ currentUser }) {
               dragRef.current.moved = false;
               return;
             }
-            if (hasMyStatus) {
-              handleOpenViewer(myStatusIndex);
-            } else {
-              setCreatorOpen(true);
-            }
+            setCreatorOpen(true);
           }}
-          title={hasMyStatus ? 'View your status' : 'Add 24-hour status'}
+          title="Add 24-hour status"
         >
           <div className="status-create-thumb">
             <Avatar
-              name={currentUser?.name || currentUser?.display_name || 'You'}
+              name={cleanDisplayName(currentUser?.name || currentUser?.display_name || 'You', 'You')}
               src={currentUser?.avatar_url}
               hasStatus={hasMyStatus}
               className="status-user-avatar"
+              onClick={
+                hasMyStatus
+                  ? (e) => {
+                      e.stopPropagation();
+                      handleOpenViewer(myStatusIndex);
+                    }
+                  : undefined
+              }
+              title={hasMyStatus ? 'View your status (or tap + to add another)' : 'Add 24-hour status'}
             />
             <button
               type="button"
@@ -197,20 +202,18 @@ export default function StatusTray({ currentUser }) {
                 e.stopPropagation();
                 setCreatorOpen(true);
               }}
-              title="Add new status"
-              aria-label="Add new status"
+              title="Add another 24-hour status"
+              aria-label="Add another 24-hour status"
             >
               <Plus size={15} strokeWidth={3} />
             </button>
           </div>
-          <span className="status-card-label">
-            {hasMyStatus ? 'Your Status' : 'Add Status'}
-          </span>
+          <span className="status-card-label">Add Status</span>
         </div>
 
-        {/* Subsequent Cards: Active 24-hour community statuses */}
+        {/* Community & user 24-hour status story cards */}
         {statuses.map((status, index) => {
-          if (hasMyStatus && index === myStatusIndex) return null;
+          const cleanName = cleanDisplayName(status.userName, 'Member');
 
           return (
             <div
@@ -218,11 +221,11 @@ export default function StatusTray({ currentUser }) {
               role="listitem"
               className={`status-card-item status-card-story status-bg-${status.bgStyle || 'emerald'}`}
               onClick={() => handleOpenViewer(index)}
-              title={`${status.userName}: ${status.text}`}
+              title={`${cleanName}: ${status.text}`}
             >
               <div className="status-card-header">
                 <Avatar
-                  name={status.userName}
+                  name={cleanName}
                   src={status.userAvatar}
                   hasStatus={true}
                   className="status-user-avatar"
@@ -233,7 +236,7 @@ export default function StatusTray({ currentUser }) {
                         detail: {
                           author: {
                             id: status.userId,
-                            display_name: status.userName,
+                            display_name: cleanName,
                             avatar_url: status.userAvatar,
                             badge: status.userBadge,
                             badge_verified: status.userVerified,
@@ -253,7 +256,7 @@ export default function StatusTray({ currentUser }) {
 
               <div className="status-card-footer">
                 <div
-                  className="status-footer-name-row cursor-pointer"
+                  className="status-author-name-row cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
                     window.dispatchEvent(
@@ -261,7 +264,7 @@ export default function StatusTray({ currentUser }) {
                         detail: {
                           author: {
                             id: status.userId,
-                            display_name: status.userName,
+                            display_name: cleanName,
                             avatar_url: status.userAvatar,
                             badge: status.userBadge,
                             badge_verified: status.userVerified,
@@ -273,9 +276,7 @@ export default function StatusTray({ currentUser }) {
                     );
                   }}
                 >
-                  {/* Clean input name shown */}
-                  <span className="status-card-author-name">{status.userName}</span>
-                  {/* Title shown by member badge */}
+                  <span className="status-card-author-name">{cleanName}</span>
                   {status.userBadge && (
                     <MemberBadge badgeId={status.userBadge} size="sm" />
                   )}
