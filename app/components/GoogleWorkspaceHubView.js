@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import {
   Calendar,
   Video,
@@ -27,7 +28,13 @@ import {
   ListChecks,
   LayoutGrid,
   LogIn,
+  Lock,
+  ShieldCheck,
+  ChevronRight,
+  Download,
+  Share2,
 } from 'lucide-react';
+import { supabase } from '../../lib/supabaseClient';
 import {
   initAuth,
   googleSignIn,
@@ -43,21 +50,37 @@ import {
   saveMinistryNoteToFirestore,
   deleteMinistryNoteFromFirestore,
 } from '../lib/firebaseClient';
+import {
+  fetchChurchWorkspaceItems,
+  saveChurchWorkspaceItem,
+  deleteChurchWorkspaceItem,
+  checkChurchWorkspacePlan,
+} from '../lib/churchWorkspaceManager';
+import {
+  getGoogleCalendarTemplateUrl,
+  generateIcsDataUri,
+} from '../lib/calendarExport';
+import {
+  WORKSPACE_PLAN_KEY,
+  WORKSPACE_PLAN_PRICE_KES,
+  WORKSPACE_PLAN_LABEL,
+  formatKes,
+} from '../lib/churchConfig';
+import PopupSheet from './PopupSheet';
 import { playSound } from '../lib/soundEffects';
 
 const HUB_TABS = [
   { id: 'calendar', label: 'Calendar', icon: Calendar, color: '#0d766e' },
-  { id: 'slides', label: 'Slides', icon: Presentation, color: '#d97706' },
-  { id: 'forms', label: 'Sign-Up Forms', icon: FileSpreadsheet, color: '#8b5cf6' },
-  { id: 'keep', label: 'Notes', icon: StickyNote, color: '#eab308' },
   { id: 'meet', label: 'Video Rooms', icon: Video, color: '#10b981' },
+  { id: 'forms', label: 'Sign-Up Forms', icon: FileSpreadsheet, color: '#8b5cf6' },
+  { id: 'slides', label: 'Slides', icon: Presentation, color: '#d97706' },
   { id: 'classroom', label: 'Classes', icon: GraduationCap, color: '#f59e0b' },
   { id: 'tasks', label: 'To-Do List', icon: CheckSquare, color: '#06b6d4' },
   { id: 'chat', label: 'Group Chat', icon: MessageSquare, color: '#6366f1' },
   { id: 'firebase', label: 'Prayer Wall', icon: Flame, color: '#ec4899' },
 ];
 
-export default function GoogleWorkspaceHubView({ onShareToFeed }) {
+export default function GoogleWorkspaceHubView({ session, currentUser, onShareToFeed }) {
   const [activeTab, setActiveTab] = useState('calendar');
   const [needsAuth, setNeedsAuth] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -69,7 +92,20 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
   const [errorMessage, setErrorMessage] = useState('');
   const [copiedUri, setCopiedUri] = useState('');
 
-  // Mandatory Explicit User Confirmation Modal State for Mutating/Destructive Operations
+  // Church Admin & Plan States
+  const [ownedChurches, setOwnedChurches] = useState([]);
+  const [activeChurch, setActiveChurch] = useState(null);
+  const [hasWorkspacePlan, setHasWorkspacePlan] = useState(false);
+  const [checkingPlan, setCheckingPlan] = useState(true);
+  const [showActivationRequestModal, setShowActivationRequestModal] = useState(false);
+  const [activationRequested, setActivationRequested] = useState(false);
+
+  // Community Shared Items State (For Members & Admins)
+  const [sharedItems, setSharedItems] = useState([]);
+  const [sharedCategoryFilter, setSharedCategoryFilter] = useState('all');
+  const [itemVisibility, setItemVisibility] = useState('public'); // 'public' | 'members' | 'followers'
+
+  // Mandatory Explicit Confirmation Modal State (PopupSheet standard)
   const [confirmDialog, setConfirmDialog] = useState(null); // { title, description, confirmLabel, isDestructive, onConfirm }
 
   // Google Calendar State
@@ -90,113 +126,183 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
   const [announcements, setAnnouncements] = useState([]);
   const [announcementText, setAnnouncementText] = useState('');
 
-  // Google Keep & Firestore Ministry Notes State
-  const [keepNotes, setKeepNotes] = useState([]);
-  const [cloudNotes, setCloudNotes] = useState([]);
-  const [noteTitle, setNoteTitle] = useState('');
-  const [noteScripture, setNoteScripture] = useState('');
-  const [noteBody, setNoteBody] = useState('');
-  const [keepNoteMode, setKeepNoteMode] = useState('text'); // 'text' | 'checklist'
-  const [keepChecklistInput, setKeepChecklistInput] = useState('');
-
   // Google Slides State
   const [presentations, setPresentations] = useState([]);
-  const [selectedPresentationId, setSelectedPresentationId] = useState('');
-  const [selectedPresentation, setSelectedPresentation] = useState(null);
   const [newDeckTitle, setNewDeckTitle] = useState('');
-  const [newSlideHeading, setNewSlideHeading] = useState('');
-  const [newSlideBody, setNewSlideBody] = useState('');
+  const [selectedPresentationId, setSelectedPresentationId] = useState('');
+  const [selectedDeckDetails, setSelectedDeckDetails] = useState(null);
+  const [slideScriptureTitle, setSlideScriptureTitle] = useState('');
+  const [slideScriptureBody, setSlideScriptureBody] = useState('');
 
   // Google Forms State
   const [formsList, setFormsList] = useState([]);
-  const [selectedFormId, setSelectedFormId] = useState('');
-  const [selectedFormDetail, setSelectedFormDetail] = useState(null);
-  const [selectedFormResponses, setSelectedFormResponses] = useState([]);
   const [newFormTitle, setNewFormTitle] = useState('');
-  const [newFormDescription, setNewFormDescription] = useState('');
-  const [newFormQuestion, setNewFormQuestion] = useState('Will you attend Sunday Fellowship Service?');
+  const [newFormType, setNewFormType] = useState('baptism');
+  const [selectedFormId, setSelectedFormId] = useState('');
+  const [selectedFormDetails, setSelectedFormDetails] = useState(null);
+  const [formResponses, setFormResponses] = useState([]);
+  const [customQuestionText, setCustomQuestionText] = useState('');
 
   // Google Tasks State
   const [taskLists, setTaskLists] = useState([]);
   const [selectedTaskListId, setSelectedTaskListId] = useState('@default');
   const [tasks, setTasks] = useState([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskNotes, setNewTaskNotes] = useState('');
+  const [newTaskDue, setNewTaskDue] = useState('');
 
   // Google Chat State
   const [chatSpaces, setChatSpaces] = useState([]);
   const [selectedSpaceName, setSelectedSpaceName] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState('');
+  const [newMessageText, setNewMessageText] = useState('');
 
-  // Firebase Firestore Live Prayer Requests State
+  // Firebase Firestore State (Prayer Wall & Ministry Notes)
   const [prayerRequests, setPrayerRequests] = useState([]);
   const [prayerTitle, setPrayerTitle] = useState('');
   const [prayerContent, setPrayerContent] = useState('');
-  const [prayerCategory, setPrayerCategory] = useState('general');
+  const [prayerCategory, setPrayerCategory] = useState('Healing');
 
-  function showBanner(msg, isError = false) {
-    if (isError) {
-      setErrorMessage(msg);
-      setTimeout(() => setErrorMessage(''), 5000);
-    } else {
-      setStatusMessage(msg);
-      setTimeout(() => setStatusMessage(''), 4000);
-    }
-  }
+  const userId = currentUser?.id || session?.user?.id;
+  const isPlatformAdmin = currentUser?.role === 'platform_admin';
+  const isChurchAdmin = isPlatformAdmin || (ownedChurches && ownedChurches.length > 0);
 
-  function requestConfirmation({ title, description, confirmLabel = 'Confirm', isDestructive = false, onConfirm }) {
-    setConfirmDialog({
-      title,
-      description,
-      confirmLabel,
-      isDestructive,
-      onConfirm: async () => {
-        setConfirmDialog(null);
-        await onConfirm();
-      },
-    });
-  }
-
-  const callWorkspaceApi = useCallback(async (service, endpoint, method = 'GET', body = null) => {
-    const activeToken = await getAccessToken();
-    if (!activeToken) {
-      setToken(null);
-      setNeedsAuth(true);
-      if (user) setSessionExpired(true);
-      throw new Error('Your Google Workspace token is missing or expired. Please reconnect your Google account.');
-    }
-
-    const res = await fetch('/api/workspace', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${activeToken}`,
-      },
-      body: JSON.stringify({ service, endpoint, method, body }),
-    });
-
-    const data = await res.json();
-    if (res.status === 401) {
-      clearAccessToken();
-      setToken(null);
-      setNeedsAuth(true);
-      setSessionExpired(true);
-      throw new Error('Your Google Workspace session expired (401). Please reconnect your Google account.');
-    }
-    if (!res.ok || data.error) {
-      throw new Error(data.error || `Failed calling Google ${service} API`);
-    }
-    return data;
-  }, [user]);
-
-  // Load active tab data when authenticated
-  const loadActiveTabData = useCallback(
-    async (tabId = activeTab) => {
-      const currentToken = await getAccessToken();
-      if (!currentToken && tabId !== 'firebase') {
+  // 1. Load user's churches & evaluate church admin role
+  useEffect(() => {
+    async function loadChurches() {
+      if (!userId) {
+        setOwnedChurches([]);
+        setCheckingPlan(false);
         return;
       }
+      try {
+        const { data: churches } = await supabase
+          .from('churches')
+          .select('id, name, logo_url, subscription_status, subscription_plan')
+          .eq('created_by', userId)
+          .order('created_at', { ascending: false });
+
+        const list = churches || [];
+        setOwnedChurches(list);
+        if (list.length > 0) {
+          const defaultChurch = list[0];
+          setActiveChurch(defaultChurch);
+          const hasPlan = await checkChurchWorkspacePlan(defaultChurch.id);
+          setHasWorkspacePlan(hasPlan || isPlatformAdmin);
+        } else {
+          setActiveChurch(null);
+          setHasWorkspacePlan(isPlatformAdmin);
+        }
+      } catch (err) {
+        console.warn('Error loading church profile:', err);
+      } finally {
+        setCheckingPlan(false);
+      }
+    }
+    loadChurches();
+  }, [userId, isPlatformAdmin]);
+
+  // Handle active church switch
+  const handleSelectChurch = async (church) => {
+    setActiveChurch(church);
+    setCheckingPlan(true);
+    const hasPlan = await checkChurchWorkspacePlan(church.id);
+    setHasWorkspacePlan(hasPlan || isPlatformAdmin);
+    setCheckingPlan(false);
+  };
+
+  // 2. Load Community Shared Workspace Items (from church_workspace_items)
+  const reloadSharedItems = useCallback(async () => {
+    try {
+      const items = await fetchChurchWorkspaceItems();
+      setSharedItems(items);
+    } catch (err) {
+      console.warn('Could not load shared workspace items:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    reloadSharedItems();
+  }, [reloadSharedItems]);
+
+  // 3. Initialize Firebase Auth for Google Workspace OAuth
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (authenticatedUser, accessToken) => {
+        setUser(authenticatedUser);
+        setToken(accessToken);
+        setNeedsAuth(false);
+        setSessionExpired(false);
+      },
+      () => {
+        setUser(null);
+        setToken(null);
+        setNeedsAuth(true);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // 4. Proxy Caller with Shammah session verification and target church_id
+  const callWorkspaceApi = useCallback(
+    async (service, endpoint, method = 'GET', body = null) => {
+      const activeToken = await getAccessToken();
+      if (!activeToken) {
+        setToken(null);
+        setNeedsAuth(true);
+        if (user) setSessionExpired(true);
+        throw new Error('Your Google Workspace token is missing or expired. Please reconnect your Google account.');
+      }
+
+      // Retrieve caller's current Supabase session token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const supabaseAccessToken = sessionData?.session?.access_token;
+
+      if (!supabaseAccessToken) {
+        throw new Error('You must be signed in to Shammah to perform church workspace actions.');
+      }
+
+      const churchIdToPass = activeChurch?.id || (ownedChurches.length > 0 ? ownedChurches[0].id : null);
+
+      const res = await fetch('/api/workspace', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${activeToken}`,
+          'x-supabase-auth': supabaseAccessToken,
+          'x-church-id': churchIdToPass || '',
+        },
+        body: JSON.stringify({
+          service,
+          endpoint,
+          method,
+          body,
+          church_id: churchIdToPass,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.status === 401) {
+        clearAccessToken();
+        setToken(null);
+        setNeedsAuth(true);
+        setSessionExpired(true);
+        throw new Error('Your Google Workspace session expired (401). Please reconnect your Google account.');
+      }
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `Failed calling Google ${service} API`);
+      }
+      return data;
+    },
+    [user, activeChurch, ownedChurches]
+  );
+
+  // 5. Load Tab Data for Admin View
+  const loadActiveTabData = useCallback(
+    async (tabId = activeTab) => {
+      if (!isChurchAdmin || !hasWorkspacePlan) return;
+      const currentToken = await getAccessToken();
+      if (!currentToken && tabId !== 'firebase') return;
+
       setLoadingData(true);
       setErrorMessage('');
       try {
@@ -231,28 +337,17 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
             'drive',
             `/files?q=${q}&pageSize=15&orderBy=modifiedTime desc&fields=files(id,name,webViewLink,modifiedTime)`
           );
-          const files = data.files || [];
-          setFormsList(files);
-          if (files.length > 0 && !selectedFormId) {
-            setSelectedFormId(files[0].id);
-          }
-        } else if (tabId === 'keep') {
-          try {
-            const data = await callWorkspaceApi('keep', '/notes?pageSize=15');
-            setKeepNotes(data.notes || []);
-          } catch (keepErr) {
-            if (keepErr?.message?.includes('401') || keepErr?.message?.includes('expired')) {
-              throw keepErr;
-            }
-            // Keep API requires Workspace enterprise domain on some accounts; still show Firestore Cloud Notes seamlessly
-            setKeepNotes([]);
+          const forms = data.files || [];
+          setFormsList(forms);
+          if (forms.length > 0 && !selectedFormId) {
+            setSelectedFormId(forms[0].id);
           }
         } else if (tabId === 'tasks') {
           const listsData = await callWorkspaceApi('tasks', '/users/@me/lists?maxResults=10');
           const lists = listsData.items || [];
           setTaskLists(lists);
-          const listId = lists[0]?.id || '@default';
-          setSelectedTaskListId(listId);
+          const listId = selectedTaskListId || (lists.length > 0 ? lists[0].id : '@default');
+          if (lists.length > 0 && !selectedTaskListId) setSelectedTaskListId(listId);
           const tasksData = await callWorkspaceApi('tasks', `/lists/${encodeURIComponent(listId)}/tasks?maxResults=25`);
           setTasks(tasksData.items || []);
         } else if (tabId === 'chat') {
@@ -264,2222 +359,1601 @@ export default function GoogleWorkspaceHubView({ onShareToFeed }) {
           }
         }
       } catch (err) {
-        showBanner(err.message || 'Could not load Google Workspace data.', true);
+        setErrorMessage(err.message || 'Error loading Google Workspace data');
       } finally {
         setLoadingData(false);
       }
     },
-    [activeTab, callWorkspaceApi, selectedCourseId, selectedSpaceName, selectedPresentationId, selectedFormId]
+    [activeTab, isChurchAdmin, hasWorkspacePlan, callWorkspaceApi, selectedCourseId, selectedPresentationId, selectedFormId, selectedTaskListId, selectedSpaceName]
   );
 
   useEffect(() => {
-    const unsub = initAuth(
-      (u, accessToken) => {
-        setUser(u);
-        setToken(accessToken);
-        setNeedsAuth(false);
-        setSessionExpired(false);
-      },
-      (u) => {
-        setUser(u || null);
-        setToken(null);
-        setNeedsAuth(true);
-        if (u) {
-          // User is still signed into Firebase across a page reload, but the in-memory OAuth access token was cleared
-          setSessionExpired(true);
-        }
-      }
-    );
+    if (!needsAuth && token && isChurchAdmin && hasWorkspacePlan) {
+      loadActiveTabData(activeTab);
+    }
+  }, [activeTab, needsAuth, token, isChurchAdmin, hasWorkspacePlan, loadActiveTabData]);
+
+  // Subscribe to Firestore prayer requests
+  useEffect(() => {
+    const unsubPrayers = subscribeToPrayerRequests((items) => {
+      setPrayerRequests(items || []);
+    });
     return () => {
-      if (typeof unsub === 'function') unsub();
+      if (typeof unsubPrayers === 'function') unsubPrayers();
     };
   }, []);
 
-  // Attach Firestore real-time listeners only when Firebase user is authenticated
-  useEffect(() => {
-    if (!user) {
-      setPrayerRequests([]);
-      setCloudNotes([]);
-      return;
-    }
-    const unsubPrayers = subscribeToPrayerRequests((items) => setPrayerRequests(items));
-    const unsubNotes = subscribeToMinistryNotes((items) => setCloudNotes(items));
-    return () => {
-      unsubPrayers();
-      unsubNotes();
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (!needsAuth && token) {
-      loadActiveTabData(activeTab);
-    }
-  }, [activeTab, needsAuth, token, loadActiveTabData]);
-
-  // Load Classroom announcements when selectedCourseId changes
-  useEffect(() => {
-    if (!needsAuth && token && activeTab === 'classroom' && selectedCourseId) {
-      callWorkspaceApi('classroom', `/courses/${encodeURIComponent(selectedCourseId)}/announcements?pageSize=10`)
-        .then((data) => setAnnouncements(data.announcements || []))
-        .catch((err) => {
-          setAnnouncements([]);
-          if (err?.message?.includes('401') || err?.message?.includes('expired')) {
-            showBanner(err.message, true);
-          }
-        });
-    }
-  }, [activeTab, needsAuth, token, selectedCourseId, callWorkspaceApi]);
-
-  // Load Chat messages when selectedSpaceName changes
-  useEffect(() => {
-    if (!needsAuth && token && activeTab === 'chat' && selectedSpaceName) {
-      callWorkspaceApi('chat', `/${selectedSpaceName}/messages?pageSize=15`)
-        .then((data) => setChatMessages(data.messages || []))
-        .catch((err) => {
-          setChatMessages([]);
-          if (err?.message?.includes('401') || err?.message?.includes('expired')) {
-            showBanner(err.message, true);
-          }
-        });
-    }
-  }, [activeTab, needsAuth, token, selectedSpaceName, callWorkspaceApi]);
-
-  // Load selected Google Slides presentation details
-  useEffect(() => {
-    if (!needsAuth && token && activeTab === 'slides' && selectedPresentationId) {
-      callWorkspaceApi('slides', `/presentations/${encodeURIComponent(selectedPresentationId)}`)
-        .then((data) => setSelectedPresentation(data))
-        .catch((err) => {
-          setSelectedPresentation(null);
-          if (err?.message?.includes('401') || err?.message?.includes('expired')) {
-            showBanner(err.message, true);
-          }
-        });
-    }
-  }, [activeTab, needsAuth, token, selectedPresentationId, callWorkspaceApi]);
-
-  // Load selected Google Form structure & responses
-  useEffect(() => {
-    if (!needsAuth && token && activeTab === 'forms' && selectedFormId) {
-      Promise.all([
-        callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}`).catch((err) => {
-          if (err?.message?.includes('401') || err?.message?.includes('expired')) {
-            showBanner(err.message, true);
-          }
-          return null;
-        }),
-        callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}/responses`).catch(() => ({ responses: [] })),
-      ]).then(([formDoc, respDoc]) => {
-        setSelectedFormDetail(formDoc);
-        setSelectedFormResponses(respDoc?.responses || []);
-      });
-    }
-  }, [activeTab, needsAuth, token, selectedFormId, callWorkspaceApi]);
-
-  async function handleLogin() {
+  // Handle Google Login
+  const handleGoogleLogin = async () => {
     setIsLoggingIn(true);
     setErrorMessage('');
     try {
       const result = await googleSignIn();
       if (result) {
-        setToken(result.accessToken);
         setUser(result.user);
+        setToken(result.accessToken);
         setNeedsAuth(false);
         setSessionExpired(false);
-        playSound('postPublished');
-        showBanner(`Signed in as ${result.user.displayName || result.user.email}`);
+        playSound('reaction');
       }
     } catch (err) {
-      showBanner(err.message || 'Google Sign-In was cancelled or failed.', true);
+      setErrorMessage(err.message || 'Google Sign-in failed. Please check popup permissions.');
     } finally {
       setIsLoggingIn(false);
     }
-  }
+  };
 
-  async function handleSignOut() {
+  const handleGoogleLogout = async () => {
     await logout();
-    setToken(null);
     setUser(null);
+    setToken(null);
     setNeedsAuth(true);
-    setSessionExpired(false);
-    showBanner('Signed out of Google Workspace & Firebase.');
-  }
+    setCalendarEvents([]);
+    setMeetSpaces([]);
+    setCourses([]);
+    setPresentations([]);
+    setFormsList([]);
+    setTasks([]);
+    setChatSpaces([]);
+  };
 
-  // ---------------- Google Calendar Handlers ----------------
-  function handleCreateCalendarEvent(e) {
+  const copyToClipboard = (text, label = 'Copied!') => {
+    navigator.clipboard.writeText(text);
+    setCopiedUri(text);
+    setStatusMessage(label);
+    playSound('reaction');
+    setTimeout(() => {
+      setCopiedUri('');
+      setStatusMessage('');
+    }, 2500);
+  };
+
+  // -------------------------------------------------------------
+  // TAB ACTIONS: CALENDAR
+  // -------------------------------------------------------------
+  const handleCreateEvent = async (e) => {
     e.preventDefault();
-    if (!eventSummary.trim() || !eventStart) return;
-    const startDate = new Date(eventStart);
-    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-
-    requestConfirmation({
-      title: 'Create Google Calendar Event?',
-      description: `Add "${eventSummary.trim()}" scheduled for ${startDate.toLocaleString()} to your primary Google Calendar?`,
-      confirmLabel: 'Create Event',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi('calendar', '/calendars/primary/events', 'POST', {
-            summary: eventSummary.trim(),
-            description: eventDescription.trim() || 'Scheduled via Shammah Fellowship Hub',
-            start: { dateTime: startDate.toISOString() },
-            end: { dateTime: endDate.toISOString() },
-          });
-          setEventSummary('');
-          setEventStart('');
-          setEventDescription('');
-          showBanner('Event added to your Google Calendar!');
-          await loadActiveTabData('calendar');
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
-
-  function handleDeleteCalendarEvent(ev) {
-    requestConfirmation({
-      title: 'Delete Google Calendar Event?',
-      description: `Are you sure you want to permanently delete "${ev.summary || 'Untitled Event'}" from your Google Calendar?`,
-      confirmLabel: 'Delete Event',
-      isDestructive: true,
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi('calendar', `/calendars/primary/events/${encodeURIComponent(ev.id)}`, 'DELETE');
-          showBanner('Calendar event deleted.');
-          await loadActiveTabData('calendar');
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
-
-  // ---------------- Google Meet Handlers ----------------
-  async function handleCreateMeetSpace() {
+    if (!eventSummary.trim() || !eventStart) {
+      setErrorMessage('Please provide both an event title and start date/time.');
+      return;
+    }
+    setLoadingData(true);
+    setErrorMessage('');
     try {
-      setLoadingData(true);
-      const data = await callWorkspaceApi('meet', '/spaces', 'POST', {});
-      const newSpace = {
-        name: data.name || `spaces/${Date.now()}`,
-        meetingUri: data.meetingUri || `https://meet.google.com/${data.meetingCode || ''}`,
-        meetingCode: data.meetingCode || 'new-room',
-        topic: meetTopic.trim() || 'Fellowship Prayer & Bible Study Room',
-        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      const startDate = new Date(eventStart);
+      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+      const eventPayload = {
+        summary: eventSummary.trim(),
+        description: eventDescription.trim() || 'Church fellowship and community gathering.',
+        start: { dateTime: startDate.toISOString() },
+        end: { dateTime: endDate.toISOString() },
       };
-      setMeetSpaces((prev) => [newSpace, ...prev]);
-      playSound('postPublished');
-      showBanner('Google Meet fellowship room created!');
+
+      const created = await callWorkspaceApi('calendar', '/calendars/primary/events', 'POST', eventPayload);
+
+      // Save to church repository
+      if (activeChurch?.id) {
+        await saveChurchWorkspaceItem({
+          churchId: activeChurch.id,
+          kind: 'calendar_event',
+          title: created.summary || eventSummary.trim(),
+          description: created.description || eventDescription.trim(),
+          googleId: created.id,
+          shareUrl: created.htmlLink || `https://calendar.google.com/calendar/r/eventedit/${created.id}`,
+          visibility: itemVisibility,
+          startsAt: startDate.toISOString(),
+          endsAt: endDate.toISOString(),
+          userId,
+        });
+      }
+
+      setEventSummary('');
+      setEventStart('');
+      setEventDescription('');
+      setStatusMessage('✓ Event scheduled and shared with church community!');
+      playSound('reaction');
+      loadActiveTabData('calendar');
+      reloadSharedItems();
     } catch (err) {
-      showBanner(err.message, true);
+      setErrorMessage(err.message || 'Failed to create Google Calendar event');
     } finally {
       setLoadingData(false);
     }
-  }
+  };
 
-  // ---------------- Google Classroom Handlers ----------------
-  function handleCreateCourse(e) {
-    e.preventDefault();
-    if (!newCourseName.trim()) return;
-    requestConfirmation({
-      title: 'Create Google Classroom Course?',
-      description: `Create a new Google Classroom course "${newCourseName.trim()}" (${newCourseSection.trim()})?`,
-      confirmLabel: 'Create Course',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi('classroom', '/courses', 'POST', {
-            name: newCourseName.trim(),
-            section: newCourseSection.trim(),
-            ownerId: 'me',
-            courseState: 'PROVISIONED',
-          });
-          setNewCourseName('');
-          showBanner('Course created in Google Classroom!');
-          await loadActiveTabData('classroom');
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
-
-  function handlePostClassroomAnnouncement(e) {
-    e.preventDefault();
-    if (!selectedCourseId || !announcementText.trim()) return;
-    requestConfirmation({
-      title: 'Post Classroom Announcement?',
-      description: `Publish this announcement to your selected Google Classroom course: "${announcementText.trim().slice(0, 100)}"?`,
-      confirmLabel: 'Post Announcement',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi(
-            'classroom',
-            `/courses/${encodeURIComponent(selectedCourseId)}/announcements`,
-            'POST',
-            { text: announcementText.trim(), state: 'PUBLISHED' }
-          );
-          setAnnouncementText('');
-          showBanner('Announcement posted to Google Classroom!');
-          const updated = await callWorkspaceApi(
-            'classroom',
-            `/courses/${encodeURIComponent(selectedCourseId)}/announcements?pageSize=10`
-          );
-          setAnnouncements(updated.announcements || []);
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
-
-  // ---------------- Google Slides Handlers ----------------
-  function handleCreateSlideDeck(e) {
-    e.preventDefault();
-    if (!newDeckTitle.trim()) return;
-    requestConfirmation({
-      title: 'Create Google Slides Presentation?',
-      description: `Create a new Google Slides presentation "${newDeckTitle.trim()}" in your Google Drive?`,
-      confirmLabel: 'Create Presentation',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          const created = await callWorkspaceApi('slides', '/presentations', 'POST', {
-            title: newDeckTitle.trim(),
-          });
-          setNewDeckTitle('');
-          showBanner('Google Slides presentation created!');
-          await loadActiveTabData('slides');
-          if (created?.presentationId) {
-            setSelectedPresentationId(created.presentationId);
-            setSelectedPresentation(created);
-          }
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
-
-  function handleAppendSlideToDeck(e) {
-    e.preventDefault();
-    if (!selectedPresentationId || !newSlideHeading.trim()) return;
-    requestConfirmation({
-      title: 'Add Slide to Google Slides Deck?',
-      description: `Insert a new slide titled "${newSlideHeading.trim()}" into the selected Google Slides presentation?`,
-      confirmLabel: 'Add Slide',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          const slideObjId = `slide_${Date.now()}`;
-          const titleBoxId = `title_${Date.now()}`;
-          const bodyBoxId = `body_${Date.now()}`;
-          const requests = [
-            {
-              createSlide: {
-                objectId: slideObjId,
-                slideLayoutReference: { predefinedLayout: 'BLANK' },
-              },
-            },
-            {
-              createShape: {
-                objectId: titleBoxId,
-                shapeType: 'TEXT_BOX',
-                elementProperties: {
-                  pageObjectId: slideObjId,
-                  size: {
-                    height: { magnitude: 60, unit: 'PT' },
-                    width: { magnitude: 600, unit: 'PT' },
-                  },
-                  transform: {
-                    scaleX: 1,
-                    scaleY: 1,
-                    translateX: 50,
-                    translateY: 40,
-                    unit: 'PT',
-                  },
-                },
-              },
-            },
-            {
-              insertText: {
-                objectId: titleBoxId,
-                insertionIndex: 0,
-                text: newSlideHeading.trim(),
-              },
-            },
-          ];
-
-          if (newSlideBody.trim()) {
-            requests.push(
-              {
-                createShape: {
-                  objectId: bodyBoxId,
-                  shapeType: 'TEXT_BOX',
-                  elementProperties: {
-                    pageObjectId: slideObjId,
-                    size: {
-                      height: { magnitude: 220, unit: 'PT' },
-                      width: { magnitude: 600, unit: 'PT' },
-                    },
-                    transform: {
-                      scaleX: 1,
-                      scaleY: 1,
-                      translateX: 50,
-                      translateY: 120,
-                      unit: 'PT',
-                    },
-                  },
-                },
-              },
-              {
-                insertText: {
-                  objectId: bodyBoxId,
-                  insertionIndex: 0,
-                  text: newSlideBody.trim(),
-                },
-              }
-            );
-          }
-
-          await callWorkspaceApi(
-            'slides',
-            `/presentations/${encodeURIComponent(selectedPresentationId)}:batchUpdate`,
-            'POST',
-            { requests }
-          );
-          setNewSlideHeading('');
-          setNewSlideBody('');
-          showBanner('Worship / Scripture slide added to presentation!');
-          const updated = await callWorkspaceApi(
-            'slides',
-            `/presentations/${encodeURIComponent(selectedPresentationId)}`
-          );
-          setSelectedPresentation(updated);
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
-
-  function handleDeletePresentation(deck) {
-    requestConfirmation({
-      title: 'Delete Google Slides Presentation?',
-      description: `Are you sure you want to permanently delete "${deck.name}" from your Google Drive?`,
-      confirmLabel: 'Delete Presentation',
+  const handleDeleteCalendarEvent = (ev) => {
+    setConfirmDialog({
+      title: 'Delete Calendar Event?',
+      description: `Are you sure you want to delete "${ev.summary}"? This will cancel the event from the church calendar and remove it from community schedules.`,
+      confirmLabel: 'Delete Event',
       isDestructive: true,
       onConfirm: async () => {
+        setConfirmDialog(null);
+        setLoadingData(true);
         try {
-          setLoadingData(true);
-          await callWorkspaceApi('drive', `/files/${encodeURIComponent(deck.id)}`, 'DELETE');
-          showBanner('Presentation deleted.');
-          if (selectedPresentationId === deck.id) {
-            setSelectedPresentationId('');
-            setSelectedPresentation(null);
-          }
-          await loadActiveTabData('slides');
+          await callWorkspaceApi('calendar', `/calendars/primary/events/${encodeURIComponent(ev.id)}`, 'DELETE');
+          setStatusMessage('Event removed successfully.');
+          playSound('offline_remove');
+          loadActiveTabData('calendar');
+          reloadSharedItems();
         } catch (err) {
-          showBanner(err.message, true);
+          setErrorMessage(err.message || 'Failed to delete event');
         } finally {
           setLoadingData(false);
         }
       },
     });
-  }
+  };
 
-  // ---------------- Google Forms Handlers ----------------
-  function handleCreateGoogleForm(e) {
+  // -------------------------------------------------------------
+  // TAB ACTIONS: MEET
+  // -------------------------------------------------------------
+  const handleCreateMeetSpace = async () => {
+    setLoadingData(true);
+    setErrorMessage('');
+    try {
+      const data = await callWorkspaceApi('meet', '/spaces', 'POST', {});
+      const roomUri = data.meetingUri || data.space?.meetingUri || `https://meet.google.com/${data.name?.replace('spaces/', '')}`;
+      setMeetSpaces((prev) => [data, ...prev]);
+
+      // Save to church repository
+      if (activeChurch?.id && roomUri) {
+        await saveChurchWorkspaceItem({
+          churchId: activeChurch.id,
+          kind: 'meet',
+          title: meetTopic || 'Mid-Week Fellowship & Intercession',
+          description: `Live video prayer room hosted by ${activeChurch.name || 'our church'}.`,
+          googleId: data.name,
+          shareUrl: roomUri,
+          visibility: itemVisibility,
+          userId,
+        });
+      }
+
+      setStatusMessage('✓ Google Meet video room created and shared with community!');
+      playSound('reaction');
+      reloadSharedItems();
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed creating Google Meet room.');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // TAB ACTIONS: FORMS
+  // -------------------------------------------------------------
+  const handleCreateForm = async (e) => {
     e.preventDefault();
-    if (!newFormTitle.trim()) return;
-    requestConfirmation({
-      title: 'Create Google Form?',
-      description: `Create a new Google Form "${newFormTitle.trim()}" for your church community?`,
-      confirmLabel: 'Create Form',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          const created = await callWorkspaceApi('forms', '/forms', 'POST', {
-            info: {
-              title: newFormTitle.trim(),
-              documentTitle: newFormTitle.trim(),
-            },
-          });
+    if (!newFormTitle.trim()) {
+      setErrorMessage('Please enter a form title.');
+      return;
+    }
+    setLoadingData(true);
+    setErrorMessage('');
+    try {
+      const created = await callWorkspaceApi('forms', '/forms', 'POST', {
+        info: {
+          title: newFormTitle.trim(),
+          documentTitle: `${newFormTitle.trim()} - ${activeChurch?.name || 'Shammah Church'}`,
+        },
+      });
 
-          const formId = created?.formId;
-          if (formId && (newFormDescription.trim() || newFormQuestion.trim())) {
-            const batchRequests = [];
-            if (newFormDescription.trim()) {
-              batchRequests.push({
-                updateFormInfo: {
-                  info: {
-                    title: newFormTitle.trim(),
-                    description: newFormDescription.trim(),
-                  },
-                  updateMask: 'description',
-                },
-              });
-            }
-            if (newFormQuestion.trim()) {
-              batchRequests.push({
-                createItem: {
-                  item: {
-                    title: newFormQuestion.trim(),
-                    questionItem: {
-                      question: {
-                        required: true,
-                        textQuestion: { paragraph: false },
-                      },
-                    },
-                  },
-                  location: { index: 0 },
-                },
-              });
-            }
-            if (batchRequests.length > 0) {
-              await callWorkspaceApi('forms', `/forms/${encodeURIComponent(formId)}:batchUpdate`, 'POST', {
-                requests: batchRequests,
-              });
-            }
-          }
+      const formId = created.formId;
+      const shareUrl = created.responderUri || `https://docs.google.com/forms/d/${formId}/viewform`;
 
-          setNewFormTitle('');
-          setNewFormDescription('');
-          showBanner('Google Form created and configured!');
-          await loadActiveTabData('forms');
-          if (formId) {
-            setSelectedFormId(formId);
-          }
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
+      // Save to church repository
+      if (activeChurch?.id) {
+        await saveChurchWorkspaceItem({
+          churchId: activeChurch.id,
+          kind: 'form',
+          title: newFormTitle.trim(),
+          description: `Church sign-up form for ${newFormType}.`,
+          googleId: formId,
+          shareUrl,
+          visibility: itemVisibility,
+          userId,
+        });
+      }
 
-  function handleAddQuestionToSelectedForm(e) {
+      setNewFormTitle('');
+      setStatusMessage('✓ Google Sign-Up Form created and shared with church members!');
+      playSound('reaction');
+      loadActiveTabData('forms');
+      reloadSharedItems();
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed creating Google Form.');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // TAB ACTIONS: SLIDES
+  // -------------------------------------------------------------
+  const handleCreatePresentation = async (e) => {
     e.preventDefault();
-    if (!selectedFormId || !newFormQuestion.trim()) return;
-    requestConfirmation({
-      title: 'Add Question to Google Form?',
-      description: `Add question "${newFormQuestion.trim()}" to the selected Google Form?`,
-      confirmLabel: 'Add Question',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}:batchUpdate`, 'POST', {
-            requests: [
-              {
-                createItem: {
-                  item: {
-                    title: newFormQuestion.trim(),
-                    questionItem: {
-                      question: {
-                        required: false,
-                        textQuestion: { paragraph: true },
-                      },
-                    },
-                  },
-                  location: { index: 0 },
-                },
-              },
-            ],
-          });
-          showBanner('Question added to Google Form!');
-          const updated = await callWorkspaceApi('forms', `/forms/${encodeURIComponent(selectedFormId)}`);
-          setSelectedFormDetail(updated);
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
+    if (!newDeckTitle.trim()) {
+      setErrorMessage('Please enter a slide deck title.');
+      return;
+    }
+    setLoadingData(true);
+    setErrorMessage('');
+    try {
+      const created = await callWorkspaceApi('slides', '/presentations', 'POST', {
+        title: `${newDeckTitle.trim()} · ${activeChurch?.name || 'Shammah Church'}`,
+      });
 
-  function handleDeleteGoogleForm(formFile) {
-    requestConfirmation({
-      title: 'Delete Google Form?',
-      description: `Are you sure you want to permanently delete "${formFile.name}" from your Google Drive?`,
-      confirmLabel: 'Delete Form',
-      isDestructive: true,
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi('drive', `/files/${encodeURIComponent(formFile.id)}`, 'DELETE');
-          showBanner('Google Form deleted.');
-          if (selectedFormId === formFile.id) {
-            setSelectedFormId('');
-            setSelectedFormDetail(null);
-            setSelectedFormResponses([]);
-          }
-          await loadActiveTabData('forms');
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
+      const deckId = created.presentationId;
+      const shareUrl = `https://docs.google.com/presentation/d/${deckId}/edit`;
 
-  // ---------------- Google Keep & Firestore Ministry Notes Handlers ----------------
-  function handleCreateNote(e) {
+      if (activeChurch?.id) {
+        await saveChurchWorkspaceItem({
+          churchId: activeChurch.id,
+          kind: 'slide',
+          title: newDeckTitle.trim(),
+          description: `Sermon presentation slides by ${activeChurch.name || 'our church'}.`,
+          googleId: deckId,
+          shareUrl,
+          visibility: itemVisibility,
+          userId,
+        });
+      }
+
+      setNewDeckTitle('');
+      setStatusMessage('✓ Sermon Slide Deck created and shared!');
+      playSound('reaction');
+      loadActiveTabData('slides');
+      reloadSharedItems();
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to create Google Slides presentation.');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // TAB ACTIONS: CLASSROOM
+  // -------------------------------------------------------------
+  const handleCreateCourse = async (e) => {
     e.preventDefault();
-    const isChecklist = keepNoteMode === 'checklist';
-    const rawContent = isChecklist ? keepChecklistInput.trim() : noteBody.trim();
-    if (!noteTitle.trim() || !rawContent) return;
-    requestConfirmation({
-      title: isChecklist ? 'Save Google Keep Checklist?' : 'Save Sermon & Ministry Note?',
-      description: `Save "${noteTitle.trim()}" to your Google Keep & Firebase Cloud Ministry Notes?`,
-      confirmLabel: 'Save Note',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          const formattedBody = isChecklist
-            ? rawContent
-                .split('\n')
-                .map((l) => l.trim())
-                .filter(Boolean)
-                .map((l) => `☐ ${l}`)
-                .join('\n')
-            : rawContent;
+    if (!newCourseName.trim()) {
+      setErrorMessage('Please enter a course name.');
+      return;
+    }
+    setLoadingData(true);
+    setErrorMessage('');
+    try {
+      const created = await callWorkspaceApi('classroom', '/courses', 'POST', {
+        name: newCourseName.trim(),
+        section: newCourseSection.trim() || 'Discipleship Track',
+        ownerId: 'me',
+        courseState: 'ACTIVE',
+      });
 
-          // Save to Firestore Cloud Ministry Notes
-          await saveMinistryNoteToFirestore({
-            title: noteTitle.trim(),
-            scriptureRef: noteScripture.trim(),
-            body: formattedBody,
-          });
-          // Also create in Google Keep API if token is active
-          if (token) {
-            try {
-              const keepBody = isChecklist
-                ? {
-                    list: {
-                      listItems: rawContent
-                        .split('\n')
-                        .map((l) => l.trim())
-                        .filter(Boolean)
-                        .slice(0, 50)
-                        .map((line) => ({
-                          text: { text: line },
-                          checked: false,
-                        })),
-                    },
-                  }
-                : {
-                    text: {
-                      text: noteScripture.trim()
-                        ? `[${noteScripture.trim()}]\n${rawContent}`
-                        : rawContent,
-                    },
-                  };
+      const shareUrl = created.alternateLink || `https://classroom.google.com/c/${created.id}`;
 
-              await callWorkspaceApi('keep', '/notes', 'POST', {
-                title: noteTitle.trim(),
-                body: keepBody,
-              });
-              await loadActiveTabData('keep');
-            } catch {
-              // Keep API is optional on consumer accounts; Firestore sync already succeeded
-            }
-          }
-          setNoteTitle('');
-          setNoteScripture('');
-          setNoteBody('');
-          setKeepChecklistInput('');
-          showBanner('Note synced to Google Keep & Cloud Notes!');
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
+      if (activeChurch?.id) {
+        await saveChurchWorkspaceItem({
+          churchId: activeChurch.id,
+          kind: 'classroom',
+          title: newCourseName.trim(),
+          description: newCourseSection.trim() || 'Discipleship Track',
+          googleId: created.id,
+          shareUrl,
+          visibility: itemVisibility,
+          userId,
+        });
+      }
 
-  function handleDeleteKeepNote(noteName, title) {
-    requestConfirmation({
-      title: 'Delete Google Keep Note?',
-      description: `Are you sure you want to permanently delete "${title || noteName}" from Google Keep?`,
-      confirmLabel: 'Delete Note',
-      isDestructive: true,
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi('keep', `/${noteName}`, 'DELETE');
-          showBanner('Keep note deleted.');
-          await loadActiveTabData('keep');
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
+      setNewCourseName('');
+      setStatusMessage('✓ Google Classroom course created and shared!');
+      playSound('reaction');
+      loadActiveTabData('classroom');
+      reloadSharedItems();
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed creating Google Classroom course.');
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
-  function handleDeleteCloudNote(note) {
-    requestConfirmation({
-      title: 'Delete Cloud Ministry Note?',
-      description: `Are you sure you want to permanently delete "${note.title}" from your Firestore Cloud Notes?`,
-      confirmLabel: 'Delete Note',
-      isDestructive: true,
-      onConfirm: async () => {
-        try {
-          await deleteMinistryNoteFromFirestore(note.id);
-          showBanner('Cloud ministry note deleted.');
-        } catch (err) {
-          showBanner(err.message, true);
-        }
-      },
-    });
-  }
-
-  // ---------------- Google Tasks Handlers ----------------
-  function handleCreateTask(e) {
+  // -------------------------------------------------------------
+  // TAB ACTIONS: TASKS
+  // -------------------------------------------------------------
+  const handleCreateTask = async (e) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
-    requestConfirmation({
-      title: 'Add Task to Google Tasks?',
-      description: `Create task "${newTaskTitle.trim()}" in your Google Tasks ministry checklist?`,
-      confirmLabel: 'Add Task',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi(
-            'tasks',
-            `/lists/${encodeURIComponent(selectedTaskListId)}/tasks`,
-            'POST',
-            {
-              title: newTaskTitle.trim(),
-              notes: newTaskNotes.trim() || undefined,
-            }
-          );
-          setNewTaskTitle('');
-          setNewTaskNotes('');
-          showBanner('Task added to Google Tasks!');
-          const tasksData = await callWorkspaceApi(
-            'tasks',
-            `/lists/${encodeURIComponent(selectedTaskListId)}/tasks?maxResults=25`
-          );
-          setTasks(tasksData.items || []);
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
+    setLoadingData(true);
+    try {
+      const listId = selectedTaskListId || '@default';
+      const payload = {
+        title: newTaskTitle.trim(),
+        due: newTaskDue ? new Date(newTaskDue).toISOString() : undefined,
+      };
+      await callWorkspaceApi('tasks', `/lists/${encodeURIComponent(listId)}/tasks`, 'POST', payload);
+      setNewTaskTitle('');
+      setNewTaskDue('');
+      setStatusMessage('✓ Ministry task added.');
+      playSound('reaction');
+      loadActiveTabData('tasks');
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed creating task.');
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
-  function handleToggleTaskStatus(task) {
-    const nextStatus = task.status === 'completed' ? 'needsAction' : 'completed';
-    requestConfirmation({
-      title: nextStatus === 'completed' ? 'Mark Task Completed?' : 'Reopen Task?',
-      description: `Update "${task.title}" to "${nextStatus === 'completed' ? 'Completed' : 'Needs Action'}" in Google Tasks?`,
-      confirmLabel: 'Update Task',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi(
-            'tasks',
-            `/lists/${encodeURIComponent(selectedTaskListId)}/tasks/${encodeURIComponent(task.id)}`,
-            'PATCH',
-            { status: nextStatus }
-          );
-          const tasksData = await callWorkspaceApi(
-            'tasks',
-            `/lists/${encodeURIComponent(selectedTaskListId)}/tasks?maxResults=25`
-          );
-          setTasks(tasksData.items || []);
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
-
-  function handleDeleteTask(task) {
-    requestConfirmation({
-      title: 'Delete Google Task?',
-      description: `Are you sure you want to permanently delete "${task.title}" from Google Tasks?`,
-      confirmLabel: 'Delete Task',
-      isDestructive: true,
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi(
-            'tasks',
-            `/lists/${encodeURIComponent(selectedTaskListId)}/tasks/${encodeURIComponent(task.id)}`,
-            'DELETE'
-          );
-          showBanner('Task deleted.');
-          const tasksData = await callWorkspaceApi(
-            'tasks',
-            `/lists/${encodeURIComponent(selectedTaskListId)}/tasks?maxResults=25`
-          );
-          setTasks(tasksData.items || []);
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
-
-  // ---------------- Google Chat Handlers ----------------
-  function handleSendChatMessage(e) {
+  // -------------------------------------------------------------
+  // TAB ACTIONS: FIREBASE PRAYER REQUESTS
+  // -------------------------------------------------------------
+  const handleAddPrayerRequest = async (e) => {
     e.preventDefault();
-    if (!selectedSpaceName || !chatInput.trim()) return;
-    requestConfirmation({
-      title: 'Send Google Chat Message?',
-      description: `Send "${chatInput.trim().slice(0, 120)}" to the selected Google Chat space?`,
-      confirmLabel: 'Send Message',
-      onConfirm: async () => {
-        try {
-          setLoadingData(true);
-          await callWorkspaceApi('chat', `/${selectedSpaceName}/messages`, 'POST', {
-            text: chatInput.trim(),
-          });
-          setChatInput('');
-          showBanner('Message sent to Google Chat!');
-          const data = await callWorkspaceApi('chat', `/${selectedSpaceName}/messages?pageSize=15`);
-          setChatMessages(data.messages || []);
-        } catch (err) {
-          showBanner(err.message, true);
-        } finally {
-          setLoadingData(false);
-        }
-      },
-    });
-  }
-
-  // ---------------- Firebase Live Prayer Wall Handlers ----------------
-  async function handleCreatePrayerRequest(e) {
-    e.preventDefault();
-    if (!prayerTitle.trim() || !prayerContent.trim()) return;
+    if (!prayerTitle.trim() || !prayerContent.trim()) {
+      setErrorMessage('Please enter both a title and prayer details.');
+      return;
+    }
+    setLoadingData(true);
     try {
       await createPrayerRequestInFirestore({
         title: prayerTitle.trim(),
         content: prayerContent.trim(),
         category: prayerCategory,
+        authorId: user?.uid || userId || 'anon',
+        authorName: currentUser?.display_name || user?.displayName || 'Believer',
       });
       setPrayerTitle('');
       setPrayerContent('');
-      playSound('postPublished');
-      showBanner('Prayer request published to Firebase Cloud Wall!');
+      setStatusMessage('✓ Prayer request posted to community Prayer Wall!');
+      playSound('reaction');
     } catch (err) {
-      showBanner(err.message, true);
+      setErrorMessage(err.message || 'Failed to post prayer request.');
+    } finally {
+      setLoadingData(false);
     }
-  }
+  };
 
-  function handleDeletePrayerRequest(pr) {
-    requestConfirmation({
-      title: 'Delete Prayer Request?',
-      description: `Are you sure you want to delete "${pr.title}" from the Firebase Live Prayer Wall?`,
-      confirmLabel: 'Delete Request',
+  const handleDeleteSharedWorkspaceItem = (item) => {
+    setConfirmDialog({
+      title: 'Remove Shared Item?',
+      description: `Are you sure you want to remove "${item.title}" from your church's shared workspace? Church members will no longer see this in their community hub.`,
+      confirmLabel: 'Remove Item',
       isDestructive: true,
       onConfirm: async () => {
+        setConfirmDialog(null);
         try {
-          await deletePrayerRequestFromFirestore(pr.id);
-          showBanner('Prayer request removed.');
+          await deleteChurchWorkspaceItem(item.id);
+          setStatusMessage('Item removed from church community workspace.');
+          playSound('offline_remove');
+          reloadSharedItems();
         } catch (err) {
-          showBanner(err.message, true);
+          setErrorMessage(err.message || 'Failed removing item.');
         }
       },
     });
+  };
+
+  // Filtered shared items for the Community View
+  const filteredSharedItems = useMemo(() => {
+    if (sharedCategoryFilter === 'all') return sharedItems;
+    return sharedItems.filter((item) => {
+      if (sharedCategoryFilter === 'calendar') return item.kind === 'calendar_event';
+      if (sharedCategoryFilter === 'meet') return item.kind === 'meet';
+      if (sharedCategoryFilter === 'forms') return item.kind === 'form';
+      if (sharedCategoryFilter === 'slides') return item.kind === 'slide' || item.kind === 'drive_file';
+      if (sharedCategoryFilter === 'classroom') return item.kind === 'classroom';
+      if (sharedCategoryFilter === 'tasks') return item.kind === 'task_list';
+      if (sharedCategoryFilter === 'chat') return item.kind === 'chat_space';
+      return true;
+    });
+  }, [sharedItems, sharedCategoryFilter]);
+
+  // Loading skeleton while resolving plan
+  if (checkingPlan) {
+    return (
+      <div className="gws-shell">
+        <div className="gws-hero-card">
+          <div className="st-skeleton st-skel-title" style={{ width: '40%', marginBottom: 12 }} />
+          <div className="st-skeleton st-skel-sub" style={{ width: '70%', height: 16 }} />
+        </div>
+      </div>
+    );
   }
 
-  return (
-    <div className="section-feed-view gws-page-shell">
-      {/* Assimilated Workspace Header Card */}
-      <div className="gws-hero-card">
-        <div className="gws-hero-top-row">
-          <div className="gws-hero-title-group">
-            <span className="gws-hero-icon-box">
-              <LayoutGrid size={18} />
-            </span>
-            <div className="gws-hero-text-wrap">
-              <div className="gws-hero-heading-line">
-                <h2 className="gws-hero-title">My Workspace</h2>
-                <span className="gws-hero-badge">
-                  <Sparkles size={11} />
-                  <span>Study &amp; Ministry Tools</span>
-                </span>
-              </div>
-              <p className="gws-hero-sub">
-                Plan fellowship events, make worship slides, create quick sign-up forms, take sermon notes, start video prayer rooms, join Bible study classes, track to-do lists, chat with your group, and share prayer requests.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Account Connection & Action Bar */}
-        <div className="gws-auth-bar">
-          {needsAuth || !token ? (
-            <button
-              type="button"
-              className="gws-btn-primary"
-              onClick={handleLogin}
-              disabled={isLoggingIn}
-            >
-              <LogIn size={15} />
-              <span>
-                {isLoggingIn
-                  ? 'Connecting account…'
-                  : sessionExpired
-                    ? 'Reconnect Google Account'
-                    : 'Connect Google Account'}
+  // =========================================================================
+  // VIEW 1: CHURCH ADMIN WITHOUT ACTIVE PLAN (LOCKED STATE)
+  // =========================================================================
+  if (isChurchAdmin && !hasWorkspacePlan) {
+    return (
+      <div className="gws-shell">
+        <div className="gws-hero-card gws-locked-hero">
+          <div className="gws-hero-content">
+            <div className="gws-plan-pill-row">
+              <span className="gws-badge-gold">
+                <Lock size={12} />
+                <span>{WORKSPACE_PLAN_LABEL}</span>
               </span>
-            </button>
-          ) : (
-            <div className="gws-connected-row">
-              <span className="gws-status-badge gws-status-badge-teal">
-                <Check size={13} />
-                <span>Connected: {user?.displayName || user?.email}</span>
+              <span className="gws-price-tag">
+                {formatKes(WORKSPACE_PLAN_PRICE_KES)} / month
               </span>
-              <div className="gws-connected-actions">
-                <button
-                  type="button"
-                  className="gws-btn-secondary"
-                  onClick={() => loadActiveTabData(activeTab)}
-                  disabled={loadingData}
-                >
-                  <RefreshCw size={13} />
-                  <span>Refresh</span>
-                </button>
-                <button
-                  type="button"
-                  className="gws-btn-secondary"
-                  onClick={handleSignOut}
-                >
-                  <LogOut size={13} />
-                  <span>Disconnect</span>
-                </button>
+            </div>
+
+            <h2 className="gws-hero-title">
+              Google Workspace Creation is Locked for {activeChurch?.name || 'Your Church'}
+            </h2>
+            <p className="gws-hero-sub">
+              To create and publish official Google Forms, live Calendar schedules, Google Meet video rooms, Google Classroom discipleship courses, and sermon slide decks for your congregation, activate the Workspace Premium plan.
+            </p>
+
+            <div className="gws-features-grid">
+              <div className="gws-feature-item">
+                <span className="gws-check-icon">✓</span>
+                <div>
+                  <strong>Official Church Sign-Up Forms</strong>
+                  <p>Baptisms, dedications, ministry volunteer forms with real-time response tracking.</p>
+                </div>
+              </div>
+              <div className="gws-feature-item">
+                <span className="gws-check-icon">✓</span>
+                <div>
+                  <strong>Live Church Calendar &amp; .ics Sync</strong>
+                  <p>1-click calendar sync for your entire congregation without requiring Google sign-in.</p>
+                </div>
+              </div>
+              <div className="gws-feature-item">
+                <span className="gws-check-icon">✓</span>
+                <div>
+                  <strong>Google Meet Video Rooms</strong>
+                  <p>Instant video rooms for mid-week fellowship, intercession, and leadership meetings.</p>
+                </div>
+              </div>
+              <div className="gws-feature-item">
+                <span className="gws-check-icon">✓</span>
+                <div>
+                  <strong>Google Classroom &amp; Discipleship Tracks</strong>
+                  <p>Structured courses, Bible study assignments, and announcements for believers.</p>
+                </div>
+              </div>
+              <div className="gws-feature-item">
+                <span className="gws-check-icon">✓</span>
+                <div>
+                  <strong>Sermon Slide Decks &amp; Cloud Documents</strong>
+                  <p>Automatic publishing and archiving of Sunday sermon presentation slides.</p>
+                </div>
+              </div>
+              <div className="gws-feature-item">
+                <span className="gws-check-icon">✓</span>
+                <div>
+                  <strong>Tasks &amp; Group Chat Spaces</strong>
+                  <p>Department task delegation and official church ministry team communication.</p>
+                </div>
               </div>
             </div>
-          )}
-        </div>
 
-        {(sessionExpired || (user && (!token || needsAuth))) && (
-          <div className="gws-banner gws-banner-warn">
-            <span>
-              Your session expired after reloading the page{user?.email ? ` (${user.email})` : ''}. Reconnect your account to keep using your tools.
-            </span>
-            <button
-              type="button"
-              className="gws-btn-primary gws-btn-sm"
-              onClick={handleLogin}
-              disabled={isLoggingIn}
-            >
-              <LogIn size={13} />
-              <span>{isLoggingIn ? 'Reconnecting…' : 'Reconnect'}</span>
-            </button>
-          </div>
-        )}
-
-        {statusMessage && (
-          <div className="gws-banner gws-banner-ok">
-            <Check size={14} />
-            <span>{statusMessage}</span>
-          </div>
-        )}
-        {errorMessage && (
-          <div className="gws-banner gws-banner-err">
-            <AlertTriangle size={14} />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Tool Selector Card */}
-      <div className="gws-nav-card">
-        <div className="gws-nav-tabs no-scrollbar" role="tablist" aria-label="Workspace Tools">
-          {HUB_TABS.map((t) => {
-            const Icon = t.icon;
-            const isActive = activeTab === t.id;
-            return (
+            <div className="gws-locked-actions">
+              <Link href="/settings/billing" className="gws-btn-primary gws-btn-lg">
+                <Sparkles size={16} />
+                <span>Activate Workspace Premium ({formatKes(WORKSPACE_PLAN_PRICE_KES)}/mo)</span>
+              </Link>
               <button
-                key={t.id}
                 type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={`gws-tab-pill${isActive ? ' active' : ''}`}
-                style={{ '--gws-tab-color': t.color }}
+                className="gws-btn-secondary gws-btn-lg"
+                onClick={() => setShowActivationRequestModal(true)}
+              >
+                <ShieldCheck size={16} />
+                <span>Request Activation / Invoice</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Community View below for what other churches have shared */}
+        <div className="gws-community-divider">
+          <h3>Community Workspace Items You Can Access</h3>
+          <p>You can still open and interact with items shared by other churches in the fellowship.</p>
+        </div>
+
+        <CommunityWorkspaceSection items={filteredSharedItems} onShareToFeed={onShareToFeed} />
+
+        {/* Request Activation Modal using PopupSheet standard */}
+        <PopupSheet
+          open={showActivationRequestModal}
+          onClose={() => setShowActivationRequestModal(false)}
+          title="Request Workspace Premium Activation"
+          size="md"
+        >
+          {activationRequested ? (
+            <div className="p-4 text-center">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-3 text-xl">
+                ✓
+              </div>
+              <h3 className="text-lg font-bold mb-2">Activation Request Received!</h3>
+              <p className="text-sm text-slate-300 mb-4">
+                We have recorded your request for <strong>{activeChurch?.name || 'your church'}</strong> for the {WORKSPACE_PLAN_LABEL} ({formatKes(WORKSPACE_PLAN_PRICE_KES)}/month). An onboarding specialist will verify your church details and activate your workspace integration shortly.
+              </p>
+              <button
+                type="button"
+                className="gws-btn-primary w-full"
                 onClick={() => {
-                  setActiveTab(t.id);
+                  setShowActivationRequestModal(false);
+                  setActivationRequested(false);
+                }}
+              >
+                Close
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-slate-300">
+                Submit an activation request for <strong>{activeChurch?.name || 'your church'}</strong>. For M-Pesa business paybills, church bank transfer invoices, or pilot church grants, our administration team will review your account.
+              </p>
+              <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-300 space-y-1">
+                <div><strong>Church:</strong> {activeChurch?.name || 'Selected Church'}</div>
+                <div><strong>Admin Email:</strong> {session?.user?.email || 'Your account email'}</div>
+                <div><strong>Standard Price:</strong> {formatKes(WORKSPACE_PLAN_PRICE_KES)} / month (KES billing)</div>
+              </div>
+              <button
+                type="button"
+                className="gws-btn-primary w-full py-3"
+                onClick={() => {
+                  setActivationRequested(true);
                   playSound('reaction');
                 }}
               >
-                <Icon size={14} className="gws-tab-icon" />
-                <span>{t.label}</span>
+                Confirm &amp; Send Activation Request
               </button>
-            );
-          })}
+            </div>
+          )}
+        </PopupSheet>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // VIEW 2: EVERYONE ELSE (MEMBERS, FOLLOWERS, NON-ADMIN BELIEVERS)
+  // =========================================================================
+  if (!isChurchAdmin) {
+    return (
+      <div className="gws-shell">
+        <div className="gws-hero-card">
+          <div className="gws-hero-content">
+            <span className="gws-badge-teal">
+              <Users size={12} />
+              <span>Church Community Hub</span>
+            </span>
+            <h2 className="gws-hero-title">Church Workspace Resources</h2>
+            <p className="gws-hero-sub">
+              Access upcoming calendar events, join video prayer rooms, fill baptism and dedication sign-up forms, and open discipleship course material shared by your church communities.
+            </p>
+          </div>
+        </div>
+
+        {/* Filter Pills */}
+        <div className="gws-shared-filter-bar">
+          {[
+            { id: 'all', label: 'All Items' },
+            { id: 'calendar', label: '📅 Events' },
+            { id: 'meet', label: '📹 Video Rooms' },
+            { id: 'forms', label: '📝 Sign-Up Forms' },
+            { id: 'slides', label: '📊 Slide Decks' },
+            { id: 'classroom', label: '🎓 Classes' },
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              className={`gws-filter-pill ${sharedCategoryFilter === cat.id ? 'active' : ''}`}
+              onClick={() => {
+                setSharedCategoryFilter(cat.id);
+                playSound('reaction');
+              }}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+
+        <CommunityWorkspaceSection
+          items={filteredSharedItems}
+          onShareToFeed={onShareToFeed}
+          emptyMessage="No workspace items have been shared yet by churches you follow or belong to. Check back soon for events and sign-up forms!"
+        />
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // VIEW 3: CHURCH ADMIN WITH ACTIVE PLAN (FULL HUB WITH CREATE ACTIONS)
+  // =========================================================================
+  return (
+    <div className="gws-shell">
+      {/* Top Banner / Active Church Switcher */}
+      <div className="gws-hero-card">
+        <div className="gws-hero-content">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="gws-badge-teal">
+                <ShieldCheck size={12} />
+                <span>Admin Portal</span>
+              </span>
+              <span className="gws-badge-gold">
+                <Sparkles size={12} />
+                <span>{WORKSPACE_PLAN_LABEL} · Active</span>
+              </span>
+            </div>
+
+            {ownedChurches.length > 1 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Managing:</span>
+                <select
+                  value={activeChurch?.id || ''}
+                  onChange={(e) => {
+                    const c = ownedChurches.find((x) => x.id === e.target.value);
+                    if (c) handleSelectChurch(c);
+                  }}
+                  className="bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs"
+                >
+                  {ownedChurches.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          <h2 className="gws-hero-title">
+            {activeChurch?.name || 'Church'} Google Workspace Hub
+          </h2>
+          <p className="gws-hero-sub">
+            Create and publish live Google Calendar schedules, instant Google Meet rooms, member sign-up forms, and discipleship materials for your congregation.
+          </p>
+
+          {/* Google Auth Status Bar */}
+          <div className="gws-auth-status-bar">
+            {needsAuth ? (
+              <div className="flex items-center justify-between flex-wrap gap-3 w-full">
+                <div className="flex items-center gap-2 text-xs text-amber-300">
+                  <AlertTriangle size={15} />
+                  <span>Connect your Google account to create and manage workspace items</span>
+                </div>
+                <button
+                  type="button"
+                  className="gsi-material-button"
+                  onClick={handleGoogleLogin}
+                  disabled={isLoggingIn}
+                >
+                  <div className="gsi-material-button-state"></div>
+                  <div className="gsi-material-button-content-wrapper">
+                    <div className="gsi-material-button-icon">
+                      <svg version="1.1" viewBox="0 0 48 48" style={{ display: 'block' }}>
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                        <path fill="none" d="M0 0h48v48H0z"></path>
+                      </svg>
+                    </div>
+                    <span className="gsi-material-button-contents">
+                      {isLoggingIn ? 'Connecting...' : 'Connect Google Workspace'}
+                    </span>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between flex-wrap gap-2 w-full">
+                <div className="flex items-center gap-2 text-xs text-emerald-300">
+                  <Check size={14} />
+                  <span>Connected as {user?.email || user?.displayName || 'Google Account'}</span>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1 underline"
+                  onClick={handleGoogleLogout}
+                >
+                  <LogOut size={12} />
+                  <span>Disconnect</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Global Status / Error notifications */}
+      {statusMessage && (
+        <div className="p-3 mb-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs flex items-center gap-2">
+          <Check size={14} />
+          <span>{statusMessage}</span>
+        </div>
+      )}
+      {errorMessage && (
+        <div className="p-3 mb-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-200 text-xs flex items-center gap-2">
+          <AlertTriangle size={14} />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {/* Navigation Tabs (Horizontal Scrollable container) */}
+      <div className="gws-tabs-bar no-scrollbar">
+        {HUB_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              className={`gws-tab-btn ${isActive ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab(tab.id);
+                playSound('reaction');
+              }}
+            >
+              <Icon size={15} style={{ color: isActive ? tab.color : 'inherit' }} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Item Visibility Selector (Used when creating any new item) */}
+      <div className="gws-visibility-selector-card">
+        <span className="text-xs font-semibold text-slate-300">Default Share Visibility:</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          {[
+            { id: 'public', label: '🌐 Public (Everyone)' },
+            { id: 'members', label: '👥 Members Only' },
+            { id: 'followers', label: '🔔 Followers & Members' },
+          ].map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              className={`gws-vis-pill ${itemVisibility === v.id ? 'active' : ''}`}
+              onClick={() => {
+                setItemVisibility(v.id);
+                playSound('reaction');
+              }}
+            >
+              {v.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* TAB 1: CALENDAR */}
       {activeTab === 'calendar' && (
-        <section className="gws-workspace-section" style={{ '--gws-accent': '#0d766e' }}>
-          <div className="gws-section-header">
-            <div className="gws-title-wrap">
-              <span className="gws-sec-icon-box">
-                <Calendar size={17} />
-              </span>
+        <div className="gws-tab-body">
+          <div className="gws-card">
+            <h3 className="gws-card-title flex items-center gap-2">
+              <Calendar size={18} className="text-teal-400" />
+              <span>Schedule Church Event</span>
+            </h3>
+            <form onSubmit={handleCreateEvent} className="space-y-3 mt-3">
               <div>
-                <h3>Fellowship &amp; Youth Calendar</h3>
-                <span className="gws-section-hint">Plan services, youth hangouts, keshas &amp; study sessions</span>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Event Title *</label>
+                <input
+                  type="text"
+                  className="st-input"
+                  placeholder="e.g. Sunday Celebration Service or Youth Night"
+                  value={eventSummary}
+                  onChange={(e) => setEventSummary(e.target.value)}
+                  disabled={needsAuth || loadingData}
+                  required
+                />
               </div>
-            </div>
-          </div>
-
-          {needsAuth ? (
-            <div className="empty-state gws-empty-card">
-              <h2>Connect your account to view &amp; schedule events</h2>
-              <p>Link your account above to see upcoming dates and add church or youth group events.</p>
-            </div>
-          ) : (
-            <div className="gws-grid">
-              <form className="gws-panel-card" onSubmit={handleCreateCalendarEvent}>
-                <div className="gws-panel-header">
-                  <h4>Schedule an Event</h4>
-                  <span className="gws-panel-sub">Adds directly to your calendar</span>
-                </div>
-                <div className="gws-form-stack">
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="Event name (e.g., Friday Night Youth Kesha)"
-                    value={eventSummary}
-                    onChange={(e) => setEventSummary(e.target.value)}
-                    required
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-300 block mb-1">Date &amp; Time *</label>
                   <input
                     type="datetime-local"
-                    className="gws-input-field"
+                    className="st-input"
                     value={eventStart}
                     onChange={(e) => setEventStart(e.target.value)}
+                    disabled={needsAuth || loadingData}
                     required
                   />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-300 block mb-1">Description</label>
                   <input
                     type="text"
-                    className="gws-input-field"
-                    placeholder="Short note or Bible verse theme (optional)"
+                    className="st-input"
+                    placeholder="Worship, sermon & fellowship..."
                     value={eventDescription}
                     onChange={(e) => setEventDescription(e.target.value)}
+                    disabled={needsAuth || loadingData}
                   />
-                  <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    <Plus size={14} />
-                    <span>Add Event</span>
-                  </button>
                 </div>
-              </form>
-
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Upcoming Events ({calendarEvents.length})</h4>
-                  <span className="gws-panel-sub">Your next scheduled gatherings</span>
-                </div>
-                {calendarEvents.length === 0 ? (
-                  <p className="gws-card-hint">No upcoming events scheduled yet.</p>
-                ) : (
-                  <div className="gws-items-list">
-                    {calendarEvents.map((ev) => {
-                      const startStr = ev.start?.dateTime || ev.start?.date || '';
-                      return (
-                        <div key={ev.id} className="gws-item-card">
-                          <div className="gws-item-body">
-                            <strong className="gws-item-title">{ev.summary || 'Untitled Event'}</strong>
-                            <span className="gws-item-meta">
-                              <Clock size={11} />
-                              <span>{startStr ? new Date(startStr).toLocaleString() : 'All day'}</span>
-                            </span>
-                          </div>
-                          <div className="gws-item-actions">
-                            {ev.htmlLink && (
-                              <a
-                                href={ev.htmlLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="gws-icon-btn"
-                                title="Open event"
-                              >
-                                <ExternalLink size={13} />
-                              </a>
-                            )}
-                            <button
-                              type="button"
-                              className="gws-icon-btn gws-icon-btn-danger"
-                              onClick={() => handleDeleteCalendarEvent(ev)}
-                              title="Delete event"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* TAB 1B: SLIDES */}
-      {activeTab === 'slides' && (
-        <section className="gws-workspace-section" style={{ '--gws-accent': '#d97706' }}>
-          <div className="gws-section-header">
-            <div className="gws-title-wrap">
-              <span className="gws-sec-icon-box">
-                <Presentation size={17} />
-              </span>
-              <div>
-                <h3>Worship &amp; Sermon Slides</h3>
-                <span className="gws-section-hint">Build lyric slides, Bible verse decks &amp; youth presentations</span>
-              </div>
-            </div>
+              <button
+                type="submit"
+                className="gws-btn-primary"
+                disabled={needsAuth || loadingData || !eventSummary.trim() || !eventStart}
+              >
+                <Plus size={14} />
+                <span>{loadingData ? 'Scheduling...' : 'Schedule & Share Event'}</span>
+              </button>
+            </form>
           </div>
 
-          {needsAuth ? (
-            <div className="empty-state gws-empty-card">
-              <h2>Connect your account to build slide decks</h2>
-              <p>Link your account above to create worship lyrics, sermon points, and presentation slides.</p>
-            </div>
-          ) : (
-            <div className="gws-grid">
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Your Slide Decks ({presentations.length})</h4>
-                  <span className="gws-panel-sub">Click a deck to add slides or present</span>
-                </div>
-                {presentations.length === 0 ? (
-                  <p className="gws-card-hint">
-                    No presentations yet. Create your first worship or sermon deck below!
-                  </p>
-                ) : (
-                  <div className="gws-items-list">
-                    {presentations.map((deck) => {
-                      const isSelected = selectedPresentationId === deck.id;
-                      return (
-                        <div
-                          key={deck.id}
-                          onClick={() => setSelectedPresentationId(deck.id)}
-                          className={`gws-item-card is-clickable${isSelected ? ' is-selected' : ''}`}
-                        >
-                          <div className="gws-item-body">
-                            <strong className="gws-item-title">{deck.name}</strong>
-                            <span className="gws-item-meta">
-                              {deck.modifiedTime ? `Updated ${new Date(deck.modifiedTime).toLocaleDateString()}` : 'Slide Deck'}
-                            </span>
-                          </div>
-                          <div className="gws-item-actions">
-                            <a
-                              href={deck.webViewLink || `https://docs.google.com/presentation/d/${deck.id}/edit`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="gws-icon-btn"
-                              onClick={(e) => e.stopPropagation()}
-                              title="Open presentation"
-                            >
-                              <ExternalLink size={13} />
-                            </a>
-                            <button
-                              type="button"
-                              className="gws-icon-btn gws-icon-btn-danger"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeletePresentation(deck);
-                              }}
-                              title="Delete presentation"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+          <div className="gws-card mt-4">
+            <h3 className="gws-card-title">Live Upcoming Events ({calendarEvents.length})</h3>
+            {calendarEvents.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3">No upcoming events scheduled yet.</p>
+            ) : (
+              <div className="space-y-2.5 mt-3">
+                {calendarEvents.map((ev) => {
+                  const startStr = ev.start?.dateTime || ev.start?.date;
+                  const endStr = ev.end?.dateTime || ev.end?.date;
+                  const calUrl = getGoogleCalendarTemplateUrl({
+                    title: ev.summary,
+                    description: ev.description,
+                    startsAt: startStr,
+                    endsAt: endStr,
+                    location: activeChurch?.name,
+                  });
+                  const icsUri = generateIcsDataUri({
+                    title: ev.summary,
+                    description: ev.description,
+                    startsAt: startStr,
+                    endsAt: endStr,
+                    location: activeChurch?.name,
+                  });
 
-                <form onSubmit={handleCreateSlideDeck} className="gws-form-stack gws-form-divider">
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="New deck title (e.g., Sunday Worship Lyrics)"
-                    value={newDeckTitle}
-                    onChange={(e) => setNewDeckTitle(e.target.value)}
-                    required
-                  />
-                  <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    <Plus size={14} />
-                    <span>Create New Slide Deck</span>
-                  </button>
-                </form>
-              </div>
-
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>
-                    {selectedPresentation ? `Editing: ${selectedPresentation.title}` : 'Add a Slide'}
-                  </h4>
-                  <span className="gws-panel-sub">Add lyrics, Bible verses, or key points</span>
-                </div>
-                {selectedPresentationId ? (
-                  <>
-                    <div className="gws-summary-strip">
-                      <span>
-                        Slides in deck: <strong>{selectedPresentation?.slides?.length || 1}</strong>
-                      </span>
-                      <a
-                        href={`https://docs.google.com/presentation/d/${selectedPresentationId}/present`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="gws-btn-secondary gws-btn-sm"
-                      >
-                        <span>Present Fullscreen</span>
-                        <ExternalLink size={12} />
-                      </a>
-                    </div>
-
-                    <form onSubmit={handleAppendSlideToDeck} className="gws-form-stack">
-                      <input
-                        type="text"
-                        className="gws-input-field"
-                        placeholder="Slide heading (e.g., Psalm 23:1-4 or Song Title)"
-                        value={newSlideHeading}
-                        onChange={(e) => setNewSlideHeading(e.target.value)}
-                        required
-                      />
-                      <textarea
-                        className="gws-input-field gws-textarea"
-                        placeholder="Type the Bible verse, sermon points, or song lyrics for this slide…"
-                        value={newSlideBody}
-                        onChange={(e) => setNewSlideBody(e.target.value)}
-                      />
-                      <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                        <Plus size={14} />
-                        <span>Add Slide to Deck</span>
-                      </button>
-                    </form>
-                  </>
-                ) : (
-                  <p className="gws-card-hint">Choose or create a slide deck first to add new slides.</p>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* TAB 1C: FORMS */}
-      {activeTab === 'forms' && (
-        <section className="gws-workspace-section" style={{ '--gws-accent': '#8b5cf6' }}>
-          <div className="gws-section-header">
-            <div className="gws-title-wrap">
-              <span className="gws-sec-icon-box">
-                <FileSpreadsheet size={17} />
-              </span>
-              <div>
-                <h3>Event Sign-Ups &amp; Quick Surveys</h3>
-                <span className="gws-section-hint">Collect RSVPs for youth camps, retreats &amp; volunteer teams</span>
-              </div>
-            </div>
-          </div>
-
-          {needsAuth ? (
-            <div className="empty-state gws-empty-card">
-              <h2>Connect your account to create sign-up forms</h2>
-              <p>Link your account above to make registration forms, add questions, and check responses.</p>
-            </div>
-          ) : (
-            <div className="gws-grid">
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Your Forms ({formsList.length})</h4>
-                  <span className="gws-panel-sub">Select a form to view questions &amp; replies</span>
-                </div>
-                {formsList.length === 0 ? (
-                  <p className="gws-card-hint">
-                    No sign-up forms yet. Create an event RSVP or feedback form below!
-                  </p>
-                ) : (
-                  <div className="gws-items-list">
-                    {formsList.map((f) => {
-                      const isSelected = selectedFormId === f.id;
-                      return (
-                        <div
-                          key={f.id}
-                          onClick={() => setSelectedFormId(f.id)}
-                          className={`gws-item-card is-clickable${isSelected ? ' is-selected' : ''}`}
-                        >
-                          <div className="gws-item-body">
-                            <strong className="gws-item-title">{f.name}</strong>
-                            <span className="gws-item-meta">
-                              {f.modifiedTime ? `Updated ${new Date(f.modifiedTime).toLocaleDateString()}` : 'Sign-Up Form'}
-                            </span>
-                          </div>
-                          <div className="gws-item-actions">
-                            <a
-                              href={f.webViewLink || `https://docs.google.com/forms/d/${f.id}/edit`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="gws-icon-btn"
-                              onClick={(e) => e.stopPropagation()}
-                              title="Open form"
-                            >
-                              <ExternalLink size={13} />
-                            </a>
-                            <button
-                              type="button"
-                              className="gws-icon-btn gws-icon-btn-danger"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteGoogleForm(f);
-                              }}
-                              title="Delete form"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <form onSubmit={handleCreateGoogleForm} className="gws-form-stack gws-form-divider">
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="Form title (e.g., Youth Camp Sign-Up)"
-                    value={newFormTitle}
-                    onChange={(e) => setNewFormTitle(e.target.value)}
-                    required
-                  />
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="Short description (optional)"
-                    value={newFormDescription}
-                    onChange={(e) => setNewFormDescription(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="First question to ask"
-                    value={newFormQuestion}
-                    onChange={(e) => setNewFormQuestion(e.target.value)}
-                  />
-                  <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    <Plus size={14} />
-                    <span>Create Sign-Up Form</span>
-                  </button>
-                </form>
-              </div>
-
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>
-                    {selectedFormDetail?.info?.title
-                      ? `${selectedFormDetail.info.title} (${selectedFormResponses.length} replies)`
-                      : 'Questions & Replies'}
-                  </h4>
-                  <span className="gws-panel-sub">Share link with friends or check sign-ups</span>
-                </div>
-                {selectedFormId ? (
-                  <div className="gws-form-stack">
-                    {selectedFormDetail?.responderUri && (
-                      <div className="gws-action-row">
-                        <a
-                          href={selectedFormDetail.responderUri}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="gws-btn-primary gws-btn-sm"
-                        >
-                          <span>Open Shareable Form</span>
-                          <ExternalLink size={12} />
-                        </a>
-                        <button
-                          type="button"
-                          className="gws-btn-secondary gws-btn-sm"
-                          onClick={() => {
-                            navigator.clipboard?.writeText(selectedFormDetail.responderUri);
-                            setCopiedUri(selectedFormDetail.responderUri);
-                            setTimeout(() => setCopiedUri(''), 2500);
-                          }}
-                        >
-                          {copiedUri === selectedFormDetail.responderUri ? <Check size={13} /> : <Copy size={13} />}
-                          <span>{copiedUri === selectedFormDetail.responderUri ? 'Copied Link' : 'Copy Link'}</span>
-                        </button>
-                      </div>
-                    )}
-
-                    <div>
-                      <span className="gws-sub-label">
-                        Questions ({(selectedFormDetail?.items || []).length})
-                      </span>
-                      {(selectedFormDetail?.items || []).length === 0 ? (
-                        <p className="gws-card-hint">No questions added yet.</p>
-                      ) : (
-                        <div className="gws-items-list gws-items-compact">
-                          {(selectedFormDetail?.items || []).map((item, idx) => (
-                            <div key={item.itemId || idx} className="gws-item-card">
-                              <span className="gws-item-title">
-                                {idx + 1}. {item.title || 'Untitled Question'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <form onSubmit={handleAddQuestionToSelectedForm} className="gws-inline-form">
-                      <input
-                        type="text"
-                        className="gws-input-field"
-                        placeholder="Add another question…"
-                        value={newFormQuestion}
-                        onChange={(e) => setNewFormQuestion(e.target.value)}
-                        required
-                      />
-                      <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                        <Plus size={14} />
-                        <span>Add</span>
-                      </button>
-                    </form>
-
-                    <div>
-                      <span className="gws-sub-label">
-                        People’s Replies ({selectedFormResponses.length})
-                      </span>
-                      {selectedFormResponses.length === 0 ? (
-                        <p className="gws-card-hint">No replies submitted yet.</p>
-                      ) : (
-                        <div className="gws-items-list gws-items-compact">
-                          {selectedFormResponses.map((resp) => {
-                            const answerTexts = Object.values(resp.answers || {})
-                              .map((ans) =>
-                                (ans.textAnswers?.answers || []).map((a) => a.value).join(', ')
-                              )
-                              .filter(Boolean);
-                            return (
-                              <div key={resp.responseId} className="gws-item-card">
-                                <div className="gws-item-body">
-                                  <strong className="gws-item-title">
-                                    {answerTexts.join(' • ') || 'Response recorded'}
-                                  </strong>
-                                  <span className="gws-item-meta">
-                                    {resp.lastSubmittedTime ? new Date(resp.lastSubmittedTime).toLocaleString() : 'Submitted'}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="gws-card-hint">Select or create a form above to see its questions and replies.</p>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* TAB 2: VIDEO ROOMS */}
-      {activeTab === 'meet' && (
-        <section className="gws-workspace-section" style={{ '--gws-accent': '#10b981' }}>
-          <div className="gws-section-header">
-            <div className="gws-title-wrap">
-              <span className="gws-sec-icon-box">
-                <Video size={17} />
-              </span>
-              <div>
-                <h3>Live Video &amp; Prayer Rooms</h3>
-                <span className="gws-section-hint">Start a video call for Bible study, cell group, or prayer</span>
-              </div>
-            </div>
-          </div>
-
-          {needsAuth ? (
-            <div className="empty-state gws-empty-card">
-              <h2>Connect your account to start a video room</h2>
-              <p>Create instant video call links to share with your youth group, Bible study, or prayer partners.</p>
-            </div>
-          ) : (
-            <div className="gws-grid">
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Start a New Video Room</h4>
-                  <span className="gws-panel-sub">Get a shareable video call link in one tap</span>
-                </div>
-                <div className="gws-form-stack">
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    value={meetTopic}
-                    onChange={(e) => setMeetTopic(e.target.value)}
-                    placeholder="What is this call for? (e.g., Evening Prayer & Study)"
-                  />
-                  <button
-                    type="button"
-                    className="gws-btn-primary"
-                    onClick={handleCreateMeetSpace}
-                    disabled={loadingData}
-                  >
-                    <Video size={14} />
-                    <span>{loadingData ? 'Starting Room…' : 'Create Video Room'}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Active Video Rooms ({meetSpaces.length})</h4>
-                  <span className="gws-panel-sub">Join or copy link to invite friends</span>
-                </div>
-                {meetSpaces.length === 0 ? (
-                  <p className="gws-card-hint">No rooms created yet. Tap &ldquo;Create Video Room&rdquo; to start one.</p>
-                ) : (
-                  <div className="gws-items-list">
-                    {meetSpaces.map((sp) => (
-                      <div key={sp.name} className="gws-item-card gws-item-card-stacked">
-                        <div className="gws-item-body">
-                          <strong className="gws-item-title">{sp.topic}</strong>
-                          <span className="gws-item-meta">
-                            Room code: <code>{sp.meetingCode}</code> • Created {sp.createdAt}
+                  return (
+                    <div key={ev.id} className="gws-item-card">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <strong className="text-sm font-bold text-white block">{ev.summary}</strong>
+                          <span className="text-xs text-teal-300 block">
+                            📅 {startStr ? new Date(startStr).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'All Day'}
                           </span>
+                          {ev.description && <p className="text-xs text-slate-300 mt-1">{ev.description}</p>}
                         </div>
-                        <div className="gws-action-row">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <a
-                            href={sp.meetingUri}
+                            href={calUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="gws-btn-primary gws-btn-sm"
+                            className="gws-btn-secondary gws-btn-sm"
+                            title="Add to Google Calendar"
                           >
-                            <span>Join Video Call</span>
-                            <ExternalLink size={12} />
+                            <Calendar size={12} />
+                            <span>Add</span>
+                          </a>
+                          <a
+                            href={icsUri}
+                            download={`${(ev.summary || 'event').replace(/\s+/g, '_')}.ics`}
+                            className="gws-btn-secondary gws-btn-sm"
+                            title="Download .ics file"
+                          >
+                            <Download size={12} />
+                            <span>.ics</span>
                           </a>
                           <button
                             type="button"
-                            className="gws-btn-secondary gws-btn-sm"
-                            onClick={() => {
-                              navigator.clipboard?.writeText(sp.meetingUri);
-                              setCopiedUri(sp.meetingUri);
-                              setTimeout(() => setCopiedUri(''), 2500);
-                            }}
-                          >
-                            {copiedUri === sp.meetingUri ? <Check size={13} /> : <Copy size={13} />}
-                            <span>{copiedUri === sp.meetingUri ? 'Copied' : 'Copy Link'}</span>
-                          </button>
-                          {onShareToFeed && (
-                            <button
-                              type="button"
-                              className="gws-btn-secondary gws-btn-sm"
-                              onClick={() =>
-                                onShareToFeed(
-                                  `🙏 Join our live video room for "${sp.topic}": ${sp.meetingUri}`
-                                )
-                              }
-                            >
-                              <span>Share to Feed</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* TAB 3: CLASSES */}
-      {activeTab === 'classroom' && (
-        <section className="gws-workspace-section" style={{ '--gws-accent': '#f59e0b' }}>
-          <div className="gws-section-header">
-            <div className="gws-title-wrap">
-              <span className="gws-sec-icon-box">
-                <GraduationCap size={17} />
-              </span>
-              <div>
-                <h3>Bible Study &amp; Discipleship Classes</h3>
-                <span className="gws-section-hint">Follow lessons, class updates &amp; Sunday school groups</span>
-              </div>
-            </div>
-          </div>
-
-          {needsAuth ? (
-            <div className="empty-state gws-empty-card">
-              <h2>Connect your account to view classes</h2>
-              <p>Link your account above to join discipleship classes, view lessons, and post class updates.</p>
-            </div>
-          ) : (
-            <div className="gws-grid">
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Your Classes ({courses.length})</h4>
-                  <span className="gws-panel-sub">Select a class to view or post updates</span>
-                </div>
-                {courses.length === 0 ? (
-                  <p className="gws-card-hint">
-                    No classes found yet. Create a new Bible study or discipleship class below!
-                  </p>
-                ) : (
-                  <div className="gws-items-list">
-                    {courses.map((c) => {
-                      const isSelected = selectedCourseId === c.id;
-                      return (
-                        <div
-                          key={c.id}
-                          onClick={() => setSelectedCourseId(c.id)}
-                          className={`gws-item-card is-clickable${isSelected ? ' is-selected' : ''}`}
-                        >
-                          <div className="gws-item-body">
-                            <strong className="gws-item-title">{c.name}</strong>
-                            <span className="gws-item-meta">
-                              {c.section || 'General'} • Join code: <code>{c.enrollmentCode || 'N/A'}</code>
-                            </span>
-                          </div>
-                          {c.alternateLink && (
-                            <a
-                              href={c.alternateLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="gws-icon-btn"
-                              onClick={(e) => e.stopPropagation()}
-                              title="Open class"
-                            >
-                              <ExternalLink size={13} />
-                            </a>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <form onSubmit={handleCreateCourse} className="gws-form-stack gws-form-divider">
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="Class name (e.g., Youth Foundations 101)"
-                    value={newCourseName}
-                    onChange={(e) => setNewCourseName(e.target.value)}
-                    required
-                  />
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="Group (e.g., Teens / New Believers)"
-                    value={newCourseSection}
-                    onChange={(e) => setNewCourseSection(e.target.value)}
-                  />
-                  <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    <Plus size={14} />
-                    <span>Create Class</span>
-                  </button>
-                </form>
-              </div>
-
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Class Updates &amp; Readings</h4>
-                  <span className="gws-panel-sub">Share weekly memory verses or study notes</span>
-                </div>
-                {selectedCourseId ? (
-                  <div className="gws-form-stack">
-                    <form onSubmit={handlePostClassroomAnnouncement} className="gws-inline-form">
-                      <input
-                        type="text"
-                        className="gws-input-field"
-                        placeholder="Post a reading or update to the class…"
-                        value={announcementText}
-                        onChange={(e) => setAnnouncementText(e.target.value)}
-                        required
-                      />
-                      <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                        <Send size={14} />
-                        <span>Post</span>
-                      </button>
-                    </form>
-                    {announcements.length === 0 ? (
-                      <p className="gws-card-hint">No updates posted in this class yet.</p>
-                    ) : (
-                      <div className="gws-items-list">
-                        {announcements.map((a) => (
-                          <div key={a.id} className="gws-item-card">
-                            <p className="gws-item-text">{a.text}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="gws-card-hint">Select or create a class to view and post updates.</p>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* TAB 4: NOTES */}
-      {activeTab === 'keep' && (
-        <section className="gws-workspace-section" style={{ '--gws-accent': '#eab308' }}>
-          <div className="gws-section-header">
-            <div className="gws-title-wrap">
-              <span className="gws-sec-icon-box">
-                <StickyNote size={17} />
-              </span>
-              <div>
-                <h3>Sermon Notes &amp; Checklists</h3>
-                <span className="gws-section-hint">Jot down sermon points, Bible verses &amp; quick checklists</span>
-              </div>
-            </div>
-          </div>
-
-          {!user ? (
-            <div className="empty-state gws-empty-card">
-              <h2>Connect your account to save sermon notes</h2>
-              <p>Write down Sunday sermon takeaways, Bible verses, and checklists that stay saved across your devices.</p>
-            </div>
-          ) : (
-            <div className="gws-grid">
-              <form className="gws-panel-card" onSubmit={handleCreateNote}>
-                <div className="gws-panel-header gws-panel-header-row">
-                  <div>
-                    <h4>New Sermon Note</h4>
-                    <span className="gws-panel-sub">Write a note or a quick checklist</span>
-                  </div>
-                  <div className="gws-mode-switch">
-                    <button
-                      type="button"
-                      className={`gws-mode-btn${keepNoteMode === 'text' ? ' active' : ''}`}
-                      onClick={() => setKeepNoteMode('text')}
-                    >
-                      <StickyNote size={12} />
-                      <span>Note</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`gws-mode-btn${keepNoteMode === 'checklist' ? ' active' : ''}`}
-                      onClick={() => setKeepNoteMode('checklist')}
-                    >
-                      <ListChecks size={12} />
-                      <span>Checklist</span>
-                    </button>
-                  </div>
-                </div>
-                <div className="gws-form-stack">
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="Title (e.g., Sunday Sermon: Walking in Faith)"
-                    value={noteTitle}
-                    onChange={(e) => setNoteTitle(e.target.value)}
-                    maxLength={160}
-                    required
-                  />
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="Bible Verse (e.g., Galatians 5:16-25)"
-                    value={noteScripture}
-                    onChange={(e) => setNoteScripture(e.target.value)}
-                    maxLength={100}
-                  />
-                  {keepNoteMode === 'checklist' ? (
-                    <textarea
-                      className="gws-input-field gws-textarea"
-                      placeholder={'One item per line:\nBring Bible & notebook\nPractice worship songs\nCheck sound system'}
-                      value={keepChecklistInput}
-                      onChange={(e) => setKeepChecklistInput(e.target.value)}
-                      maxLength={5000}
-                      required
-                    />
-                  ) : (
-                    <textarea
-                      className="gws-input-field gws-textarea"
-                      placeholder="Write your sermon takeaways, favorite quotes, or prayer points…"
-                      value={noteBody}
-                      onChange={(e) => setNoteBody(e.target.value)}
-                      maxLength={5000}
-                      required
-                    />
-                  )}
-                  <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    <BookOpen size={14} />
-                    <span>Save Note</span>
-                  </button>
-                </div>
-              </form>
-
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Saved Notes ({cloudNotes.length + keepNotes.length})</h4>
-                  <span className="gws-panel-sub">Your personal sermon &amp; study notes</span>
-                </div>
-                {cloudNotes.length === 0 && keepNotes.length === 0 ? (
-                  <p className="gws-card-hint">No notes saved yet. Write your first note above!</p>
-                ) : (
-                  <div className="gws-items-list">
-                    {cloudNotes.map((n) => (
-                      <div key={n.id} className="gws-item-card">
-                        <div className="gws-item-body">
-                          <strong className="gws-item-title">{n.title}</strong>
-                          {n.scriptureRef && (
-                            <span className="gws-scripture-tag">
-                              <BookOpen size={11} />
-                              <span>{n.scriptureRef}</span>
-                            </span>
-                          )}
-                          <p className="gws-item-text">{n.body}</p>
-                        </div>
-                        <button
-                          type="button"
-                          className="gws-icon-btn gws-icon-btn-danger"
-                          onClick={() => handleDeleteCloudNote(n)}
-                          title="Delete note"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
-                    {keepNotes.map((kn) => (
-                      <div key={kn.name} className="gws-item-card">
-                        <div className="gws-item-body">
-                          <strong className="gws-item-title">{kn.title || 'Saved Note'}</strong>
-                          {kn.body?.text?.text && (
-                            <p className="gws-item-text">{kn.body.text.text}</p>
-                          )}
-                          {Array.isArray(kn.body?.list?.listItems) && kn.body.list.listItems.length > 0 && (
-                            <ul className="gws-checklist-ul">
-                              {kn.body.list.listItems.map((li, idx) => (
-                                <li key={idx}>
-                                  {li.checked ? '☑ ' : '☐ '}
-                                  {li.text?.text || ''}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          className="gws-icon-btn gws-icon-btn-danger"
-                          onClick={() => handleDeleteKeepNote(kn.name, kn.title)}
-                          title="Delete note"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* TAB 5: TO-DO LIST */}
-      {activeTab === 'tasks' && (
-        <section className="gws-workspace-section" style={{ '--gws-accent': '#06b6d4' }}>
-          <div className="gws-section-header">
-            <div className="gws-title-wrap">
-              <span className="gws-sec-icon-box">
-                <CheckSquare size={17} />
-              </span>
-              <div>
-                <h3>To-Do List &amp; Action Items</h3>
-                <span className="gws-section-hint">Keep track of Sunday prep, outreach &amp; personal goals</span>
-              </div>
-            </div>
-          </div>
-
-          {needsAuth ? (
-            <div className="empty-state gws-empty-card">
-              <h2>Connect your account to manage your to-do list</h2>
-              <p>Stay on top of fellowship tasks, service preparation, and weekly goals.</p>
-            </div>
-          ) : (
-            <div className="gws-grid">
-              <form className="gws-panel-card" onSubmit={handleCreateTask}>
-                <div className="gws-panel-header">
-                  <h4>Add a To-Do Item</h4>
-                  <span className="gws-panel-sub">Check off tasks as you finish them</span>
-                </div>
-                <div className="gws-form-stack">
-                  {taskLists.length > 0 && (
-                    <select
-                      className="gws-input-field"
-                      value={selectedTaskListId}
-                      onChange={(e) => setSelectedTaskListId(e.target.value)}
-                    >
-                      {taskLists.map((tl) => (
-                        <option key={tl.id} value={tl.id}>
-                          List: {tl.title}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="What needs to be done? (e.g., Prepare worship lyrics)"
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    required
-                  />
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="Extra details (optional)"
-                    value={newTaskNotes}
-                    onChange={(e) => setNewTaskNotes(e.target.value)}
-                  />
-                  <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                    <Plus size={14} />
-                    <span>Add Task</span>
-                  </button>
-                </div>
-              </form>
-
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Your Tasks ({tasks.length})</h4>
-                  <span className="gws-panel-sub">Tap the checkbox to mark complete</span>
-                </div>
-                {tasks.length === 0 ? (
-                  <p className="gws-card-hint">No tasks in this list yet.</p>
-                ) : (
-                  <div className="gws-items-list">
-                    {tasks.map((t) => {
-                      const done = t.status === 'completed';
-                      return (
-                        <div key={t.id} className="gws-item-card">
-                          <label className="gws-task-check-row">
-                            <input
-                              type="checkbox"
-                              checked={done}
-                              onChange={() => handleToggleTaskStatus(t)}
-                            />
-                            <div className="gws-item-body">
-                              <strong className={`gws-item-title${done ? ' is-done' : ''}`}>
-                                {t.title}
-                              </strong>
-                              {t.notes && <span className="gws-item-meta">{t.notes}</span>}
-                            </div>
-                          </label>
-                          <button
-                            type="button"
                             className="gws-icon-btn gws-icon-btn-danger"
-                            onClick={() => handleDeleteTask(t)}
-                            title="Delete task"
+                            onClick={() => handleDeleteCalendarEvent(ev)}
+                            title="Delete Event"
                           >
                             <Trash2 size={13} />
                           </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* TAB 6: GROUP CHAT */}
-      {activeTab === 'chat' && (
-        <section className="gws-workspace-section" style={{ '--gws-accent': '#6366f1' }}>
-          <div className="gws-section-header">
-            <div className="gws-title-wrap">
-              <span className="gws-sec-icon-box">
-                <MessageSquare size={17} />
-              </span>
-              <div>
-                <h3>Group Chat Spaces</h3>
-                <span className="gws-section-hint">Chat with your ministry team or youth group spaces</span>
-              </div>
-            </div>
-          </div>
-
-          {needsAuth ? (
-            <div className="empty-state gws-empty-card">
-              <h2>Connect your account to open group chats</h2>
-              <p>Read and send quick messages to your connected fellowship chat spaces.</p>
-            </div>
-          ) : (
-            <div className="gws-grid">
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Your Chat Spaces ({chatSpaces.length})</h4>
-                  <span className="gws-panel-sub">Select a group space to open messages</span>
-                </div>
-                {chatSpaces.length === 0 ? (
-                  <p className="gws-card-hint">No group chat spaces found for this account.</p>
-                ) : (
-                  <div className="gws-items-list">
-                    {chatSpaces.map((sp) => {
-                      const isSelected = selectedSpaceName === sp.name;
-                      return (
-                        <button
-                          key={sp.name}
-                          type="button"
-                          onClick={() => setSelectedSpaceName(sp.name)}
-                          className={`gws-item-card is-clickable${isSelected ? ' is-selected' : ''}`}
-                        >
-                          <div className="gws-item-body">
-                            <strong className="gws-item-title">
-                              {sp.displayName || sp.name}
-                            </strong>
-                            <span className="gws-item-meta">{sp.spaceType || 'Group Space'}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Messages</h4>
-                  <span className="gws-panel-sub">Recent conversation in selected space</span>
-                </div>
-                {selectedSpaceName ? (
-                  <div className="gws-form-stack">
-                    <div className="gws-items-list">
-                      {chatMessages.length === 0 ? (
-                        <p className="gws-card-hint">No recent messages in this space.</p>
-                      ) : (
-                        chatMessages.map((m) => (
-                          <div key={m.name} className="gws-item-card">
-                            <div className="gws-item-body">
-                              <span className="gws-item-meta">
-                                {m.sender?.displayName || 'Member'}
-                              </span>
-                              <p className="gws-item-text">{m.text}</p>
-                            </div>
-                          </div>
-                        ))
-                      )}
+                      </div>
                     </div>
-                    <form onSubmit={handleSendChatMessage} className="gws-inline-form">
-                      <input
-                        type="text"
-                        className="gws-input-field"
-                        placeholder="Write a message to the group…"
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        required
-                      />
-                      <button type="submit" className="gws-btn-primary" disabled={loadingData}>
-                        <Send size={14} />
-                        <span>Send</span>
-                      </button>
-                    </form>
-                  </div>
-                ) : (
-                  <p className="gws-card-hint">Select a chat space above to read or send messages.</p>
-                )}
+                  );
+                })}
               </div>
-            </div>
-          )}
-        </section>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* TAB 7: LIVE PRAYER WALL */}
-      {activeTab === 'firebase' && (
-        <section className="gws-workspace-section" style={{ '--gws-accent': '#ec4899' }}>
-          <div className="gws-section-header">
-            <div className="gws-title-wrap">
-              <span className="gws-sec-icon-box">
-                <Flame size={17} />
-              </span>
+      {/* TAB 2: MEET */}
+      {activeTab === 'meet' && (
+        <div className="gws-tab-body">
+          <div className="gws-card">
+            <h3 className="gws-card-title flex items-center gap-2">
+              <Video size={18} className="text-emerald-400" />
+              <span>Instant Google Meet Video Room</span>
+            </h3>
+            <p className="text-xs text-slate-300 mb-3">
+              Generate an instant Google Meet room for your church prayer watch, mid-week Bible study, or leadership meeting.
+            </p>
+            <div className="space-y-3">
               <div>
-                <h3>Live Prayer Wall</h3>
-                <span className="gws-section-hint">Share prayer requests and pray for others in real time</span>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Meeting Room Topic</label>
+                <input
+                  type="text"
+                  className="st-input"
+                  value={meetTopic}
+                  onChange={(e) => setMeetTopic(e.target.value)}
+                  placeholder="e.g. Dawn Prayer Watch or Youth Fellowship"
+                />
               </div>
+              <button
+                type="button"
+                className="gws-btn-primary"
+                onClick={handleCreateMeetSpace}
+                disabled={needsAuth || loadingData}
+              >
+                <Plus size={14} />
+                <span>{loadingData ? 'Creating...' : 'Create Instant Meeting Room'}</span>
+              </button>
             </div>
           </div>
 
-          {!user ? (
-            <div className="empty-state gws-empty-card">
-              <h2>Connect your account to join the Prayer Wall</h2>
-              <p>Post prayer requests and let friends and church family pray with you live.</p>
-            </div>
-          ) : (
-            <div className="gws-grid">
-              <form className="gws-panel-card" onSubmit={handleCreatePrayerRequest}>
-                <div className="gws-panel-header">
-                  <h4>Share a Prayer Request</h4>
-                  <span className="gws-panel-sub">Let the fellowship stand with you in prayer</span>
-                </div>
-                <div className="gws-form-stack">
-                  <input
-                    type="text"
-                    className="gws-input-field"
-                    placeholder="Short title (e.g., Peace for upcoming exams)"
-                    value={prayerTitle}
-                    onChange={(e) => setPrayerTitle(e.target.value)}
-                    maxLength={140}
-                    required
-                  />
+          <div className="gws-card mt-4">
+            <h3 className="gws-card-title">Recent Video Rooms</h3>
+            {meetSpaces.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3">No active video rooms created in this session.</p>
+            ) : (
+              <div className="space-y-2 mt-3">
+                {meetSpaces.map((s, idx) => {
+                  const uri = s.meetingUri || s.space?.meetingUri || `https://meet.google.com/${s.name?.replace('spaces/', '')}`;
+                  return (
+                    <div key={idx} className="gws-item-card flex items-center justify-between gap-3">
+                      <div>
+                        <strong className="text-sm font-bold text-white block">{meetTopic}</strong>
+                        <span className="text-xs text-emerald-300">{uri}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="gws-btn-secondary gws-btn-sm"
+                          onClick={() => copyToClipboard(uri, 'Meeting link copied!')}
+                        >
+                          <Copy size={12} />
+                          <span>Copy</span>
+                        </button>
+                        <a
+                          href={uri}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="gws-btn-primary gws-btn-sm"
+                        >
+                          <ExternalLink size={12} />
+                          <span>Join Room</span>
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: FORMS */}
+      {activeTab === 'forms' && (
+        <div className="gws-tab-body">
+          <div className="gws-card">
+            <h3 className="gws-card-title flex items-center gap-2">
+              <FileSpreadsheet size={18} className="text-purple-400" />
+              <span>Create Official Church Sign-Up Form</span>
+            </h3>
+            <form onSubmit={handleCreateForm} className="space-y-3 mt-3">
+              <div>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Form Title *</label>
+                <input
+                  type="text"
+                  className="st-input"
+                  placeholder="e.g. Water Baptism Registration 2026"
+                  value={newFormTitle}
+                  onChange={(e) => setNewFormTitle(e.target.value)}
+                  disabled={needsAuth || loadingData}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-300 block mb-1">Form Category</label>
                   <select
-                    className="gws-input-field"
+                    className="st-input"
+                    value={newFormType}
+                    onChange={(e) => setNewFormType(e.target.value)}
+                  >
+                    <option value="baptism">Water Baptism Sign-up</option>
+                    <option value="dedication">Child Dedication</option>
+                    <option value="volunteer">Ministry Volunteer Track</option>
+                    <option value="fellowship">Community Cell Group</option>
+                    <option value="counseling">Pastoral Counseling Request</option>
+                  </select>
+                </div>
+              </div>
+              <button
+                type="submit"
+                className="gws-btn-primary"
+                disabled={needsAuth || loadingData || !newFormTitle.trim()}
+              >
+                <Plus size={14} />
+                <span>{loadingData ? 'Creating...' : 'Create & Share Google Form'}</span>
+              </button>
+            </form>
+          </div>
+
+          <div className="gws-card mt-4">
+            <h3 className="gws-card-title">Existing Church Forms ({formsList.length})</h3>
+            {formsList.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3">No forms found in your church Google Drive.</p>
+            ) : (
+              <div className="space-y-2 mt-3">
+                {formsList.map((f) => (
+                  <div key={f.id} className="gws-item-card flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <strong className="text-sm font-bold text-white block">{f.name}</strong>
+                      <span className="text-xs text-purple-300">
+                        Updated {f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString() : 'Recently'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={f.webViewLink || `https://docs.google.com/forms/d/${f.id}/edit`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="gws-btn-secondary gws-btn-sm"
+                      >
+                        <ExternalLink size={12} />
+                        <span>Open Form</span>
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: SLIDES */}
+      {activeTab === 'slides' && (
+        <div className="gws-tab-body">
+          <div className="gws-card">
+            <h3 className="gws-card-title flex items-center gap-2">
+              <Presentation size={18} className="text-amber-400" />
+              <span>Create Sermon Slide Deck</span>
+            </h3>
+            <form onSubmit={handleCreatePresentation} className="space-y-3 mt-3">
+              <div>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Sermon Title *</label>
+                <input
+                  type="text"
+                  className="st-input"
+                  placeholder="e.g. Walking in the Divine Presence (Exodus 33:14)"
+                  value={newDeckTitle}
+                  onChange={(e) => setNewDeckTitle(e.target.value)}
+                  disabled={needsAuth || loadingData}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="gws-btn-primary"
+                disabled={needsAuth || loadingData || !newDeckTitle.trim()}
+              >
+                <Plus size={14} />
+                <span>{loadingData ? 'Creating...' : 'Create & Share Slide Deck'}</span>
+              </button>
+            </form>
+          </div>
+
+          <div className="gws-card mt-4">
+            <h3 className="gws-card-title">Sermon Slide Decks ({presentations.length})</h3>
+            {presentations.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3">No sermon presentations found.</p>
+            ) : (
+              <div className="space-y-2 mt-3">
+                {presentations.map((deck) => (
+                  <div key={deck.id} className="gws-item-card flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <strong className="text-sm font-bold text-white block">{deck.name}</strong>
+                      <span className="text-xs text-amber-300">
+                        {deck.modifiedTime ? `Updated ${new Date(deck.modifiedTime).toLocaleDateString()}` : 'Slide Deck'}
+                      </span>
+                    </div>
+                    <a
+                      href={deck.webViewLink || `https://docs.google.com/presentation/d/${deck.id}/edit`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="gws-btn-secondary gws-btn-sm"
+                    >
+                      <ExternalLink size={12} />
+                      <span>Open Deck</span>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: CLASSROOM */}
+      {activeTab === 'classroom' && (
+        <div className="gws-tab-body">
+          <div className="gws-card">
+            <h3 className="gws-card-title flex items-center gap-2">
+              <GraduationCap size={18} className="text-amber-500" />
+              <span>Create Google Classroom Discipleship Course</span>
+            </h3>
+            <form onSubmit={handleCreateCourse} className="space-y-3 mt-3">
+              <div>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Course Title *</label>
+                <input
+                  type="text"
+                  className="st-input"
+                  placeholder="e.g. Foundations of Christian Faith: Discipleship 101"
+                  value={newCourseName}
+                  onChange={(e) => setNewCourseName(e.target.value)}
+                  disabled={needsAuth || loadingData}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Course Track</label>
+                <input
+                  type="text"
+                  className="st-input"
+                  placeholder="e.g. New Believers Track"
+                  value={newCourseSection}
+                  onChange={(e) => setNewCourseSection(e.target.value)}
+                />
+              </div>
+              <button
+                type="submit"
+                className="gws-btn-primary"
+                disabled={needsAuth || loadingData || !newCourseName.trim()}
+              >
+                <Plus size={14} />
+                <span>{loadingData ? 'Creating...' : 'Create & Publish Course'}</span>
+              </button>
+            </form>
+          </div>
+
+          <div className="gws-card mt-4">
+            <h3 className="gws-card-title">Active Discipleship Courses ({courses.length})</h3>
+            {courses.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3">No courses created yet.</p>
+            ) : (
+              <div className="space-y-2 mt-3">
+                {courses.map((c) => (
+                  <div key={c.id} className="gws-item-card flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <strong className="text-sm font-bold text-white block">{c.name}</strong>
+                      <span className="text-xs text-amber-300">{c.section || 'General Track'}</span>
+                    </div>
+                    <a
+                      href={c.alternateLink || `https://classroom.google.com/c/${c.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="gws-btn-secondary gws-btn-sm"
+                    >
+                      <ExternalLink size={12} />
+                      <span>Open Course</span>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 6: TASKS */}
+      {activeTab === 'tasks' && (
+        <div className="gws-tab-body">
+          <div className="gws-card">
+            <h3 className="gws-card-title flex items-center gap-2">
+              <CheckSquare size={18} className="text-cyan-400" />
+              <span>Ministry To-Do &amp; Task Assignment</span>
+            </h3>
+            <form onSubmit={handleCreateTask} className="space-y-3 mt-3">
+              <div>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Task Title *</label>
+                <input
+                  type="text"
+                  className="st-input"
+                  placeholder="e.g. Prepare Sunday school materials & print bulletins"
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                  disabled={needsAuth || loadingData}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="gws-btn-primary"
+                disabled={needsAuth || loadingData || !newTaskTitle.trim()}
+              >
+                <Plus size={14} />
+                <span>Add Task</span>
+              </button>
+            </form>
+          </div>
+
+          <div className="gws-card mt-4">
+            <h3 className="gws-card-title">Tasks ({tasks.length})</h3>
+            {tasks.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3">No tasks found in your to-do list.</p>
+            ) : (
+              <div className="space-y-2 mt-3">
+                {tasks.map((t) => (
+                  <div key={t.id} className="gws-item-card flex items-center justify-between gap-2">
+                    <span className={`text-sm ${t.status === 'completed' ? 'line-through text-slate-400' : 'text-white'}`}>
+                      {t.title}
+                    </span>
+                    <span className="text-xs text-cyan-300">
+                      {t.status === 'completed' ? '✓ Done' : 'Pending'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 7: CHAT */}
+      {activeTab === 'chat' && (
+        <div className="gws-tab-body">
+          <div className="gws-card">
+            <h3 className="gws-card-title flex items-center gap-2">
+              <MessageSquare size={18} className="text-indigo-400" />
+              <span>Google Chat Spaces</span>
+            </h3>
+            <p className="text-xs text-slate-300 mb-3">
+              Google Chat spaces provide departmental and ministry team collaboration.
+            </p>
+            {chatSpaces.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3">No Google Chat spaces found for this account.</p>
+            ) : (
+              <div className="space-y-2">
+                {chatSpaces.map((s) => (
+                  <div key={s.name} className="gws-item-card flex items-center justify-between gap-3">
+                    <div>
+                      <strong className="text-sm font-bold text-white block">
+                        {s.displayName || s.name}
+                      </strong>
+                      <span className="text-xs text-indigo-300">Space Type: {s.type || 'Group'}</span>
+                    </div>
+                    <a
+                      href={s.spaceUri || 'https://chat.google.com'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="gws-btn-secondary gws-btn-sm"
+                    >
+                      <ExternalLink size={12} />
+                      <span>Open Space</span>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 8: FIREBASE PRAYER WALL */}
+      {activeTab === 'firebase' && (
+        <div className="gws-tab-body">
+          <div className="gws-card">
+            <h3 className="gws-card-title flex items-center gap-2">
+              <Flame size={18} className="text-pink-400" />
+              <span>Post to Community Prayer Wall</span>
+            </h3>
+            <form onSubmit={handleAddPrayerRequest} className="space-y-3 mt-3">
+              <div>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Prayer Title *</label>
+                <input
+                  type="text"
+                  className="st-input"
+                  placeholder="e.g. Prayer for Divine Healing / Family Restoration"
+                  value={prayerTitle}
+                  onChange={(e) => setPrayerTitle(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-300 block mb-1">Category</label>
+                  <select
+                    className="st-input"
                     value={prayerCategory}
                     onChange={(e) => setPrayerCategory(e.target.value)}
                   >
-                    <option value="general">Topic: General Prayer</option>
-                    <option value="healing">Topic: Healing &amp; Health</option>
-                    <option value="family">Topic: Family &amp; Friends</option>
-                    <option value="missions">Topic: Church &amp; Outreach</option>
-                    <option value="guidance">Topic: Studies, Work &amp; Guidance</option>
-                    <option value="thanksgiving">Topic: Praise &amp; Testimony</option>
+                    <option value="Healing">Healing &amp; Wholeness</option>
+                    <option value="Family">Family &amp; Marriage</option>
+                    <option value="Ministry">Church Ministry &amp; Missions</option>
+                    <option value="Provision">Divine Provision &amp; Career</option>
+                    <option value="Thanksgiving">Thanksgiving &amp; Praise</option>
                   </select>
-                  <textarea
-                    className="gws-input-field gws-textarea"
-                    placeholder="Write how we can pray with you…"
-                    value={prayerContent}
-                    onChange={(e) => setPrayerContent(e.target.value)}
-                    maxLength={2000}
-                    required
-                  />
-                  <button type="submit" className="gws-btn-primary">
-                    <Flame size={14} />
-                    <span>Post Prayer Request</span>
-                  </button>
                 </div>
-              </form>
-
-              <div className="gws-panel-card">
-                <div className="gws-panel-header">
-                  <h4>Community Prayer Wall ({prayerRequests.length})</h4>
-                  <span className="gws-panel-sub">Tap &ldquo;I Prayed&rdquo; to encourage someone</span>
-                </div>
-                {prayerRequests.length === 0 ? (
-                  <p className="gws-card-hint">No prayer requests posted yet. Be the first to share one!</p>
-                ) : (
-                  <div className="gws-items-list">
-                    {prayerRequests.map((pr) => (
-                      <div
-                        key={pr.id}
-                        className={`gws-item-card gws-item-card-stacked${pr.status === 'answered' ? ' is-answered' : ''}`}
-                      >
-                        <div className="gws-prayer-top">
-                          <strong className="gws-item-title">{pr.title}</strong>
-                          <span className={`gws-status-badge ${pr.status === 'answered' ? 'gws-status-badge-teal' : 'gws-status-badge-gold'}`}>
-                            {pr.status === 'answered' ? '✓ Answered' : pr.category}
-                          </span>
-                        </div>
-                        <p className="gws-item-text">{pr.content}</p>
-                        <div className="gws-prayer-footer">
-                          <span className="gws-item-meta">
-                            By {pr.authorName} • 🙏 {pr.prayedCount || 0} prayed
-                          </span>
-                          <div className="gws-item-actions">
-                            {pr.status !== 'answered' && (
-                              <button
-                                type="button"
-                                className="gws-btn-secondary gws-btn-sm"
-                                onClick={() => incrementPrayerCountInFirestore(pr.id, pr.prayedCount)}
-                              >
-                                <Heart size={12} />
-                                <span>I Prayed</span>
-                              </button>
-                            )}
-                            {pr.authorId === user?.uid && pr.status !== 'answered' && (
-                              <button
-                                type="button"
-                                className="gws-btn-secondary gws-btn-sm"
-                                onClick={() => markPrayerAnsweredInFirestore(pr.id)}
-                              >
-                                <Check size={12} />
-                                <span>Mark Answered</span>
-                              </button>
-                            )}
-                            {pr.authorId === user?.uid && (
-                              <button
-                                type="button"
-                                className="gws-icon-btn gws-icon-btn-danger"
-                                onClick={() => handleDeletePrayerRequest(pr)}
-                                title="Delete prayer request"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
-            </div>
-          )}
-        </section>
+              <div>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Prayer Details *</label>
+                <textarea
+                  className="st-input"
+                  rows={3}
+                  placeholder="Share details for the community to stand in agreement..."
+                  value={prayerContent}
+                  onChange={(e) => setPrayerContent(e.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="gws-btn-primary" disabled={loadingData}>
+                <Plus size={14} />
+                <span>Post Prayer Request</span>
+              </button>
+            </form>
+          </div>
+
+          <div className="gws-card mt-4">
+            <h3 className="gws-card-title">Live Prayer Wall ({prayerRequests.length})</h3>
+            {prayerRequests.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3">No prayer requests posted yet.</p>
+            ) : (
+              <div className="space-y-3 mt-3">
+                {prayerRequests.map((pr) => (
+                  <div key={pr.id} className="gws-item-card">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <strong className="text-sm font-bold text-white block">{pr.title}</strong>
+                        <span className="text-xs text-pink-300 font-semibold">{pr.category}</span>
+                        <p className="text-xs text-slate-300 mt-1">{pr.content}</p>
+                        <span className="text-[11px] text-slate-400 mt-2 block">
+                          By {pr.authorName} • 🙏 {pr.prayedCount || 0} prayers
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="gws-btn-secondary gws-btn-sm"
+                        onClick={() => {
+                          incrementPrayerCountInFirestore(pr.id, pr.prayedCount);
+                          playSound('reaction');
+                        }}
+                      >
+                        <Heart size={12} />
+                        <span>I Prayed</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* CONFIRMATION DIALOG MODAL FOR MUTATING / DESTRUCTIVE ACTIONS */}
+      {/* CHURCH SHARED ITEMS SECTION (ADMIN OVERVIEW) */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <Share2 size={16} className="text-teal-400" />
+            <span>Items Shared with Community by {activeChurch?.name || 'Your Church'} ({sharedItems.length})</span>
+          </h3>
+          <button
+            type="button"
+            className="text-xs text-teal-300 hover:underline flex items-center gap-1"
+            onClick={reloadSharedItems}
+          >
+            <RefreshCw size={12} />
+            <span>Refresh Shared List</span>
+          </button>
+        </div>
+
+        {sharedItems.length === 0 ? (
+          <div className="gws-item-card text-center py-6 text-xs text-slate-400">
+            No items shared yet. Create an event, meeting room, or sign-up form above to share it with your congregation.
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {sharedItems.map((item) => (
+              <div key={item.id} className="gws-item-card flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <strong className="text-sm font-bold text-white">{item.title}</strong>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 border border-white/15 uppercase">
+                      {item.kind.replace('_', ' ')}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                      {item.visibility}
+                    </span>
+                  </div>
+                  {item.description && <p className="text-xs text-slate-300 mt-1">{item.description}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={item.share_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="gws-btn-secondary gws-btn-sm"
+                  >
+                    <ExternalLink size={12} />
+                    <span>Open</span>
+                  </a>
+                  <button
+                    type="button"
+                    className="gws-icon-btn gws-icon-btn-danger"
+                    onClick={() => handleDeleteSharedWorkspaceItem(item)}
+                    title="Remove from shared workspace"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* CONFIRMATION POPUP MODAL (POPUP STANDARD VIA PopupSheet) */}
       {confirmDialog && (
-        <div className="auth-overlay" onClick={() => setConfirmDialog(null)} style={{ zIndex: 100 }}>
-          <div className="auth-panel neon-glow-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="gws-confirm-header">
-              <AlertTriangle size={20} className={confirmDialog.isDestructive ? 'text-red-500' : 'text-amber-500'} />
-              <h3>{confirmDialog.title}</h3>
+        <PopupSheet
+          open={Boolean(confirmDialog)}
+          onClose={() => setConfirmDialog(null)}
+          title={confirmDialog.title}
+          size="sm"
+        >
+          <div className="p-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle
+                size={24}
+                className={confirmDialog.isDestructive ? 'text-red-400 shrink-0 mt-0.5' : 'text-amber-400 shrink-0 mt-0.5'}
+              />
+              <p className="text-sm text-slate-200">{confirmDialog.description}</p>
             </div>
-            <p className="gws-confirm-desc">
-              {confirmDialog.description}
-            </p>
-            <div className="gws-confirm-actions">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 className="gws-btn-secondary"
                 onClick={() => setConfirmDialog(null)}
               >
-                <span>Cancel</span>
+                Cancel
               </button>
               <button
                 type="button"
                 className={confirmDialog.isDestructive ? 'gws-btn-danger' : 'gws-btn-primary'}
                 onClick={confirmDialog.onConfirm}
               >
-                <span>{confirmDialog.confirmLabel}</span>
+                {confirmDialog.confirmLabel}
               </button>
             </div>
           </div>
-        </div>
+        </PopupSheet>
       )}
+    </div>
+  );
+}
+
+/**
+ * Community Shared Workspace Component (Used by members and non-paying view)
+ */
+function CommunityWorkspaceSection({ items, onShareToFeed, emptyMessage = 'No items found.' }) {
+  if (items.length === 0) {
+    return (
+      <div className="gws-item-card text-center py-8 text-xs text-slate-400">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 mt-3">
+      {items.map((item) => {
+        let actionLabel = 'Open Link';
+        let actionIcon = ExternalLink;
+        let isCal = item.kind === 'calendar_event';
+        let calUrl = null;
+        let icsUri = null;
+
+        if (isCal) {
+          calUrl = getGoogleCalendarTemplateUrl({
+            title: item.title,
+            description: item.description,
+            startsAt: item.starts_at,
+            endsAt: item.ends_at,
+          });
+          icsUri = generateIcsDataUri({
+            title: item.title,
+            description: item.description,
+            startsAt: item.starts_at,
+            endsAt: item.ends_at,
+          });
+        } else if (item.kind === 'form') {
+          actionLabel = 'Open Sign-Up Form';
+        } else if (item.kind === 'meet') {
+          actionLabel = 'Join Video Room';
+          actionIcon = Video;
+        } else if (item.kind === 'classroom') {
+          actionLabel = 'Join Class';
+          actionIcon = GraduationCap;
+        } else if (item.kind === 'slide') {
+          actionLabel = 'View Sermon Slides';
+          actionIcon = Presentation;
+        }
+
+        return (
+          <div key={item.id} className="gws-item-card">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 uppercase">
+                    {item.kind.replace('_', ' ')}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300">
+                    {item.visibility}
+                  </span>
+                </div>
+                <strong className="text-sm font-bold text-white block mb-1">{item.title}</strong>
+                {item.description && (
+                  <p className="text-xs text-slate-300 mb-2 leading-relaxed">{item.description}</p>
+                )}
+                {isCal && item.starts_at && (
+                  <span className="text-xs text-teal-300 font-semibold block mb-2">
+                    📅 {new Date(item.starts_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                {isCal ? (
+                  <>
+                    <a
+                      href={calUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="gws-btn-primary gws-btn-sm"
+                    >
+                      <Calendar size={13} />
+                      <span>Add to Google Calendar</span>
+                    </a>
+                    <a
+                      href={icsUri}
+                      download={`${(item.title || 'event').replace(/\s+/g, '_')}.ics`}
+                      className="gws-btn-secondary gws-btn-sm"
+                      title="Download .ics calendar file"
+                    >
+                      <Download size={13} />
+                      <span>.ics</span>
+                    </a>
+                  </>
+                ) : (
+                  <a
+                    href={item.share_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="gws-btn-primary gws-btn-sm"
+                  >
+                    <ExternalLink size={13} />
+                    <span>{actionLabel}</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

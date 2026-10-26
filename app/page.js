@@ -1502,78 +1502,81 @@ export default function Feed() {
               }}
             />
 
-            {/* Quick Bar: Google Workspace (Calendar, Keep, Meet, Classroom, Tasks, Chat), Firebase & Google Maps */}
-            <div className="my-3 p-3 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-900/70 to-teal-950/50 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2.5 shadow-sm w-full max-w-full overflow-hidden box-border">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <span className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-sm shrink-0">
-                  ☁️
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <strong className="text-xs font-bold text-white">
-                      Google Workspace, Firebase &amp; Maps Connected
-                    </strong>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
-                      Live Sync
-                    </span>
+            {/* Quick Bar: Google Workspace & Church Community Hub */}
+            <div className="gws-hero-card my-3 box-border w-full max-w-full overflow-hidden">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="gws-hero-icon-box shrink-0">
+                    <span className="text-base" aria-hidden="true">☁️</span>
                   </div>
-                  <p className="text-[11px] text-slate-300 truncate max-w-full">
-                    Slides · Forms · Keep · Calendar · Meet · Classroom · Tasks · Chat · Firestore · Maps
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <strong className="text-xs font-bold text-[var(--ink)]">
+                        Church Workspace &amp; Community Hub
+                      </strong>
+                      <span className="gws-status-badge gws-status-badge-teal text-[10px] py-0.5 px-2">
+                        Connected
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[var(--ink-muted)] truncate max-w-full mt-0.5">
+                      Forms · Calendar · Video Rooms · Slides · Discipleship Classes · Tasks
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto min-w-0 max-w-full">
-                <PWAInstallButton compact />
-                <button
-                  type="button"
-                  onClick={() => {
-                    cacheMainFeedPosts(activeCategory, posts, pollOptionsByPost, pollCountsByPost);
-                    setLastSwCachedAt(new Date().toISOString());
-                    playSound('reaction');
-                  }}
-                  title={
-                    lastSwCachedAt
-                      ? `Service Worker cached ${posts.length} posts (${new Date(lastSwCachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
-                      : 'Sync current feed posts to Service Worker offline cache'
-                  }
-                  className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-emerald-200 hover:bg-white/15 border border-emerald-400/30 transition-all flex items-center gap-1.5 whitespace-nowrap max-w-full"
-                >
-                  {(isDisconnected || hasPendingSyncs || feedFromSwCache) && (
-                    <span
-                      aria-hidden="true"
-                      className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
-                        dotColor === 'yellow' ? 'bg-yellow-400' : 'bg-red-500'
-                      }`}
-                    />
-                  )}
-                  <span className="truncate">
-                    {!isOnline || feedFromSwCache
-                      ? dotColor === 'yellow'
-                        ? `Offline · Pending Sync (${pendingSyncCount || 1})`
-                        : 'Offline'
-                      : `✓ SW Cached (${posts.length})`}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSection('workspace');
-                    playSound('reaction');
-                  }}
-                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition-all shadow-sm whitespace-nowrap max-w-full"
-                >
-                  Open Workspace Hub
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTab('churches');
-                    playSound('reaction');
-                  }}
-                  className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-white hover:bg-white/15 border border-white/15 transition-all whitespace-nowrap max-w-full"
-                >
-                  🗺️ Church Map
-                </button>
+
+                <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto min-w-0 max-w-full">
+                  <PWAInstallButton compact />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cacheMainFeedPosts(activeCategory, posts, pollOptionsByPost, pollCountsByPost);
+                      setLastSwCachedAt(new Date().toISOString());
+                      playSound('reaction');
+                    }}
+                    title={
+                      lastSwCachedAt
+                        ? `Service Worker cached ${posts.length} posts (${new Date(lastSwCachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                        : 'Sync current feed posts to Service Worker offline cache'
+                    }
+                    className="gws-btn-secondary gws-btn-sm"
+                  >
+                    {(isDisconnected || hasPendingSyncs || feedFromSwCache) && (
+                      <span
+                        aria-hidden="true"
+                        className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
+                          dotColor === 'yellow' ? 'bg-yellow-400' : 'bg-red-500'
+                        }`}
+                      />
+                    )}
+                    <span className="truncate">
+                      {!isOnline || feedFromSwCache
+                        ? dotColor === 'yellow'
+                          ? `Offline · Sync (${pendingSyncCount || 1})`
+                          : 'Offline'
+                        : `✓ Cached (${posts.length})`}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSection('workspace');
+                      playSound('reaction');
+                    }}
+                    className="gws-btn-primary gws-btn-sm"
+                  >
+                    Open Workspace Hub
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTab('churches');
+                      playSound('reaction');
+                    }}
+                    className="gws-btn-secondary gws-btn-sm"
+                  >
+                    🗺️ Church Map
+                  </button>
+                </div>
               </div>
             </div>
           </>

@@ -14,6 +14,12 @@ export const PLANS = {
     monthlyKes: 3000,
     blurb: 'For growing churches with more members',
   },
+  workspace_premium: {
+    id: 'workspace_premium',
+    name: 'Workspace Premium',
+    monthlyKes: 7000,
+    blurb: 'Google Workspace tools: Forms, Calendar, Meet, Classroom, Drive, Slides, Tasks, Chat',
+  },
 };
 
 // period → months and discount off the monthly total

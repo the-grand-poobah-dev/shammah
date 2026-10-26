@@ -15,6 +15,17 @@ export const DENOMINATIONS = [
 
 export const DESCRIPTION_MAX = 500;
 
+// Google Workspace Church Plan (KES 7,000 / month)
+export const WORKSPACE_PLAN_KEY = 'workspace_premium';
+export const WORKSPACE_PLAN_PRICE_KES = 7000;
+export const WORKSPACE_PLAN_LABEL = 'Workspace Premium Plan';
+export const WORKSPACE_PLAN_DESCRIPTION =
+  'Unlocks church creation and administration of Google Workspace tools: Google Forms, Google Calendar events, Google Meet rooms, Google Classroom courses, Google Drive/Docs/Sheets/Slides, Tasks, and Chat spaces.';
+
+export function formatKes(amount) {
+  return `KES ${Number(amount || 0).toLocaleString('en-KE')}`;
+}
+
 // The church columns the church pages load
 export const CHURCH_FIELDS =
   'id, name, description, denomination, logo_url, cover_url, location_label, location_place_id, location_lat, location_lng, website, created_by, subscription_status, created_at';

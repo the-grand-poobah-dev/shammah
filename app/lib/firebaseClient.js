@@ -53,19 +53,17 @@ export const WORKSPACE_TAB_SCOPES = {
   ],
   slides: [
     'https://www.googleapis.com/auth/drive.file',
-    'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/presentations',
   ],
   forms: [
     'https://www.googleapis.com/auth/drive.file',
-    'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/forms.body',
     'https://www.googleapis.com/auth/forms.responses.readonly',
   ],
   firebase: [],
 };
 
-// Trimmed Google Workspace OAuth scopes (only the 13 scopes actually used by live hub features, down from 84)
+// Narrowed Google Workspace OAuth scopes (only the minimal scopes used by live hub features)
 export const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/keep',
@@ -76,7 +74,6 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/chat.spaces.readonly',
   'https://www.googleapis.com/auth/chat.messages',
   'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/presentations',
   'https://www.googleapis.com/auth/forms.body',
   'https://www.googleapis.com/auth/forms.responses.readonly',
