@@ -240,6 +240,10 @@ export default function Feed() {
     function onTabSet(e) {
       if (e.detail && ['home', 'messages', 'alerts', 'churches', 'menu'].includes(e.detail)) {
         setTab(e.detail);
+        if (e.detail === 'home') {
+          setSection('all');
+          setActiveCategory(null);
+        }
       }
     }
     window.addEventListener('shammah:set-tab', onTabSet);
@@ -321,6 +325,8 @@ export default function Feed() {
         const sec = params.get('section');
         if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss', 'workspace'].includes(sec)) {
           setSection(sec);
+        } else {
+          setSection('all');
         }
         const cat = params.get('category');
         if (cat) {

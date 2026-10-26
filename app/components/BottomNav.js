@@ -11,19 +11,23 @@ import {
   PenSquare,
   X,
   Flame,
-  Tv,
   Sparkles,
   ChevronUp,
   Calendar,
   LayoutGrid,
+  Film,
 } from 'lucide-react';
 import { getTotalUnreadMessagesCount } from '../lib/inboxManager';
 import { getUnreadNotificationCount, fetchRealNotifications } from '../lib/notificationsManager';
 import { playSound } from '../lib/soundEffects';
+import { useSession } from '../../lib/useSession';
+import StatusCreatorModal from './StatusCreatorModal';
+import ReelCreatorModal from './ReelCreatorModal';
 
 export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { session, profile } = useSession();
   const [activeTab, setActiveTab] = useState('home');
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
@@ -33,7 +37,20 @@ export default function BottomNav() {
   const [hoveredActionId, setHoveredActionId] = useState(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isContentHovered, setIsContentHovered] = useState(false);
+  const [showStatusCreator, setShowStatusCreator] = useState(false);
+  const [showReelCreator, setShowReelCreator] = useState(false);
   const menuRef = useRef(null);
+
+  const currentUser = session?.user
+    ? {
+        id: session.user.id,
+        name: profile?.display_name || session.user.email?.split('@')[0] || 'You',
+        avatar_url: profile?.avatar_url,
+        badge: profile?.badge,
+        badge_verified: profile?.badge_verified,
+        role: profile?.role,
+      }
+    : null;
 
   const QUICK_ACTIONS = [
     {
@@ -45,12 +62,20 @@ export default function BottomNav() {
       action: handleCreatePost,
     },
     {
-      id: 'projection',
-      label: 'Sanctuary Screen Projection',
-      desc: 'Project courses, polls & scriptures',
-      icon: Tv,
-      color: '#f59e0b', // Sanctuary Gold
-      action: handleOpenProjection,
+      id: 'status',
+      label: 'Post a 24-Hour Status Story',
+      desc: 'Share a photo, video or scripture expiring in 24 hours',
+      icon: Sparkles,
+      color: '#ec4899', // Pink / Rose
+      action: handleOpenCreateStatus,
+    },
+    {
+      id: 'reel',
+      label: 'Post a Reel',
+      desc: 'Short vertical video testimony or praise clip',
+      icon: Film,
+      color: '#8b5cf6', // Violet
+      action: handleOpenCreateReel,
     },
     {
       id: 'workspace',
@@ -190,6 +215,30 @@ export default function BottomNav() {
     return () => window.removeEventListener('shammah:tab-changed', handleTabEvent);
   }, []);
 
+  // Listen for global open requests for status and reel creators
+  useEffect(() => {
+    function onOpenCreateStatus() {
+      if (!session?.user?.id) {
+        window.dispatchEvent(new CustomEvent('shammah:open-auth', { detail: 'signin' }));
+      } else {
+        setShowStatusCreator(true);
+      }
+    }
+    function onOpenCreateReel() {
+      if (!session?.user?.id) {
+        window.dispatchEvent(new CustomEvent('shammah:open-auth', { detail: 'signin' }));
+      } else {
+        setShowReelCreator(true);
+      }
+    }
+    window.addEventListener('shammah:open-create-status', onOpenCreateStatus);
+    window.addEventListener('shammah:open-create-reel', onOpenCreateReel);
+    return () => {
+      window.removeEventListener('shammah:open-create-status', onOpenCreateStatus);
+      window.removeEventListener('shammah:open-create-reel', onOpenCreateReel);
+    };
+  }, [session?.user?.id]);
+
   // Close floating action menu on click outside
   useEffect(() => {
     function handleClickOutside(e) {
@@ -208,17 +257,27 @@ export default function BottomNav() {
     setMenuOpen(false);
     playSound('reaction');
 
+    if (tabId === 'home') {
+      // Whenever Home is clicked, always redirect to the home feed with the 'All' tab
+      window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+      window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'all' }));
+      if (pathname === '/') {
+        if (typeof window !== 'undefined') {
+          if (window.location.search) {
+            window.history.pushState(null, '', '/');
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } else {
+        router.push('/');
+      }
+      return;
+    }
+
     if (pathname === '/') {
       window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: tabId }));
-      if (tabId === 'home') {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
     } else {
-      if (tabId === 'home') {
-        router.push('/');
-      } else {
-        router.push(href);
-      }
+      router.push(href);
     }
   }
 
@@ -238,16 +297,30 @@ export default function BottomNav() {
     }
   }
 
+  function handleOpenCreateStatus() {
+    setMenuOpen(false);
+    playSound('reaction');
+    if (!session?.user?.id) {
+      window.dispatchEvent(new CustomEvent('shammah:open-auth', { detail: 'signin' }));
+      return;
+    }
+    setShowStatusCreator(true);
+  }
+
+  function handleOpenCreateReel() {
+    setMenuOpen(false);
+    playSound('reaction');
+    if (!session?.user?.id) {
+      window.dispatchEvent(new CustomEvent('shammah:open-auth', { detail: 'signin' }));
+      return;
+    }
+    setShowReelCreator(true);
+  }
+
   function handleOpenChatbot() {
     setMenuOpen(false);
     playSound('reaction');
     window.dispatchEvent(new CustomEvent('shammah:open-chatbot'));
-  }
-
-  function handleOpenProjection() {
-    setMenuOpen(false);
-    playSound('reaction');
-    window.dispatchEvent(new CustomEvent('shammah:open-projection', { detail: { type: 'course' } }));
   }
 
   function handleOpenWorkspace() {
@@ -322,12 +395,13 @@ export default function BottomNav() {
                 </div>
               </div>
 
-              {/* Quick Actions with Different-Color Picker Boxes */}
+              {/* Quick Actions with Clean Outlines Appearing Only on Highlight/Hover/Select */}
               <div className="floating-quick-actions-list">
                 {QUICK_ACTIONS.map((item) => {
                   const Icon = item.icon;
                   const isItemActive = activeHighlightId === item.id;
-                  const effectiveColor = isItemActive ? highlightColor : item.color;
+                  const isHovered = hoveredActionId === item.id;
+                  const effectiveColor = item.color;
                   return (
                     <div
                       key={item.id}
@@ -338,8 +412,12 @@ export default function BottomNav() {
                         className={`quick-action-item explore-channel-card${isItemActive ? ' item-active' : ''}`}
                         style={{
                           '--sec-color': effectiveColor,
-                          borderColor: effectiveColor,
+                          borderColor: isItemActive || isHovered ? effectiveColor : undefined,
                         }}
+                        onMouseEnter={() => setHoveredActionId(item.id)}
+                        onMouseLeave={() => setHoveredActionId(null)}
+                        onFocus={() => setHoveredActionId(item.id)}
+                        onBlur={() => setHoveredActionId(null)}
                         onClick={() => {
                           setActiveHighlightId(item.id);
                           item.action();
@@ -353,7 +431,13 @@ export default function BottomNav() {
                           <strong>{item.label}</strong>
                           <small>{item.desc}</small>
                         </div>
-                        <span className="item-color-picker-box" style={{ '--picker-color': effectiveColor, borderColor: effectiveColor }}>
+                        <span
+                          className={`item-color-picker-box${isItemActive || isHovered ? ' active-picker' : ''}`}
+                          style={{
+                            '--picker-color': effectiveColor,
+                            borderColor: isItemActive || isHovered ? effectiveColor : undefined,
+                          }}
+                        >
                           <span className="picker-box-swatch" style={{ background: effectiveColor }} />
                         </span>
                       </button>
@@ -460,6 +544,26 @@ export default function BottomNav() {
           </button>
         </div>
       </nav>
+
+      {/* 24-Hour Status Story Creator Modal */}
+      {showStatusCreator && (
+        <StatusCreatorModal
+          currentUser={currentUser}
+          onClose={() => setShowStatusCreator(false)}
+          onCreated={() => setShowStatusCreator(false)}
+        />
+      )}
+
+      {/* Faith Reel Creator Modal */}
+      {showReelCreator && (
+        <ReelCreatorModal
+          isOpen={showReelCreator}
+          onClose={() => setShowReelCreator(false)}
+          session={session}
+          profile={profile}
+          onCreated={() => setShowReelCreator(false)}
+        />
+      )}
     </>
   );
 }

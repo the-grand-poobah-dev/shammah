@@ -87,6 +87,9 @@ export default function AppHeader() {
     function handleTabSwitch(e) {
       if (e.detail && typeof e.detail === 'string') {
         setActiveTab(e.detail);
+        if (e.detail === 'home') {
+          setActiveSection('all');
+        }
       }
     }
     window.addEventListener('shammah:set-tab', handleTabSwitch);
