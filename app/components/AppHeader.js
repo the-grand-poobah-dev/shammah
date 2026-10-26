@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Moon, Sun, Volume2, VolumeX, DownloadCloud, Search } from 'lucide-react';
@@ -11,6 +11,9 @@ import TopNav from './TopNav';
 import TopNavCollapsedControls from './TopNavCollapsedControls';
 import UserAccountMenu from './UserAccountMenu';
 import OfflineLibraryModal from './OfflineLibraryModal';
+
+const COLLAPSE_SCROLL_Y = 120;
+const EXPAND_SCROLL_Y = 16;
 
 export default function AppHeader() {
   const pathname = usePathname();
@@ -30,14 +33,18 @@ export default function AppHeader() {
   const [offlineCount, setOfflineCount] = useState(0);
   const [showOfflineLibrary, setShowOfflineLibrary] = useState(false);
   const [activeSection, setActiveSection] = useState('all');
+  const [activeTab, setActiveTab] = useState('home');
   const [adminMode, setAdminMode] = useState(false);
 
   // Scroll collapse behavior:
-  // On non-Home routes, the header is ALWAYS collapsed.
-  // On Home, collapses when scrolled down past 96px; restores when scrolled near top (< 16px).
+  // On non-Home routes (or non-home bottom tabs), the header is ALWAYS collapsed.
+  // On Home, collapses when scrolled down past 120px; restores when scrolled near top (<= 16px).
   const [isScrolledDown, setIsScrolledDown] = useState(false);
-  const isHome = pathname === '/';
-  const isCollapsed = !isHome || isScrolledDown;
+  const [expandedSecondaryHeight, setExpandedSecondaryHeight] = useState(112);
+  const secondaryRef = useRef(null);
+
+  const isHomeRoute = pathname === '/' && activeTab === 'home';
+  const isCollapsed = !isHomeRoute || isScrolledDown;
 
   const {
     isDisconnected,
@@ -46,7 +53,36 @@ export default function AppHeader() {
     dotColor,
   } = useOfflineIndicatorStatus();
 
-  // Scroll listener with requestAnimationFrame and hysteresis to prevent oscillation
+  // Measure expanded .header-secondary height so we can reserve it with a spacer when collapsed on Home
+  useEffect(() => {
+    if (!isCollapsed && secondaryRef.current) {
+      const measured = secondaryRef.current.offsetHeight;
+      if (measured > 0) {
+        setExpandedSecondaryHeight(measured);
+      }
+    }
+  }, [isCollapsed, pathname]);
+
+  // Listen for bottom-nav tab switches on "/"
+  useEffect(() => {
+    function handleTabSwitch(e) {
+      if (e.detail && typeof e.detail === 'string') {
+        setActiveTab(e.detail);
+      }
+    }
+    window.addEventListener('shammah:set-tab', handleTabSwitch);
+    return () => window.removeEventListener('shammah:set-tab', handleTabSwitch);
+  }, []);
+
+  // Reset activeTab to 'home' when navigating to "/"
+  useEffect(() => {
+    if (pathname === '/') {
+      setActiveTab('home');
+    }
+  }, [pathname]);
+
+  // Passive scroll listener with requestAnimationFrame + hysteresis (collapse > 120px, expand <= 16px)
+  // State is updated ONLY when the boolean actually changes.
   useEffect(() => {
     if (pathname !== '/') {
       setIsScrolledDown(true);
@@ -54,19 +90,19 @@ export default function AppHeader() {
     }
 
     let rafId = null;
-    let lastCollapsed = typeof window !== 'undefined' ? window.scrollY > 96 : false;
+    let lastCollapsed =
+      typeof window !== 'undefined' ? (window.scrollY || window.pageYOffset || 0) > COLLAPSE_SCROLL_Y : false;
     setIsScrolledDown(lastCollapsed);
 
     function handleScroll() {
-      if (rafId) return;
-      rafId = requestAnimationFrame(() => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
         rafId = null;
         const scrollY = window.scrollY || window.pageYOffset || 0;
-        // Hysteresis: collapse at > 96px, expand at < 16px
-        if (!lastCollapsed && scrollY > 96) {
+        if (!lastCollapsed && scrollY > COLLAPSE_SCROLL_Y) {
           lastCollapsed = true;
           setIsScrolledDown(true);
-        } else if (lastCollapsed && scrollY < 16) {
+        } else if (lastCollapsed && scrollY <= EXPAND_SCROLL_Y) {
           lastCollapsed = false;
           setIsScrolledDown(false);
         }
@@ -75,7 +111,7 @@ export default function AppHeader() {
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
-      if (rafId) cancelAnimationFrame(rafId);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       window.removeEventListener('scroll', handleScroll);
     };
   }, [pathname]);
@@ -406,7 +442,7 @@ export default function AppHeader() {
           aria-hidden={isCollapsed}
         >
           <div className="header-secondary-collapse-inner">
-            <div className="header-secondary">
+            <div className="header-secondary" ref={secondaryRef}>
               <TopNav
                 isHome={pathname === '/'}
                 activeSection={activeSection}
@@ -441,6 +477,18 @@ export default function AppHeader() {
           </div>
         </div>
       </div>
+
+      {/* Height-compensating spacer on Home when collapsed so document height never shrinks */}
+      {isHomeRoute && isScrolledDown && (
+        <div
+          aria-hidden="true"
+          style={{
+            height: `${expandedSecondaryHeight}px`,
+            pointerEvents: 'none',
+            flexShrink: 0,
+          }}
+        />
+      )}
 
       {showOfflineLibrary && (
         <OfflineLibraryModal

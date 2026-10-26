@@ -30,7 +30,9 @@ import Avatar from './Avatar';
 import { playSound } from '../lib/soundEffects';
 import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
-export default function OfflineLibraryModal({ onClose, onOpenItem }) {
+import PopupSheet from './PopupSheet';
+
+export default function OfflineLibraryModal({ isOpen = true, onClose, onOpenItem }) {
   const router = useRouter();
   const now = useRelativeTimeTick();
   const [offlineItems, setOfflineItems] = useState([]);
@@ -67,37 +69,37 @@ export default function OfflineLibraryModal({ onClose, onOpenItem }) {
   });
 
   return (
-    <div className="vis-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div
-        className="vis-modal-card neon-glow-modal offline-modal-card"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="offline-modal-header">
-          <div className="offline-modal-title">
-            <DownloadCloud size={20} className="text-cyan-400" />
-            <h3>Offline Synced Library</h3>
-          </div>
-          <button
-            type="button"
-            className="inst-modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
+    <PopupSheet
+      open={isOpen}
+      onClose={onClose}
+      title={
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <DownloadCloud size={18} className="text-cyan-400" />
+          <span>Offline Synced Library</span>
+        </span>
+      }
+      size="lg"
+      footer={
+        <button
+          type="button"
+          className="signin-btn"
+          onClick={onClose}
+          style={{ width: '100%', padding: '10px 0' }}
+        >
+          Close Offline Library
+        </button>
+      }
+    >
+      {/* 30-Day Guarantee Banner */}
+      <div className="offline-guarantee-banner">
+        <WifiOff size={16} className="text-sky-400 flex-shrink-0" />
+        <div>
+          <strong>30-Day Offline Storage Enabled</strong>
+          <p>
+            Downloaded church feeds, Bible chapters, media, and notes remain available offline for up to 30 days without needing an internet connection.
+          </p>
         </div>
-
-        {/* 30-Day Guarantee Banner */}
-        <div className="offline-guarantee-banner">
-          <WifiOff size={16} className="text-sky-400 flex-shrink-0" />
-          <div>
-            <strong>30-Day Offline Storage Enabled</strong>
-            <p>
-              Downloaded church feeds, Bible chapters, media, and notes remain available offline for up to 30 days without needing an internet connection.
-            </p>
-          </div>
-        </div>
+      </div>
 
         {/* Filter Pills */}
         <div className="offline-filter-row">
@@ -314,18 +316,6 @@ export default function OfflineLibraryModal({ onClose, onOpenItem }) {
             })
           )}
         </div>
-
-        <div className="offline-modal-footer">
-          <button
-            type="button"
-            className="signin-btn"
-            onClick={onClose}
-            style={{ width: '100%', padding: '10px 0' }}
-          >
-            Close Offline Library
-          </button>
-        </div>
-      </div>
-    </div>
+    </PopupSheet>
   );
 }

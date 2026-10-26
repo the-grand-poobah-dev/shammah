@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import {
   Flame,
   Video,
@@ -19,6 +19,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
+import PopupSheet from './PopupSheet';
 
 export const TOP_NAV_SECTIONS = [
   { id: 'all', label: 'All', icon: Flame },
@@ -72,40 +73,90 @@ export const MORE_DROPDOWN_ITEMS = [
   },
 ];
 
+export function handleSectionClick(secId, context = {}) {
+  const {
+    pathname = typeof window !== 'undefined' ? window.location.pathname : '/',
+    router,
+    onSelectSection,
+    setCurrentSection,
+    setMoreOpen,
+  } = context;
+
+  if (setMoreOpen) setMoreOpen(false);
+  playSound('reaction');
+  if (setCurrentSection) setCurrentSection(secId);
+
+  if (onSelectSection) {
+    onSelectSection(secId);
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+    window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: secId }));
+  }
+
+  if (pathname === '/') {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (secId === 'all') {
+        url.searchParams.delete('section');
+      } else {
+        url.searchParams.set('section', secId);
+      }
+      window.history.replaceState({}, '', url.toString());
+    }
+  } else if (router) {
+    router.push(secId === 'all' ? '/' : `/?section=${secId}`);
+  }
+}
+
+export function handleMoreItemClick(item, context = {}) {
+  const {
+    pathname = typeof window !== 'undefined' ? window.location.pathname : '/',
+    router,
+    setMoreOpen,
+  } = context;
+
+  playSound('reaction');
+  if (setMoreOpen) setMoreOpen(false);
+
+  if (item.isSermonNote) {
+    if (pathname === '/') {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+        window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'bible' }));
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('shammah:open-sermon-note'));
+        }, 80);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else if (router) {
+      router.push('/?section=bible&note=1');
+    }
+    return;
+  }
+
+  if (item.isCategories) {
+    if (router) {
+      router.push('/categories');
+    }
+    return;
+  }
+
+  if (item.isSection || item.id) {
+    handleSectionClick(item.id, context);
+  }
+}
+
 export default function TopNav({ activeSection = 'all', onSelectSection, isHome = false }) {
   const pathname = usePathname();
   const router = useRouter();
   const [currentSection, setCurrentSection] = useState(activeSection);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [dropdownPos, setDropdownPos] = useState({ top: 60, right: 12 });
-  const moreRef = useRef(null);
 
   useEffect(() => {
     setCurrentSection(activeSection);
   }, [activeSection]);
-
-  // Keep dropdown accurately positioned sticky to the right of the screen
-  useEffect(() => {
-    if (moreOpen && moreRef.current) {
-      function updatePos() {
-        if (!moreRef.current) return;
-        const rect = moreRef.current.getBoundingClientRect();
-        // Stick safely to right of viewport so it is never overlapped by bottom-left plus menu
-        const rightOffset = Math.max(12, Math.min(24, window.innerWidth - rect.right));
-        setDropdownPos({
-          top: rect.bottom + 8,
-          right: rightOffset,
-        });
-      }
-      updatePos();
-      window.addEventListener('scroll', updatePos, { passive: true });
-      window.addEventListener('resize', updatePos, { passive: true });
-      return () => {
-        window.removeEventListener('scroll', updatePos);
-        window.removeEventListener('resize', updatePos);
-      };
-    }
-  }, [moreOpen]);
 
   // Sync with global custom event
   useEffect(() => {
@@ -115,94 +166,20 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
       }
     }
     window.addEventListener('shammah:section-changed', handleSectionEvent);
-    return () => window.removeEventListener('shammah:section-changed', handleSectionEvent);
+    window.addEventListener('shammah:set-section', handleSectionEvent);
+    return () => {
+      window.removeEventListener('shammah:section-changed', handleSectionEvent);
+      window.removeEventListener('shammah:set-section', handleSectionEvent);
+    };
   }, []);
 
-  // Reliable outside-click and escape listener
-  useEffect(() => {
-    if (!moreOpen) return;
-
-    function handleOutsideClick(e) {
-      if (moreRef.current && !moreRef.current.contains(e.target)) {
-        setMoreOpen(false);
-      }
-    }
-
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') {
-        setMoreOpen(false);
-      }
-    }
-
-    const timer = setTimeout(() => {
-      document.addEventListener('pointerdown', handleOutsideClick);
-      document.addEventListener('keydown', handleKeyDown);
-    }, 50);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('pointerdown', handleOutsideClick);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [moreOpen]);
-
-  function handleSectionClick(secId) {
-    setMoreOpen(false);
-    playSound('reaction');
-    setCurrentSection(secId);
-
-    if (onSelectSection) {
-      onSelectSection(secId);
-    }
-
-    // Dispatch global event for listeners
-    window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
-    window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: secId }));
-
-    if (pathname === '/') {
-      if (typeof window !== 'undefined') {
-        const url = new URL(window.location.href);
-        if (secId === 'all') {
-          url.searchParams.delete('section');
-        } else {
-          url.searchParams.set('section', secId);
-        }
-        window.history.replaceState({}, '', url.toString());
-      }
-    } else {
-      router.push(secId === 'all' ? '/' : `/?section=${secId}`);
-    }
-  }
-
-  function handleMoreItemClick(item) {
-    playSound('reaction');
-    setMoreOpen(false);
-
-    if (item.isSermonNote) {
-      if (pathname === '/') {
-        window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
-        window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'bible' }));
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('shammah:open-sermon-note'));
-        }, 80);
-        if (typeof window !== 'undefined') {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      } else {
-        router.push('/?section=bible&note=1');
-      }
-      return;
-    }
-
-    if (item.isCategories) {
-      router.push('/categories');
-      return;
-    }
-
-    if (item.isSection) {
-      handleSectionClick(item.id);
-    }
-  }
+  const navContext = {
+    pathname,
+    router,
+    onSelectSection,
+    setCurrentSection,
+    setMoreOpen,
+  };
 
   const isMoreActive =
     currentSection === 'rss' || currentSection === 'challenges' || currentSection === 'games';
@@ -229,7 +206,7 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                   data-section={s.id}
                   aria-selected={isActive}
                   className={`section-item-stacked${isActive ? ' active' : ''}`}
-                  onClick={() => handleSectionClick(s.id)}
+                  onClick={() => handleSectionClick(s.id, navContext)}
                   whileTap={{ scale: 0.92 }}
                   animate={isActive ? { scale: [0.96, 1.07, 1], y: [1, -2, 0] } : { scale: 1, y: 0 }}
                   transition={{
@@ -250,16 +227,14 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
               );
             })}
 
-            {/* More Tab with Dropdown Menu containing Sermon Note, Category Topics, RSS, Challenges & Arcade */}
-            <div className="top-nav-more-container" ref={moreRef}>
+            {/* More Tab with PopupSheet Menu containing Sermon Note, Category Topics, RSS, Challenges & Arcade */}
+            <div className="top-nav-more-container">
               <motion.button
                 type="button"
-                role="button"
-                aria-haspopup="menu"
+                aria-haspopup="dialog"
                 aria-expanded={moreOpen}
                 aria-label="More options including RSS feeds, category topics, challenges, and arcade"
                 className={`section-item-stacked top-nav-more-btn${isMoreActive ? ' active' : ''}${moreOpen ? ' is-open' : ''}`}
-                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
                   playSound('reaction');
@@ -291,69 +266,48 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                 </span>
               </motion.button>
 
-              <AnimatePresence>
-                {moreOpen && (
-                  <>
-                    <div
-                      className="top-nav-more-backdrop"
-                      onClick={() => setMoreOpen(false)}
-                      aria-hidden="true"
-                    />
-                    <motion.div
-                      className="top-nav-more-dropdown neon-glow-modal"
-                      role="menu"
-                      style={{
-                        position: 'fixed',
-                        top: dropdownPos.top,
-                        right: dropdownPos.right,
-                        zIndex: 55,
-                      }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => e.stopPropagation()}
-                      initial={{ opacity: 0, y: -6, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -6, scale: 0.96 }}
-                      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                    >
-                      <div className="top-nav-more-header">Explore &amp; Topics</div>
-
-                      {MORE_DROPDOWN_ITEMS.map((item) => {
-                        const ItemIcon = item.icon;
-                        const isItemActive = currentSection === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            role="menuitem"
-                            className={`top-nav-more-item${isItemActive ? ' is-active' : ''}`}
-                            style={{
-                              '--item-accent': item.color,
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMoreItemClick(item);
-                            }}
-                          >
-                            <div className={`top-nav-more-icon-box ${item.id}`} style={{ '--item-accent': item.color }}>
-                              <ItemIcon size={17} strokeWidth={2} />
-                            </div>
-                            <div className="top-nav-more-text">
-                              <span className="top-nav-more-title">
-                                <span>{item.label}</span>
-                                {isItemActive && <Check size={14} style={{ color: item.color }} />}
-                              </span>
-                              <span className="top-nav-more-desc">{item.desc}</span>
-                            </div>
-                            <span className="item-color-picker-box" style={{ '--picker-color': item.color }}>
-                              <span className="picker-box-swatch" />
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+              <PopupSheet
+                open={moreOpen}
+                onClose={() => setMoreOpen(false)}
+                title="Explore & Topics"
+                size="sm"
+              >
+                <div className="top-nav-dropdown-scrollable">
+                  {MORE_DROPDOWN_ITEMS.map((item) => {
+                    const ItemIcon = item.icon;
+                    const isItemActive = currentSection === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`top-nav-more-item${isItemActive ? ' is-active' : ''}`}
+                        style={{
+                          '--item-accent': item.color,
+                          marginBottom: '6px',
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMoreItemClick(item, navContext);
+                        }}
+                      >
+                        <div className={`top-nav-more-icon-box ${item.id}`} style={{ '--item-accent': item.color }}>
+                          <ItemIcon size={17} strokeWidth={2} />
+                        </div>
+                        <div className="top-nav-more-text">
+                          <span className="top-nav-more-title">
+                            <span>{item.label}</span>
+                            {isItemActive && <Check size={14} style={{ color: item.color }} />}
+                          </span>
+                          <span className="top-nav-more-desc">{item.desc}</span>
+                        </div>
+                        <span className="item-color-picker-box" style={{ '--picker-color': item.color }}>
+                          <span className="picker-box-swatch" />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </PopupSheet>
             </div>
           </div>
         </div>

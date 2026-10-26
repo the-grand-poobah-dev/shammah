@@ -198,7 +198,7 @@ input[type="checkbox"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .header-secondary-collapse-wrapper {
+  .sticky-header .header-secondary-collapse-wrapper {
     transition: none !important;
   }
 }
@@ -216,6 +216,12 @@ input[type="checkbox"] {
   min-width: 0;
 }
 
+.topbar .brand {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
 @media (min-width: 480px) {
   .topbar {
     padding: 14px 18px;
@@ -227,6 +233,7 @@ input[type="checkbox"] {
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
+  max-width: 100%;
   gap: 1px;
 }
 
@@ -5317,10 +5324,27 @@ button:focus-visible, a:focus-visible {
 .section-nav-toggle-btn {
   position: relative;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: color-mix(in srgb, var(--nav-btn-accent, var(--gold)) 15%, transparent) !important;
+  border-color: color-mix(in srgb, var(--nav-btn-accent, var(--gold)) 45%, transparent) !important;
+  color: var(--nav-btn-accent, var(--gold)) !important;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--nav-btn-accent, var(--gold)) 24%, transparent) !important;
+}
+
+[data-theme='light'] .section-nav-toggle-btn {
+  background: color-mix(in srgb, var(--nav-btn-accent, var(--gold)) 14%, #ffffff) !important;
+  border-color: color-mix(in srgb, var(--nav-btn-accent, var(--gold)) 52%, transparent) !important;
+  color: color-mix(in srgb, var(--nav-btn-accent, var(--gold)) 82%, #0f172a) !important;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--nav-btn-accent, var(--gold)) 20%, transparent) !important;
+}
+
+.section-nav-toggle-btn:hover {
+  background: color-mix(in srgb, var(--nav-btn-accent, var(--gold)) 24%, transparent) !important;
+  border-color: color-mix(in srgb, var(--nav-btn-accent, var(--gold)) 72%, transparent) !important;
+  box-shadow: 0 0 15px color-mix(in srgb, var(--nav-btn-accent, var(--gold)) 42%, transparent) !important;
 }
 
 .section-nav-toggle-btn.is-open {
-  box-shadow: 0 0 16px rgba(245, 158, 11, 0.45) !important;
+  box-shadow: 0 0 16px var(--nav-btn-accent, rgba(245, 158, 11, 0.45)) !important;
   transform: scale(1.05);
 }
 
@@ -6277,24 +6301,24 @@ button:focus-visible, a:focus-visible {
     gap: 6px !important;
   }
 
-  .topbar-toggle-group,
-  .topbar-collapsed-controls {
+  .topbar-toggle-group, .topbar-collapsed-controls {
     gap: 4px !important;
   }
 
-  .topbar-toggle-btn {
+  .topbar .topbar-toggle-btn {
     width: 32px !important;
     height: 32px !important;
   }
 
   .me-btn {
-    padding: 3px 6px !important;
+    padding: 2px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
     gap: 4px !important;
   }
 
   .me-name {
-    max-width: 65px !important;
-    font-size: 12px !important;
+    display: none !important;
   }
 
   .signin-btn, .signup-btn {
@@ -6336,7 +6360,8 @@ button:focus-visible, a:focus-visible {
   }
 
   .brand-mark {
-    max-width: 85px !important;
+    max-width: 100% !important;
+    font-size: 16.5px !important;
   }
 
   .topbar {
@@ -6344,12 +6369,26 @@ button:focus-visible, a:focus-visible {
     gap: 4px !important;
   }
 
-  .topbar-toggle-group,
-  .topbar-collapsed-controls {
+  .topbar-right {
+    gap: 4px !important;
+  }
+
+  .topbar-toggle-group, .topbar-collapsed-controls {
     gap: 3px !important;
   }
 
-  .topbar-toggle-btn {
+  .sticky-header .topbar .topbar-toggle-btn {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .topbar .me-btn {
+    min-width: 30px !important;
+    min-height: 30px !important;
+    padding: 0 !important;
+  }
+
+  .topbar .avatar-sm {
     width: 30px !important;
     height: 30px !important;
   }
