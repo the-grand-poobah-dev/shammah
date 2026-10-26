@@ -64,9 +64,11 @@ export default function StatusTray({ currentUser }) {
     }
 
     window.addEventListener('shammah:status-updated', onStatusUpdated);
+    window.addEventListener('shammah:muted-users-changed', onStatusUpdated);
     window.addEventListener('shammah:open-status', onOpenStatus);
     return () => {
       window.removeEventListener('shammah:status-updated', onStatusUpdated);
+      window.removeEventListener('shammah:muted-users-changed', onStatusUpdated);
       window.removeEventListener('shammah:open-status', onOpenStatus);
     };
   }, []);

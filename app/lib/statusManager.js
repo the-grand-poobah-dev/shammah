@@ -13,6 +13,24 @@ create table if not exists public.statuses (
 );
 create index if not exists statuses_expires_idx on public.statuses (expires_at);
 create index if not exists statuses_user_created_idx on public.statuses (user_id, created_at desc);
+
+-- Migration: 012_status_privacy_and_reports.sql
+alter table public.profiles
+  add column if not exists allow_status_reshare boolean not null default false;
+
+create table if not exists public.content_reports (
+  id               uuid primary key default gen_random_uuid(),
+  reporter_id      uuid not null references public.profiles(id) on delete cascade,
+  target_type      text not null check (target_type in ('post','status')),
+  target_id        uuid not null,
+  reported_user_id uuid references public.profiles(id) on delete set null,
+  reason           text not null,
+  notes            text,
+  status           text not null default 'open' check (status in ('open','reviewed','dismissed','actioned')),
+  created_at       timestamptz not null default now()
+);
+create index if not exists content_reports_target_idx on public.content_reports (target_type, target_id);
+create index if not exists content_reports_reporter_idx on public.content_reports (reporter_id, created_at desc);
 */
 
 'use client';
@@ -22,6 +40,9 @@ import { cleanDisplayName } from './postDisplay';
 
 const STATUS_STORAGE_KEY = 'shammah_24h_statuses_v2';
 const STATUS_VIEWED_KEY = 'shammah_status_views_v1';
+const STATUS_MUTED_USERS_KEY = 'shammah_muted_status_users_v1';
+const STATUS_HIDDEN_KEY = 'shammah_hidden_statuses_v1';
+const STATUS_REPORTS_KEY = 'shammah_reported_statuses_v1';
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 let statusesMemoryCache = null;
@@ -44,6 +65,267 @@ export function inferMediaType(url, explicitType = null) {
   if (/\.(mp3|wav|m4a|aac|flac)$/.test(clean)) return 'audio';
   if (/\.(jpg|jpeg|png|webp|gif|svg|bmp|avif)$/.test(clean)) return 'image';
   return 'image';
+}
+
+/**
+ * Retrieves list of muted status user accounts from localStorage.
+ * Format: Array<{ userId: string, userName: string, mutedAt: string }>
+ */
+export function getMutedStatusUsers() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STATUS_MUTED_USERS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Checks whether a specific user is in the muted status posters list.
+ */
+export function isStatusUserMuted(userId, userName) {
+  const list = getMutedStatusUsers();
+  if (!list || list.length === 0) return false;
+  return list.some(
+    (item) =>
+      (userId && item.userId === userId) ||
+      (userName && item.userName && item.userName.toLowerCase() === userName.toLowerCase())
+  );
+}
+
+/**
+ * Mutes a user from the status tray and viewer.
+ */
+export function muteStatusUser(userId, userName) {
+  if (typeof window === 'undefined') return;
+  try {
+    const list = getMutedStatusUsers();
+    const cleanName = cleanDisplayName(userName, 'Member');
+    const existing = list.find(
+      (m) =>
+        (userId && m.userId === userId) ||
+        (m.userName && m.userName.toLowerCase() === cleanName.toLowerCase())
+    );
+    if (!existing) {
+      const updated = [
+        ...list,
+        {
+          userId: userId || `user-${Date.now()}`,
+          userName: cleanName,
+          mutedAt: new Date().toISOString(),
+        },
+      ];
+      localStorage.setItem(STATUS_MUTED_USERS_KEY, JSON.stringify(updated));
+    }
+    // Bust memory cache so getActiveStatuses() re-evaluates
+    statusesMemoryCache = null;
+    window.dispatchEvent(new CustomEvent('shammah:status-updated'));
+    window.dispatchEvent(new CustomEvent('shammah:muted-users-changed'));
+  } catch (e) {
+    console.error('Failed to mute status user', e);
+  }
+}
+
+/**
+ * Unmutes a user account so their statuses can be viewed again.
+ */
+export function unmuteStatusUser(userId) {
+  if (typeof window === 'undefined') return;
+  try {
+    const list = getMutedStatusUsers();
+    const filtered = list.filter((item) => item.userId !== userId && item.userName !== userId);
+    localStorage.setItem(STATUS_MUTED_USERS_KEY, JSON.stringify(filtered));
+    statusesMemoryCache = null;
+    window.dispatchEvent(new CustomEvent('shammah:status-updated'));
+    window.dispatchEvent(new CustomEvent('shammah:muted-users-changed'));
+  } catch (e) {
+    console.error('Failed to unmute status user', e);
+  }
+}
+
+/**
+ * Retrieves list of hidden status IDs (e.g. from reports).
+ */
+export function getHiddenStatuses() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STATUS_HIDDEN_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Checks whether a specific status ID is hidden locally.
+ */
+export function isStatusHidden(statusId) {
+  if (!statusId) return false;
+  const list = getHiddenStatuses();
+  return list.includes(statusId);
+}
+
+/**
+ * Hides a status ID locally for the current user.
+ */
+export function hideStatus(statusId) {
+  if (!statusId || typeof window === 'undefined') return;
+  try {
+    const list = getHiddenStatuses();
+    if (!list.includes(statusId)) {
+      list.push(statusId);
+      localStorage.setItem(STATUS_HIDDEN_KEY, JSON.stringify(list));
+    }
+    // Also remove from in-memory cache
+    if (statusesMemoryCache) {
+      statusesMemoryCache = statusesMemoryCache.filter((s) => s.id !== statusId);
+    }
+    window.dispatchEvent(new CustomEvent('shammah:status-updated'));
+  } catch (e) {
+    console.error('Failed to hide status', e);
+  }
+}
+
+/**
+ * Reports a status story:
+ * - Persists locally (hides story for reporter immediately).
+ * - Writes confidential report to Supabase `content_reports` table with target_type = 'status'.
+ */
+export async function reportStatus({
+  statusId,
+  reason,
+  authorId = null,
+  notes = '',
+  reporterId = null,
+}) {
+  if (!statusId) return { success: false, error: 'Status ID missing' };
+
+  // 1. Hide locally immediately so reporter never sees it again
+  hideStatus(statusId);
+
+  // 2. Cache report locally
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(STATUS_REPORTS_KEY);
+      const reports = raw ? JSON.parse(raw) : [];
+      reports.push({
+        statusId,
+        authorId,
+        reason,
+        notes: (notes || '').trim(),
+        reportedAt: new Date().toISOString(),
+      });
+      localStorage.setItem(STATUS_REPORTS_KEY, JSON.stringify(reports));
+    } catch (e) {
+      console.warn('Failed to cache status report locally', e);
+    }
+  }
+
+  // 3. Persist confidential report to Supabase content_reports table
+  try {
+    let activeReporterId = reporterId;
+    if (!isValidUuid(activeReporterId)) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      activeReporterId = sessionData?.session?.user?.id;
+    }
+
+    if (isValidUuid(activeReporterId)) {
+      const reportRow = {
+        reporter_id: activeReporterId,
+        target_type: 'status',
+        target_id: statusId,
+        reported_user_id: isValidUuid(authorId) ? authorId : null,
+        reason: reason || 'other',
+        notes: (notes || '').trim().slice(0, 500) || null,
+        status: 'open',
+      };
+
+      const { error: insErr } = await supabase.from('content_reports').insert(reportRow);
+      if (insErr) {
+        console.warn('Could not insert to content_reports, trying post_reports fallback:', insErr.message);
+        if (isValidUuid(statusId)) {
+          await supabase.from('post_reports').insert({
+            post_id: statusId,
+            reporter_id: activeReporterId,
+            author_id: isValidUuid(authorId) ? authorId : null,
+            reason: reason || 'other',
+            notes: (notes || '').trim().slice(0, 300) || null,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error persisting status report to Supabase:', err);
+  }
+
+  return { success: true };
+}
+
+/**
+ * Reshares a status story as a normal community post (only if author allows reshare).
+ * Does not invent a new post type — inserts a standard post into Supabase `posts`.
+ */
+export async function reshareStatusAsPost({ status, currentUser, comment = '' }) {
+  if (!status) return { success: false, error: 'Status not found' };
+  if (!currentUser?.id) return { success: false, error: 'Please sign in to reshare stories' };
+
+  if (!status.allowStatusReshare) {
+    return { success: false, error: 'The author has not enabled story resharing' };
+  }
+
+  const cleanAuthorName = cleanDisplayName(status.userName, 'Member');
+  const userComment = (comment || '').trim();
+  const quoteSnippet = status.text ? `"${status.text}"` : '';
+
+  let finalContent;
+  if (userComment) {
+    finalContent = `${userComment}\n\nShared from ${cleanAuthorName}'s story${quoteSnippet ? `: ${quoteSnippet}` : ''}`;
+  } else {
+    finalContent = `Shared from ${cleanAuthorName}'s story${quoteSnippet ? `: ${quoteSnippet}` : ''}`;
+  }
+
+  const resolvedMediaType = status.mediaType || inferMediaType(status.mediaUrl);
+
+  try {
+    const postPayload = {
+      author_id: currentUser.id,
+      church_id: currentUser.church_id || null,
+      category_id: 'general',
+      text_content: finalContent,
+      media_url: status.mediaUrl || null,
+      media_type: resolvedMediaType || null,
+      visibility: 'public',
+      source: 'user',
+      is_anonymous: false,
+      post_identity: 'real',
+    };
+
+    const { data, error } = await supabase.from('posts').insert(postPayload).select('id').single();
+
+    if (error) {
+      console.warn('Failed to insert reshared post to Supabase:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('shammah:post-created', {
+          detail: { postId: data?.id, statusId: status.id },
+        })
+      );
+      window.dispatchEvent(new CustomEvent('shammah:feed-updated'));
+    }
+
+    return { success: true, postId: data?.id };
+  } catch (err) {
+    console.error('Error resharing status as post:', err);
+    return { success: false, error: err?.message || 'Could not reshare story' };
+  }
 }
 
 /**
@@ -138,6 +420,7 @@ export function groupStatusesByUser(rawStatuses = [], currentViewerId = 'me') {
         userBadge: status.userBadge || 'believer',
         userRole: status.userRole || 'member',
         userVerified: Boolean(status.userVerified),
+        allowStatusReshare: Boolean(status.allowStatusReshare),
         statuses: [],
       });
     }
@@ -202,8 +485,8 @@ export function buildViewerPlaylist(groupedUsers = [], currentViewerId = 'me') {
 }
 
 /**
- * Retrieves all valid 24-hour statuses from local cache that have not expired.
- * Use fetchActiveStatuses() to hydrate from Supabase.
+ * Retrieves all valid 24-hour statuses from local cache that have not expired,
+ * filtering out muted user accounts and hidden/reported stories.
  */
 export function getActiveStatuses() {
   const now = Date.now();
@@ -227,8 +510,10 @@ export function getActiveStatuses() {
 
   const list = Array.isArray(stored) ? stored : [];
 
-  // Filter out any status older than 24 hours
+  // Filter out any status older than 24 hours, muted user accounts, or hidden statuses
   const valid = list.filter((s) => {
+    if (isStatusHidden(s.id)) return false;
+    if (isStatusUserMuted(s.userId, s.userName)) return false;
     const exp = new Date(s.expiresAt || new Date(s.createdAt).getTime() + TWENTY_FOUR_HOURS_MS).getTime();
     return exp > now;
   });
@@ -238,7 +523,8 @@ export function getActiveStatuses() {
 }
 
 /**
- * Fetches real 24-hour statuses from Supabase `statuses` table joined with `profiles`.
+ * Fetches real 24-hour statuses from Supabase `statuses` table joined with `profiles`,
+ * including `allow_status_reshare`.
  */
 export async function fetchActiveStatuses() {
   try {
@@ -246,7 +532,7 @@ export async function fetchActiveStatuses() {
     const { data, error } = await supabase
       .from('statuses')
       .select(
-        'id, user_id, text_content, scripture_tag, bg_style, media_url, media_type, created_at, expires_at, profiles(id, display_name, avatar_url, badge, badge_verified, role)'
+        'id, user_id, text_content, scripture_tag, bg_style, media_url, media_type, created_at, expires_at, profiles(id, display_name, avatar_url, badge, badge_verified, role, allow_status_reshare)'
       )
       .gt('expires_at', nowIso)
       .order('created_at', { ascending: false })
@@ -268,6 +554,7 @@ export async function fetchActiveStatuses() {
         userBadge: prof?.badge || 'believer',
         userRole: prof?.role || 'member',
         userVerified: Boolean(prof?.badge_verified),
+        allowStatusReshare: Boolean(prof?.allow_status_reshare),
         text: row.text_content,
         scriptureTag: row.scripture_tag || null,
         bgStyle: row.bg_style || 'emerald',
@@ -287,7 +574,7 @@ export async function fetchActiveStatuses() {
       localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(mapped));
       window.dispatchEvent(new CustomEvent('shammah:status-updated', { detail: mapped }));
     }
-    return mapped;
+    return getActiveStatuses();
   } catch (err) {
     console.warn('fetchActiveStatuses error:', err);
     return getActiveStatuses();
@@ -345,6 +632,7 @@ export async function createStatusUpdate({
     userBadge: userBadge || 'believer',
     userRole: userRole || 'member',
     userVerified: Boolean(userVerified),
+    allowStatusReshare: false,
     text: cleanText,
     mediaUrl,
     mediaType: resolvedMediaType,

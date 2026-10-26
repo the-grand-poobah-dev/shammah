@@ -10,14 +10,18 @@ import BadgeIcon from './BadgeIcon';
 import MemberName from './MemberName';
 import LocationPicker from './LocationPicker';
 import VerificationBadgeModal from './VerificationBadgeModal';
-import { DownloadCloud } from 'lucide-react';
+import { DownloadCloud, EyeOff, Repeat } from 'lucide-react';
 import {
   getAuthorOfflineDownloadPermission,
   setAuthorOfflineDownloadPermission,
 } from '../lib/offlineSyncManager';
+import {
+  getMutedStatusUsers,
+  unmuteStatusUser,
+} from '../lib/statusManager';
 
 const COLS =
-  'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, location_place_id, location_lat, location_lng, onboarding_completed_at, display_name_changed_at';
+  'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, location_place_id, location_lat, location_lng, onboarding_completed_at, display_name_changed_at, allow_status_reshare';
 const ABOUT_MAX = 250;
 const MIN_AGE = 13;
 
@@ -56,12 +60,46 @@ export default function ProfileSettings({ session }) {
   const [dob, setDob] = useState('');
   const [location, setLocation] = useState(null);
   const [allowOffline, setAllowOffline] = useState(() => getAuthorOfflineDownloadPermission(uid));
+  const [allowReshare, setAllowReshare] = useState(false);
+  const [mutedUsers, setMutedUsers] = useState(() => getMutedStatusUsers());
 
   function handleToggleOffline() {
     const next = !allowOffline;
     setAllowOffline(next);
     setAuthorOfflineDownloadPermission(uid, next);
     notify('success', next ? 'Offline downloads enabled for your media (up to 30 days)' : 'Offline downloads restricted for your media');
+  }
+
+  async function handleToggleAllowReshare() {
+    const nextVal = !allowReshare;
+    setAllowReshare(nextVal);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ allow_status_reshare: nextVal })
+        .eq('id', uid);
+      if (error) {
+        setAllowReshare(!nextVal);
+        notify('error', 'Could not update story reshare permission.');
+      } else {
+        notify(
+          'success',
+          nextVal
+            ? 'Story reshare enabled: other members can now share your status stories as posts.'
+            : 'Story reshare disabled: other members cannot share your status stories.'
+        );
+      }
+    } catch (err) {
+      setAllowReshare(!nextVal);
+      notify('error', 'Network error updating story reshare permission.');
+    }
+  }
+
+  function handleUnmute(targetId) {
+    unmuteStatusUser(targetId);
+    const fresh = getMutedStatusUsers();
+    setMutedUsers(fresh);
+    notify('success', 'Account unmuted. Their stories will appear in your tray again.');
   }
 
   const [saving, setSaving] = useState(false);
@@ -81,6 +119,7 @@ export default function ProfileSettings({ session }) {
     setProfile(p);
     setName(p.display_name || '');
     setAbout(p.about || '');
+    setAllowReshare(Boolean(p.allow_status_reshare));
     setLocation(
       p.location_label
         ? { label: p.location_label, placeId: p.location_place_id, lat: p.location_lat, lng: p.location_lng }
@@ -417,16 +456,38 @@ export default function ProfileSettings({ session }) {
         </div>
       </section>
 
-      {/* ---------- Content & Offline Download Privacy ---------- */}
+      {/* ---------- Content & Privacy ---------- */}
       <section className="st-card st-rise" style={{ '--d': '270ms' }}>
         <header className="st-card-head">
           <span className="st-ico"><DownloadCloud size={18} /></span>
           <div>
-            <h2 className="st-h">Content &amp; Offline Downloads</h2>
-            <p className="st-sub">Determine if other members can download your media for offline access up to 30 days.</p>
+            <h2 className="st-h">Content &amp; Privacy</h2>
+            <p className="st-sub">Determine how your media, status stories, and community interactions are shared.</p>
           </div>
         </header>
+
+        {/* Story Resharing Toggle */}
         <div className="st-field">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
+            <div>
+              <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>Allow others to reshare my status stories</strong>
+              <p style={{ fontSize: '12px', color: 'var(--ink-muted)', margin: '2px 0 0' }}>
+                When enabled, other believers can quote and reshare your 24-hour status stories as posts to their community feed.
+              </p>
+            </div>
+            <button
+              type="button"
+              className={`st-btn ${allowReshare ? 'st-btn-primary' : 'st-btn-ghost'}`}
+              style={{ flexShrink: 0, fontSize: '12px', padding: '6px 14px' }}
+              onClick={handleToggleAllowReshare}
+            >
+              {allowReshare ? 'Resharing Allowed ✓' : 'Disabled ✕'}
+            </button>
+          </div>
+        </div>
+
+        {/* Offline Downloads */}
+        <div className="st-field" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
             <div>
               <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>Allow Offline Syncing (30-Day Access)</strong>
@@ -442,6 +503,59 @@ export default function ProfileSettings({ session }) {
             >
               {allowOffline ? 'Downloads Allowed ✓' : 'Restricted ✕'}
             </button>
+          </div>
+        </div>
+
+        {/* Muted Accounts List */}
+        <div className="st-field" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <EyeOff size={16} className="text-amber-500" />
+              <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>Muted Story Accounts</strong>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--ink-muted)', margin: '0 0 10px' }}>
+              Accounts you have hidden from your 24-hour status stories tray.
+            </p>
+
+            {mutedUsers.length === 0 ? (
+              <p style={{ fontSize: '12.5px', color: 'var(--ink-muted)', fontStyle: 'italic', margin: 0 }}>
+                No accounts currently muted.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {mutedUsers.map((m) => (
+                  <div
+                    key={m.userId}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      borderRadius: '10px',
+                      background: 'var(--surface-sunken)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: '13px', color: 'var(--ink)' }}>{m.userName}</strong>
+                      {m.mutedAt && (
+                        <span style={{ fontSize: '11px', color: 'var(--ink-muted)', display: 'block' }}>
+                          Muted {new Date(m.mutedAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="st-btn st-btn-ghost"
+                      style={{ fontSize: '12px', padding: '4px 10px' }}
+                      onClick={() => handleUnmute(m.userId)}
+                    >
+                      Unmute
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </section>

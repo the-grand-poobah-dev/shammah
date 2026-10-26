@@ -127,6 +127,20 @@ export async function reportPost(postId, reason, authorId = null, notes = '') {
         reason: reason || 'other',
         notes: (notes || '').trim().slice(0, 300) || null,
       });
+
+      // Also persist to unified content_reports table for moderator review
+      try {
+        await supabase.from('content_reports').insert({
+          target_type: 'post',
+          target_id: postId,
+          reporter_id: reporterId,
+          reported_user_id: isValidUuid(authorId) ? authorId : null,
+          reason: reason || 'other',
+          notes: (notes || '').trim().slice(0, 500) || null,
+          status: 'open',
+        });
+      } catch (_) {}
+
       if (error) {
         console.warn('Could not persist post report to Supabase:', error.message);
         return { persisted: false, error: error.message };

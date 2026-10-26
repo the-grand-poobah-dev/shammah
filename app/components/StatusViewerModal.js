@@ -1,14 +1,79 @@
 'use client';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { X, ChevronLeft, ChevronRight, Send, Sparkles, Plus, Music, Volume2, VolumeX, Video } from 'lucide-react';
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Send,
+  Sparkles,
+  Plus,
+  Music,
+  Volume2,
+  VolumeX,
+  Video,
+  MoreVertical,
+  Flag,
+  EyeOff,
+  Repeat,
+  ShieldCheck,
+  ShieldAlert,
+} from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
-import { reactToStatus, commentOnStatus, inferMediaType, markStatusViewed } from '../lib/statusManager';
-import { formatPostDate, getPostDateTitle, useRelativeTimeTick, cleanDisplayName } from '../lib/postDisplay';
+import PopupSheet from './PopupSheet';
+import {
+  reactToStatus,
+  commentOnStatus,
+  inferMediaType,
+  markStatusViewed,
+  reportStatus,
+  muteStatusUser,
+  reshareStatusAsPost,
+} from '../lib/statusManager';
+import { cleanDisplayName } from '../lib/postDisplay';
 import FaithReactionPicker from './FaithReactionPicker';
 
 const QUICK_EMOJIS = ['🙏', '❤️', '🙌', '🔥', '✨', '👏'];
+
+const REPORT_REASONS = [
+  {
+    id: 'hate',
+    label: 'Hate speech or hostility',
+    desc: 'Attacking individuals, ethnic groups, or promoting malice',
+    color: '#ef4444',
+  },
+  {
+    id: 'abuse',
+    label: 'Abuse, harassment, or bullying',
+    desc: 'Targeted disrespect, personal defamation, or intimidation',
+    color: '#f43f5e',
+  },
+  {
+    id: 'false_doctrine',
+    label: 'Spiritual manipulation or false doctrine',
+    desc: 'Exploitative claims, fraudulent prophecies, or deception',
+    color: '#f59e0b',
+  },
+  {
+    id: 'inappropriate',
+    label: 'Inappropriate or explicit content',
+    desc: 'Media or wording violating Christian community standards',
+    color: '#ec4899',
+  },
+  {
+    id: 'spam',
+    label: 'Spam, scams, or commercial fraud',
+    desc: 'Unsolicited adverts, suspicious links, or phishing',
+    color: '#8b5cf6',
+  },
+  {
+    id: 'other',
+    label: 'Other Community Guideline breach',
+    desc: 'Any behavior contrary to peaceful Christian fellowship',
+    color: '#0d9488',
+  },
+];
 
 function formatMediaTime(seconds) {
   if (!seconds || isNaN(seconds)) return '0:00';
@@ -24,10 +89,10 @@ export default function StatusViewerModal({
   onClose,
   onAddStatus,
 }) {
-  const now = useRelativeTimeTick();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [commentText, setCommentText] = useState('');
   const [sentFeedback, setSentFeedback] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
   const [replyError, setReplyError] = useState('');
   const [floatingEmojis, setFloatingEmojis] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
@@ -37,6 +102,16 @@ export default function StatusViewerModal({
   const [isMuted, setIsMuted] = useState(true);
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+
+  // Story Options Sheets state
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('inappropriate');
+  const [reportNotes, setReportNotes] = useState('');
+  const [reportSubmitted, setReportSubmitted] = useState(false);
+  const [reshareOpen, setReshareOpen] = useState(false);
+  const [reshareComment, setReshareComment] = useState('');
+  const [resharing, setResharing] = useState(false);
 
   const progressTimerRef = useRef(null);
   const pointerStartRef = useRef(null);
@@ -113,6 +188,10 @@ export default function StatusViewerModal({
     setReplyError('');
     setCommentText('');
     setShowEmojiSheet(false);
+    setMenuOpen(false);
+    setReportOpen(false);
+    setReshareOpen(false);
+    setReportSubmitted(false);
     setAudioDuration(0);
     setAudioCurrentTime(0);
   }, [currentIndex]);
@@ -186,6 +265,7 @@ export default function StatusViewerModal({
   // Keyboard navigation & escape to close
   useEffect(() => {
     function handleKeyDown(e) {
+      if (menuOpen || reportOpen || reshareOpen) return;
       if (e.key === 'Escape') {
         onClose();
       } else if (e.key === 'ArrowRight' || e.key === ' ') {
@@ -196,13 +276,16 @@ export default function StatusViewerModal({
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNext, handlePrev, onClose]);
+  }, [handleNext, handlePrev, onClose, menuOpen, reportOpen, reshareOpen]);
+
+  // Autoplay pause check: paused if user holds screen, or if modal sheets are open
+  const isInteracting = isPaused || menuOpen || reportOpen || reshareOpen || showEmojiSheet;
 
   // Progress Bar timer:
   // For text and images: 5 seconds fixed duration.
   // For video and audio: progress is updated dynamically via media onTimeUpdate.
   useEffect(() => {
-    if (!currentStatus || isPaused) return;
+    if (!currentStatus || isInteracting) return;
 
     if (resolvedMediaType === 'video' || resolvedMediaType === 'audio') {
       // Driven by element onTimeUpdate
@@ -224,24 +307,24 @@ export default function StatusViewerModal({
     }, interval);
 
     return () => clearInterval(progressTimerRef.current);
-  }, [currentIndex, currentStatus, isPaused, resolvedMediaType, handleNext]);
+  }, [currentIndex, currentStatus, isInteracting, resolvedMediaType, handleNext]);
 
   // Synchronize pause state with video and audio elements
   useEffect(() => {
     if (resolvedMediaType === 'video' && videoRef.current) {
-      if (isPaused) {
+      if (isInteracting) {
         videoRef.current.pause();
       } else {
         videoRef.current.play().catch(() => {});
       }
     } else if (resolvedMediaType === 'audio' && audioRef.current) {
-      if (isPaused) {
+      if (isInteracting) {
         audioRef.current.pause();
       } else {
         audioRef.current.play().catch(() => {});
       }
     }
-  }, [isPaused, resolvedMediaType]);
+  }, [isInteracting, resolvedMediaType]);
 
   if (!currentStatus) return null;
 
@@ -249,7 +332,7 @@ export default function StatusViewerModal({
   function onPointerDown(e) {
     if (
       e.target.closest(
-        'button, input, form, .status-viewer-footer, .status-viewer-header, .faith-reaction-picker-bubble, .status-viewer-sound-toggle-btn'
+        'button, input, textarea, form, .status-viewer-footer, .status-viewer-header, .faith-reaction-picker-bubble, .status-viewer-sound-toggle-btn, .popup-sheet-dialog'
       )
     ) {
       return;
@@ -344,11 +427,61 @@ export default function StatusViewerModal({
     });
 
     if (res?.sent) {
+      setFeedbackMessage(`✓ Sent directly to ${cleanAuthorName}'s inbox!`);
       setSentFeedback(true);
       setCommentText('');
       setTimeout(() => setSentFeedback(false), 3500);
     } else {
       setReplyError(res?.error || 'Could not send reply to inbox.');
+      setTimeout(() => setReplyError(''), 4000);
+    }
+  }
+
+  // Handle Muting Poster
+  function handleMutePoster() {
+    muteStatusUser(currentStatus.userId, currentStatus.userName);
+    setMenuOpen(false);
+    setFeedbackMessage(`✓ Muted ${cleanAuthorName} from your story tray.`);
+    setSentFeedback(true);
+    setTimeout(() => setSentFeedback(false), 3500);
+    handleNextUser();
+  }
+
+  // Handle Submitting Story Report
+  async function handleReportSubmit(e) {
+    if (e) e.preventDefault();
+    await reportStatus({
+      statusId: currentStatus.id,
+      reason: reportReason,
+      authorId: currentStatus.userId,
+      notes: reportNotes,
+      reporterId: currentUser?.id,
+    });
+    setReportSubmitted(true);
+    setTimeout(() => {
+      setReportOpen(false);
+      setReportSubmitted(false);
+      handleNext();
+    }, 1800);
+  }
+
+  // Handle Resharing Story
+  async function handleReshareSubmit() {
+    setResharing(true);
+    const res = await reshareStatusAsPost({
+      status: currentStatus,
+      currentUser,
+      comment: reshareComment,
+    });
+    setResharing(false);
+    if (res?.success) {
+      setReshareOpen(false);
+      setReshareComment('');
+      setFeedbackMessage('✓ Story reshared to your community feed!');
+      setSentFeedback(true);
+      setTimeout(() => setSentFeedback(false), 3500);
+    } else {
+      setReplyError(res?.error || 'Could not reshare story');
       setTimeout(() => setReplyError(''), 4000);
     }
   }
@@ -398,18 +531,33 @@ export default function StatusViewerModal({
           ))}
         </div>
 
-        {/* Story Top Navigation Bar: ONE Exit button at top-left, Author Info, and optional Add button at top-right */}
+        {/* Story Top Navigation Bar: Close button, More menu, Author Info, and optional Add button */}
         <div className="status-viewer-header">
-          {/* Top-Left: Circular glass button (40-44px), aria-label="Close status" */}
-          <button
-            type="button"
-            className="status-viewer-close-btn"
-            onClick={onClose}
-            aria-label="Close status"
-            title="Close status"
-          >
-            <X size={20} />
-          </button>
+          {/* Top-Left: Close button + three-vertical-dots menu button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, zIndex: 3 }}>
+            <button
+              type="button"
+              className="status-viewer-close-btn"
+              onClick={onClose}
+              aria-label="Close status"
+              title="Close status"
+            >
+              <X size={20} />
+            </button>
+
+            <button
+              type="button"
+              className="status-viewer-close-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(true);
+              }}
+              aria-label="Story options menu"
+              title="Story options"
+            >
+              <MoreVertical size={18} />
+            </button>
+          </div>
 
           {/* Center-Left: Author profile info */}
           <div
@@ -534,14 +682,14 @@ export default function StatusViewerModal({
           {resolvedMediaType === 'audio' && currentStatus.mediaUrl && (
             <div className="status-viewer-audio-player-card" onClick={(e) => e.stopPropagation()}>
               <div className="status-viewer-audio-visual">
-                <div className={`status-viewer-audio-disc ${!isPaused ? 'is-spinning' : ''}`}>
+                <div className={`status-viewer-audio-disc ${!isInteracting ? 'is-spinning' : ''}`}>
                   <Music size={26} className="text-white" />
                 </div>
                 <div className="status-viewer-audio-wave-bars">
-                  <span className={`bar ${!isPaused ? 'animating' : ''}`} />
-                  <span className={`bar ${!isPaused ? 'animating' : ''}`} />
-                  <span className={`bar ${!isPaused ? 'animating' : ''}`} />
-                  <span className={`bar ${!isPaused ? 'animating' : ''}`} />
+                  <span className={`bar ${!isInteracting ? 'animating' : ''}`} />
+                  <span className={`bar ${!isInteracting ? 'animating' : ''}`} />
+                  <span className={`bar ${!isInteracting ? 'animating' : ''}`} />
+                  <span className={`bar ${!isInteracting ? 'animating' : ''}`} />
                 </div>
               </div>
 
@@ -617,7 +765,7 @@ export default function StatusViewerModal({
         <div className="status-viewer-footer" onClick={(e) => e.stopPropagation()}>
           {sentFeedback && (
             <div className="status-sent-banner">
-              ✓ Sent directly to {cleanAuthorName}&apos;s inbox!
+              {feedbackMessage || `✓ Sent directly to ${cleanAuthorName}'s inbox!`}
             </div>
           )}
           {replyError && (
@@ -693,6 +841,265 @@ export default function StatusViewerModal({
           </form>
         </div>
       </div>
+
+      {/* =========================================
+          PopupSheet 1: Story Options Menu Sheet
+         ========================================= */}
+      <PopupSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        size="sm"
+        title="Story Options"
+      >
+        <div className="post-options-list">
+          {currentStatus.allowStatusReshare && (
+            <button
+              type="button"
+              className="post-options-item-card"
+              onClick={() => {
+                setMenuOpen(false);
+                setReshareOpen(true);
+              }}
+            >
+              <Repeat size={18} className="text-teal-400 flex-shrink-0" style={{ marginTop: 2 }} />
+              <div>
+                <strong style={{ display: 'block', fontSize: 14, color: 'var(--ink)' }}>Reshare Story</strong>
+                <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Share this story as a post on your community feed</small>
+              </div>
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="post-options-item-card"
+            onClick={handleMutePoster}
+          >
+            <EyeOff size={18} className="text-amber-400 flex-shrink-0" style={{ marginTop: 2 }} />
+            <div>
+              <strong style={{ display: 'block', fontSize: 14, color: 'var(--ink)' }}>Hide / Mute {cleanAuthorName}</strong>
+              <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Don&apos;t show stories from this account in your tray</small>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className="post-options-item-card"
+            onClick={() => {
+              setMenuOpen(false);
+              setReportOpen(true);
+            }}
+          >
+            <Flag size={18} className="text-rose-400 flex-shrink-0" style={{ marginTop: 2 }} />
+            <div>
+              <strong style={{ display: 'block', fontSize: 14, color: 'var(--rose, #f43f5e)' }}>Report Story</strong>
+              <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Confidential report to church moderation elders</small>
+            </div>
+          </button>
+        </div>
+      </PopupSheet>
+
+      {/* =========================================
+          PopupSheet 2: Report Story Dialog
+         ========================================= */}
+      <PopupSheet
+        open={reportOpen}
+        onClose={() => {
+          setReportOpen(false);
+          setReportSubmitted(false);
+        }}
+        size="md"
+        title={
+          <div className="report-title-row">
+            <span className="report-icon-box">
+              <Flag size={18} className="report-flag-icon" />
+            </span>
+            <div className="report-header-text">
+              <h3>Report Story</h3>
+              <p>Keeping Shammah safe, edifying, and Christ-centered</p>
+            </div>
+          </div>
+        }
+        footer={
+          !reportSubmitted ? (
+            <div className="report-modal-actions" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+              <button
+                type="button"
+                className="report-cancel-btn"
+                onClick={() => setReportOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="report-submit-btn"
+                onClick={handleReportSubmit}
+              >
+                Submit Confidential Report
+              </button>
+            </div>
+          ) : null
+        }
+      >
+        {reportSubmitted ? (
+          <div className="report-success-state">
+            <div className="report-success-icon-wrap">
+              <ShieldCheck size={44} className="report-success-icon" />
+            </div>
+            <h4>Report Received Confidentially</h4>
+            <p>
+              Thank you for caring for the flock. Our pastoral moderation team has received this report. This story has been removed from your view.
+            </p>
+            <button
+              type="button"
+              className="signin-btn report-done-btn"
+              onClick={() => {
+                setReportOpen(false);
+                setReportSubmitted(false);
+                handleNext();
+              }}
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <form className="report-form" onSubmit={handleReportSubmit}>
+            <div className="report-modal-scroll-area" style={{ overflowY: 'visible', paddingRight: 0 }}>
+              <div className="report-banner-note">
+                <ShieldAlert size={15} className="text-amber-500 flex-shrink-0" />
+                <span>Reports are confidential and reviewed by ordained church elders.</span>
+              </div>
+
+              <div className="report-reasons-list no-scrollbar">
+                {REPORT_REASONS.map((r) => {
+                  const isSelected = reportReason === r.id;
+                  return (
+                    <label
+                      key={r.id}
+                      className={`report-reason-item${isSelected ? ' active is-highlighted' : ''}`}
+                      style={{
+                        '--reason-color': r.color,
+                        '--item-accent': r.color,
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="storyReportReason"
+                        value={r.id}
+                        checked={isSelected}
+                        onChange={() => setReportReason(r.id)}
+                        className="report-radio-input"
+                      />
+                      <div className="report-reason-text">
+                        <strong>{r.label}</strong>
+                        <small>{r.desc}</small>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="report-notes-wrap" style={{ marginTop: 12 }}>
+                <label className="report-notes-label" htmlFor="status-report-notes">
+                  Additional confidential details (optional)
+                </label>
+                <textarea
+                  id="status-report-notes"
+                  value={reportNotes}
+                  onChange={(e) => setReportNotes(e.target.value)}
+                  placeholder="Share any context that will help pastoral review..."
+                  className="report-textarea"
+                  maxLength={500}
+                  rows={3}
+                />
+              </div>
+            </div>
+          </form>
+        )}
+      </PopupSheet>
+
+      {/* =========================================
+          PopupSheet 3: Reshare Story Dialog
+         ========================================= */}
+      <PopupSheet
+        open={reshareOpen}
+        onClose={() => setReshareOpen(false)}
+        size="md"
+        title={
+          <div className="report-title-row">
+            <span className="report-icon-box" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+              <Repeat size={18} />
+            </span>
+            <div className="report-header-text">
+              <h3>Reshare Story</h3>
+              <p>Post {cleanAuthorName}&apos;s story to your community feed</p>
+            </div>
+          </div>
+        }
+        footer={
+          <div className="report-modal-actions" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+            <button
+              type="button"
+              className="report-cancel-btn"
+              onClick={() => setReshareOpen(false)}
+              disabled={resharing}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="report-submit-btn"
+              style={{ background: 'var(--gold)', color: '#000', borderColor: 'var(--gold)', fontWeight: 700 }}
+              onClick={handleReshareSubmit}
+              disabled={resharing}
+            >
+              {resharing ? 'Posting...' : 'Reshare to Feed'}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ padding: '12px 14px', borderRadius: 12, background: 'var(--surface-sunken)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <Avatar name={cleanAuthorName} src={currentStatus.userAvatar} size={28} />
+              <div>
+                <strong style={{ fontSize: 13, color: 'var(--ink)' }}>{cleanAuthorName}</strong>
+                <span style={{ fontSize: 11, color: 'var(--ink-muted)', display: 'block' }}>Original Story</span>
+              </div>
+            </div>
+            {currentStatus.text && (
+              <p style={{ fontSize: 13.5, fontStyle: 'italic', color: 'var(--ink)', margin: '4px 0 0' }}>
+                &ldquo;{currentStatus.text}&rdquo;
+              </p>
+            )}
+            {currentStatus.mediaUrl && (
+              <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', maxHeight: 160, position: 'relative' }}>
+                {resolvedMediaType === 'image' && (
+                  <img src={currentStatus.mediaUrl} alt="" style={{ width: '100%', maxHeight: 160, objectFit: 'cover' }} />
+                )}
+                {resolvedMediaType === 'video' && (
+                  <video src={currentStatus.mediaUrl} style={{ width: '100%', maxHeight: 160, objectFit: 'cover' }} muted />
+                )}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 6 }} htmlFor="reshare-comment-input">
+              Add your thoughts or reflection (optional)
+            </label>
+            <textarea
+              id="reshare-comment-input"
+              value={reshareComment}
+              onChange={(e) => setReshareComment(e.target.value)}
+              placeholder="Amen! Such an encouraging testimony..."
+              className="report-textarea"
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13.5 }}
+              maxLength={400}
+              rows={3}
+            />
+          </div>
+        </div>
+      </PopupSheet>
     </div>
   );
 }
