@@ -34,6 +34,7 @@ export const MORE_DROPDOWN_ITEMS = [
   {
     id: 'sermon-note',
     label: 'Take Sermon Note',
+    navLabel: 'Sermon Note',
     desc: 'Capture points & view scriptures',
     icon: FileText,
     isSermonNote: true,
@@ -42,6 +43,7 @@ export const MORE_DROPDOWN_ITEMS = [
   {
     id: 'category-topics',
     label: 'Category Topics',
+    navLabel: 'Topics',
     desc: 'Browse topics & filter home feed',
     icon: Compass,
     isCategories: true,
@@ -50,6 +52,7 @@ export const MORE_DROPDOWN_ITEMS = [
   {
     id: 'rss',
     label: 'RSS Feeds',
+    navLabel: 'RSS Feeds',
     desc: 'Christian news, blogs & devotionals',
     icon: Rss,
     isSection: true,
@@ -58,6 +61,7 @@ export const MORE_DROPDOWN_ITEMS = [
   {
     id: 'challenges',
     label: 'Faith Challenges',
+    navLabel: 'Challenges',
     desc: 'Daily devotion & video challenges',
     icon: Sparkles,
     isSection: true,
@@ -66,6 +70,7 @@ export const MORE_DROPDOWN_ITEMS = [
   {
     id: 'games',
     label: 'Arcade Games',
+    navLabel: 'Arcade',
     desc: 'Bible trivia & scripture arcade',
     icon: Gamepad2,
     isSection: true,
@@ -197,7 +202,7 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
           <div className="section-menu-inner" role="tablist">
             {TOP_NAV_SECTIONS.map((s) => {
               const Icon = s.icon;
-              const isActive = currentSection === s.id;
+              const isActive = pathname === '/' && currentSection === s.id;
               return (
                 <motion.button
                   key={s.id}
@@ -227,7 +232,43 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
               );
             })}
 
-            {/* More Tab with PopupSheet Menu containing Sermon Note, Category Topics, RSS, Challenges & Arcade */}
+            {/* Larger Screens (>= 641px, tablets & desktops): Display 'More' items & their icons directly on the full-width bar */}
+            {MORE_DROPDOWN_ITEMS.map((item) => {
+              const ItemIcon = item.icon;
+              const isItemActive =
+                (item.isCategories && pathname === '/categories') ||
+                (pathname === '/' && currentSection === item.id);
+              return (
+                <motion.button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  data-section={item.id}
+                  aria-selected={isItemActive}
+                  className={`section-item-stacked top-nav-desktop-more-item${isItemActive ? ' active' : ''}`}
+                  onClick={() => handleMoreItemClick(item, navContext)}
+                  whileTap={{ scale: 0.92 }}
+                  animate={isItemActive ? { scale: [0.96, 1.07, 1], y: [1, -2, 0] } : { scale: 1, y: 0 }}
+                  transition={{
+                    duration: 0.28,
+                    ease: [0.25, 1, 0.5, 1],
+                  }}
+                  title={`${item.label} — ${item.desc}`}
+                >
+                  <motion.span
+                    className="top-nav-icon-wrap"
+                    animate={isItemActive ? { scale: [1, 1.18, 1], rotate: [0, -5, 5, 0] } : { scale: 1, rotate: 0 }}
+                    transition={{ duration: 0.32, ease: 'easeInOut' }}
+                    style={{ color: isItemActive ? undefined : item.color }}
+                  >
+                    <ItemIcon size={18} strokeWidth={isItemActive ? 2.3 : 2} className="top-nav-icon" />
+                  </motion.span>
+                  <span className="top-nav-label-small">{item.label}</span>
+                </motion.button>
+              );
+            })}
+
+            {/* Smaller Screens (<= 640px): More Tab with PopupSheet Menu */}
             <div className="top-nav-more-container">
               <motion.button
                 type="button"

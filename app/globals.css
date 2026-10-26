@@ -6566,6 +6566,36 @@ button:focus-visible, a:focus-visible {
   text-shadow: 0 0 8px rgba(56, 189, 248, 0.45);
 }
 
+.section-item-stacked[data-section='sermon-note'].active {
+  background: rgba(245, 158, 11, 0.14);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  box-shadow: 0 0 13px rgba(245, 158, 11, 0.4), inset 0 0 6px rgba(245, 158, 11, 0.18);
+}
+
+[data-theme='dark'] .section-item-stacked[data-section='sermon-note'].active {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.7);
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.52), inset 0 0 8px rgba(245, 158, 11, 0.24);
+  text-shadow: 0 0 8px rgba(251, 191, 36, 0.45);
+}
+
+.section-item-stacked[data-section='category-topics'].active {
+  background: rgba(13, 148, 136, 0.14);
+  color: #0d9488;
+  border: 1px solid rgba(13, 148, 136, 0.55);
+  box-shadow: 0 0 13px rgba(13, 148, 136, 0.4), inset 0 0 6px rgba(13, 148, 136, 0.18);
+}
+
+[data-theme='dark'] .section-item-stacked[data-section='category-topics'].active {
+  background: rgba(13, 148, 136, 0.22);
+  color: #2dd4bf;
+  border-color: rgba(13, 148, 136, 0.7);
+  box-shadow: 0 0 16px rgba(13, 148, 136, 0.52), inset 0 0 8px rgba(13, 148, 136, 0.24);
+  text-shadow: 0 0 8px rgba(45, 212, 191, 0.45);
+}
+
 .top-nav-icon-wrap {
   display: flex;
   align-items: center;
@@ -21298,6 +21328,10 @@ html, body, *, *::before, *::after {
    TopNav "More" Button Text Visibility & Equal Flex Sizing
    ========================================================================= */
 
+.top-nav-desktop-more-item {
+  display: none !important;
+}
+
 .top-nav-more-container {
   position: relative !important;
   flex: 1 0 auto !important;
@@ -21325,6 +21359,51 @@ html, body, *, *::before, *::after {
   white-space: nowrap !important;
   width: auto !important;
   max-width: none !important;
+}
+
+@media (min-width: 641px) {
+  .top-nav-wrapper.top-nav-home {
+    padding: 2px 14px 6px !important;
+  }
+
+  .top-nav-wrapper .section-menu {
+    min-width: 0 !important;
+    width: 100% !important;
+    padding: 4px 0 8px !important;
+  }
+
+  .top-nav-wrapper .section-menu-pill {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .top-nav-wrapper .section-menu-inner {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 3px !important;
+    overflow-x: auto !important;
+  }
+
+  .section-menu-inner .section-item-stacked {
+    flex: 1 1 auto !important;
+    min-width: max-content !important;
+    padding: 7px 6px !important;
+  }
+
+  .section-menu-inner .section-item-stacked .top-nav-label-small {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  .section-menu-inner .top-nav-desktop-more-item {
+    display: flex !important;
+  }
+
+  .section-menu-inner .top-nav-more-container {
+    display: none !important;
+  }
 }
 
 @media (max-width: 640px) {
