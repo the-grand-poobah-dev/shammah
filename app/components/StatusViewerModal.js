@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { X, ChevronLeft, ChevronRight, Send, Sparkles, Plus, Music, Volume2, VolumeX, Video } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
-import { reactToStatus, commentOnStatus, inferMediaType } from '../lib/statusManager';
+import { reactToStatus, commentOnStatus, inferMediaType, markStatusViewed } from '../lib/statusManager';
 import { formatPostDate, getPostDateTitle, useRelativeTimeTick, cleanDisplayName } from '../lib/postDisplay';
 import FaithReactionPicker from './FaithReactionPicker';
 
@@ -33,7 +33,7 @@ export default function StatusViewerModal({
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const [showEmojiSheet, setShowEmojiSheet] = useState(false);
-  const [slideAnim, setSlideAnim] = useState(''); // 'slide-left' | 'slide-right' | ''
+  const [slideAnim, setSlideAnim] = useState(''); // 'slide-from-left' | 'slide-from-right' | ''
   const [isMuted, setIsMuted] = useState(true);
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
@@ -47,6 +47,29 @@ export default function StatusViewerModal({
 
   const currentStatus = statuses[currentIndex];
   const resolvedMediaType = currentStatus ? inferMediaType(currentStatus.mediaUrl, currentStatus.mediaType) : null;
+
+  // Mark current status as viewed client-side
+  useEffect(() => {
+    if (currentStatus?.id) {
+      markStatusViewed(currentStatus.id, currentUser?.id);
+    }
+  }, [currentStatus?.id, currentUser?.id]);
+
+  // Compute the current user's subset of stories for top progress segmented tracks
+  const currentUserStatuses = useMemo(() => {
+    if (!currentStatus) return [];
+    return statuses.filter(
+      (s) =>
+        (currentStatus.userId && s.userId === currentStatus.userId) ||
+        (currentStatus.userName && s.userName?.toLowerCase() === currentStatus.userName?.toLowerCase())
+    );
+  }, [statuses, currentStatus]);
+
+  const currentUserIndex = useMemo(() => {
+    if (!currentStatus || currentUserStatuses.length === 0) return 0;
+    const idx = currentUserStatuses.findIndex((s) => s.id === currentStatus.id);
+    return idx !== -1 ? idx : 0;
+  }, [currentUserStatuses, currentStatus]);
 
   const isMyStatus = Boolean(
     currentUser &&
@@ -108,6 +131,7 @@ export default function StatusViewerModal({
       setCurrentIndex((i) => i + 1);
       setTimeout(() => setSlideAnim(''), 300);
     } else {
+      // Clean exit at the end of all statuses, never infinite-loop
       onClose();
     }
   }, [currentIndex, statuses.length, onClose]);
@@ -116,7 +140,10 @@ export default function StatusViewerModal({
   const handleNextUser = useCallback(() => {
     if (!currentStatus) return;
     const nextIdx = statuses.findIndex(
-      (s, idx) => idx > currentIndex && (s.userId !== currentStatus.userId || s.userName !== currentStatus.userName)
+      (s, idx) =>
+        idx > currentIndex &&
+        ((currentStatus.userId && s.userId !== currentStatus.userId) ||
+          (currentStatus.userName && s.userName?.toLowerCase() !== currentStatus.userName?.toLowerCase()))
     );
     if (nextIdx !== -1) {
       setSlideAnim('slide-from-right');
@@ -132,7 +159,11 @@ export default function StatusViewerModal({
     if (!currentStatus) return;
     let prevUserIdx = -1;
     for (let i = currentIndex - 1; i >= 0; i--) {
-      if (statuses[i].userId !== currentStatus.userId || statuses[i].userName !== currentStatus.userName) {
+      const s = statuses[i];
+      if (
+        (currentStatus.userId && s.userId !== currentStatus.userId) ||
+        (currentStatus.userName && s.userName?.toLowerCase() !== currentStatus.userName?.toLowerCase())
+      ) {
         prevUserIdx = i;
         break;
       }
@@ -140,7 +171,9 @@ export default function StatusViewerModal({
     if (prevUserIdx !== -1) {
       const targetUser = statuses[prevUserIdx];
       const firstIdxOfUser = statuses.findIndex(
-        (s) => s.userId === targetUser.userId || s.userName === targetUser.userName
+        (s) =>
+          (targetUser.userId && s.userId === targetUser.userId) ||
+          (targetUser.userName && s.userName?.toLowerCase() === targetUser.userName?.toLowerCase())
       );
       setSlideAnim('slide-from-left');
       setCurrentIndex(firstIdxOfUser !== -1 ? firstIdxOfUser : prevUserIdx);
@@ -214,7 +247,11 @@ export default function StatusViewerModal({
 
   // Touch and pointer gestures: long press pauses, swipe navigates, edge tap skips
   function onPointerDown(e) {
-    if (e.target.closest('button, input, form, .status-viewer-footer, .status-viewer-header, .faith-reaction-picker-bubble, .status-viewer-sound-toggle-btn')) {
+    if (
+      e.target.closest(
+        'button, input, form, .status-viewer-footer, .status-viewer-header, .faith-reaction-picker-bubble, .status-viewer-sound-toggle-btn'
+      )
+    ) {
       return;
     }
     pointerStartRef.current = {
@@ -342,14 +379,19 @@ export default function StatusViewerModal({
           </div>
         )}
 
-        {/* Story Progress Indicators across the top */}
+        {/* Story Progress Indicators across the top (scoped to current user's stories) */}
         <div className="status-progress-bars">
-          {statuses.map((_, idx) => (
+          {currentUserStatuses.map((_, idx) => (
             <div key={idx} className="status-progress-track">
               <div
                 className="status-progress-fill"
                 style={{
-                  width: idx < currentIndex ? '100%' : idx === currentIndex ? `${progress}%` : '0%',
+                  width:
+                    idx < currentUserIndex
+                      ? '100%'
+                      : idx === currentUserIndex
+                      ? `${progress}%`
+                      : '0%',
                 }}
               />
             </div>
@@ -579,7 +621,10 @@ export default function StatusViewerModal({
             </div>
           )}
           {replyError && (
-            <div className="status-sent-banner" style={{ background: 'rgba(239, 68, 68, 0.2)', borderColor: 'rgba(239, 68, 68, 0.45)', color: '#fecaca' }}>
+            <div
+              className="status-sent-banner"
+              style={{ background: 'rgba(239, 68, 68, 0.2)', borderColor: 'rgba(239, 68, 68, 0.45)', color: '#fecaca' }}
+            >
               {replyError}
             </div>
           )}

@@ -291,27 +291,7 @@ export default function StatusTray({ currentUser }) {
                 ) : null}
               </div>
 
-              <div
-                className="status-card-footer cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.dispatchEvent(
-                    new CustomEvent('shammah:open-profile', {
-                      detail: {
-                        author: {
-                          id: status.userId,
-                          display_name: cleanName,
-                          avatar_url: status.userAvatar,
-                          badge: status.userBadge,
-                          badge_verified: status.userVerified,
-                          role: status.userRole,
-                        },
-                        authorId: status.userId,
-                      },
-                    })
-                  );
-                }}
-              >
+              <div className="status-card-footer">
                 <div className="status-author-name-row">
                   <span className="status-card-author-name">{cleanName}</span>
                   {status.userVerified && (

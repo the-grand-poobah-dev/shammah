@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic';
+
 // Base URLs for allowed Google Workspace services
 // Note: gmail and people have been removed completely (not used by Shammah).
 const SERVICE_BASE_URLS = {

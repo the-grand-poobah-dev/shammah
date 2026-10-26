@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic';
+
 function normalizeKenyanPhone(raw) {
   const digits = String(raw || '').replace(/\D/g, '');
   if (digits.startsWith('254') && digits.length === 12) return digits;

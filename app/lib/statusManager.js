@@ -1,9 +1,27 @@
+/*
+-- Migration: 011_statuses_table.sql (only if table does not already exist)
+create table if not exists public.statuses (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references public.profiles(id) on delete cascade,
+  text_content  text,
+  scripture_tag text,
+  bg_style      text default 'emerald',
+  media_url     text,
+  media_type    text check (media_type is null or media_type in ('image','video','audio')),
+  created_at    timestamptz not null default now(),
+  expires_at    timestamptz not null
+);
+create index if not exists statuses_expires_idx on public.statuses (expires_at);
+create index if not exists statuses_user_created_idx on public.statuses (user_id, created_at desc);
+*/
+
 'use client';
 import { supabase } from '../../lib/supabaseClient';
 import { sendStatusReplyToInbox } from './inboxManager';
 import { cleanDisplayName } from './postDisplay';
 
 const STATUS_STORAGE_KEY = 'shammah_24h_statuses_v2';
+const STATUS_VIEWED_KEY = 'shammah_status_views_v1';
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 let statusesMemoryCache = null;
@@ -28,6 +46,160 @@ export function inferMediaType(url, explicitType = null) {
   return 'image';
 }
 
+/**
+ * Retrieves the client-side viewed statuses lookup map from localStorage.
+ */
+export function getStatusViewedMap() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(STATUS_VIEWED_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+/**
+ * Checks if a status is viewed by viewerId (keyed by statusId:viewerId in localStorage).
+ */
+export function isStatusViewed(statusId, viewerId = 'me') {
+  if (!statusId) return false;
+  const vId = viewerId || 'me';
+  const map = getStatusViewedMap();
+  return Boolean(map[`${statusId}:${vId}`] || map[`${statusId}:me`]);
+}
+
+/**
+ * Determines whether a given status item has been viewed by the viewer.
+ * Checks both status.views array and client-side localStorage map.
+ */
+export function isStatusRead(status, viewerId = 'me') {
+  if (!status || !status.id) return false;
+  const vId = viewerId || 'me';
+  if (Array.isArray(status.views) && (status.views.includes(vId) || status.views.includes('me'))) {
+    return true;
+  }
+  return isStatusViewed(status.id, vId);
+}
+
+/**
+ * Marks a status as viewed client-side and syncs with cache & localStorage.
+ */
+export function markStatusViewed(statusId, viewerId = 'me') {
+  if (!statusId || typeof window === 'undefined') return;
+  const vId = viewerId || 'me';
+  const key = `${statusId}:${vId}`;
+  const map = getStatusViewedMap();
+
+  if (!map[key]) {
+    map[key] = Date.now();
+    try {
+      localStorage.setItem(STATUS_VIEWED_KEY, JSON.stringify(map));
+    } catch (e) {}
+
+    // Synchronize views array in memory and local status cache
+    const active = getActiveStatuses();
+    const item = active.find((s) => s.id === statusId);
+    if (item) {
+      if (!Array.isArray(item.views)) item.views = [];
+      if (!item.views.includes(vId)) {
+        item.views.push(vId);
+      }
+      statusesMemoryCache = active;
+      try {
+        localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(active));
+      } catch (e) {}
+    }
+
+    window.dispatchEvent(
+      new CustomEvent('shammah:status-viewed', { detail: { statusId, viewerId: vId } })
+    );
+  }
+}
+
+/**
+ * Groups a flat array of active statuses by userId (fallback userName).
+ * Preserves tray order based on each user's most recent status.
+ */
+export function groupStatusesByUser(rawStatuses = [], currentViewerId = 'me') {
+  if (!Array.isArray(rawStatuses) || rawStatuses.length === 0) return [];
+  const vId = currentViewerId || 'me';
+
+  const groupMap = new Map();
+
+  for (const status of rawStatuses) {
+    const userKey = status.userId || status.userName || 'unknown';
+    if (!groupMap.has(userKey)) {
+      groupMap.set(userKey, {
+        key: userKey,
+        userId: status.userId,
+        userName: cleanDisplayName(status.userName, 'Member'),
+        userAvatar: status.userAvatar || null,
+        userBadge: status.userBadge || 'believer',
+        userRole: status.userRole || 'member',
+        userVerified: Boolean(status.userVerified),
+        statuses: [],
+      });
+    }
+    groupMap.get(userKey).statuses.push(status);
+  }
+
+  const result = [];
+  for (const group of groupMap.values()) {
+    // Sort this user's statuses newest first
+    group.statuses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    group.count = group.statuses.length;
+    // Card media and thumbnail is that user's MOST RECENT status
+    group.latestStatus = group.statuses[0];
+
+    // Determine viewed state across this user's statuses
+    const unviewed = group.statuses.filter((s) => !isStatusRead(s, vId));
+    group.unviewedCount = unviewed.length;
+    group.hasUnviewed = unviewed.length > 0;
+    group.allViewed = unviewed.length === 0;
+
+    result.push(group);
+  }
+
+  return result;
+}
+
+/**
+ * Builds the continuous playback playlist and start indices for StatusViewerModal.
+ * Enforces start rules:
+ * - Any unviewed: start at newest unviewed, play forward through remaining for that user.
+ * - All viewed: start at oldest, cycle through all once.
+ * - After last status of a user, naturally advances to next user in tray order; terminates at end.
+ */
+export function buildViewerPlaylist(groupedUsers = [], currentViewerId = 'me') {
+  const viewerStatuses = [];
+  const groupStartIndices = {};
+  const vId = currentViewerId || 'me';
+
+  for (const group of groupedUsers) {
+    const unviewed = group.statuses
+      .filter((s) => !isStatusRead(s, vId))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // newest unviewed first
+
+    const viewed = group.statuses
+      .filter((s) => isStatusRead(s, vId))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    let userPlaylist;
+    if (unviewed.length > 0) {
+      // Start at newest unviewed, followed by remaining unviewed, then viewed
+      userPlaylist = [...unviewed, ...viewed];
+    } else {
+      // All viewed -> start at oldest, cycle through all once
+      userPlaylist = [...group.statuses].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    }
+
+    groupStartIndices[group.key] = viewerStatuses.length;
+    viewerStatuses.push(...userPlaylist);
+  }
+
+  return { viewerStatuses, groupStartIndices };
+}
 
 /**
  * Retrieves all valid 24-hour statuses from local cache that have not expired.
