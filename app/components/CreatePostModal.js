@@ -1,5 +1,6 @@
 'use client';
-import { X, PenSquare, Sparkles } from 'lucide-react';
+import { PenSquare } from 'lucide-react';
+import PopupSheet from './PopupSheet';
 import CreatePostBox from './CreatePostBox';
 
 export default function CreatePostModal({
@@ -29,64 +30,56 @@ export default function CreatePostModal({
   onSubmit,
   openAuth,
 }) {
-  if (!isOpen) return null;
-
   async function handleModalSubmit(e, visibility, identityMeta) {
-    const success = await onSubmit(e, visibility, identityMeta);
-    // If post is created without error, close modal
+    await onSubmit(e, visibility, identityMeta);
     if (!postError) {
       onClose();
     }
   }
 
-  return (
-    <div className="create-post-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="create-post-modal-card neon-glow-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="create-post-modal-header">
-          <div className="cp-header-title">
-            <span className="cp-icon-wrap">
-              <PenSquare size={18} className="cp-icon" />
-            </span>
-            <h3>Create Post</h3>
-          </div>
-          <button
-            type="button"
-            className="create-post-modal-close"
-            onClick={onClose}
-            aria-label="Close dialog"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="create-post-modal-body">
-          <CreatePostBox
-            session={session}
-            profile={profile}
-            isAdmin={isAdmin}
-            composeText={composeText}
-            setComposeText={setComposeText}
-            composeCategory={composeCategory}
-            setComposeCategory={setComposeCategory}
-            isPoll={isPoll}
-            setIsPoll={setIsPoll}
-            pollOptions={pollOptions}
-            setPollOptions={setPollOptions}
-            mediaFile={mediaFile}
-            setMediaFile={setMediaFile}
-            mediaPreview={mediaPreview}
-            setMediaPreview={setMediaPreview}
-            mediaUploading={mediaUploading}
-            pollUploading={pollUploading}
-            isPinnedAnnouncement={isPinnedAnnouncement}
-            setIsPinnedAnnouncement={setIsPinnedAnnouncement}
-            posting={posting}
-            postError={postError}
-            onSubmit={handleModalSubmit}
-            openAuth={openAuth}
-          />
-        </div>
-      </div>
+  const modalTitle = (
+    <div className="cp-header-title">
+      <span className="cp-icon-wrap">
+        <PenSquare size={18} className="cp-icon" />
+      </span>
+      <span>Create Post</span>
     </div>
+  );
+
+  return (
+    <PopupSheet
+      open={isOpen}
+      onClose={onClose}
+      title={modalTitle}
+      size="lg"
+    >
+      <div className="create-post-modal-body">
+        <CreatePostBox
+          session={session}
+          profile={profile}
+          isAdmin={isAdmin}
+          composeText={composeText}
+          setComposeText={setComposeText}
+          composeCategory={composeCategory}
+          setComposeCategory={setComposeCategory}
+          isPoll={isPoll}
+          setIsPoll={setIsPoll}
+          pollOptions={pollOptions}
+          setPollOptions={setPollOptions}
+          mediaFile={mediaFile}
+          setMediaFile={setMediaFile}
+          mediaPreview={mediaPreview}
+          setMediaPreview={setMediaPreview}
+          mediaUploading={mediaUploading}
+          pollUploading={pollUploading}
+          isPinnedAnnouncement={isPinnedAnnouncement}
+          setIsPinnedAnnouncement={setIsPinnedAnnouncement}
+          posting={posting}
+          postError={postError}
+          onSubmit={handleModalSubmit}
+          openAuth={openAuth}
+        />
+      </div>
+    </PopupSheet>
   );
 }
