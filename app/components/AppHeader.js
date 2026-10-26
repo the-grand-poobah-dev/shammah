@@ -335,6 +335,39 @@ export default function AppHeader() {
 
           <div className="topbar-right">
             <div className="topbar-toggle-group">
+              {/* Desktop & Tablet (>= 641px) when collapsed: Search icon + input field as the first control in the row */}
+              {isCollapsed && (
+                <div
+                  className="topbar-desktop-collapsed-search"
+                  role="search"
+                  onClick={handleOpenSearch}
+                  title="Search sermons, scriptures, and members (⌘K or /)"
+                >
+                  <Search size={16} strokeWidth={2.2} className="topbar-desktop-search-icon" />
+                  <input
+                    type="text"
+                    readOnly
+                    className="topbar-desktop-search-input"
+                    placeholder="Search sermons, scriptures, topics, members..."
+                    aria-label="Open search (scriptures, sermons, topics, and members)"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenSearch();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleOpenSearch();
+                      }
+                    }}
+                  />
+                  <span className="search-bar-widget-badge">
+                    <kbd className="search-kbd">⌘K</kbd>
+                  </span>
+                </div>
+              )}
+
               {/* 1. Theme toggle: Sun for light / Moon for dark */}
               <button
                 type="button"
