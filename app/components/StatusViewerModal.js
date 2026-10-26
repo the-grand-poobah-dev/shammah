@@ -13,6 +13,7 @@ import {
   Video,
   MoreVertical,
   Flag,
+  Eye,
   EyeOff,
   Repeat,
   ShieldCheck,
@@ -28,6 +29,10 @@ import {
   inferMediaType,
   markStatusViewed,
   reportStatus,
+  hideStatus,
+  unhideStatus,
+  isStatusHidden,
+  isStatusUserMuted,
   muteStatusUser,
   reshareStatusAsPost,
 } from '../lib/statusManager';
@@ -156,7 +161,16 @@ export default function StatusViewerModal({
       ((currentUser.id && currentStatus.userId === currentUser.id) ||
         (currentUser.name &&
           currentStatus.userName &&
-          currentStatus.userName.toLowerCase() === currentUser.name.toLowerCase()))
+          currentStatus.userName.toLowerCase() === currentUser.name.toLowerCase()) ||
+        (currentUser.display_name &&
+          currentStatus.userName &&
+          currentStatus.userName.toLowerCase() === currentUser.display_name.toLowerCase()))
+  );
+
+  const isStatusHiddenNow = Boolean(
+    currentStatus &&
+      (isStatusHidden(currentStatus.id) ||
+        isStatusUserMuted(currentStatus.userId, currentStatus.userName))
   );
 
   // Push history state so mobile hardware or browser Back button closes viewer
@@ -441,14 +455,23 @@ export default function StatusViewerModal({
     }
   }
 
-  // Handle Muting Poster
-  function handleMutePoster() {
-    muteStatusUser(currentStatus.userId, currentStatus.userName);
+  // Handle Hiding Status
+  function handleHideStatus() {
+    hideStatus(currentStatus.id, currentStatus.userId, currentStatus.userName);
     setMenuOpen(false);
-    setFeedbackMessage(`✓ Muted ${cleanAuthorName} from your story tray.`);
+    setFeedbackMessage('✓ Status hidden. You can reinstate it from Hidden Stories.');
     setSentFeedback(true);
     setTimeout(() => setSentFeedback(false), 3500);
-    handleNextUser();
+    handleNext();
+  }
+
+  // Handle Unhiding Status
+  function handleUnhideStatus() {
+    unhideStatus(currentStatus.id, currentStatus.userId, currentStatus.userName);
+    setMenuOpen(false);
+    setFeedbackMessage('✓ Status reinstated to your stories tray.');
+    setSentFeedback(true);
+    setTimeout(() => setSentFeedback(false), 3500);
   }
 
   // Handle Submitting Story Report
@@ -535,35 +558,9 @@ export default function StatusViewerModal({
           ))}
         </div>
 
-        {/* Story Top Navigation Bar: Close button, More menu, Author Info, and optional Add button */}
+        {/* Story Top Navigation Bar: Author Info on Left, Action Cluster on Top-Right */}
         <div className="status-viewer-header">
-          {/* Top-Left: Close button + three-vertical-dots menu button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, zIndex: 3 }}>
-            <button
-              type="button"
-              className="status-viewer-close-btn"
-              onClick={onClose}
-              aria-label="Close status"
-              title="Close status"
-            >
-              <X size={20} />
-            </button>
-
-            <button
-              type="button"
-              className="status-viewer-close-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(true);
-              }}
-              aria-label="Story options menu"
-              title="Story options"
-            >
-              <MoreVertical size={18} />
-            </button>
-          </div>
-
-          {/* Center-Left: Author profile info */}
+          {/* Top-Left: Author profile info (takes available space and truncates so it never overlaps buttons) */}
           <div
             className="status-viewer-author-info cursor-pointer"
             onClick={(e) => {
@@ -605,30 +602,70 @@ export default function StatusViewerModal({
                   />
                 )}
               </div>
-              {currentStatus.userBadge && (
-                <MemberBadge badgeId={currentStatus.userBadge} size="sm" />
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {currentStatus.userBadge && (
+                  <MemberBadge badgeId={currentStatus.userBadge} size="sm" />
+                )}
+                {isStatusHiddenNow && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: 999,
+                      background: 'rgba(239, 68, 68, 0.25)',
+                      border: '1px solid rgba(239, 68, 68, 0.45)',
+                      color: '#fca5a5',
+                    }}
+                  >
+                    Hidden
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Top-Right: Add action (+) for signed-in user's own stories, or symmetrical spacer */}
-          {isMyStatus ? (
+          {/* Top-Right: Add Status icon, Menu icon, and Close 'X' icon (side-by-side or responsive vertical) */}
+          <div className="status-viewer-actions-cluster">
+            {onAddStatus && (
+              <button
+                type="button"
+                className="status-viewer-close-btn status-viewer-add-status-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                  onAddStatus();
+                }}
+                aria-label="Add status"
+                title="Add 24-hour status"
+              >
+                <Plus size={19} strokeWidth={2.4} />
+              </button>
+            )}
+
             <button
               type="button"
-              className="status-viewer-add-status-btn"
+              className="status-viewer-close-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                onClose();
-                onAddStatus?.();
+                setMenuOpen(true);
               }}
-              aria-label="Add status"
-              title="Add another status"
+              aria-label="Story options menu"
+              title="Story options"
             >
-              <Plus size={20} strokeWidth={2.5} />
+              <MoreVertical size={18} />
             </button>
-          ) : (
-            <div className="status-viewer-header-spacer" aria-hidden="true" />
-          )}
+
+            <button
+              type="button"
+              className="status-viewer-close-btn"
+              onClick={onClose}
+              aria-label="Close status"
+              title="Close status"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Screen Edge Tap zones hints */}
@@ -873,32 +910,57 @@ export default function StatusViewerModal({
             </button>
           )}
 
-          <button
-            type="button"
-            className="post-options-item-card"
-            onClick={handleMutePoster}
-          >
-            <EyeOff size={18} className="text-amber-400 flex-shrink-0" style={{ marginTop: 2 }} />
-            <div>
-              <strong style={{ display: 'block', fontSize: 14, color: 'var(--ink)' }}>Hide / Mute {cleanAuthorName}</strong>
-              <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Don&apos;t show stories from this account in your tray</small>
-            </div>
-          </button>
+          {/* Hide/Unhide and Report options: NEVER shown for the user's own status */}
+          {!isMyStatus && (
+            <>
+              {isStatusHiddenNow ? (
+                <button
+                  type="button"
+                  className="post-options-item-card"
+                  onClick={handleUnhideStatus}
+                >
+                  <Eye size={18} className="text-teal-400 flex-shrink-0" style={{ marginTop: 2 }} />
+                  <div>
+                    <strong style={{ display: 'block', fontSize: 14, color: 'var(--ink)' }}>Unhide status</strong>
+                    <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Reinstate this story back into your status tray</small>
+                  </div>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="post-options-item-card"
+                  onClick={handleHideStatus}
+                >
+                  <EyeOff size={18} className="text-amber-400 flex-shrink-0" style={{ marginTop: 2 }} />
+                  <div>
+                    <strong style={{ display: 'block', fontSize: 14, color: 'var(--ink)' }}>Hide status</strong>
+                    <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Hide this story from your main status tray</small>
+                  </div>
+                </button>
+              )}
 
-          <button
-            type="button"
-            className="post-options-item-card"
-            onClick={() => {
-              setMenuOpen(false);
-              setReportOpen(true);
-            }}
-          >
-            <Flag size={18} className="text-rose-400 flex-shrink-0" style={{ marginTop: 2 }} />
-            <div>
-              <strong style={{ display: 'block', fontSize: 14, color: 'var(--rose, #f43f5e)' }}>Report Story</strong>
-              <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Confidential report to church moderation elders</small>
+              <button
+                type="button"
+                className="post-options-item-card"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setReportOpen(true);
+                }}
+              >
+                <Flag size={18} className="text-rose-400 flex-shrink-0" style={{ marginTop: 2 }} />
+                <div>
+                  <strong style={{ display: 'block', fontSize: 14, color: 'var(--rose, #f43f5e)' }}>Report Story</strong>
+                  <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Confidential report to church moderation elders</small>
+                </div>
+              </button>
+            </>
+          )}
+
+          {isMyStatus && !currentStatus.allowStatusReshare && (
+            <div style={{ padding: '16px 12px', fontSize: 13, color: 'var(--ink-muted)', textAlign: 'center' }}>
+              This is your status story. You cannot hide or report your own story.
             </div>
-          </button>
+          )}
         </div>
       </PopupSheet>
 

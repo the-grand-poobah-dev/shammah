@@ -147,7 +147,7 @@ export function unmuteStatusUser(userId) {
 }
 
 /**
- * Retrieves list of hidden status IDs (e.g. from reports).
+ * Retrieves list of hidden status IDs (e.g. from reports or hide action).
  */
 export function getHiddenStatuses() {
   if (typeof window === 'undefined') return [];
@@ -173,21 +173,61 @@ export function isStatusHidden(statusId) {
 /**
  * Hides a status ID locally for the current user.
  */
-export function hideStatus(statusId) {
-  if (!statusId || typeof window === 'undefined') return;
+export function hideStatus(statusId, userId = null, userName = null) {
+  if (!statusId && !userId) return;
+  if (typeof window === 'undefined') return;
   try {
-    const list = getHiddenStatuses();
-    if (!list.includes(statusId)) {
-      list.push(statusId);
-      localStorage.setItem(STATUS_HIDDEN_KEY, JSON.stringify(list));
+    if (statusId) {
+      const list = getHiddenStatuses();
+      if (!list.includes(statusId)) {
+        list.push(statusId);
+        localStorage.setItem(STATUS_HIDDEN_KEY, JSON.stringify(list));
+      }
     }
-    // Also remove from in-memory cache
-    if (statusesMemoryCache) {
-      statusesMemoryCache = statusesMemoryCache.filter((s) => s.id !== statusId);
-    }
+    statusesMemoryCache = null;
     window.dispatchEvent(new CustomEvent('shammah:status-updated'));
+    window.dispatchEvent(new CustomEvent('shammah:status-hidden-changed', { detail: { statusId, userId } }));
   } catch (e) {
     console.error('Failed to hide status', e);
+  }
+}
+
+/**
+ * Unhides a previously hidden status story or un-mutes its author.
+ */
+export function unhideStatus(statusId, userId = null, userName = null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (statusId) {
+      const list = getHiddenStatuses();
+      const filtered = list.filter((id) => id !== statusId);
+      localStorage.setItem(STATUS_HIDDEN_KEY, JSON.stringify(filtered));
+    }
+    if (userId || userName) {
+      unmuteStatusUser(userId || userName);
+    }
+    statusesMemoryCache = null;
+    window.dispatchEvent(new CustomEvent('shammah:status-updated'));
+    window.dispatchEvent(new CustomEvent('shammah:status-hidden-changed', { detail: { statusId, userId } }));
+  } catch (e) {
+    console.error('Failed to unhide status', e);
+  }
+}
+
+/**
+ * Reinstates all hidden statuses and muted users back into the status tray.
+ */
+export function unhideAllStatuses() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(STATUS_HIDDEN_KEY);
+    localStorage.removeItem(STATUS_MUTED_USERS_KEY);
+    statusesMemoryCache = null;
+    window.dispatchEvent(new CustomEvent('shammah:status-updated'));
+    window.dispatchEvent(new CustomEvent('shammah:status-hidden-changed'));
+    window.dispatchEvent(new CustomEvent('shammah:muted-users-changed'));
+  } catch (e) {
+    console.error('Failed to reinstate all statuses', e);
   }
 }
 
@@ -485,10 +525,10 @@ export function buildViewerPlaylist(groupedUsers = [], currentViewerId = 'me') {
 }
 
 /**
- * Retrieves all valid 24-hour statuses from local cache that have not expired,
- * filtering out muted user accounts and hidden/reported stories.
+ * Retrieves all valid 24-hour statuses from local memory cache or storage that have not expired.
+ * Includes both visible and hidden statuses.
  */
-export function getActiveStatuses() {
+export function getAllActiveStatuses() {
   const now = Date.now();
   let stored = statusesMemoryCache;
 
@@ -510,16 +550,29 @@ export function getActiveStatuses() {
 
   const list = Array.isArray(stored) ? stored : [];
 
-  // Filter out any status older than 24 hours, muted user accounts, or hidden statuses
   const valid = list.filter((s) => {
-    if (isStatusHidden(s.id)) return false;
-    if (isStatusUserMuted(s.userId, s.userName)) return false;
     const exp = new Date(s.expiresAt || new Date(s.createdAt).getTime() + TWENTY_FOUR_HOURS_MS).getTime();
     return exp > now;
   });
 
-  // Sort: newest first
   return valid.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+/**
+ * Retrieves all valid 24-hour statuses from local cache that have not expired,
+ * filtering out muted user accounts and hidden/reported stories.
+ */
+export function getActiveStatuses() {
+  const all = getAllActiveStatuses();
+  return all.filter((s) => !isStatusHidden(s.id) && !isStatusUserMuted(s.userId, s.userName));
+}
+
+/**
+ * Retrieves all valid active statuses that are currently HIDDEN by the user.
+ */
+export function getHiddenActiveStatuses() {
+  const all = getAllActiveStatuses();
+  return all.filter((s) => isStatusHidden(s.id) || isStatusUserMuted(s.userId, s.userName));
 }
 
 /**
