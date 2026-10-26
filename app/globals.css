@@ -45,7 +45,7 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+  overflow-x: clip;
   width: 100%;
 }
 
@@ -168,10 +168,12 @@ input[type="checkbox"] {
 /* Sticky header stack (topbar always visible; secondary collapses on scroll) */
 
 .sticky-header {
-  position: -webkit-sticky;
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 40;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 90;
   background: rgba(243, 245, 237, 0.94);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -5083,7 +5085,7 @@ button:focus-visible, a:focus-visible {
   border-right: 1px solid var(--border);
   background: var(--bg);
   width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
   position: relative;
   padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
 }

@@ -12,8 +12,18 @@ import TopNavCollapsedControls from './TopNavCollapsedControls';
 import UserAccountMenu from './UserAccountMenu';
 import OfflineLibraryModal from './OfflineLibraryModal';
 
-const COLLAPSE_SCROLL_Y = 120;
+const COLLAPSE_SCROLL_Y = 96;
 const EXPAND_SCROLL_Y = 16;
+
+function getPageScrollY() {
+  if (typeof window === 'undefined') return 0;
+  return Math.max(
+    window.scrollY || 0,
+    window.pageYOffset || 0,
+    document.documentElement?.scrollTop || 0,
+    document.body?.scrollTop || 0
+  );
+}
 
 export default function AppHeader() {
   const pathname = usePathname();
@@ -38,9 +48,11 @@ export default function AppHeader() {
 
   // Scroll collapse behavior:
   // On non-Home routes (or non-home bottom tabs), the header is ALWAYS collapsed.
-  // On Home, collapses when scrolled down past 120px; restores when scrolled near top (<= 16px).
+  // On Home, collapses when scrolled down past 96px; restores when scrolled near top (<= 16px).
   const [isScrolledDown, setIsScrolledDown] = useState(false);
+  const [topbarHeight, setTopbarHeight] = useState(62);
   const [expandedSecondaryHeight, setExpandedSecondaryHeight] = useState(112);
+  const topbarRef = useRef(null);
   const secondaryRef = useRef(null);
 
   const isHomeRoute = pathname === '/' && activeTab === 'home';
@@ -53,14 +65,21 @@ export default function AppHeader() {
     dotColor,
   } = useOfflineIndicatorStatus();
 
-  // Measure expanded .header-secondary height so we can reserve it with a spacer when collapsed on Home
+  // Measure .topbar and expanded .header-secondary heights so our in-flow spacer reserves exact space
   useEffect(() => {
-    if (!isCollapsed && secondaryRef.current) {
-      const measured = secondaryRef.current.offsetHeight;
-      if (measured > 0) {
-        setExpandedSecondaryHeight(measured);
+    function measureHeights() {
+      if (topbarRef.current) {
+        const h = topbarRef.current.offsetHeight;
+        if (h > 0) setTopbarHeight(h);
+      }
+      if (!isCollapsed && secondaryRef.current) {
+        const s = secondaryRef.current.offsetHeight;
+        if (s > 0) setExpandedSecondaryHeight(s);
       }
     }
+    measureHeights();
+    window.addEventListener('resize', measureHeights, { passive: true });
+    return () => window.removeEventListener('resize', measureHeights);
   }, [isCollapsed, pathname]);
 
   // Listen for bottom-nav tab switches on "/"
@@ -81,7 +100,7 @@ export default function AppHeader() {
     }
   }, [pathname]);
 
-  // Passive scroll listener with requestAnimationFrame + hysteresis (collapse > 120px, expand <= 16px)
+  // Passive scroll listener with requestAnimationFrame + hysteresis (collapse > 96px, expand <= 16px)
   // State is updated ONLY when the boolean actually changes.
   useEffect(() => {
     if (pathname !== '/') {
@@ -90,15 +109,14 @@ export default function AppHeader() {
     }
 
     let rafId = null;
-    let lastCollapsed =
-      typeof window !== 'undefined' ? (window.scrollY || window.pageYOffset || 0) > COLLAPSE_SCROLL_Y : false;
+    let lastCollapsed = getPageScrollY() > COLLAPSE_SCROLL_Y;
     setIsScrolledDown(lastCollapsed);
 
     function handleScroll() {
       if (rafId !== null) return;
       rafId = window.requestAnimationFrame(() => {
         rafId = null;
-        const scrollY = window.scrollY || window.pageYOffset || 0;
+        const scrollY = getPageScrollY();
         if (!lastCollapsed && scrollY > COLLAPSE_SCROLL_Y) {
           lastCollapsed = true;
           setIsScrolledDown(true);
@@ -110,9 +128,11 @@ export default function AppHeader() {
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true });
+    document.body?.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       if (rafId !== null) window.cancelAnimationFrame(rafId);
       window.removeEventListener('scroll', handleScroll);
+      document.body?.removeEventListener('scroll', handleScroll);
     };
   }, [pathname]);
 
@@ -298,10 +318,14 @@ export default function AppHeader() {
     window.dispatchEvent(new CustomEvent('shammah:open-activity-log'));
   }
 
+  const spacerHeight = isHomeRoute
+    ? topbarHeight + expandedSecondaryHeight
+    : topbarHeight;
+
   return (
     <>
       <div className="sticky-header">
-        <header className="topbar">
+        <header className="topbar" ref={topbarRef}>
           <div className="brand">
             <Link href="/" className="brand-text-wrap" style={{ textDecoration: 'none', color: 'inherit' }}>
               <h1 className="brand-mark">Shammah</h1>
@@ -478,17 +502,15 @@ export default function AppHeader() {
         </div>
       </div>
 
-      {/* Height-compensating spacer on Home when collapsed so document height never shrinks */}
-      {isHomeRoute && isScrolledDown && (
-        <div
-          aria-hidden="true"
-          style={{
-            height: `${expandedSecondaryHeight}px`,
-            pointerEvents: 'none',
-            flexShrink: 0,
-          }}
-        />
-      )}
+      {/* Permanent in-flow spacer matching the fixed header height so content is never covered and document height never oscillates */}
+      <div
+        aria-hidden="true"
+        style={{
+          height: `calc(${spacerHeight}px + env(safe-area-inset-top, 0px))`,
+          pointerEvents: 'none',
+          flexShrink: 0,
+        }}
+      />
 
       {showOfflineLibrary && (
         <OfflineLibraryModal
