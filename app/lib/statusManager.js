@@ -648,6 +648,56 @@ export function hasUserActiveStatus(userId, userName) {
   });
 }
 
+export const STATUS_AUDIENCE_DEFAULT_KEY = 'shammah_status_audience_default_v1';
+
+export const STATUS_AUDIENCE_OPTIONS = [
+  {
+    id: 'public',
+    label: 'Everyone',
+    shortLabel: 'Everyone',
+    description: 'All believers on Shammah can view your story',
+    iconName: 'Globe',
+  },
+  {
+    id: 'church',
+    label: 'My Church Only',
+    shortLabel: 'My Church',
+    description: 'Only believers from your church community',
+    iconName: 'Church',
+  },
+  {
+    id: 'followers',
+    label: 'Followers Only',
+    shortLabel: 'Followers',
+    description: 'Believers who follow your account',
+    iconName: 'UserCheck',
+  },
+  {
+    id: 'private',
+    label: 'Only Me (Draft)',
+    shortLabel: 'Only Me',
+    description: 'Private draft visible only to you',
+    iconName: 'Lock',
+  },
+];
+
+export function getDefaultStatusAudience() {
+  if (typeof window === 'undefined') return 'public';
+  try {
+    return localStorage.getItem(STATUS_AUDIENCE_DEFAULT_KEY) || 'public';
+  } catch (e) {
+    return 'public';
+  }
+}
+
+export function setDefaultStatusAudience(audience) {
+  if (!audience || typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STATUS_AUDIENCE_DEFAULT_KEY, audience);
+    window.dispatchEvent(new CustomEvent('shammah:status-audience-changed', { detail: { audience } }));
+  } catch (e) {}
+}
+
 /**
  * Creates and publishes a new 24-hour status update to Supabase.
  */
@@ -663,6 +713,7 @@ export async function createStatusUpdate({
   mediaType = null,
   bgStyle = 'emerald',
   scriptureTag = null,
+  visibility = 'public',
 }) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + TWENTY_FOUR_HOURS_MS);
@@ -691,9 +742,10 @@ export async function createStatusUpdate({
     mediaType: resolvedMediaType,
     bgStyle: bgStyle || 'emerald',
     scriptureTag: scriptureTag || null,
+    visibility: visibility || 'public',
     createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
-    isPublic: true,
+    isPublic: visibility === 'public',
     views: [],
     reactions: [],
     comments: [],
@@ -730,7 +782,7 @@ export async function createStatusUpdate({
     }
   }
 
-  const existing = getActiveStatuses();
+  const existing = getAllActiveStatuses();
   const updated = [newStatus, ...existing];
   statusesMemoryCache = updated;
 
@@ -744,6 +796,46 @@ export async function createStatusUpdate({
   }
 
   return newStatus;
+}
+
+/**
+ * Deletes a status update created by the user before the 24-hour timer expires.
+ * Removes from Supabase `statuses` table and local cache/storage.
+ */
+export async function deleteStatus(statusId) {
+  if (!statusId) return { success: false, error: 'Status ID missing' };
+
+  // 1. Remove from local storage & memory cache immediately
+  if (typeof window !== 'undefined') {
+    try {
+      const all = getAllActiveStatuses();
+      const updated = all.filter((s) => s.id !== statusId);
+      statusesMemoryCache = updated;
+      localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to update local status storage on delete', e);
+    }
+  }
+
+  // 2. Delete from Supabase if valid UUID
+  if (isValidUuid(statusId)) {
+    try {
+      const { error } = await supabase.from('statuses').delete().eq('id', statusId);
+      if (error) {
+        console.warn('Supabase status delete warning:', error.message);
+      }
+    } catch (err) {
+      console.warn('Failed to delete status from Supabase:', err);
+    }
+  }
+
+  // 3. Dispatch events to notify tray and open viewers
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('shammah:status-updated', { detail: { deletedId: statusId } }));
+    window.dispatchEvent(new CustomEvent('shammah:status-deleted', { detail: { statusId } }));
+  }
+
+  return { success: true };
 }
 
 /**

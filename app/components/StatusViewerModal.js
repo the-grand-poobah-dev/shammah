@@ -18,6 +18,8 @@ import {
   Repeat,
   ShieldCheck,
   ShieldAlert,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
@@ -31,6 +33,7 @@ import {
   reportStatus,
   hideStatus,
   unhideStatus,
+  deleteStatus,
   isStatusHidden,
   isStatusUserMuted,
   muteStatusUser,
@@ -117,6 +120,8 @@ export default function StatusViewerModal({
   const [reshareOpen, setReshareOpen] = useState(false);
   const [reshareComment, setReshareComment] = useState('');
   const [resharing, setResharing] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const progressTimerRef = useRef(null);
   const pointerStartRef = useRef(null);
@@ -210,6 +215,8 @@ export default function StatusViewerModal({
     setReportOpen(false);
     setReshareOpen(false);
     setReportSubmitted(false);
+    setDeleteConfirmOpen(false);
+    setIsDeleting(false);
     setAudioDuration(0);
     setAudioCurrentTime(0);
   }, [currentIndex]);
@@ -472,6 +479,30 @@ export default function StatusViewerModal({
     setFeedbackMessage('✓ Status reinstated to your stories tray.');
     setSentFeedback(true);
     setTimeout(() => setSentFeedback(false), 3500);
+  }
+
+  // Handle Deleting Status before 24h timer expires (owner only)
+  async function handleConfirmDeleteStatus() {
+    if (!currentStatus?.id) return;
+    setIsDeleting(true);
+    try {
+      await deleteStatus(currentStatus.id);
+      setDeleteConfirmOpen(false);
+      setFeedbackMessage('✓ Story deleted successfully.');
+      setSentFeedback(true);
+      setTimeout(() => setSentFeedback(false), 2500);
+
+      // If user had more than 1 status, advance to next; otherwise exit viewer
+      if (currentUserStatuses.length > 1) {
+        handleNext();
+      } else {
+        onClose();
+      }
+    } catch (err) {
+      console.error('Failed to delete status:', err);
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   // Handle Submitting Story Report
@@ -956,10 +987,21 @@ export default function StatusViewerModal({
             </>
           )}
 
-          {isMyStatus && !currentStatus.allowStatusReshare && (
-            <div style={{ padding: '16px 12px', fontSize: 13, color: 'var(--ink-muted)', textAlign: 'center' }}>
-              This is your status story. You cannot hide or report your own story.
-            </div>
+          {isMyStatus && (
+            <button
+              type="button"
+              className="post-options-item-card"
+              onClick={() => {
+                setMenuOpen(false);
+                setDeleteConfirmOpen(true);
+              }}
+            >
+              <Trash2 size={18} className="text-rose-400 flex-shrink-0" style={{ marginTop: 2 }} />
+              <div>
+                <strong style={{ display: 'block', fontSize: 14, color: 'var(--rose, #f43f5e)' }}>Delete Story</strong>
+                <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Remove this status story immediately before 24 hours</small>
+              </div>
+            </button>
           )}
         </div>
       </PopupSheet>
@@ -1163,6 +1205,62 @@ export default function StatusViewerModal({
               maxLength={400}
               rows={3}
             />
+          </div>
+        </div>
+      </PopupSheet>
+
+      {/* =========================================
+          PopupSheet 4: Delete Status Confirmation
+         ========================================= */}
+      <PopupSheet
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        size="sm"
+        title="Delete Status Update?"
+      >
+        <div style={{ padding: '8px 4px 16px' }}>
+          <p style={{ margin: '0 0 18px', fontSize: 13.5, color: 'var(--ink-muted)', lineHeight: 1.5 }}>
+            Are you sure you want to delete this status? It will be removed immediately from your stories tray and will no longer be visible to believers.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="report-cancel-btn"
+              onClick={() => setDeleteConfirmOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              style={{
+                background: 'var(--rose, #f43f5e)',
+                color: '#ffffff',
+                padding: '8px 18px',
+                borderRadius: 999,
+                fontWeight: 700,
+                fontSize: 13,
+                border: 'none',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+              onClick={handleConfirmDeleteStatus}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Deleting...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 size={14} />
+                  <span>Delete Story</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </PopupSheet>

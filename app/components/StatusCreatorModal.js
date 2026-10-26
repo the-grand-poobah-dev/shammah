@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Sparkles,
   Send,
@@ -11,8 +11,20 @@ import {
   Loader2,
   AlertCircle,
   FileAudio,
+  Globe,
+  Users,
+  UserCheck,
+  Lock,
+  Plus,
+  Trash2,
+  ChevronDown,
 } from 'lucide-react';
-import { createStatusUpdate } from '../lib/statusManager';
+import {
+  createStatusUpdate,
+  getDefaultStatusAudience,
+  setDefaultStatusAudience,
+  STATUS_AUDIENCE_OPTIONS,
+} from '../lib/statusManager';
 import { uploadPostMedia } from '../lib/mediaUpload';
 import { supabase } from '../../lib/supabaseClient';
 import { cleanDisplayName } from '../lib/postDisplay';
@@ -40,9 +52,9 @@ function getMediaType(file) {
   if (file.type?.startsWith('video/')) return 'video';
   if (file.type?.startsWith('audio/')) return 'audio';
   const name = (file.name || '').toLowerCase();
-  if (/\.(jpg|jpeg|png|webp|gif)$/.test(name)) return 'image';
+  if (/\.(jpg|jpeg|png|webp|gif|avif)$/.test(name)) return 'image';
   if (/\.(mp4|webm|mov|m4v)$/.test(name)) return 'video';
-  if (/\.(mp3|wav|ogg|m4a|aac)$/.test(name)) return 'audio';
+  if (/\.(mp3|wav|ogg|m4a|aac|flac)$/.test(name)) return 'audio';
   return null;
 }
 
@@ -63,7 +75,7 @@ function checkMediaDuration(file, type) {
       if (typeof duration === 'number' && duration > 60.5) {
         resolve({
           valid: false,
-          error: `${type === 'video' ? 'Video' : 'Audio clip'} must be 60 seconds or shorter for a 24-hour status story. (Selected: ${Math.round(duration)}s)`,
+          error: `${type === 'video' ? 'Video' : 'Audio clip'} must be 60s or shorter. (Selected: ${Math.round(duration)}s)`,
         });
       } else {
         resolve({ valid: true, duration });
@@ -72,7 +84,6 @@ function checkMediaDuration(file, type) {
 
     element.onerror = () => {
       URL.revokeObjectURL(url);
-      // If metadata couldn't be loaded in background, don't falsely reject valid file
       resolve({ valid: true });
     };
 
@@ -80,129 +91,269 @@ function checkMediaDuration(file, type) {
   });
 }
 
+function createEmptySlide() {
+  return {
+    id: `slide-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    file: null,
+    previewUrl: '',
+    mediaUrl: '',
+    mediaType: null,
+    fileName: '',
+    caption: '',
+    scriptureTag: '',
+    bgStyle: 'emerald',
+    isUploading: false,
+    uploadError: '',
+  };
+}
+
 export default function StatusCreatorModal({ currentUser, onClose, onCreated }) {
-  const [text, setText] = useState('');
-  const [scriptureTag, setScriptureTag] = useState('');
-  const [selectedBg, setSelectedBg] = useState('emerald');
-  const [mediaUrl, setMediaUrl] = useState('');
-  const [mediaType, setMediaType] = useState(null); // 'image' | 'video' | 'audio'
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [selectedFileName, setSelectedFileName] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
+  // Audience setting (defaults from localStorage, persists on change)
+  const [audience, setAudience] = useState('public');
+  const [audienceSheetOpen, setAudienceSheetOpen] = useState(false);
+
+  // Bulk Media & Slides State (WhatsApp style)
+  const [slides, setSlides] = useState([createEmptySlide()]);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  const [globalError, setGlobalError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [publishProgress, setPublishProgress] = useState('');
 
   const fileInputRef = useRef(null);
   const displayName = cleanDisplayName(currentUser?.name || currentUser?.display_name || 'You', 'You');
 
-  async function handleFileSelect(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  useEffect(() => {
+    const saved = getDefaultStatusAudience();
+    if (saved) setAudience(saved);
+  }, []);
 
-    setUploadError('');
-
-    const detected = getMediaType(file);
-    if (!detected) {
-      setUploadError('Unsupported format. Please select a photo (JPG, PNG, WebP), video (MP4, WebM) or audio clip (MP3, WAV).');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    const limits = STATUS_MEDIA_LIMITS[detected];
-    if (file.size > limits.maxBytes) {
-      setUploadError(`That ${detected} is too large. Maximum size for statuses is ${limits.maxLabel}.`);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    const durationCheck = await checkMediaDuration(file, detected);
-    if (!durationCheck.valid) {
-      setUploadError(durationCheck.error);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    const localObjUrl = URL.createObjectURL(file);
-    setPreviewUrl(localObjUrl);
-    setMediaType(detected);
-    setSelectedFileName(file.name);
-    setIsUploading(true);
-
-    try {
-      let authUid = currentUser?.id;
-      if (!authUid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(authUid)) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        authUid = sessionData?.session?.user?.id;
-      }
-
-      if (authUid) {
-        const uploadRes = await uploadPostMedia(file, authUid);
-        setMediaUrl(uploadRes.url);
-        setMediaType(uploadRes.type || detected);
-      } else {
-        setMediaUrl(localObjUrl);
-      }
-    } catch (err) {
-      console.warn('Storage upload note:', err.message);
-      // Provide local preview fallback if storage bucket or network issue
-      setMediaUrl(localObjUrl);
-      if (err.message && !err.message.includes('not signed in')) {
-        setUploadError(err.message);
-      }
-    } finally {
-      setIsUploading(false);
-    }
+  function handleAudienceChange(selectedId) {
+    setAudience(selectedId);
+    setDefaultStatusAudience(selectedId);
+    setAudienceSheetOpen(false);
   }
 
-  function handleRemoveMedia() {
-    if (previewUrl && previewUrl.startsWith('blob:')) {
+  const currentSlide = slides[activeIdx] || slides[0];
+
+  function updateCurrentSlide(partial) {
+    setSlides((prev) => {
+      const next = [...prev];
+      if (next[activeIdx]) {
+        next[activeIdx] = { ...next[activeIdx], ...partial };
+      }
+      return next;
+    });
+  }
+
+  // Handle Bulk File Selection
+  async function handleFileSelect(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setGlobalError('');
+
+    const newSlides = [];
+    const authUid = currentUser?.id;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const detected = getMediaType(file);
+
+      if (!detected) {
+        setGlobalError(`Unsupported format for "${file.name}". Please select photos, videos, or audio.`);
+        continue;
+      }
+
+      const limits = STATUS_MEDIA_LIMITS[detected];
+      if (file.size > limits.maxBytes) {
+        setGlobalError(`"${file.name}" is too large. Maximum size is ${limits.maxLabel}.`);
+        continue;
+      }
+
+      const durCheck = await checkMediaDuration(file, detected);
+      if (!durCheck.valid) {
+        setGlobalError(durCheck.error);
+        continue;
+      }
+
+      const localObjUrl = URL.createObjectURL(file);
+      const slideId = `slide-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`;
+
+      newSlides.push({
+        id: slideId,
+        file,
+        previewUrl: localObjUrl,
+        mediaUrl: localObjUrl, // fallback until cloud upload completes
+        mediaType: detected,
+        fileName: file.name,
+        caption: '',
+        scriptureTag: '',
+        bgStyle: BG_THEMES[i % BG_THEMES.length].id,
+        isUploading: true,
+        uploadError: '',
+      });
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (newSlides.length === 0) return;
+
+    // If currently on an empty slide (no media and empty caption), replace it
+    setSlides((prev) => {
+      const isEmptyFirst =
+        prev.length === 1 && !prev[0].file && !prev[0].previewUrl && !prev[0].caption.trim();
+      const combined = isEmptyFirst ? newSlides : [...prev, ...newSlides];
+      return combined;
+    });
+
+    // Start background uploads for each new slide
+    newSlides.forEach(async (slide) => {
       try {
-        URL.revokeObjectURL(previewUrl);
+        let uid = authUid;
+        if (!uid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uid)) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          uid = sessionData?.session?.user?.id;
+        }
+
+        if (uid && slide.file) {
+          const res = await uploadPostMedia(slide.file, uid);
+          setSlides((cur) =>
+            cur.map((s) =>
+              s.id === slide.id ? { ...s, mediaUrl: res.url, mediaType: res.type || s.mediaType, isUploading: false } : s
+            )
+          );
+        } else {
+          setSlides((cur) => cur.map((s) => (s.id === slide.id ? { ...s, isUploading: false } : s)));
+        }
+      } catch (err) {
+        console.warn('Media upload warning for slide:', err.message);
+        setSlides((cur) =>
+          cur.map((s) => (s.id === slide.id ? { ...s, isUploading: false, uploadError: err.message } : s))
+        );
+      }
+    });
+  }
+
+  // Delete an individual slide (like WhatsApp status delete item)
+  function handleDeleteSlide(indexToDelete, e) {
+    if (e) e.stopPropagation();
+
+    const slideToDelete = slides[indexToDelete];
+    if (slideToDelete?.previewUrl && slideToDelete.previewUrl.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(slideToDelete.previewUrl);
       } catch (_) {}
     }
-    setPreviewUrl('');
-    setMediaUrl('');
-    setMediaType(null);
-    setSelectedFileName('');
-    setUploadError('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    setSlides((prev) => {
+      if (prev.length <= 1) {
+        // Return to clean empty slide
+        return [createEmptySlide()];
+      }
+      return prev.filter((_, idx) => idx !== indexToDelete);
+    });
+
+    setActiveIdx((prev) => {
+      if (prev >= indexToDelete && prev > 0) {
+        return prev - 1;
+      }
+      return 0;
+    });
   }
 
+  // Submit all slides sequentially
   async function handleSubmit(e) {
     if (e) e.preventDefault();
-    if (!text.trim() || submitting || isUploading) return;
+    if (submitting) return;
+
+    // Validate that each slide has either media or text
+    for (let i = 0; i < slides.length; i++) {
+      const s = slides[i];
+      if (!s.mediaUrl && !s.previewUrl && !s.caption.trim()) {
+        setGlobalError(`Slide ${i + 1} has no text or media. Please add a thought or attach media.`);
+        setActiveIdx(i);
+        return;
+      }
+    }
 
     setSubmitting(true);
+    setGlobalError('');
 
     try {
-      const newStatus = await createStatusUpdate({
-        userId: currentUser?.id || 'me',
-        userName: displayName,
-        userAvatar: currentUser?.avatar_url || null,
-        userBadge: currentUser?.badge || 'believer',
-        userRole: currentUser?.role || 'member',
-        userVerified: Boolean(currentUser?.badge_verified),
-        text: text.trim(),
-        mediaUrl: mediaUrl || null,
-        mediaType: mediaType || null,
-        bgStyle: selectedBg,
-        scriptureTag: scriptureTag.trim() || null,
-      });
+      let firstCreated = null;
 
-      if (onCreated) onCreated(newStatus);
+      for (let i = 0; i < slides.length; i++) {
+        const s = slides[i];
+        setPublishProgress(`Publishing ${i + 1} of ${slides.length}...`);
+
+        const resolvedText = s.caption.trim() || (s.mediaUrl ? '' : 'Praise God!');
+
+        const created = await createStatusUpdate({
+          userId: currentUser?.id || 'me',
+          userName: displayName,
+          userAvatar: currentUser?.avatar_url || null,
+          userBadge: currentUser?.badge || 'believer',
+          userRole: currentUser?.role || 'member',
+          userVerified: Boolean(currentUser?.badge_verified),
+          text: resolvedText,
+          mediaUrl: s.mediaUrl || s.previewUrl || null,
+          mediaType: s.mediaType || null,
+          bgStyle: s.bgStyle || 'emerald',
+          scriptureTag: s.scriptureTag?.trim() || null,
+          visibility: audience,
+        });
+
+        if (i === 0) firstCreated = created;
+      }
+
+      if (onCreated) onCreated(firstCreated);
       onClose();
     } catch (err) {
-      console.error('Failed to create status:', err);
-      setUploadError(err.message || 'Failed to publish status.');
+      console.error('Failed to post status updates:', err);
+      setGlobalError(err.message || 'Failed to publish status updates.');
     } finally {
       setSubmitting(false);
+      setPublishProgress('');
+    }
+  }
+
+  const selectedAudienceObj =
+    STATUS_AUDIENCE_OPTIONS.find((opt) => opt.id === audience) || STATUS_AUDIENCE_OPTIONS[0];
+
+  function renderAudienceIcon(iconName, size = 14) {
+    switch (iconName) {
+      case 'Church':
+        return <Users size={size} />;
+      case 'UserCheck':
+        return <UserCheck size={size} />;
+      case 'Lock':
+        return <Lock size={size} />;
+      default:
+        return <Globe size={size} />;
     }
   }
 
   const modalTitle = (
-    <div className="status-creator-title-row">
-      <Sparkles size={16} className="status-creator-sparkle" />
-      <h3 className="status-creator-title">Create 24-Hour Status</h3>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 10 }}>
+      <div className="status-creator-title-row" style={{ minWidth: 0, flex: 1 }}>
+        <Sparkles size={16} className="status-creator-sparkle flex-shrink-0" />
+        <h3 className="status-creator-title truncate">Create 24-Hour Status</h3>
+      </div>
+
+      {/* Audience selector pill button (shows current default, opens picker) */}
+      <button
+        type="button"
+        className="status-audience-pill"
+        onClick={() => setAudienceSheetOpen(true)}
+        title="Who can view your story"
+        aria-label="Story audience setting"
+      >
+        <span className="text-teal-400 flex-shrink-0">
+          {renderAudienceIcon(selectedAudienceObj.iconName, 13)}
+        </span>
+        <span className="truncate">{selectedAudienceObj.shortLabel}</span>
+        <ChevronDown size={12} className="opacity-70 flex-shrink-0" />
+      </button>
     </div>
   );
 
@@ -211,21 +362,24 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
       <button type="button" className="status-cancel-btn" onClick={onClose} disabled={submitting}>
         Cancel
       </button>
+
       <button
         type="button"
         className="status-publish-btn"
-        disabled={!text.trim() || submitting || isUploading}
+        disabled={submitting}
         onClick={handleSubmit}
       >
         {submitting ? (
           <>
             <Loader2 size={15} className="animate-spin" />
-            <span>Publishing...</span>
+            <span>{publishProgress || 'Publishing...'}</span>
           </>
         ) : (
           <>
             <Send size={15} />
-            <span>Share 24h Status</span>
+            <span>
+              {slides.length > 1 ? `Share ${slides.length} Stories` : 'Share 24h Status'}
+            </span>
           </>
         )}
       </button>
@@ -233,199 +387,358 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
   );
 
   return (
-    <PopupSheet
-      open={true}
-      onClose={onClose}
-      title={modalTitle}
-      size="md"
-      footer={footerActions}
-    >
-      <form onSubmit={handleSubmit} className="status-creator-form">
-        {/* Live Card Preview */}
-        <div className={`status-creator-preview status-bg-${selectedBg}`}>
-          <div className="status-creator-preview-top">
-            <Avatar
-              name={displayName}
-              src={currentUser?.avatar_url}
-              hasStatus={true}
-              className="avatar-sm"
-            />
-            <div className="status-creator-preview-meta">
-              <span className="status-preview-name">{displayName}</span>
-              <span className="status-preview-duration">Visible for 24 hours</span>
-            </div>
-          </div>
-
-          <textarea
-            className="status-creator-textarea"
-            placeholder="What is on your heart today? Share a testimony, scripture verse, or prayer thought..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={3}
-            maxLength={280}
-            required
-            autoFocus
-          />
-
-          {/* Attached Media Preview inside the preview card */}
-          {previewUrl && (
-            <div className="status-preview-media-container">
-              {mediaType === 'video' ? (
-                <video
-                  src={previewUrl}
-                  controls
-                  playsInline
-                  className="status-preview-media-video"
+    <>
+      <PopupSheet
+        open={true}
+        onClose={onClose}
+        title={modalTitle}
+        size="md"
+        footer={footerActions}
+      >
+        <form onSubmit={handleSubmit} className="status-creator-form">
+          {/* Active Slide Live Preview Stage */}
+          <div className={`status-creator-preview status-bg-${currentSlide.bgStyle || 'emerald'}`}>
+            <div className="status-creator-preview-top" style={{ justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Avatar
+                  name={displayName}
+                  src={currentUser?.avatar_url}
+                  hasStatus={true}
+                  className="avatar-sm"
                 />
-              ) : mediaType === 'audio' ? (
-                <div className="status-preview-media-audio-card">
-                  <div className="status-audio-info-row">
-                    <Music size={16} className="text-emerald-400 shrink-0" />
-                    <span className="status-audio-filename truncate">
-                      {selectedFileName || 'Audio recording'}
-                    </span>
-                  </div>
-                  <audio src={previewUrl} controls className="status-preview-audio-player w-full" />
+                <div className="status-creator-preview-meta">
+                  <span className="status-preview-name">{displayName}</span>
+                  <span className="status-preview-duration">
+                    Visible for 24h · {selectedAudienceObj.shortLabel}
+                  </span>
                 </div>
-              ) : (
-                <img
-                  src={previewUrl}
-                  alt="Status media preview"
-                  className="status-preview-media-image"
-                />
-              )}
+              </div>
 
-              <button
-                type="button"
-                className="status-media-remove-pill"
-                onClick={handleRemoveMedia}
-                title="Remove media"
-                aria-label="Remove media"
-              >
-                <X size={13} />
-                <span>Remove</span>
-              </button>
+              {/* Slide Counter & Delete current slide */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {slides.length > 1 && (
+                  <span className="status-bulk-counter-pill">
+                    {activeIdx + 1} / {slides.length}
+                  </span>
+                )}
+                {(slides.length > 1 || currentSlide.previewUrl) && (
+                  <button
+                    type="button"
+                    className="status-media-remove-pill"
+                    onClick={(e) => handleDeleteSlide(activeIdx, e)}
+                    title="Delete this slide"
+                    aria-label="Delete this slide"
+                  >
+                    <Trash2 size={13} />
+                    <span>Delete</span>
+                  </button>
+                )}
+              </div>
             </div>
-          )}
 
-          {scriptureTag && (
-            <div className="status-preview-tag">
-              <Sparkles size={12} />
-              <span>{scriptureTag}</span>
-            </div>
-          )}
-        </div>
+            {/* Media Presentation or Textarea */}
+            {currentSlide.previewUrl ? (
+              <div className="status-preview-media-container">
+                {currentSlide.mediaType === 'video' ? (
+                  <video
+                    src={currentSlide.previewUrl}
+                    controls
+                    playsInline
+                    className="status-preview-media-video"
+                  />
+                ) : currentSlide.mediaType === 'audio' ? (
+                  <div className="status-preview-media-audio-card">
+                    <div className="status-audio-info-row">
+                      <Music size={16} className="text-emerald-400 shrink-0" />
+                      <span className="status-audio-filename truncate">
+                        {currentSlide.fileName || 'Audio clip'}
+                      </span>
+                    </div>
+                    <audio src={currentSlide.previewUrl} controls className="status-preview-audio-player w-full" />
+                  </div>
+                ) : (
+                  <img
+                    src={currentSlide.previewUrl}
+                    alt="Status media preview"
+                    className="status-preview-media-image"
+                  />
+                )}
 
-        {/* Theme Selector */}
-        <div className="status-theme-picker-section">
-          <span className="status-field-label">Background Theme:</span>
-          <div className="status-theme-chips no-scrollbar">
-            {BG_THEMES.map((theme) => (
-              <button
-                key={theme.id}
-                type="button"
-                className={`status-theme-circle${selectedBg === theme.id ? ' active' : ''}`}
-                style={{ background: theme.style }}
-                onClick={() => setSelectedBg(theme.id)}
-                title={theme.label}
-                aria-label={theme.label}
-              >
-                {selectedBg === theme.id && <Check size={14} className="theme-check-icon" />}
-              </button>
-            ))}
+                {/* WhatsApp-style floating caption input under the media */}
+                <div className="status-caption-bar">
+                  <input
+                    type="text"
+                    placeholder="Add a caption..."
+                    value={currentSlide.caption}
+                    onChange={(e) => updateCurrentSlide({ caption: e.target.value })}
+                    className="status-caption-input"
+                    maxLength={280}
+                  />
+                  {currentSlide.caption && (
+                    <button
+                      type="button"
+                      onClick={() => updateCurrentSlide({ caption: '' })}
+                      style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer' }}
+                      title="Clear caption"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Pure Text Status Mode */
+              <textarea
+                className="status-creator-textarea"
+                placeholder="What is on your heart today? Share a testimony, scripture verse, or prayer thought..."
+                value={currentSlide.caption}
+                onChange={(e) => updateCurrentSlide({ caption: e.target.value })}
+                rows={3}
+                maxLength={280}
+                required
+                autoFocus
+              />
+            )}
+
+            {currentSlide.scriptureTag && (
+              <div className="status-preview-tag">
+                <Sparkles size={12} />
+                <span>{currentSlide.scriptureTag}</span>
+              </div>
+            )}
           </div>
-        </div>
 
-        {/* Scripture Reference Field */}
-        <div className="status-input-group">
-          <label className="status-field-label" htmlFor="scripture-ref-input">
-            Scripture or Topic Tag (Optional):
-          </label>
-          <input
-            id="scripture-ref-input"
-            type="text"
-            placeholder="e.g. Psalm 23:1, Answered Prayer, Praise Report"
-            value={scriptureTag}
-            onChange={(e) => setScriptureTag(e.target.value)}
-            className="status-text-input"
-            maxLength={60}
-          />
-        </div>
+          {/* WhatsApp-style Bulk Media Carousel Strip */}
+          <div className="status-bulk-thumb-strip">
+            {slides.map((s, idx) => {
+              const isActive = idx === activeIdx;
+              const hasMedia = Boolean(s.previewUrl);
 
-        {/* Device Media Picker (Replaces URL field) */}
-        <div className="status-input-group">
-          <label className="status-field-label" htmlFor="status-media-device-input">
-            Attach Media (Photo, Video, or Audio):
-          </label>
+              return (
+                <div
+                  key={s.id}
+                  className={`status-bulk-thumb${isActive ? ' active' : ''}`}
+                  onClick={() => setActiveIdx(idx)}
+                  title={`Slide ${idx + 1}${s.caption ? `: "${s.caption.slice(0, 30)}..."` : ''}`}
+                >
+                  {hasMedia ? (
+                    s.mediaType === 'image' ? (
+                      <img src={s.previewUrl} alt="" className="status-bulk-thumb-img" />
+                    ) : s.mediaType === 'video' ? (
+                      <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
+                        <video src={s.previewUrl} className="status-bulk-thumb-img" muted preload="metadata" />
+                        <span style={{ position: 'absolute', bottom: 3, right: 3, background: 'rgba(0,0,0,0.7)', borderRadius: 4, padding: '1px 3px', color: '#fff', fontSize: 9 }}>
+                          <Video size={10} />
+                        </span>
+                      </div>
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#064e3b', color: '#34d399' }}>
+                        <Music size={20} />
+                      </div>
+                    )
+                  ) : (
+                    <div className={`status-bg-${s.bgStyle || 'emerald'}`} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4, textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#fff' }}>
+                      {s.caption ? s.caption.slice(0, 15) : 'Text'}
+                    </div>
+                  )}
 
+                  {/* Individual slide quick delete button */}
+                  {(slides.length > 1 || hasMedia) && (
+                    <button
+                      type="button"
+                      className="status-bulk-thumb-delete"
+                      onClick={(e) => handleDeleteSlide(idx, e)}
+                      title="Delete this slide"
+                      aria-label="Delete this slide"
+                    >
+                      <X size={11} strokeWidth={2.8} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Add More Media Button (bulk import) */}
+            <button
+              type="button"
+              className="status-bulk-add-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Add more photos or videos"
+            >
+              <Plus size={16} />
+              <span>Add</span>
+            </button>
+          </div>
+
+          {/* Theme Selector (for text styling or background tone) */}
+          <div className="status-theme-picker-section">
+            <span className="status-field-label">Background Style:</span>
+            <div className="status-theme-chips no-scrollbar">
+              {BG_THEMES.map((theme) => (
+                <button
+                  key={theme.id}
+                  type="button"
+                  className={`status-theme-circle${(currentSlide.bgStyle || 'emerald') === theme.id ? ' active' : ''}`}
+                  style={{ background: theme.style }}
+                  onClick={() => updateCurrentSlide({ bgStyle: theme.id })}
+                  title={theme.label}
+                  aria-label={theme.label}
+                >
+                  {(currentSlide.bgStyle || 'emerald') === theme.id && <Check size={14} className="theme-check-icon" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Scripture or Topic Tag Field for Active Slide */}
+          <div className="status-input-group">
+            <label className="status-field-label" htmlFor="scripture-ref-input">
+              Scripture or Topic Tag (Optional):
+            </label>
+            <input
+              id="scripture-ref-input"
+              type="text"
+              placeholder="e.g. Psalm 23:1, Answered Prayer, Testimony"
+              value={currentSlide.scriptureTag || ''}
+              onChange={(e) => updateCurrentSlide({ scriptureTag: e.target.value })}
+              className="status-text-input"
+              maxLength={60}
+            />
+          </div>
+
+          {/* Hidden Multi-file input for bulk imports */}
           <input
             ref={fileInputRef}
             id="status-media-device-input"
             type="file"
+            multiple
             accept="image/*,video/*,audio/*"
             onChange={handleFileSelect}
             className="hidden"
             style={{ display: 'none' }}
           />
 
-          {!previewUrl ? (
-            <button
-              type="button"
-              className="status-media-picker-btn"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <div className="status-media-picker-icons">
-                <ImagePlus size={18} className="text-emerald-400" />
-                <Video size={18} className="text-amber-400" />
-                <FileAudio size={18} className="text-cyan-400" />
-              </div>
-              <div className="status-media-picker-text">
-                <span className="status-media-picker-title">Add photo / video / audio</span>
-                <span className="status-media-picker-sub">
-                  Photos up to 10MB · Video up to 50MB (60s) · Audio up to 5MB (60s)
-                </span>
-              </div>
-            </button>
-          ) : (
-            <div className="status-attached-media-bar">
-              <div className="status-attached-media-left">
-                {mediaType === 'video' ? (
-                  <Video size={16} className="text-amber-400" />
-                ) : mediaType === 'audio' ? (
-                  <Music size={16} className="text-cyan-400" />
-                ) : (
-                  <ImagePlus size={16} className="text-emerald-400" />
-                )}
-                <span className="status-attached-media-name truncate">
-                  {selectedFileName || 'Attached media'}
-                </span>
-                {isUploading && (
-                  <span className="status-uploading-pill">
-                    <Loader2 size={12} className="animate-spin" />
-                    <span>Uploading...</span>
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                className="status-attached-change-btn"
-                onClick={handleRemoveMedia}
-                title="Remove attached media"
-              >
-                <X size={14} />
-                <span>Remove</span>
-              </button>
+          {/* Import Media Button (Bulk photos/videos/audio) */}
+          <button
+            type="button"
+            className="status-media-picker-btn"
+            onClick={() => fileInputRef.current?.click()}
+            style={{ marginTop: 4 }}
+          >
+            <div className="status-media-picker-icons">
+              <ImagePlus size={18} className="text-emerald-400" />
+              <Video size={18} className="text-amber-400" />
+              <FileAudio size={18} className="text-cyan-400" />
             </div>
-          )}
+            <div className="status-media-picker-text">
+              <span className="status-media-picker-title">
+                {slides.some((s) => s.previewUrl) ? 'Import more photos / videos / audio' : 'Import media (single or bulk)'}
+              </span>
+              <span className="status-media-picker-sub">
+                Select multiple photos, videos or audio clips to caption &amp; share together
+              </span>
+            </div>
+          </button>
 
-          {uploadError && (
-            <div className="status-upload-error-row" role="alert">
+          {globalError && (
+            <div className="status-upload-error-row" role="alert" style={{ marginTop: 10 }}>
               <AlertCircle size={14} className="shrink-0" />
-              <span>{uploadError}</span>
+              <span>{globalError}</span>
             </div>
           )}
+        </form>
+      </PopupSheet>
+
+      {/* =========================================
+          PopupSheet: Story Audience / Privacy Selector
+         ========================================= */}
+      <PopupSheet
+        open={audienceSheetOpen}
+        onClose={() => setAudienceSheetOpen(false)}
+        size="sm"
+        title="Who can view your story?"
+      >
+        <div style={{ padding: '4px 2px 8px' }}>
+          <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.45 }}>
+            Select who can view your 24-hour status stories. This setting will be remembered as your default until you change it.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {STATUS_AUDIENCE_OPTIONS.map((opt) => {
+              const isSelected = audience === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`status-audience-row${isSelected ? ' active' : ''}`}
+                  onClick={() => handleAudienceChange(opt.id)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                    <div
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: '50%',
+                        background: isSelected ? 'rgba(20, 184, 166, 0.2)' : 'var(--surface-sunken)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: isSelected ? 'var(--teal, #14b8a6)' : 'var(--ink-muted)',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {renderAudienceIcon(opt.iconName, 18)}
+                    </div>
+                    <div style={{ textAlign: 'left', minWidth: 0 }}>
+                      <strong style={{ display: 'block', fontSize: 14, color: 'var(--ink)' }}>
+                        {opt.label}
+                      </strong>
+                      <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
+                        {opt.description}
+                      </small>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      border: isSelected ? '2px solid var(--teal, #14b8a6)' : '2px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: isSelected ? 'var(--teal, #14b8a6)' : 'transparent',
+                      color: '#ffffff',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isSelected && <Check size={12} strokeWidth={3} />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            style={{
+              marginTop: 12,
+              padding: '8px 12px',
+              borderRadius: 8,
+              background: 'rgba(20, 184, 166, 0.08)',
+              border: '1px solid rgba(20, 184, 166, 0.2)',
+              color: 'var(--teal, #14b8a6)',
+              fontSize: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Check size={13} />
+            <span>Whatever setting you choose becomes your new default automatically.</span>
+          </div>
         </div>
-      </form>
-    </PopupSheet>
+      </PopupSheet>
+    </>
   );
 }
