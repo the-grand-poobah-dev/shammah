@@ -14908,8 +14908,8 @@ html, body, *, *::before, *::after {
 }
 
 .church-color-card {
-  flex: 0 0 200px;
-  min-width: 200px;
+  flex: 0 0 240px;
+  min-width: 240px;
   border-radius: 16px;
   padding: 14px 12px;
   display: flex;
@@ -15007,17 +15007,28 @@ html, body, *, *::before, *::after {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 4px;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
 }
 
 .church-card-members {
   font-size: 11px;
   font-weight: 500;
   opacity: 0.85;
+  white-space: nowrap;
+}
+
+.church-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .church-card-follow-btn {
-  padding: 5px 12px;
+  min-height: 40px;
+  padding: 8px 12px;
   border-radius: 999px;
   font-size: 11.5px;
   font-weight: 700;
@@ -15028,7 +15039,11 @@ html, body, *, *::before, *::after {
   transition: all 0.18s ease;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .church-card-follow-btn.following {
@@ -15036,8 +15051,132 @@ html, body, *, *::before, *::after {
   color: #ffffff;
 }
 
-.church-card-follow-btn:hover {
-  transform: scale(1.05);
+.church-card-follow-btn:hover:not(:disabled) {
+  transform: scale(1.04);
+}
+
+.church-card-follow-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.church-card-join-btn {
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border: 1.5px solid rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+  user-select: none;
+  backdrop-filter: blur(8px);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.church-card-join-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #ffffff;
+  transform: scale(1.04);
+}
+
+.church-card-join-btn.joined {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: rgba(52, 211, 153, 0.85);
+  color: #ecfdf5;
+}
+
+.church-card-join-btn.pending {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(251, 191, 36, 0.85);
+  color: #fffbeb;
+}
+
+.church-card-join-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+@media (max-width: 360px) {
+  .church-color-card .church-card-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .church-card-actions .church-card-follow-btn,
+  .church-card-actions .church-card-join-btn {
+    width: 100%;
+  }
+  .church-color-card .church-card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+.church-leave-modal-body {
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.5;
+  padding: 4px 0 12px;
+}
+
+.church-leave-subtext {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+.church-leave-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+
+.church-leave-cancel-btn {
+  min-height: 40px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.church-leave-cancel-btn:hover {
+  background: var(--bg);
+}
+
+.church-leave-confirm-btn {
+  min-height: 40px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: none;
+  background: var(--rose, #e11d48);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.25);
+}
+
+.church-leave-confirm-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
 }
 
 .person-color-card {

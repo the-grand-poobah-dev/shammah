@@ -28,11 +28,16 @@ import {
   getInstitutionSubscription,
   isInstitutionOwner,
   SUBSCRIPTION_PLANS,
+  getChurchMembershipStatus,
+  joinChurchSupabase,
+  leaveChurchSupabase,
+  fetchChurchMemberships,
 } from '../lib/institutionManager';
 import VerifiedBadge from './VerifiedBadge';
 import InstitutionProfileModal from './InstitutionProfileModal';
 import InstitutionSubscriptionModal from './InstitutionSubscriptionModal';
 import ChurchMapLocator from './ChurchMapLocator';
+import PopupSheet from './PopupSheet';
 import { playSound } from '../lib/soundEffects';
 
 export default function InstitutionsView({ session, currentUser, openAuth }) {
@@ -42,6 +47,7 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
   const [joinedIds, setJoinedIds] = useState(() => getJoinedInstitutionIds());
   const [selectedInstForModal, setSelectedInstForModal] = useState(null);
   const [selectedInstForSub, setSelectedInstForSub] = useState(null);
+  const [confirmLeaveInst, setConfirmLeaveInst] = useState(null);
   const [toastMsg, setToastMsg] = useState('');
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'map' | 'directory'
 
@@ -50,27 +56,61 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
       setAllInstitutions(getAllInstitutions());
       setJoinedIds(getJoinedInstitutionIds());
     }
+    if (session?.user?.id) {
+      fetchChurchMemberships(session.user.id);
+    }
     window.addEventListener('shammah:institutions-updated', syncInstitutions);
     window.addEventListener('shammah:institution-sub-updated', syncInstitutions);
+    window.addEventListener('shammah:church-membership-changed', syncInstitutions);
     return () => {
       window.removeEventListener('shammah:institutions-updated', syncInstitutions);
       window.removeEventListener('shammah:institution-sub-updated', syncInstitutions);
+      window.removeEventListener('shammah:church-membership-changed', syncInstitutions);
     };
-  }, []);
+  }, [session?.user?.id]);
 
   function showToast(msg) {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(''), 3000);
   }
 
-  function handleJoinToggle(inst) {
-    if (!session) {
-      if (openAuth) openAuth('signin');
+  async function handleJoinToggle(inst) {
+    const user = session?.user || currentUser;
+    if (!user || user.is_anonymous) {
+      if (openAuth) {
+        openAuth('signin');
+      } else {
+        window.dispatchEvent(new CustomEvent('shammah:open-auth', { detail: 'signin' }));
+      }
       return;
     }
-    const next = toggleJoinInstitution(inst.id);
+
+    const currentStatus = getChurchMembershipStatus(inst.id);
+    if (currentStatus) {
+      setConfirmLeaveInst(inst);
+      return;
+    }
+
+    const res = await joinChurchSupabase({ churchId: inst.id, userId: user.id });
     setJoinedIds(getJoinedInstitutionIds());
-    showToast(next ? `Joined ${inst.name}` : `Left ${inst.name}`);
+    if (!res.error) {
+      showToast(`Joined ${inst.name}`);
+    }
+  }
+
+  async function handleConfirmLeave() {
+    if (!confirmLeaveInst) return;
+    const inst = confirmLeaveInst;
+    const user = session?.user || currentUser;
+    setConfirmLeaveInst(null);
+
+    if (user?.id) {
+      const res = await leaveChurchSupabase({ churchId: inst.id, userId: user.id });
+      setJoinedIds(getJoinedInstitutionIds());
+      if (!res.error) {
+        showToast(`Left ${inst.name}`);
+      }
+    }
   }
 
   // Filter institutions
@@ -505,6 +545,43 @@ export default function InstitutionsView({ session, currentUser, openAuth }) {
             setJoinedIds(getJoinedInstitutionIds());
           }}
         />
+      )}
+
+      {/* Leave Church Confirmation Modal */}
+      {confirmLeaveInst && (
+        <PopupSheet
+          open={true}
+          onClose={() => setConfirmLeaveInst(null)}
+          title={`Leave ${confirmLeaveInst.name}?`}
+          size="sm"
+          footer={
+            <div className="church-leave-modal-actions">
+              <button
+                type="button"
+                className="church-leave-cancel-btn"
+                onClick={() => setConfirmLeaveInst(null)}
+              >
+                Stay a Member
+              </button>
+              <button
+                type="button"
+                className="church-leave-confirm-btn"
+                onClick={handleConfirmLeave}
+              >
+                Confirm &amp; Leave
+              </button>
+            </div>
+          }
+        >
+          <div className="church-leave-modal-body">
+            <p>
+              Are you sure you want to leave <strong>{confirmLeaveInst.name}</strong>?
+            </p>
+            <p className="church-leave-subtext">
+              You will relinquish your membership and lose access to member-only updates, discussions, and pastoral announcements. You can rejoin at any time.
+            </p>
+          </div>
+        </PopupSheet>
       )}
 
       {/* Toast Feedback */}

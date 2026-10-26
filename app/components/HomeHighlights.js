@@ -10,6 +10,8 @@ import {
   Heart,
   UserPlus,
   UserCheck,
+  Check,
+  Clock,
   ChevronRight,
   Sparkles,
   BookOpen,
@@ -33,7 +35,18 @@ import { playSound } from '../lib/soundEffects';
 import InstitutionProfileModal from './InstitutionProfileModal';
 import AuthorOverviewModal from './AuthorOverviewModal';
 import MpesaPaymentModal, { COMMUNITY_PROJECTS } from './MpesaPaymentModal';
-import { getFollowedInstitutionIds, toggleFollowInstitution } from '../lib/institutionManager';
+import PopupSheet from './PopupSheet';
+import { supabase } from '../lib/supabaseClient';
+import {
+  getFollowedInstitutionIds,
+  getStoredMembershipsMap,
+  getChurchMembershipStatus,
+  fetchChurchFollows,
+  fetchChurchMemberships,
+  toggleFollowChurchSupabase,
+  joinChurchSupabase,
+  leaveChurchSupabase,
+} from '../lib/institutionManager';
 import { getFollows, toggleFollow } from '../lib/profileManager';
 
 const SAMPLE_CHURCHES = [
@@ -204,23 +217,122 @@ function useDragScroll() {
   return { ref, onPointerDown, onPointerMove, onPointerUp, dragInfo };
 }
 
-export function ChurchesToFollowCard({ onFollowToggle }) {
+export function ChurchesToFollowCard({ onFollowToggle, session: propSession, currentUser: propUser, openAuth }) {
+  const [session, setSession] = useState(propSession || null);
   const [followedIds, setFollowedIds] = useState(() => getFollowedInstitutionIds());
+  const [memberships, setMemberships] = useState(() => getStoredMembershipsMap());
   const [selectedInst, setSelectedInst] = useState(null);
+  const [leaveConfirmChurch, setLeaveConfirmChurch] = useState(null);
+  const [loadingFollow, setLoadingFollow] = useState(null);
+  const [loadingJoin, setLoadingJoin] = useState(null);
   const { ref, onPointerDown, onPointerMove, onPointerUp, dragInfo } = useDragScroll();
+
+  useEffect(() => {
+    if (propSession) {
+      setSession(propSession);
+    } else {
+      supabase.auth.getSession().then(({ data }) => {
+        setSession(data.session);
+        if (data.session?.user?.id) {
+          fetchChurchFollows(data.session.user.id);
+          fetchChurchMemberships(data.session.user.id);
+        }
+      });
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s?.user?.id) {
+        fetchChurchFollows(s.user.id);
+        fetchChurchMemberships(s.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [propSession]);
 
   useEffect(() => {
     function sync() {
       setFollowedIds(getFollowedInstitutionIds());
+      setMemberships(getStoredMembershipsMap());
     }
     window.addEventListener('shammah:institutions-updated', sync);
-    return () => window.removeEventListener('shammah:institutions-updated', sync);
+    window.addEventListener('shammah:church-follow-changed', sync);
+    window.addEventListener('shammah:church-membership-changed', sync);
+    return () => {
+      window.removeEventListener('shammah:institutions-updated', sync);
+      window.removeEventListener('shammah:church-follow-changed', sync);
+      window.removeEventListener('shammah:church-membership-changed', sync);
+    };
   }, []);
 
-  function handleToggle(cId) {
-    toggleFollowInstitution(cId);
-    setFollowedIds(getFollowedInstitutionIds());
-    onFollowToggle?.(cId);
+  function triggerSignIn() {
+    if (openAuth) {
+      openAuth('signin');
+    } else {
+      window.dispatchEvent(new CustomEvent('shammah:open-auth', { detail: 'signin' }));
+    }
+  }
+
+  async function handleFollowToggle(church) {
+    const user = session?.user || propUser;
+    if (!user || user.is_anonymous) {
+      triggerSignIn();
+      return;
+    }
+
+    setLoadingFollow(church.id);
+    try {
+      await toggleFollowChurchSupabase({ churchId: church.id, userId: user.id });
+      setFollowedIds(getFollowedInstitutionIds());
+      onFollowToggle?.(church.id);
+    } finally {
+      setLoadingFollow(null);
+    }
+  }
+
+  async function handleJoinClick(church) {
+    const user = session?.user || propUser;
+    if (!user || user.is_anonymous) {
+      triggerSignIn();
+      return;
+    }
+
+    const currentStatus = getChurchMembershipStatus(church.id);
+    if (currentStatus) {
+      // User is already a member or pending: prompt confirmation before leaving
+      setLeaveConfirmChurch(church);
+      return;
+    }
+
+    setLoadingJoin(church.id);
+    try {
+      await joinChurchSupabase({
+        churchId: church.id,
+        userId: user.id,
+        requiresApproval: false,
+      });
+      setMemberships(getStoredMembershipsMap());
+    } finally {
+      setLoadingJoin(null);
+    }
+  }
+
+  async function handleConfirmLeave() {
+    if (!leaveConfirmChurch) return;
+    const church = leaveConfirmChurch;
+    const user = session?.user || propUser;
+    setLeaveConfirmChurch(null);
+
+    if (user?.id) {
+      setLoadingJoin(church.id);
+      try {
+        await leaveChurchSupabase({ churchId: church.id, userId: user.id });
+        setMemberships(getStoredMembershipsMap());
+      } finally {
+        setLoadingJoin(null);
+      }
+    }
   }
 
   return (
@@ -246,6 +358,12 @@ export function ChurchesToFollowCard({ onFollowToggle }) {
       >
         {SAMPLE_CHURCHES.map((c) => {
           const isFollowing = followedIds.includes(c.id);
+          const membershipStatus = memberships[c.id] || getChurchMembershipStatus(c.id);
+          const isJoined = membershipStatus === 'active';
+          const isPending = membershipStatus === 'pending';
+          const isFollowLoading = loadingFollow === c.id;
+          const isJoinLoading = loadingJoin === c.id;
+
           return (
             <div
               key={c.id}
@@ -277,27 +395,68 @@ export function ChurchesToFollowCard({ onFollowToggle }) {
 
               <div className="church-card-footer">
                 <span className="church-card-members">{c.membersCount} members</span>
-                <button
-                  type="button"
-                  className={`church-card-follow-btn${isFollowing ? ' following' : ''}`}
-                  onClick={(e) => {
-                    if (dragInfo.current.hasMoved) return;
-                    e.stopPropagation();
-                    handleToggle(c.id);
-                  }}
-                >
-                  {isFollowing ? (
-                    <>
-                      <UserCheck size={12} />
-                      <span>Following</span>
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus size={12} />
-                      <span>Follow</span>
-                    </>
-                  )}
-                </button>
+                <div className="church-card-actions" onClick={(e) => e.stopPropagation()}>
+                  {/* Follow Button */}
+                  <button
+                    type="button"
+                    className={`church-card-follow-btn${isFollowing ? ' following' : ''}`}
+                    aria-label={isFollowing ? `Unfollow ${c.name}` : `Follow ${c.name}`}
+                    disabled={isFollowLoading}
+                    onClick={(e) => {
+                      if (dragInfo.current.hasMoved) return;
+                      e.stopPropagation();
+                      handleFollowToggle(c);
+                    }}
+                  >
+                    {isFollowing ? (
+                      <>
+                        <UserCheck size={13} />
+                        <span>Following</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={13} />
+                        <span>Follow</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Join Button (Secondary Outline Variant) */}
+                  <button
+                    type="button"
+                    className={`church-card-join-btn${isJoined ? ' joined' : isPending ? ' pending' : ''}`}
+                    aria-label={
+                      isJoined
+                        ? `Joined ${c.name}. Click to leave church`
+                        : isPending
+                          ? `Membership requested for ${c.name}. Click to cancel`
+                          : `Join ${c.name}`
+                    }
+                    disabled={isJoinLoading}
+                    onClick={(e) => {
+                      if (dragInfo.current.hasMoved) return;
+                      e.stopPropagation();
+                      handleJoinClick(c);
+                    }}
+                  >
+                    {isJoined ? (
+                      <>
+                        <Check size={13} />
+                        <span>Joined</span>
+                      </>
+                    ) : isPending ? (
+                      <>
+                        <Clock size={13} />
+                        <span>Requested</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={13} />
+                        <span>Join</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -309,6 +468,43 @@ export function ChurchesToFollowCard({ onFollowToggle }) {
           institution={selectedInst}
           onClose={() => setSelectedInst(null)}
         />
+      )}
+
+      {/* Confirmation Modal when Leaving a Church */}
+      {leaveConfirmChurch && (
+        <PopupSheet
+          open={true}
+          onClose={() => setLeaveConfirmChurch(null)}
+          title={`Leave ${leaveConfirmChurch.name}?`}
+          size="sm"
+          footer={
+            <div className="church-leave-modal-actions">
+              <button
+                type="button"
+                className="church-leave-cancel-btn"
+                onClick={() => setLeaveConfirmChurch(null)}
+              >
+                Stay a Member
+              </button>
+              <button
+                type="button"
+                className="church-leave-confirm-btn"
+                onClick={handleConfirmLeave}
+              >
+                Confirm &amp; Leave
+              </button>
+            </div>
+          }
+        >
+          <div className="church-leave-modal-body">
+            <p>
+              Are you sure you want to leave <strong>{leaveConfirmChurch.name}</strong>?
+            </p>
+            <p className="church-leave-subtext">
+              You will relinquish your membership and lose access to member-only updates, discussions, and pastoral announcements. You can rejoin at any time.
+            </p>
+          </div>
+        </PopupSheet>
       )}
     </div>
   );

@@ -1656,7 +1656,7 @@ export default function Feed() {
         {/* Dynamic Homefeed Widgets: Churches to follow & Channels Explore */}
         {tab === 'home' && section === 'all' && !searchTerm && (
           <>
-            <ChurchesToFollowCard />
+            <ChurchesToFollowCard session={session} currentUser={profile} openAuth={openAuth} />
             <ExploreTabsBanner onSelectSection={(secId) => setSection(secId)} />
           </>
         )}

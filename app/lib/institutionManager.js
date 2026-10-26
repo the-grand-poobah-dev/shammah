@@ -1,4 +1,5 @@
 'use client';
+import { supabase } from './supabaseClient';
 import { playSound } from './soundEffects';
 
 const INSTITUTION_SUBS_KEY = 'shammah_institution_subscriptions_v1';
@@ -424,40 +425,37 @@ export function downgradeInstitutionToFree(institutionId) {
   return subData;
 }
 
-export function getJoinedInstitutionIds() {
-  if (typeof window === 'undefined') return ['inst-citam', 'inst-uon-cu'];
+// Cache of user church memberships: { [churchId]: 'active' | 'pending' }
+const CHURCH_MEMBERSHIPS_KEY = 'shammah_church_memberships_status_v1';
+
+export function getStoredMembershipsMap() {
+  if (typeof window === 'undefined') return { 'inst-citam': 'active', 'inst-uon-cu': 'active' };
   try {
-    const raw = localStorage.getItem(JOINED_INSTITUTIONS_KEY);
+    const raw = localStorage.getItem(CHURCH_MEMBERSHIPS_KEY);
     if (!raw) {
-      const defaults = ['inst-citam', 'inst-uon-cu'];
-      localStorage.setItem(JOINED_INSTITUTIONS_KEY, JSON.stringify(defaults));
-      return defaults;
+      const initial = { 'inst-citam': 'active', 'inst-uon-cu': 'active' };
+      localStorage.setItem(CHURCH_MEMBERSHIPS_KEY, JSON.stringify(initial));
+      return initial;
     }
     return JSON.parse(raw);
   } catch {
-    return ['inst-citam'];
+    return { 'inst-citam': 'active' };
   }
+}
+
+export function getChurchMembershipStatus(churchId) {
+  const map = getStoredMembershipsMap();
+  return map[churchId] || null; // 'active' | 'pending' | null
 }
 
 export function isInstitutionJoined(institutionId) {
-  const list = getJoinedInstitutionIds();
-  return list.includes(institutionId);
+  const status = getChurchMembershipStatus(institutionId);
+  return status === 'active';
 }
 
-export function toggleJoinInstitution(institutionId) {
-  if (typeof window === 'undefined') return false;
-  const list = getJoinedInstitutionIds();
-  const exists = list.includes(institutionId);
-  let next;
-  if (exists) {
-    next = list.filter((id) => id !== institutionId);
-  } else {
-    next = [...list, institutionId];
-    playSound('reaction');
-  }
-  localStorage.setItem(JOINED_INSTITUTIONS_KEY, JSON.stringify(next));
-  window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
-  return !exists;
+export function getJoinedInstitutionIds() {
+  const map = getStoredMembershipsMap();
+  return Object.keys(map).filter((id) => map[id] === 'active');
 }
 
 export function getFollowedInstitutionIds() {
@@ -474,7 +472,213 @@ export function isInstitutionFollowed(institutionId) {
   return getFollowedInstitutionIds().includes(institutionId);
 }
 
-export function toggleFollowInstitution(institutionId) {
+// Fetch user church follows from Supabase
+export async function fetchChurchFollows(userId) {
+  if (!userId) return getFollowedInstitutionIds();
+  try {
+    const { data, error } = await supabase
+      .from('church_follows')
+      .select('church_id')
+      .eq('user_id', userId);
+    if (!error && Array.isArray(data)) {
+      const ids = data.map((r) => r.church_id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(INSTITUTION_FOLLOWS_KEY, JSON.stringify(ids));
+        window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
+        window.dispatchEvent(new CustomEvent('shammah:church-follow-changed', { detail: { ids } }));
+      }
+      return ids;
+    }
+  } catch (err) {
+    console.error('Error fetching church follows:', err);
+  }
+  return getFollowedInstitutionIds();
+}
+
+// Fetch user church memberships from Supabase
+export async function fetchChurchMemberships(userId) {
+  if (!userId) return getStoredMembershipsMap();
+  try {
+    const { data, error } = await supabase
+      .from('church_members')
+      .select('church_id, status')
+      .eq('user_id', userId);
+    if (!error && Array.isArray(data)) {
+      const map = {};
+      data.forEach((r) => {
+        map[r.church_id] = r.status || 'active';
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(CHURCH_MEMBERSHIPS_KEY, JSON.stringify(map));
+        localStorage.setItem(JOINED_INSTITUTIONS_KEY, JSON.stringify(Object.keys(map).filter(k => map[k] === 'active')));
+        window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
+        window.dispatchEvent(new CustomEvent('shammah:church-membership-changed', { detail: { memberships: map } }));
+      }
+      return map;
+    }
+  } catch (err) {
+    console.error('Error fetching church memberships:', err);
+  }
+  return getStoredMembershipsMap();
+}
+
+// Toggle church follow in Supabase with optimistic UI
+export async function toggleFollowChurchSupabase({ churchId, userId }) {
+  if (!userId) {
+    return { isFollowing: false, error: 'unauthenticated' };
+  }
+  const current = getFollowedInstitutionIds();
+  const willFollow = !current.includes(churchId);
+  const next = willFollow
+    ? [...current, churchId]
+    : current.filter((id) => id !== churchId);
+
+  // Optimistic update
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(INSTITUTION_FOLLOWS_KEY, JSON.stringify(next));
+    window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
+    window.dispatchEvent(new CustomEvent('shammah:church-follow-changed', { detail: { churchId, isFollowing: willFollow } }));
+  }
+  if (willFollow) {
+    playSound('reaction');
+  }
+
+  try {
+    if (willFollow) {
+      const { error } = await supabase.from('church_follows').insert({
+        user_id: userId,
+        church_id: churchId,
+      });
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('church_follows')
+        .delete()
+        .eq('user_id', userId)
+        .eq('church_id', churchId);
+      if (error) throw error;
+    }
+    return { isFollowing: willFollow, error: null };
+  } catch (err) {
+    console.error('Failed to toggle church follow in Supabase:', err);
+    // Rollback optimistic update
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(INSTITUTION_FOLLOWS_KEY, JSON.stringify(current));
+      window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
+    }
+    return { isFollowing: !willFollow, error: err.message || 'Operation failed' };
+  }
+}
+
+// Join church in Supabase (status: 'active' or 'pending' if approval required)
+export async function joinChurchSupabase({ churchId, userId, requiresApproval = false }) {
+  if (!userId) {
+    return { status: null, error: 'unauthenticated' };
+  }
+  const prevMap = getStoredMembershipsMap();
+  const newStatus = requiresApproval ? 'pending' : 'active';
+  const nextMap = { ...prevMap, [churchId]: newStatus };
+
+  // Optimistic update
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(CHURCH_MEMBERSHIPS_KEY, JSON.stringify(nextMap));
+    localStorage.setItem(JOINED_INSTITUTIONS_KEY, JSON.stringify(Object.keys(nextMap).filter(k => nextMap[k] === 'active')));
+    window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
+    window.dispatchEvent(new CustomEvent('shammah:church-membership-changed', { detail: { churchId, status: newStatus } }));
+  }
+  playSound('achievement');
+
+  try {
+    const { error } = await supabase.from('church_members').upsert({
+      user_id: userId,
+      church_id: churchId,
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+    return { status: newStatus, error: null };
+  } catch (err) {
+    console.error('Failed to join church in Supabase:', err);
+    // Rollback
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CHURCH_MEMBERSHIPS_KEY, JSON.stringify(prevMap));
+      localStorage.setItem(JOINED_INSTITUTIONS_KEY, JSON.stringify(Object.keys(prevMap).filter(k => prevMap[k] === 'active')));
+      window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
+    }
+    return { status: prevMap[churchId] || null, error: err.message || 'Join failed' };
+  }
+}
+
+// Leave church in Supabase
+export async function leaveChurchSupabase({ churchId, userId }) {
+  if (!userId) {
+    return { success: false, error: 'unauthenticated' };
+  }
+  const prevMap = getStoredMembershipsMap();
+  const nextMap = { ...prevMap };
+  delete nextMap[churchId];
+
+  // Optimistic update
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(CHURCH_MEMBERSHIPS_KEY, JSON.stringify(nextMap));
+    localStorage.setItem(JOINED_INSTITUTIONS_KEY, JSON.stringify(Object.keys(nextMap).filter(k => nextMap[k] === 'active')));
+    window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
+    window.dispatchEvent(new CustomEvent('shammah:church-membership-changed', { detail: { churchId, status: null } }));
+  }
+  playSound('reaction');
+
+  try {
+    const { error } = await supabase
+      .from('church_members')
+      .delete()
+      .eq('user_id', userId)
+      .eq('church_id', churchId);
+    if (error) throw error;
+    return { success: true, error: null };
+  } catch (err) {
+    console.error('Failed to leave church in Supabase:', err);
+    // Rollback
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CHURCH_MEMBERSHIPS_KEY, JSON.stringify(prevMap));
+      localStorage.setItem(JOINED_INSTITUTIONS_KEY, JSON.stringify(Object.keys(prevMap).filter(k => prevMap[k] === 'active')));
+      window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
+    }
+    return { success: false, error: err.message || 'Leave failed' };
+  }
+}
+
+// Legacy helpers maintained for backward compatibility
+export function toggleJoinInstitution(institutionId, userId = null, requiresApproval = false) {
+  if (userId) {
+    const status = getChurchMembershipStatus(institutionId);
+    if (status) {
+      leaveChurchSupabase({ churchId: institutionId, userId });
+      return false;
+    } else {
+      joinChurchSupabase({ churchId: institutionId, userId, requiresApproval });
+      return true;
+    }
+  }
+  if (typeof window === 'undefined') return false;
+  const map = getStoredMembershipsMap();
+  const exists = Boolean(map[institutionId]);
+  if (exists) {
+    delete map[institutionId];
+  } else {
+    map[institutionId] = 'active';
+    playSound('reaction');
+  }
+  localStorage.setItem(CHURCH_MEMBERSHIPS_KEY, JSON.stringify(map));
+  localStorage.setItem(JOINED_INSTITUTIONS_KEY, JSON.stringify(Object.keys(map).filter(k => map[k] === 'active')));
+  window.dispatchEvent(new CustomEvent('shammah:institutions-updated'));
+  return !exists;
+}
+
+export function toggleFollowInstitution(institutionId, userId = null) {
+  if (userId) {
+    toggleFollowChurchSupabase({ churchId: institutionId, userId });
+    return !isInstitutionFollowed(institutionId);
+  }
   if (typeof window === 'undefined') return false;
   const list = getFollowedInstitutionIds();
   const exists = list.includes(institutionId);
