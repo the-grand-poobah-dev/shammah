@@ -120,6 +120,10 @@ export default function StatusViewerModal({
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
+  useEffect(() => {
+    setCurrentIndex(initialIndex);
+  }, [initialIndex]);
+
   const currentStatus = statuses[currentIndex];
   const resolvedMediaType = currentStatus ? inferMediaType(currentStatus.mediaUrl, currentStatus.mediaType) : null;
 

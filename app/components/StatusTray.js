@@ -1,11 +1,17 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Plus, ChevronLeft, ChevronRight, Music, Video } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
-import { getActiveStatuses, fetchActiveStatuses, inferMediaType } from '../lib/statusManager';
-import { formatPostDate, getPostDateTitle, useRelativeTimeTick, cleanDisplayName } from '../lib/postDisplay';
+import {
+  getActiveStatuses,
+  fetchActiveStatuses,
+  inferMediaType,
+  groupStatusesByUser,
+  buildViewerPlaylist,
+} from '../lib/statusManager';
+import { cleanDisplayName, useRelativeTimeTick } from '../lib/postDisplay';
 import StatusViewerModal from './StatusViewerModal';
 import StatusCreatorModal from './StatusCreatorModal';
 
@@ -20,15 +26,49 @@ export default function StatusTray({ currentUser }) {
   const scrollRef = useRef(null);
   const dragRef = useRef({ active: false, startX: 0, startScroll: 0, moved: false });
 
-  function loadStatuses() {
+  const currentViewerId = currentUser?.id || 'me';
+
+  const loadStatuses = useCallback(() => {
     setStatuses(getActiveStatuses());
-  }
+  }, []);
 
   function checkScroll() {
     if (!scrollRef.current) return;
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
     setCanScrollLeft(scrollLeft > 10);
     setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10);
+  }
+
+  // Group statuses by user and generate viewer playlist with start indices
+  const groupedUsers = useMemo(() => {
+    return groupStatusesByUser(statuses, currentViewerId);
+  }, [statuses, currentViewerId]);
+
+  const viewerPlaylist = useMemo(() => {
+    return buildViewerPlaylist(groupedUsers, currentViewerId);
+  }, [groupedUsers, currentViewerId]);
+
+  // Check if current user has active status (for "Add Status" card)
+  const myGroup = useMemo(() => {
+    if (!currentUser) return null;
+    return groupedUsers.find(
+      (g) =>
+        (currentUser.id && g.userId === currentUser.id) ||
+        (currentUser.name && g.userName.toLowerCase() === currentUser.name.toLowerCase()) ||
+        (currentUser.display_name && g.userName.toLowerCase() === currentUser.display_name.toLowerCase())
+    );
+  }, [groupedUsers, currentUser]);
+
+  const hasMyStatus = Boolean(myGroup && myGroup.count > 0);
+
+  function handleOpenViewerForUser(userKey) {
+    if (dragRef.current.moved) {
+      dragRef.current.moved = false;
+      return;
+    }
+    const startIndex = viewerPlaylist.groupStartIndices[userKey] ?? 0;
+    setActiveStoryIndex(startIndex);
+    setViewerOpen(true);
   }
 
   useEffect(() => {
@@ -43,19 +83,24 @@ export default function StatusTray({ currentUser }) {
 
     function onOpenStatus(e) {
       const all = getActiveStatuses();
+      const vId = currentUser?.id || 'me';
+      const groups = groupStatusesByUser(all, vId);
+      const playlist = buildViewerPlaylist(groups, vId);
+
       const targetUserId = e.detail?.userId;
       const targetUserName = e.detail?.userName;
 
-      const idx = all.findIndex(
-        (s) =>
-          (targetUserId && s.userId === targetUserId) ||
-          (targetUserName && s.userName && s.userName.toLowerCase() === targetUserName.toLowerCase())
+      const target = groups.find(
+        (g) =>
+          (targetUserId && g.userId === targetUserId) ||
+          (targetUserName && g.userName && g.userName.toLowerCase() === targetUserName.toLowerCase())
       );
 
-      if (idx !== -1) {
+      if (target) {
+        const idx = playlist.groupStartIndices[target.key] ?? 0;
         setActiveStoryIndex(idx);
         setViewerOpen(true);
-      } else if (all.length > 0) {
+      } else if (playlist.viewerStatuses.length > 0) {
         setActiveStoryIndex(0);
         setViewerOpen(true);
       } else {
@@ -64,20 +109,22 @@ export default function StatusTray({ currentUser }) {
     }
 
     window.addEventListener('shammah:status-updated', onStatusUpdated);
+    window.addEventListener('shammah:status-viewed', onStatusUpdated);
     window.addEventListener('shammah:muted-users-changed', onStatusUpdated);
     window.addEventListener('shammah:open-status', onOpenStatus);
     return () => {
       window.removeEventListener('shammah:status-updated', onStatusUpdated);
+      window.removeEventListener('shammah:status-viewed', onStatusUpdated);
       window.removeEventListener('shammah:muted-users-changed', onStatusUpdated);
       window.removeEventListener('shammah:open-status', onOpenStatus);
     };
-  }, []);
+  }, [loadStatuses, currentUser]);
 
   useEffect(() => {
     checkScroll();
     window.addEventListener('resize', checkScroll);
     return () => window.removeEventListener('resize', checkScroll);
-  }, [statuses]);
+  }, [groupedUsers]);
 
   function scrollTray(direction) {
     if (!scrollRef.current) return;
@@ -116,22 +163,6 @@ export default function StatusTray({ currentUser }) {
   function onPointerUp() {
     dragRef.current.active = false;
   }
-
-  function handleOpenViewer(index) {
-    if (dragRef.current.moved) {
-      dragRef.current.moved = false;
-      return;
-    }
-    setActiveStoryIndex(index);
-    setViewerOpen(true);
-  }
-
-  const myStatusIndex = statuses.findIndex(
-    (s) =>
-      (currentUser?.id && s.userId === currentUser.id) ||
-      (currentUser?.name && s.userName && s.userName.toLowerCase() === currentUser.name.toLowerCase())
-  );
-  const hasMyStatus = myStatusIndex !== -1;
 
   return (
     <section className="status-tray-container" aria-label="24-Hour Stories">
@@ -188,10 +219,10 @@ export default function StatusTray({ currentUser }) {
               hasStatus={hasMyStatus}
               className="status-user-avatar"
               onClick={
-                hasMyStatus
+                hasMyStatus && myGroup
                   ? (e) => {
                       e.stopPropagation();
-                      handleOpenViewer(myStatusIndex);
+                      handleOpenViewerForUser(myGroup.key);
                     }
                   : undefined
               }
@@ -213,31 +244,32 @@ export default function StatusTray({ currentUser }) {
           <span className="status-card-label">Add Status</span>
         </div>
 
-        {/* Community & user 24-hour status story cards */}
-        {statuses.map((status, index) => {
-          const cleanName = cleanDisplayName(status.userName, 'Member');
-          const mediaType = inferMediaType(status.mediaUrl, status.mediaType);
-          const hasMedia = Boolean(status.mediaUrl && mediaType);
+        {/* Stacked User Status Cards: 1 card per unique user, thumbnail is most recent status */}
+        {groupedUsers.map((group) => {
+          const latest = group.latestStatus;
+          const cleanName = group.userName;
+          const mediaType = inferMediaType(latest.mediaUrl, latest.mediaType);
+          const hasMedia = Boolean(latest.mediaUrl && mediaType);
 
           return (
             <div
-              key={status.id}
+              key={group.key}
               role="listitem"
-              className={`status-card-item status-card-story status-bg-${status.bgStyle || 'emerald'} ${hasMedia ? `has-media-thumb has-${mediaType}-thumb` : ''}`}
-              onClick={() => handleOpenViewer(index)}
-              title={`${cleanName}: ${status.text || '24h story'}`}
+              className={`status-card-item status-card-story status-bg-${latest.bgStyle || 'emerald'} ${hasMedia ? `has-media-thumb has-${mediaType}-thumb` : ''}`}
+              onClick={() => handleOpenViewerForUser(group.key)}
+              title={`${cleanName}: ${latest.text || `${group.count} active ${group.count === 1 ? 'status' : 'statuses'}`}`}
             >
               {/* Media Preview Background & Scrim */}
-              {mediaType === 'image' && status.mediaUrl && (
+              {mediaType === 'image' && latest.mediaUrl && (
                 <div className="status-card-media-wrap">
-                  <img src={status.mediaUrl} alt="" className="status-card-bg-media" />
+                  <img src={latest.mediaUrl} alt="" className="status-card-bg-media" />
                   <div className="status-card-media-scrim" />
                 </div>
               )}
 
-              {mediaType === 'video' && status.mediaUrl && (
+              {mediaType === 'video' && latest.mediaUrl && (
                 <div className="status-card-media-wrap">
-                  <video src={status.mediaUrl} className="status-card-bg-media" muted preload="metadata" />
+                  <video src={latest.mediaUrl} className="status-card-bg-media" muted preload="metadata" />
                   <div className="status-card-media-scrim" />
                   <span className="status-card-media-badge" title="Video status">
                     <Video size={10} />
@@ -245,7 +277,7 @@ export default function StatusTray({ currentUser }) {
                 </div>
               )}
 
-              {mediaType === 'audio' && status.mediaUrl && (
+              {mediaType === 'audio' && latest.mediaUrl && (
                 <div className="status-card-media-wrap">
                   <div className="status-card-media-scrim" />
                   <span className="status-card-media-badge audio" title="Audio testimony">
@@ -255,30 +287,39 @@ export default function StatusTray({ currentUser }) {
               )}
 
               <div className="status-card-header">
-                <Avatar
-                  name={cleanName}
-                  src={status.userAvatar}
-                  hasStatus={true}
-                  className="status-user-avatar"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.dispatchEvent(
-                      new CustomEvent('shammah:open-profile', {
-                        detail: {
-                          author: {
-                            id: status.userId,
-                            display_name: cleanName,
-                            avatar_url: status.userAvatar,
-                            badge: status.userBadge,
-                            badge_verified: status.userVerified,
-                            role: status.userRole,
+                <div className="status-avatar-stack-wrap">
+                  <Avatar
+                    name={cleanName}
+                    src={group.userAvatar}
+                    hasStatus={true}
+                    className="status-user-avatar"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.dispatchEvent(
+                        new CustomEvent('shammah:open-profile', {
+                          detail: {
+                            author: {
+                              id: group.userId,
+                              display_name: cleanName,
+                              avatar_url: group.userAvatar,
+                              badge: group.userBadge,
+                              badge_verified: group.userVerified,
+                              role: group.userRole,
+                            },
+                            authorId: group.userId,
                           },
-                          authorId: status.userId,
-                        },
-                      })
-                    );
-                  }}
-                />
+                        })
+                      );
+                    }}
+                  />
+                  <span
+                    className="status-stack-count"
+                    aria-label={`${group.count} active ${group.count === 1 ? 'story' : 'stories'}`}
+                    title={`${group.count} active ${group.count === 1 ? 'story' : 'stories'}`}
+                  >
+                    {group.count}
+                  </span>
+                </div>
               </div>
 
               <div className="status-card-snippet">
@@ -288,20 +329,20 @@ export default function StatusTray({ currentUser }) {
                     <span>Audio</span>
                   </div>
                 )}
-                {status.text ? (
-                  <p className="status-snippet-text">{status.text}</p>
+                {latest.text ? (
+                  <p className="status-snippet-text">{latest.text}</p>
                 ) : null}
               </div>
 
               <div className="status-card-footer">
                 <div className="status-author-name-row">
                   <span className="status-card-author-name">{cleanName}</span>
-                  {status.userVerified && (
-                    <VerifiedBadge badge={status.userBadge} role={status.userRole} size={13} />
+                  {group.userVerified && (
+                    <VerifiedBadge badge={group.userBadge} role={group.userRole} size={13} />
                   )}
                 </div>
-                {status.userBadge && (
-                  <MemberBadge badgeId={status.userBadge} size="sm" />
+                {group.userBadge && (
+                  <MemberBadge badgeId={group.userBadge} size="sm" />
                 )}
               </div>
             </div>
@@ -309,10 +350,10 @@ export default function StatusTray({ currentUser }) {
         })}
       </div>
 
-      {/* Story Viewer Modal (Fullscreen immersion with continuous autoplay) */}
+      {/* Story Viewer Modal (Fullscreen immersion with continuous autoplay & start rules) */}
       {viewerOpen && (
         <StatusViewerModal
-          statuses={statuses}
+          statuses={viewerPlaylist.viewerStatuses}
           initialIndex={activeStoryIndex}
           currentUser={currentUser}
           onClose={() => setViewerOpen(false)}
