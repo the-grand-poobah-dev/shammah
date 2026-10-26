@@ -215,7 +215,7 @@ export function unhideStatus(statusId, userId = null, userName = null) {
 }
 
 /**
- * Reinstates all hidden statuses and muted users back into the status tray.
+ * Unhides all hidden statuses and muted users back into the status tray.
  */
 export function unhideAllStatuses() {
   if (typeof window === 'undefined') return;
@@ -227,7 +227,7 @@ export function unhideAllStatuses() {
     window.dispatchEvent(new CustomEvent('shammah:status-hidden-changed'));
     window.dispatchEvent(new CustomEvent('shammah:muted-users-changed'));
   } catch (e) {
-    console.error('Failed to reinstate all statuses', e);
+    console.error('Failed to unhide all statuses', e);
   }
 }
 

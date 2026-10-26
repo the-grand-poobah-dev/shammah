@@ -466,7 +466,7 @@ export default function StatusViewerModal({
   function handleHideStatus() {
     hideStatus(currentStatus.id, currentStatus.userId, currentStatus.userName);
     setMenuOpen(false);
-    setFeedbackMessage('✓ Status hidden. You can reinstate it from Hidden Stories.');
+    setFeedbackMessage('✓ Status hidden. You can unhide it from Hidden Stories.');
     setSentFeedback(true);
     setTimeout(() => setSentFeedback(false), 3500);
     handleNext();
@@ -476,7 +476,7 @@ export default function StatusViewerModal({
   function handleUnhideStatus() {
     unhideStatus(currentStatus.id, currentStatus.userId, currentStatus.userName);
     setMenuOpen(false);
-    setFeedbackMessage('✓ Status reinstated to your stories tray.');
+    setFeedbackMessage('✓ Status unhidden and restored to your stories tray.');
     setSentFeedback(true);
     setTimeout(() => setSentFeedback(false), 3500);
   }
@@ -953,7 +953,7 @@ export default function StatusViewerModal({
                   <Eye size={18} className="text-teal-400 flex-shrink-0" style={{ marginTop: 2 }} />
                   <div>
                     <strong style={{ display: 'block', fontSize: 14, color: 'var(--ink)' }}>Unhide status</strong>
-                    <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Reinstate this story back into your status tray</small>
+                    <small style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Unhide this story and restore to your status tray</small>
                   </div>
                 </button>
               ) : (

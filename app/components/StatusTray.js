@@ -89,14 +89,14 @@ export default function StatusTray({ currentUser }) {
   function handleUnhideStory(statusId, userId, userName) {
     unhideStatus(statusId, userId, userName);
     loadStatuses();
-    setToastMsg('✓ Status reinstated to your stories tray');
+    setToastMsg('✓ Status unhidden and restored to your stories tray');
     setTimeout(() => setToastMsg(''), 3000);
   }
 
   function handleUnhideAll() {
     unhideAllStatuses();
     loadStatuses();
-    setToastMsg('✓ All hidden statuses reinstated to your tray');
+    setToastMsg('✓ All hidden statuses unhidden');
     setTimeout(() => setToastMsg(''), 3000);
   }
 
@@ -388,7 +388,7 @@ export default function StatusTray({ currentUser }) {
           );
         })}
 
-        {/* Furthest End: Hidden Stories Category (where user can reinstate hidden status. Sits beside Add Status if no other stories) */}
+        {/* Furthest End: Hidden Stories Category (where user can unhide hidden status. Sits beside Add Status if no other stories) */}
         <div
           role="listitem"
           className={`status-card-item ${hasHiddenStatuses ? `status-card-story status-card-hidden status-bg-${latestHidden?.bgStyle || 'emerald'}` : 'status-card-create status-card-hidden'}`}
@@ -401,8 +401,8 @@ export default function StatusTray({ currentUser }) {
           }}
           title={
             hasHiddenStatuses
-              ? `${hiddenCount} hidden ${hiddenCount === 1 ? 'story' : 'stories'} — tap to reinstate`
-              : 'Hidden stories — tap to view or reinstate'
+              ? `${hiddenCount} hidden ${hiddenCount === 1 ? 'story' : 'stories'} — tap to unhide`
+              : 'Hidden stories — tap to view or unhide'
           }
         >
           {hasHiddenStatuses && latestHidden?.mediaUrl && inferMediaType(latestHidden.mediaUrl, latestHidden.mediaType) === 'image' && (
@@ -480,7 +480,7 @@ export default function StatusTray({ currentUser }) {
                 Hidden Stories
               </h3>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-muted)' }}>
-                Stories you have hidden. Reinstate any story to restore it to your tray.
+                Stories you have hidden. Unhide any story to restore it to your tray.
               </p>
             </div>
           </div>
@@ -490,11 +490,11 @@ export default function StatusTray({ currentUser }) {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, width: '100%' }}>
               <button
                 type="button"
-                className="hidden-reinstate-btn"
+                className="hidden-unhide-btn"
                 onClick={handleUnhideAll}
               >
                 <RotateCcw size={14} />
-                <span>Reinstate All Stories</span>
+                <span>Unhide All Stories</span>
               </button>
             </div>
           ) : null
@@ -549,7 +549,7 @@ export default function StatusTray({ currentUser }) {
                 No Hidden Stories
               </strong>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-muted)', maxWidth: 320, lineHeight: 1.45 }}>
-                When you choose &ldquo;Hide status&rdquo; from any story options menu, it will appear here so you can easily reinstate it.
+                When you choose &ldquo;Hide status&rdquo; from any story options menu, it will appear here so you can easily unhide it.
               </p>
             </div>
           </div>
@@ -601,12 +601,12 @@ export default function StatusTray({ currentUser }) {
                     </button>
                     <button
                       type="button"
-                      className="hidden-reinstate-btn"
+                      className="hidden-unhide-btn"
                       onClick={() => handleUnhideStory(s.id, s.userId, s.userName)}
-                      title="Reinstate to status tray"
+                      title="Unhide and restore to status tray"
                     >
                       <RotateCcw size={13} />
-                      <span>Reinstate</span>
+                      <span>Unhide</span>
                     </button>
                   </div>
                 </div>

@@ -9459,7 +9459,7 @@ a.dropdown-item {
   flex-shrink: 0;
 }
 
-.hidden-reinstate-btn {
+.hidden-unhide-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -9475,7 +9475,7 @@ a.dropdown-item {
   min-height: 36px;
 }
 
-.hidden-reinstate-btn:hover {
+.hidden-unhide-btn:hover {
   opacity: 0.92;
   transform: scale(1.03);
 }
