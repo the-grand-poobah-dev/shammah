@@ -9374,6 +9374,14 @@ a.dropdown-item {
   background: #059669;
 }
 
+.status-add-plus-btn.status-add-plus-badge {
+  bottom: -2px;
+  right: -3px;
+  width: 19px;
+  height: 19px;
+  z-index: 5;
+}
+
 .status-card-label {
   font-size: 11.5px;
   font-weight: 600;
@@ -9603,7 +9611,11 @@ a.dropdown-item {
 
 .status-card-time {
   font-size: 9.5px;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .status-progress-bars {
@@ -9691,10 +9703,11 @@ a.dropdown-item {
 
 .status-viewer-time {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.88);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .status-viewer-close-btn {

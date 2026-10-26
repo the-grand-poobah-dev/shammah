@@ -39,7 +39,7 @@ import {
   muteStatusUser,
   reshareStatusAsPost,
 } from '../lib/statusManager';
-import { cleanDisplayName } from '../lib/postDisplay';
+import { cleanDisplayName, formatPostDate, useRelativeTimeTick } from '../lib/postDisplay';
 import FaithReactionPicker from './FaithReactionPicker';
 
 const QUICK_EMOJIS = ['🙏', '❤️', '🙌', '🔥', '✨', '👏'];
@@ -97,6 +97,7 @@ export default function StatusViewerModal({
   onClose,
   onAddStatus,
 }) {
+  const now = useRelativeTimeTick();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [commentText, setCommentText] = useState('');
   const [sentFeedback, setSentFeedback] = useState(false);
@@ -221,15 +222,36 @@ export default function StatusViewerModal({
     setAudioCurrentTime(0);
   }, [currentIndex]);
 
+  // Story menu / dialog sheets interaction state:
+  // Whenever user is interacting with ANY menu options, pause the status until done/closed
+  // to prevent the menu being closed by another loaded status in view.
+  const isMenuInteracting = Boolean(
+    menuOpen || reportOpen || reshareOpen || deleteConfirmOpen || showEmojiSheet
+  );
+  const isInteracting = Boolean(isPaused || isMenuInteracting);
+
+  // Programmatic advance used strictly after finishing an action (e.g. after reporting or deleting)
+  const advanceAfterAction = useCallback(() => {
+    if (currentIndex < statuses.length - 1) {
+      setSlideAnim('slide-from-right');
+      setCurrentIndex((i) => i + 1);
+      setTimeout(() => setSlideAnim(''), 300);
+    } else {
+      onClose();
+    }
+  }, [currentIndex, statuses.length, onClose]);
+
   const handlePrev = useCallback(() => {
+    if (isMenuInteracting) return;
     if (currentIndex > 0) {
       setSlideAnim('slide-from-left');
       setCurrentIndex((i) => i - 1);
       setTimeout(() => setSlideAnim(''), 300);
     }
-  }, [currentIndex]);
+  }, [currentIndex, isMenuInteracting]);
 
   const handleNext = useCallback(() => {
+    if (isMenuInteracting) return;
     if (currentIndex < statuses.length - 1) {
       setSlideAnim('slide-from-right');
       setCurrentIndex((i) => i + 1);
@@ -238,11 +260,11 @@ export default function StatusViewerModal({
       // Clean exit at the end of all statuses, never infinite-loop
       onClose();
     }
-  }, [currentIndex, statuses.length, onClose]);
+  }, [currentIndex, statuses.length, onClose, isMenuInteracting]);
 
   // Jump to NEXT USER's story on swipe left
   const handleNextUser = useCallback(() => {
-    if (!currentStatus) return;
+    if (isMenuInteracting || !currentStatus) return;
     const nextIdx = statuses.findIndex(
       (s, idx) =>
         idx > currentIndex &&
@@ -256,11 +278,11 @@ export default function StatusViewerModal({
     } else {
       onClose();
     }
-  }, [currentStatus, currentIndex, statuses, onClose]);
+  }, [currentStatus, currentIndex, statuses, onClose, isMenuInteracting]);
 
   // Jump to PREVIOUS USER's story on swipe right
   const handlePrevUser = useCallback(() => {
-    if (!currentStatus) return;
+    if (isMenuInteracting || !currentStatus) return;
     let prevUserIdx = -1;
     for (let i = currentIndex - 1; i >= 0; i--) {
       const s = statuses[i];
@@ -285,12 +307,12 @@ export default function StatusViewerModal({
     } else {
       setCurrentIndex(0);
     }
-  }, [currentStatus, currentIndex, statuses]);
+  }, [currentStatus, currentIndex, statuses, isMenuInteracting]);
 
   // Keyboard navigation & escape to close
   useEffect(() => {
     function handleKeyDown(e) {
-      if (menuOpen || reportOpen || reshareOpen) return;
+      if (isMenuInteracting) return;
       if (e.key === 'Escape') {
         onClose();
       } else if (e.key === 'ArrowRight' || e.key === ' ') {
@@ -301,10 +323,7 @@ export default function StatusViewerModal({
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNext, handlePrev, onClose, menuOpen, reportOpen, reshareOpen]);
-
-  // Autoplay pause check: paused if user holds screen, or if modal sheets are open
-  const isInteracting = isPaused || menuOpen || reportOpen || reshareOpen || showEmojiSheet;
+  }, [handleNext, handlePrev, onClose, isMenuInteracting]);
 
   // Progress Bar timer:
   // For text and images: 5 seconds fixed duration.
@@ -355,6 +374,7 @@ export default function StatusViewerModal({
 
   // Touch and pointer gestures: long press pauses, swipe navigates, edge tap skips
   function onPointerDown(e) {
+    if (isMenuInteracting) return;
     if (
       e.target.closest(
         'button, input, textarea, form, .status-viewer-footer, .status-viewer-header, .faith-reaction-picker-bubble, .status-viewer-sound-toggle-btn, .popup-sheet-dialog'
@@ -378,6 +398,7 @@ export default function StatusViewerModal({
   }
 
   function onPointerMove(e) {
+    if (isMenuInteracting) return;
     if (!pointerStartRef.current) return;
     const dy = Math.abs(e.clientY - pointerStartRef.current.y);
     const dx = Math.abs(e.clientX - pointerStartRef.current.x);
@@ -390,6 +411,7 @@ export default function StatusViewerModal({
     clearTimeout(longPressTimerRef.current);
     setIsPaused(false);
 
+    if (isMenuInteracting) return;
     if (!pointerStartRef.current) return;
     const start = pointerStartRef.current;
     pointerStartRef.current = null;
@@ -469,7 +491,7 @@ export default function StatusViewerModal({
     setFeedbackMessage('✓ Status hidden. You can unhide it from Hidden Stories.');
     setSentFeedback(true);
     setTimeout(() => setSentFeedback(false), 3500);
-    handleNext();
+    advanceAfterAction();
   }
 
   // Handle Unhiding Status
@@ -494,7 +516,7 @@ export default function StatusViewerModal({
 
       // If user had more than 1 status, advance to next; otherwise exit viewer
       if (currentUserStatuses.length > 1) {
-        handleNext();
+        advanceAfterAction();
       } else {
         onClose();
       }
@@ -519,7 +541,7 @@ export default function StatusViewerModal({
     setTimeout(() => {
       setReportOpen(false);
       setReportSubmitted(false);
-      handleNext();
+      advanceAfterAction();
     }, 1800);
   }
 
@@ -633,10 +655,13 @@ export default function StatusViewerModal({
                   />
                 )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', minWidth: 0 }}>
                 {currentStatus.userBadge && (
                   <MemberBadge badgeId={currentStatus.userBadge} size="sm" />
                 )}
+                <span className="status-viewer-time" title={formatPostDate(currentStatus.createdAt || currentStatus.created_at, now) || 'Just now'}>
+                  {formatPostDate(currentStatus.createdAt || currentStatus.created_at, now) || 'Just now'}
+                </span>
                 {isStatusHiddenNow && (
                   <span
                     style={{
@@ -647,6 +672,7 @@ export default function StatusViewerModal({
                       background: 'rgba(239, 68, 68, 0.25)',
                       border: '1px solid rgba(239, 68, 68, 0.45)',
                       color: '#fca5a5',
+                      flexShrink: 0,
                     }}
                   >
                     Hidden
@@ -700,8 +726,22 @@ export default function StatusViewerModal({
         </div>
 
         {/* Screen Edge Tap zones hints */}
-        <div className="status-edge-tap-zone left" onClick={handlePrev} title="Tap left edge for previous story" />
-        <div className="status-edge-tap-zone right" onClick={handleNext} title="Tap right edge for next story" />
+        <div
+          className="status-edge-tap-zone left"
+          onClick={() => {
+            if (isInteracting) return;
+            handlePrev();
+          }}
+          title="Tap left edge for previous story"
+        />
+        <div
+          className="status-edge-tap-zone right"
+          onClick={() => {
+            if (isInteracting) return;
+            handleNext();
+          }}
+          title="Tap right edge for next story"
+        />
 
         {/* Story Body: Scripture tag, text, and media */}
         <div className={`status-viewer-body ${resolvedMediaType ? `has-media has-media-${resolvedMediaType}` : ''}`}>
@@ -732,7 +772,11 @@ export default function StatusViewerModal({
                     setProgress((v.currentTime / v.duration) * 100);
                   }
                 }}
-                onEnded={handleNext}
+                onEnded={() => {
+                  if (!isMenuInteracting) {
+                    handleNext();
+                  }
+                }}
                 onClick={() => setIsMuted((m) => !m)}
               />
               <button
@@ -789,7 +833,11 @@ export default function StatusViewerModal({
                     setAudioDuration(e.currentTarget.duration);
                   }
                 }}
-                onEnded={handleNext}
+                onEnded={() => {
+                  if (!isMenuInteracting) {
+                    handleNext();
+                  }
+                }}
               />
             </div>
           )}
@@ -811,6 +859,7 @@ export default function StatusViewerModal({
             className="status-nav-btn prev"
             onClick={(e) => {
               e.stopPropagation();
+              if (isMenuInteracting) return;
               handlePrev();
             }}
             aria-label="Previous story"
@@ -825,6 +874,7 @@ export default function StatusViewerModal({
             className="status-nav-btn next"
             onClick={(e) => {
               e.stopPropagation();
+              if (isMenuInteracting) return;
               handleNext();
             }}
             aria-label="Next story"
@@ -1063,7 +1113,7 @@ export default function StatusViewerModal({
               onClick={() => {
                 setReportOpen(false);
                 setReportSubmitted(false);
-                handleNext();
+                advanceAfterAction();
               }}
             >
               Done

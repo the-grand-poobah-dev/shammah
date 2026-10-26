@@ -15,7 +15,7 @@ import {
   unhideStatus,
   unhideAllStatuses,
 } from '../lib/statusManager';
-import { cleanDisplayName, useRelativeTimeTick } from '../lib/postDisplay';
+import { cleanDisplayName, formatPostDate, useRelativeTimeTick } from '../lib/postDisplay';
 import StatusViewerModal from './StatusViewerModal';
 import StatusCreatorModal from './StatusCreatorModal';
 
@@ -49,16 +49,12 @@ export default function StatusTray({ currentUser }) {
     setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10);
   }
 
-  // Group visible statuses by user and generate viewer playlist with start indices
+  // Group visible statuses by user
   const groupedUsers = useMemo(() => {
     return groupStatusesByUser(statuses, currentViewerId);
   }, [statuses, currentViewerId]);
 
-  const viewerPlaylist = useMemo(() => {
-    return buildViewerPlaylist(groupedUsers, currentViewerId);
-  }, [groupedUsers, currentViewerId]);
-
-  // Check if current user has active status (for "Add Status" card)
+  // Check if current user has active status (to convert Add Status card into thumbnail viewer)
   const myGroup = useMemo(() => {
     if (!currentUser) return null;
     return groupedUsers.find(
@@ -70,6 +66,24 @@ export default function StatusTray({ currentUser }) {
   }, [groupedUsers, currentUser]);
 
   const hasMyStatus = Boolean(myGroup && myGroup.count > 0);
+
+  // Other believers' groups (excludes current user so their card is not duplicated in the tray)
+  const otherUsers = useMemo(() => {
+    if (!hasMyStatus || !myGroup) return groupedUsers;
+    return groupedUsers.filter((g) => g.key !== myGroup.key);
+  }, [groupedUsers, hasMyStatus, myGroup]);
+
+  // Playlist order: when current user has active stories, myGroup is first (Card 1) followed by otherUsers
+  const trayOrderedGroups = useMemo(() => {
+    if (hasMyStatus && myGroup) {
+      return [myGroup, ...otherUsers];
+    }
+    return groupedUsers;
+  }, [hasMyStatus, myGroup, otherUsers, groupedUsers]);
+
+  const viewerPlaylist = useMemo(() => {
+    return buildViewerPlaylist(trayOrderedGroups, currentViewerId);
+  }, [trayOrderedGroups, currentViewerId]);
 
   // Hidden statuses metrics
   const hiddenCount = hiddenStatuses.length;
@@ -122,12 +136,22 @@ export default function StatusTray({ currentUser }) {
       const all = getActiveStatuses();
       const vId = currentUser?.id || 'me';
       const groups = groupStatusesByUser(all, vId);
-      const playlist = buildViewerPlaylist(groups, vId);
+      const mine = currentUser
+        ? groups.find(
+            (g) =>
+              (currentUser.id && g.userId === currentUser.id) ||
+              (currentUser.name && g.userName.toLowerCase() === currentUser.name.toLowerCase()) ||
+              (currentUser.display_name && g.userName.toLowerCase() === currentUser.display_name.toLowerCase())
+          )
+        : null;
+      const others = mine && mine.count > 0 ? groups.filter((g) => g.key !== mine.key) : groups;
+      const ordered = mine && mine.count > 0 ? [mine, ...others] : groups;
+      const playlist = buildViewerPlaylist(ordered, vId);
 
       const targetUserId = e.detail?.userId;
       const targetUserName = e.detail?.userName;
 
-      const target = groups.find(
+      const target = ordered.find(
         (g) =>
           (targetUserId && g.userId === targetUserId) ||
           (targetUserName && g.userName && g.userName.toLowerCase() === targetUserName.toLowerCase())
@@ -238,57 +262,155 @@ export default function StatusTray({ currentUser }) {
         onPointerCancel={onPointerUp}
         role="list"
       >
-        {/* Card 1: Always available Add Status action (never blocks adding another) */}
-        <div
-          role="listitem"
-          className="status-card-item status-card-create"
-          onClick={() => {
-            if (dragRef.current.moved) {
-              dragRef.current.moved = false;
-              return;
-            }
-            setCreatorOpen(true);
-          }}
-          title="Add 24-hour status"
-        >
-          <div className="status-create-thumb">
-            <Avatar
-              name={cleanDisplayName(currentUser?.name || currentUser?.display_name || 'You', 'You')}
-              src={currentUser?.avatar_url}
-              hasStatus={hasMyStatus}
-              className="status-user-avatar"
-              onClick={
-                hasMyStatus && myGroup
-                  ? (e) => {
-                      e.stopPropagation();
-                      handleOpenViewerForUser(myGroup.key);
-                    }
-                  : undefined
-              }
-              title={hasMyStatus ? 'View your status (or tap + to add another)' : 'Add 24-hour status'}
-            />
-            <button
-              type="button"
-              className="status-add-plus-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                setCreatorOpen(true);
-              }}
-              title="Add another 24-hour status"
-              aria-label="Add another 24-hour status"
-            >
-              <Plus size={15} strokeWidth={3} />
-            </button>
-          </div>
-          <span className="status-card-label">Add Status</span>
-        </div>
+        {/* Card 1: Add Status card when no active stories; becomes thumbnail viewer when user has active stories */}
+        {hasMyStatus && myGroup ? (
+          (() => {
+            const latest = myGroup.latestStatus;
+            const mediaType = inferMediaType(latest.mediaUrl, latest.mediaType);
+            const hasMedia = Boolean(latest.mediaUrl && mediaType);
+            const myTimeAgo = formatPostDate(latest.createdAt || latest.created_at, now) || 'Just now';
 
-        {/* Stacked User Status Cards: 1 card per unique user, thumbnail is most recent status */}
-        {groupedUsers.map((group) => {
+            return (
+              <div
+                role="listitem"
+                className={`status-card-item status-card-story status-bg-${latest.bgStyle || 'emerald'} ${hasMedia ? `has-media-thumb has-${mediaType}-thumb` : ''}`}
+                onClick={() => handleOpenViewerForUser(myGroup.key)}
+                title={`Your story: ${latest.text || `${myGroup.count} active ${myGroup.count === 1 ? 'status' : 'statuses'}`}`}
+              >
+                {/* Media Preview Background & Scrim */}
+                {mediaType === 'image' && latest.mediaUrl && (
+                  <div className="status-card-media-wrap">
+                    <img src={latest.mediaUrl} alt="" className="status-card-bg-media" />
+                    <div className="status-card-media-scrim" />
+                  </div>
+                )}
+
+                {mediaType === 'video' && latest.mediaUrl && (
+                  <div className="status-card-media-wrap">
+                    <video src={latest.mediaUrl} className="status-card-bg-media" muted preload="metadata" />
+                    <div className="status-card-media-scrim" />
+                    <span className="status-card-media-badge" title="Video status">
+                      <Video size={10} />
+                    </span>
+                  </div>
+                )}
+
+                {mediaType === 'audio' && latest.mediaUrl && (
+                  <div className="status-card-media-wrap">
+                    <div className="status-card-media-scrim" />
+                    <span className="status-card-media-badge audio" title="Audio testimony">
+                      <Music size={10} />
+                    </span>
+                  </div>
+                )}
+
+                <div className="status-card-header">
+                  <div className="status-avatar-stack-wrap">
+                    <div style={{ position: 'relative', display: 'inline-flex' }}>
+                      <Avatar
+                        name={cleanDisplayName(currentUser?.name || currentUser?.display_name || 'You', 'You')}
+                        src={myGroup.userAvatar || currentUser?.avatar_url}
+                        hasStatus={true}
+                        className="status-user-avatar"
+                      />
+                      <button
+                        type="button"
+                        className="status-add-plus-btn status-add-plus-badge"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCreatorOpen(true);
+                        }}
+                        title="Add another 24-hour status"
+                        aria-label="Add another 24-hour status"
+                      >
+                        <Plus size={12} strokeWidth={3} />
+                      </button>
+                    </div>
+                    <span
+                      className="status-stack-count"
+                      aria-label={`${myGroup.count} active ${myGroup.count === 1 ? 'story' : 'stories'}`}
+                      title={`${myGroup.count} active ${myGroup.count === 1 ? 'story' : 'stories'}`}
+                    >
+                      {myGroup.count}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="status-card-snippet">
+                  {mediaType === 'audio' && (
+                    <div className="status-card-audio-pill">
+                      <Music size={11} />
+                      <span>Audio</span>
+                    </div>
+                  )}
+                  {latest.text ? (
+                    <p className="status-snippet-text">{latest.text}</p>
+                  ) : null}
+                </div>
+
+                <div className="status-card-footer">
+                  <div className="status-author-name-row">
+                    <span className="status-card-author-name">Your Status</span>
+                    {myGroup.userVerified && (
+                      <VerifiedBadge badge={myGroup.userBadge} role={myGroup.userRole} size={13} />
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap', minWidth: 0, overflow: 'hidden' }}>
+                    {myGroup.userBadge && (
+                      <MemberBadge badgeId={myGroup.userBadge} size="sm" />
+                    )}
+                    <span className="status-card-time" title={myTimeAgo}>
+                      {myTimeAgo}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()
+        ) : (
+          <div
+            role="listitem"
+            className="status-card-item status-card-create"
+            onClick={() => {
+              if (dragRef.current.moved) {
+                dragRef.current.moved = false;
+                return;
+              }
+              setCreatorOpen(true);
+            }}
+            title="Add 24-hour status"
+          >
+            <div className="status-create-thumb">
+              <Avatar
+                name={cleanDisplayName(currentUser?.name || currentUser?.display_name || 'You', 'You')}
+                src={currentUser?.avatar_url}
+                hasStatus={false}
+                className="status-user-avatar"
+              />
+              <button
+                type="button"
+                className="status-add-plus-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCreatorOpen(true);
+                }}
+                title="Add 24-hour status"
+                aria-label="Add 24-hour status"
+              >
+                <Plus size={15} strokeWidth={3} />
+              </button>
+            </div>
+            <span className="status-card-label">Add Status</span>
+          </div>
+        )}
+
+        {/* Stacked User Status Cards: 1 card per other unique user, thumbnail is most recent status */}
+        {otherUsers.map((group) => {
           const latest = group.latestStatus;
           const cleanName = group.userName;
           const mediaType = inferMediaType(latest.mediaUrl, latest.mediaType);
           const hasMedia = Boolean(latest.mediaUrl && mediaType);
+          const timeAgo = formatPostDate(latest.createdAt || latest.created_at, now) || 'Just now';
 
           return (
             <div
@@ -380,9 +502,14 @@ export default function StatusTray({ currentUser }) {
                     <VerifiedBadge badge={group.userBadge} role={group.userRole} size={13} />
                   )}
                 </div>
-                {group.userBadge && (
-                  <MemberBadge badgeId={group.userBadge} size="sm" />
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap', minWidth: 0, overflow: 'hidden' }}>
+                  {group.userBadge && (
+                    <MemberBadge badgeId={group.userBadge} size="sm" />
+                  )}
+                  <span className="status-card-time" title={timeAgo}>
+                    {timeAgo}
+                  </span>
+                </div>
               </div>
             </div>
           );
