@@ -14,6 +14,22 @@ function isValidUuid(id) {
 }
 
 /**
+ * Infers whether a status media URL is 'image', 'video', or 'audio'.
+ */
+export function inferMediaType(url, explicitType = null) {
+  if (explicitType && ['image', 'video', 'audio'].includes(explicitType)) {
+    return explicitType;
+  }
+  if (!url || typeof url !== 'string') return null;
+  const clean = url.split('?')[0].toLowerCase();
+  if (/\.(mp4|webm|mov|m4v|ogg)$/.test(clean)) return 'video';
+  if (/\.(mp3|wav|m4a|aac|flac)$/.test(clean)) return 'audio';
+  if (/\.(jpg|jpeg|png|webp|gif|svg|bmp|avif)$/.test(clean)) return 'image';
+  return 'image';
+}
+
+
+/**
  * Retrieves all valid 24-hour statuses from local cache that have not expired.
  * Use fetchActiveStatuses() to hydrate from Supabase.
  */
@@ -71,7 +87,7 @@ export async function fetchActiveStatuses() {
 
     const mapped = (data || []).map((row) => {
       const prof = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-      const resolvedMediaType = row.media_type || (row.media_url ? 'image' : null);
+      const resolvedMediaType = row.media_type || inferMediaType(row.media_url);
       return {
         id: row.id,
         userId: row.user_id,
@@ -139,7 +155,7 @@ export async function createStatusUpdate({
   const now = new Date();
   const expiresAt = new Date(now.getTime() + TWENTY_FOUR_HOURS_MS);
   const cleanText = (text || '').trim();
-  const resolvedMediaType = mediaType || (mediaUrl ? 'image' : null);
+  const resolvedMediaType = mediaType || inferMediaType(mediaUrl);
 
   let activeUserId = userId;
   if (!isValidUuid(activeUserId)) {

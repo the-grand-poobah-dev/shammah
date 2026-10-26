@@ -1,10 +1,10 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Music, Video } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
-import { getActiveStatuses, fetchActiveStatuses } from '../lib/statusManager';
+import { getActiveStatuses, fetchActiveStatuses, inferMediaType } from '../lib/statusManager';
 import { formatPostDate, getPostDateTitle, useRelativeTimeTick, cleanDisplayName } from '../lib/postDisplay';
 import StatusViewerModal from './StatusViewerModal';
 import StatusCreatorModal from './StatusCreatorModal';
@@ -214,15 +214,44 @@ export default function StatusTray({ currentUser }) {
         {/* Community & user 24-hour status story cards */}
         {statuses.map((status, index) => {
           const cleanName = cleanDisplayName(status.userName, 'Member');
+          const mediaType = inferMediaType(status.mediaUrl, status.mediaType);
+          const hasMedia = Boolean(status.mediaUrl && mediaType);
 
           return (
             <div
               key={status.id}
               role="listitem"
-              className={`status-card-item status-card-story status-bg-${status.bgStyle || 'emerald'}`}
+              className={`status-card-item status-card-story status-bg-${status.bgStyle || 'emerald'} ${hasMedia ? `has-media-thumb has-${mediaType}-thumb` : ''}`}
               onClick={() => handleOpenViewer(index)}
-              title={`${cleanName}: ${status.text}`}
+              title={`${cleanName}: ${status.text || '24h story'}`}
             >
+              {/* Media Preview Background & Scrim */}
+              {mediaType === 'image' && status.mediaUrl && (
+                <div className="status-card-media-wrap">
+                  <img src={status.mediaUrl} alt="" className="status-card-bg-media" />
+                  <div className="status-card-media-scrim" />
+                </div>
+              )}
+
+              {mediaType === 'video' && status.mediaUrl && (
+                <div className="status-card-media-wrap">
+                  <video src={status.mediaUrl} className="status-card-bg-media" muted preload="metadata" />
+                  <div className="status-card-media-scrim" />
+                  <span className="status-card-media-badge" title="Video status">
+                    <Video size={10} />
+                  </span>
+                </div>
+              )}
+
+              {mediaType === 'audio' && status.mediaUrl && (
+                <div className="status-card-media-wrap">
+                  <div className="status-card-media-scrim" />
+                  <span className="status-card-media-badge audio" title="Audio testimony">
+                    <Music size={10} />
+                  </span>
+                </div>
+              )}
+
               <div className="status-card-header">
                 <Avatar
                   name={cleanName}
@@ -251,7 +280,15 @@ export default function StatusTray({ currentUser }) {
               </div>
 
               <div className="status-card-snippet">
-                <p className="status-snippet-text">{status.text}</p>
+                {mediaType === 'audio' && (
+                  <div className="status-card-audio-pill">
+                    <Music size={11} />
+                    <span>Audio</span>
+                  </div>
+                )}
+                {status.text ? (
+                  <p className="status-snippet-text">{status.text}</p>
+                ) : null}
               </div>
 
               <div className="status-card-footer">
@@ -304,6 +341,7 @@ export default function StatusTray({ currentUser }) {
           initialIndex={activeStoryIndex}
           currentUser={currentUser}
           onClose={() => setViewerOpen(false)}
+          onAddStatus={() => setCreatorOpen(true)}
         />
       )}
 
