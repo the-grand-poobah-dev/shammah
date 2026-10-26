@@ -403,9 +403,6 @@ export default function StatusViewerModal({
             <div className="status-viewer-author-meta">
               <div className="status-author-name-row">
                 <span className="status-author-name">{cleanAuthorName}</span>
-                {currentStatus.userBadge && (
-                  <MemberBadge badgeId={currentStatus.userBadge} size="sm" />
-                )}
                 {currentStatus.userVerified && (
                   <VerifiedBadge
                     badge={currentStatus.userBadge}
@@ -414,13 +411,9 @@ export default function StatusViewerModal({
                   />
                 )}
               </div>
-              <span
-                className="status-viewer-time"
-                title={getPostDateTitle(currentStatus.createdAt)}
-                suppressHydrationWarning
-              >
-                {formatPostDate(currentStatus.createdAt, now)} · 24h Status Story
-              </span>
+              {currentStatus.userBadge && (
+                <MemberBadge badgeId={currentStatus.userBadge} size="sm" />
+              )}
             </div>
           </div>
 

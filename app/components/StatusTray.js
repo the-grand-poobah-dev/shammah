@@ -291,43 +291,36 @@ export default function StatusTray({ currentUser }) {
                 ) : null}
               </div>
 
-              <div className="status-card-footer">
-                <div
-                  className="status-author-name-row cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.dispatchEvent(
-                      new CustomEvent('shammah:open-profile', {
-                        detail: {
-                          author: {
-                            id: status.userId,
-                            display_name: cleanName,
-                            avatar_url: status.userAvatar,
-                            badge: status.userBadge,
-                            badge_verified: status.userVerified,
-                            role: status.userRole,
-                          },
-                          authorId: status.userId,
+              <div
+                className="status-card-footer cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(
+                    new CustomEvent('shammah:open-profile', {
+                      detail: {
+                        author: {
+                          id: status.userId,
+                          display_name: cleanName,
+                          avatar_url: status.userAvatar,
+                          badge: status.userBadge,
+                          badge_verified: status.userVerified,
+                          role: status.userRole,
                         },
-                      })
-                    );
-                  }}
-                >
+                        authorId: status.userId,
+                      },
+                    })
+                  );
+                }}
+              >
+                <div className="status-author-name-row">
                   <span className="status-card-author-name">{cleanName}</span>
-                  {status.userBadge && (
-                    <MemberBadge badgeId={status.userBadge} size="sm" />
-                  )}
                   {status.userVerified && (
                     <VerifiedBadge badge={status.userBadge} role={status.userRole} size={13} />
                   )}
                 </div>
-                <span
-                  className="status-card-time"
-                  title={getPostDateTitle(status.createdAt)}
-                  suppressHydrationWarning
-                >
-                  {formatPostDate(status.createdAt, now)}
-                </span>
+                {status.userBadge && (
+                  <MemberBadge badgeId={status.userBadge} size="sm" />
+                )}
               </div>
             </div>
           );
