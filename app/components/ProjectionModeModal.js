@@ -11,13 +11,11 @@ import {
   BarChart3,
   BookOpen,
   Clock,
-  Volume2,
   Eye,
   EyeOff,
-  Flame,
-  Award,
   Users,
 } from 'lucide-react';
+import PopupSheet from './PopupSheet';
 import { playSound } from '../lib/soundEffects';
 import { BRAND } from '../lib/brand';
 
@@ -44,15 +42,6 @@ export default function ProjectionModeModal({
     return () => clearInterval(timer);
   }, []);
 
-  // Prevent background scroll & eliminate screen glitch
-  useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, []);
-
   // Listen to fullscreen changes to sync state accurately
   useEffect(() => {
     function onFsChange() {
@@ -66,43 +55,6 @@ export default function ProjectionModeModal({
     const m = Math.floor(secs / 60);
     const s = secs % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  }
-
-  // Keyboard navigation for presentation
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
-      if (e.key === 'ArrowRight' || e.key === 'PageDown') {
-        e.preventDefault();
-        handleNextSlide();
-      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-        e.preventDefault();
-        handlePrevSlide();
-      } else if (e.key === 'f' || e.key === 'F') {
-        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-          e.preventDefault();
-          toggleFullscreen();
-        }
-      } else if (e.key === 'Escape') {
-        if (!document.fullscreenElement) {
-          onClose();
-        }
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSlideIndex, slides.length]);
-
-  function toggleFullscreen() {
-    playSound('reaction');
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen?.().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen?.().catch(() => {});
-      setIsFullscreen(false);
-    }
   }
 
   // Prepare slides if course
@@ -154,6 +106,39 @@ export default function ProjectionModeModal({
     }
   }
 
+  // Keyboard navigation for presentation
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+        e.preventDefault();
+        handleNextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        handlePrevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          toggleFullscreen();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSlideIndex, slides.length]);
+
+  function toggleFullscreen() {
+    playSound('reaction');
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen?.().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+      setIsFullscreen(false);
+    }
+  }
+
   // Calculate Poll total votes
   const pollOptions = data.options || [
     { id: 'opt-1', label: 'Option 1' },
@@ -170,13 +155,14 @@ export default function ProjectionModeModal({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`projection-mode-shell ${themeMode === 'sanctuary' ? 'sanctuary-theme' : 'contrast-theme'}`}
-    >
-      {/* Top Stage Control Header Bar */}
-      <header className="projection-top-bar">
-        <div className="projection-brand-col">
+    <PopupSheet
+      open={true}
+      onClose={onClose}
+      size="xl"
+      dialogClassName="projection-popup-dialog"
+      bodyClassName="projection-popup-body"
+      title={
+        <div className="projection-brand-col" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           <span className="projection-live-badge">
             <span className="live-dot" /> LIVE SANCTUARY PROJECTION
           </span>
@@ -184,293 +170,303 @@ export default function ProjectionModeModal({
             {data.churchName || 'Shammah Fellowship & Discipleship Academy'}
           </span>
         </div>
+      }
+      footer={
+        <div className="projection-bottom-bar" style={{ padding: 0, borderTop: 'none', background: 'transparent' }}>
+          <button
+            type="button"
+            className="stage-nav-btn prev"
+            onClick={handlePrevSlide}
+            disabled={currentSlideIndex === 0}
+            aria-label="Previous Slide"
+          >
+            <ChevronLeft size={20} />
+            <span className="stage-nav-text">Previous</span>
+          </button>
 
-        {/* Presentation Title */}
-        <div className="projection-stage-title">
-          {type === 'poll' ? (
-            <span className="stage-title-pill">
-              <BarChart3 size={16} className="text-amber-400" />
-              <span>Interactive Fellowship Poll</span>
-            </span>
-          ) : (
-            <span className="stage-title-pill">
-              <BookOpen size={16} className="text-cyan-400" />
-              <span>{currentSlide.courseTitle}</span>
-            </span>
-          )}
-        </div>
-
-        {/* Stage Presenter Controls */}
-        <div className="projection-ctrl-col">
-          <div className="projection-timer" title="Elapsed service time">
-            <Clock size={13} />
-            <span>{formatTimer(elapsedTime)}</span>
+          {/* Slide Progress Indicator Dots */}
+          <div className="stage-dots-row">
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                className={`stage-dot${i === currentSlideIndex ? ' active' : ''}`}
+                onClick={() => setCurrentSlideIndex(i)}
+                title={`Go to slide ${i + 1}`}
+                aria-label={`Slide ${i + 1}`}
+              />
+            ))}
           </div>
 
           <button
             type="button"
-            className={`projection-btn icon${showQrCode ? ' active-toggle' : ''}`}
-            onClick={() => setShowQrCode(!showQrCode)}
-            title={showQrCode ? 'Hide Live Audience QR' : 'Show Live Audience QR'}
-            aria-label="Toggle QR Code"
+            className="stage-nav-btn next"
+            onClick={handleNextSlide}
+            disabled={currentSlideIndex === slides.length - 1}
+            aria-label="Next Slide"
           >
-            <QrCode size={15} />
-            <span className="btn-label-desktop">QR</span>
-          </button>
-
-          <button
-            type="button"
-            className={`projection-btn icon${showPresenterNotes ? ' active-toggle' : ''}`}
-            onClick={() => setShowPresenterNotes(!showPresenterNotes)}
-            title="Toggle Presenter Notes"
-            aria-label="Toggle Presenter Notes"
-          >
-            {showPresenterNotes ? <EyeOff size={15} /> : <Eye size={15} />}
-            <span className="btn-label-desktop">Notes</span>
-          </button>
-
-          <button
-            type="button"
-            className="projection-btn icon"
-            onClick={() => setThemeMode(themeMode === 'sanctuary' ? 'high-contrast' : 'sanctuary')}
-            title="Switch Projector Contrast"
-            aria-label="Switch Theme"
-          >
-            <Sparkles size={15} />
-          </button>
-
-          <button
-            type="button"
-            className="projection-btn icon fullscreen-btn"
-            onClick={toggleFullscreen}
-            title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen (F)'}
-            aria-label="Toggle Fullscreen"
-          >
-            {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
-
-          <button
-            type="button"
-            className="projection-btn exit-btn"
-            onClick={onClose}
-            title="Exit Projection Mode (Esc)"
-            aria-label="Exit Projection Mode"
-          >
-            <X size={15} />
-            <span>Exit</span>
+            <span className="stage-nav-text">Next</span>
+            <ChevronRight size={20} />
           </button>
         </div>
-      </header>
+      }
+    >
+      <div
+        ref={containerRef}
+        className={`projection-mode-shell ${themeMode === 'sanctuary' ? 'sanctuary-theme' : 'contrast-theme'}`}
+      >
+        {/* Top Stage Control Header Bar */}
+        <header className="projection-top-bar">
+          {/* Presentation Title */}
+          <div className="projection-stage-title">
+            {type === 'poll' ? (
+              <span className="stage-title-pill">
+                <BarChart3 size={16} className="text-amber-400" />
+                <span>Interactive Fellowship Poll</span>
+              </span>
+            ) : (
+              <span className="stage-title-pill">
+                <BookOpen size={16} className="text-cyan-400" />
+                <span>{currentSlide.courseTitle}</span>
+              </span>
+            )}
+          </div>
 
-      {/* Main Sanctuary Projection Canvas */}
-      <main className="projection-stage-canvas">
-        {/* ================= POLL PROJECTION ================= */}
-        {type === 'poll' ? (
-          <div className="projection-poll-stage">
-            <div className="projection-poll-header">
-              <span className="poll-badge-stage">FELLOWSHIP LIVE VOTE</span>
-              <h1 className="projection-poll-question">
-                {data.text_content || 'Which spiritual discipline has deepened your walk most this season?'}
-              </h1>
-              <p className="projection-poll-sub">
-                Scan the QR code with your phone or choose an option on screen.
-              </p>
+          {/* Stage Presenter Controls */}
+          <div className="projection-ctrl-col">
+            <div className="projection-timer" title="Elapsed service time">
+              <Clock size={13} />
+              <span>{formatTimer(elapsedTime)}</span>
             </div>
 
-            {/* Poll Bars */}
-            <div className="projection-poll-options">
-              {pollOptions.map((opt, i) => {
-                const count = pollVotes[opt.id] || 0;
-                const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-                return (
-                  <div
-                    key={opt.id || i}
-                    className="projection-poll-option-card"
-                    onClick={() => simulateAudienceVote(opt.id)}
-                    title="Click to simulate live audience vote"
-                  >
-                    <div className="projection-poll-bar-fill" style={{ width: `${pct}%` }} />
-                    <div className="projection-poll-option-content">
-                      <span className="poll-letter-badge">{String.fromCharCode(65 + i)}</span>
-                      <span className="poll-option-label-large">{opt.label}</span>
-                      <div className="poll-option-stats">
-                        <span className="poll-stat-pct">{pct}%</span>
-                        <span className="poll-stat-count">({count} votes)</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <button
+              type="button"
+              className={`projection-btn icon${showQrCode ? ' active-toggle' : ''}`}
+              onClick={() => setShowQrCode(!showQrCode)}
+              title={showQrCode ? 'Hide Live Audience QR' : 'Show Live Audience QR'}
+              aria-label="Toggle QR Code"
+            >
+              <QrCode size={15} />
+              <span className="btn-label-desktop">QR</span>
+            </button>
 
-            {/* Live Poll Bottom Stat */}
-            <div className="projection-poll-footer-stats">
-              <div className="stat-pill">
-                <Users size={18} className="text-cyan-400" />
-                <span>Total Live Votes: <strong>{totalVotes}</strong></span>
-              </div>
+            <button
+              type="button"
+              className={`projection-btn icon${showPresenterNotes ? ' active-toggle' : ''}`}
+              onClick={() => setShowPresenterNotes(!showPresenterNotes)}
+              title="Toggle Presenter Notes"
+              aria-label="Toggle Presenter Notes"
+            >
+              {showPresenterNotes ? <EyeOff size={15} /> : <Eye size={15} />}
+              <span className="btn-label-desktop">Notes</span>
+            </button>
+
+            <button
+              type="button"
+              className="projection-btn icon"
+              onClick={() => setThemeMode(themeMode === 'sanctuary' ? 'high-contrast' : 'sanctuary')}
+              title="Switch Projector Contrast"
+              aria-label="Switch Theme"
+            >
+              <Sparkles size={15} />
+            </button>
+
+            <button
+              type="button"
+              className="projection-btn icon fullscreen-btn"
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen (F)'}
+              aria-label="Toggle Fullscreen"
+            >
+              {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            </button>
+
+            {isFullscreen && (
               <button
                 type="button"
-                className="projection-reveal-btn"
-                onClick={() => {
-                  playSound('reaction');
-                  setPollRevealed(true);
-                }}
+                className="projection-btn exit-btn"
+                onClick={() => document.exitFullscreen?.().catch(() => {})}
+                title="Exit Fullscreen"
+                aria-label="Exit Fullscreen"
               >
-                <Sparkles size={16} />
-                <span>Reveal Final Breakdown</span>
+                <X size={15} />
+                <span>Exit</span>
               </button>
-            </div>
+            )}
           </div>
-        ) : (
-          /* ================= COURSE & SCRIPTURE PROJECTION ================= */
-          <div className="projection-course-stage">
-            {/* Slide Header */}
-            <div className="projection-slide-top">
-              <span className="slide-num-pill">
-                MODULE {currentSlide.index} OF {slides.length}
-              </span>
-              <h2 className="projection-slide-title">{currentSlide.title}</h2>
-              {currentSlide.scripture && (
-                <div className="projection-scripture-ref">
-                  <span>📖 {currentSlide.scripture}</span>
-                </div>
-              )}
-            </div>
+        </header>
 
-            {/* Main Slide Content / Scripture Verse */}
-            <div className="projection-slide-body">
-              <div className="projection-scripture-quote-box">
-                <p className="projection-scripture-text">
-                  {currentSlide.content}
+        {/* Main Sanctuary Projection Canvas */}
+        <main className="projection-stage-canvas">
+          {/* ================= POLL PROJECTION ================= */}
+          {type === 'poll' ? (
+            <div className="projection-poll-stage">
+              <div className="projection-poll-header">
+                <span className="poll-badge-stage">FELLOWSHIP LIVE VOTE</span>
+                <h1 className="projection-poll-question">
+                  {data.text_content || 'Which spiritual discipline has deepened your walk most this season?'}
+                </h1>
+                <p className="projection-poll-sub">
+                  Scan the QR code with your phone or choose an option on screen.
                 </p>
               </div>
 
-              {/* Key points for study / discussion */}
-              {currentSlide.keyPoints && (
-                <div className="projection-keypoints-box">
-                  <h3 className="keypoints-title">Core Discipleship Points:</h3>
-                  <div className="keypoints-grid">
-                    {currentSlide.keyPoints.map((pt, i) => (
-                      <div key={i} className="keypoint-card">
-                        <span className="keypoint-bullet">{i + 1}</span>
-                        <p>{pt}</p>
+              {/* Poll Bars */}
+              <div className="projection-poll-options">
+                {pollOptions.map((opt, i) => {
+                  const count = pollVotes[opt.id] || 0;
+                  const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+                  return (
+                    <div
+                      key={opt.id || i}
+                      className="projection-poll-option-card"
+                      onClick={() => simulateAudienceVote(opt.id)}
+                      title="Click to simulate live audience vote"
+                    >
+                      <div className="projection-poll-bar-fill" style={{ width: `${pct}%` }} />
+                      <div className="projection-poll-option-content">
+                        <span className="poll-letter-badge">{String.fromCharCode(65 + i)}</span>
+                        <span className="poll-option-label-large">{opt.label}</span>
+                        <div className="poll-option-stats">
+                          <span className="poll-stat-pct">{pct}%</span>
+                          <span className="poll-stat-count">({count} votes)</span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Live Poll Bottom Stat */}
+              <div className="projection-poll-footer-stats">
+                <div className="stat-pill">
+                  <Users size={18} className="text-cyan-400" />
+                  <span>Total Live Votes: <strong>{totalVotes}</strong></span>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Live Audience QR Code Badge (Docked Non-Overlapping) */}
-        {showQrCode && (
-          <aside className="projection-qr-overlay" role="complementary" aria-label="Audience Live Sync">
-            <div className="qr-box-inner">
-              {/* SVG QR Code Simulation */}
-              <div className="qr-visual-box">
-                <svg viewBox="0 0 100 100" className="qr-svg-mock">
-                  <rect x="0" y="0" width="100" height="100" fill="#ffffff" rx="8" />
-                  {/* Position squares */}
-                  <rect x="10" y="10" width="25" height="25" fill="#0f172a" />
-                  <rect x="15" y="15" width="15" height="15" fill="#ffffff" />
-                  <rect x="18" y="18" width="9" height="9" fill="#0f172a" />
-
-                  <rect x="65" y="10" width="25" height="25" fill="#0f172a" />
-                  <rect x="70" y="15" width="15" height="15" fill="#ffffff" />
-                  <rect x="73" y="18" width="9" height="9" fill="#0f172a" />
-
-                  <rect x="10" y="65" width="25" height="25" fill="#0f172a" />
-                  <rect x="15" y="70" width="15" height="15" fill="#ffffff" />
-                  <rect x="18" y="73" width="9" height="9" fill="#0f172a" />
-
-                  {/* QR pattern dots */}
-                  <rect x="42" y="12" width="6" height="6" fill="#0f172a" />
-                  <rect x="52" y="18" width="6" height="6" fill="#0f172a" />
-                  <rect x="42" y="26" width="6" height="6" fill="#0f172a" />
-                  <rect x="42" y="42" width="16" height="16" fill="#0f172a" />
-                  <rect x="68" y="45" width="8" height="8" fill="#0f172a" />
-                  <rect x="80" y="55" width="8" height="8" fill="#0f172a" />
-                  <rect x="45" y="68" width="8" height="8" fill="#0f172a" />
-                  <rect x="60" y="72" width="12" height="12" fill="#0f172a" />
-                  <rect x="78" y="78" width="10" height="10" fill="#0f172a" />
-                </svg>
+                <button
+                  type="button"
+                  className="projection-reveal-btn"
+                  onClick={() => {
+                    playSound('reaction');
+                    setPollRevealed(true);
+                  }}
+                >
+                  <Sparkles size={16} />
+                  <span>Reveal Final Breakdown</span>
+                </button>
               </div>
-              <div className="qr-text-meta">
-                <strong>Scan with Phone</strong>
-                <span>Join &amp; vote live</span>
-                <span className="qr-link-badge">{BRAND.domain}</span>
+            </div>
+          ) : (
+            /* ================= COURSE & SCRIPTURE PROJECTION ================= */
+            <div className="projection-course-stage">
+              {/* Slide Header */}
+              <div className="projection-slide-top">
+                <span className="slide-num-pill">
+                  MODULE {currentSlide.index} OF {slides.length}
+                </span>
+                <h2 className="projection-slide-title">{currentSlide.title}</h2>
+                {currentSlide.scripture && (
+                  <div className="projection-scripture-ref">
+                    <span>📖 {currentSlide.scripture}</span>
+                  </div>
+                )}
               </div>
-              <button
-                type="button"
-                className="qr-dismiss-btn"
-                onClick={() => setShowQrCode(false)}
-                title="Dismiss QR overlay"
-                aria-label="Dismiss QR code"
-              >
-                <X size={14} />
-              </button>
+
+              {/* Main Slide Content / Scripture Verse */}
+              <div className="projection-slide-body">
+                <div className="projection-scripture-quote-box">
+                  <p className="projection-scripture-text">
+                    {currentSlide.content}
+                  </p>
+                </div>
+
+                {/* Key points for study / discussion */}
+                {currentSlide.keyPoints && (
+                  <div className="projection-keypoints-box">
+                    <h3 className="keypoints-title">Core Discipleship Points:</h3>
+                    <div className="keypoints-grid">
+                      {currentSlide.keyPoints.map((pt, i) => (
+                        <div key={i} className="keypoint-card">
+                          <span className="keypoint-bullet">{i + 1}</span>
+                          <p>{pt}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </aside>
-        )}
+          )}
 
-        {/* Presenter Notes Confidence Monitor Drawer */}
-        {showPresenterNotes && currentSlide?.notes && (
-          <div className="projection-presenter-notes-drawer">
-            <div className="presenter-notes-head">
-              <span>🎙️ Instructor / Pastor Notes (Hidden from Congregation)</span>
-              <button
-                type="button"
-                className="notes-close-btn"
-                onClick={() => setShowPresenterNotes(false)}
-              >
-                ✕
-              </button>
+          {/* Live Audience QR Code Badge (Docked Non-Overlapping) */}
+          {showQrCode && (
+            <aside className="projection-qr-overlay" role="complementary" aria-label="Audience Live Sync">
+              <div className="qr-box-inner">
+                {/* SVG QR Code Simulation */}
+                <div className="qr-visual-box">
+                  <svg viewBox="0 0 100 100" className="qr-svg-mock">
+                    <rect x="0" y="0" width="100" height="100" fill="#ffffff" rx="8" />
+                    {/* Position squares */}
+                    <rect x="10" y="10" width="25" height="25" fill="#0f172a" />
+                    <rect x="15" y="15" width="15" height="15" fill="#ffffff" />
+                    <rect x="18" y="18" width="9" height="9" fill="#0f172a" />
+
+                    <rect x="65" y="10" width="25" height="25" fill="#0f172a" />
+                    <rect x="70" y="15" width="15" height="15" fill="#ffffff" />
+                    <rect x="73" y="18" width="9" height="9" fill="#0f172a" />
+
+                    <rect x="10" y="65" width="25" height="25" fill="#0f172a" />
+                    <rect x="15" y="70" width="15" height="15" fill="#ffffff" />
+                    <rect x="18" y="73" width="9" height="9" fill="#0f172a" />
+
+                    {/* QR pattern dots */}
+                    <rect x="42" y="12" width="6" height="6" fill="#0f172a" />
+                    <rect x="52" y="18" width="6" height="6" fill="#0f172a" />
+                    <rect x="42" y="26" width="6" height="6" fill="#0f172a" />
+                    <rect x="42" y="42" width="16" height="16" fill="#0f172a" />
+                    <rect x="68" y="45" width="8" height="8" fill="#0f172a" />
+                    <rect x="80" y="55" width="8" height="8" fill="#0f172a" />
+                    <rect x="45" y="68" width="8" height="8" fill="#0f172a" />
+                    <rect x="60" y="72" width="12" height="12" fill="#0f172a" />
+                    <rect x="78" y="78" width="10" height="10" fill="#0f172a" />
+                  </svg>
+                </div>
+                <div className="qr-text-meta">
+                  <strong>Scan with Phone</strong>
+                  <span>Join &amp; vote live</span>
+                  <span className="qr-link-badge">{BRAND.domain}</span>
+                </div>
+                <button
+                  type="button"
+                  className="qr-dismiss-btn"
+                  onClick={() => setShowQrCode(false)}
+                  title="Dismiss QR overlay"
+                  aria-label="Dismiss QR code"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </aside>
+          )}
+
+          {/* Presenter Notes Confidence Monitor Drawer */}
+          {showPresenterNotes && currentSlide?.notes && (
+            <div className="projection-presenter-notes-drawer">
+              <div className="presenter-notes-head">
+                <span>🎙️ Instructor / Pastor Notes (Hidden from Congregation)</span>
+                <button
+                  type="button"
+                  className="notes-close-btn"
+                  onClick={() => setShowPresenterNotes(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="presenter-notes-body">{currentSlide.notes}</p>
             </div>
-            <p className="presenter-notes-body">{currentSlide.notes}</p>
-          </div>
-        )}
-      </main>
-
-      {/* Bottom Stage Navigation Controls */}
-      <footer className="projection-bottom-bar">
-        <button
-          type="button"
-          className="stage-nav-btn prev"
-          onClick={handlePrevSlide}
-          disabled={currentSlideIndex === 0}
-          aria-label="Previous Slide"
-        >
-          <ChevronLeft size={20} />
-          <span className="stage-nav-text">Previous</span>
-        </button>
-
-        {/* Slide Progress Indicator Dots */}
-        <div className="stage-dots-row">
-          {slides.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              className={`stage-dot${i === currentSlideIndex ? ' active' : ''}`}
-              onClick={() => setCurrentSlideIndex(i)}
-              title={`Go to slide ${i + 1}`}
-              aria-label={`Slide ${i + 1}`}
-            />
-          ))}
-        </div>
-
-        <button
-          type="button"
-          className="stage-nav-btn next"
-          onClick={handleNextSlide}
-          disabled={currentSlideIndex === slides.length - 1}
-          aria-label="Next Slide"
-        >
-          <span className="stage-nav-text">Next</span>
-          <ChevronRight size={20} />
-        </button>
-      </footer>
-    </div>
+          )}
+        </main>
+      </div>
+    </PopupSheet>
   );
 }

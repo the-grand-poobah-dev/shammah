@@ -18,6 +18,7 @@ import { saveCommentIdentity, getCommentIdentity, removeCommentIdentity } from '
 import { logActivity } from '../lib/activityLogManager';
 import { getBlockedUsers } from '../lib/profileManager';
 import { Pin, Sparkles, RefreshCw, EyeOff, Trash2 } from 'lucide-react';
+import PopupSheet from './PopupSheet';
 
 export default function CommentThread({
   postId,
@@ -41,6 +42,7 @@ export default function CommentThread({
   const [mentionedIds, setMentionedIds] = useState([]);
   const [pinnedId, setPinnedId] = useState(() => getPinnedCommentId(postId));
   const [authorReactions, setAuthorReactions] = useState(() => getAuthorCommentReactions(postId));
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   // Current session user profile for "You" identity card
   const [currentUserProfile, setCurrentUserProfile] = useState(initialProfile || null);
@@ -238,8 +240,12 @@ export default function CommentThread({
     }, 0);
   }
 
-  async function handleDeleteComment(commentId) {
-    if (!window.confirm('Delete this comment?')) return;
+  function handleDeleteComment(commentId) {
+    setConfirmDeleteId(commentId);
+  }
+
+  async function executeDeleteComment(commentId) {
+    setConfirmDeleteId(null);
     removeCommentIdentity(commentId);
     setComments((prev) => {
       const next = prev.filter((c) => c.id !== commentId && c.parent_id !== commentId);
@@ -814,6 +820,37 @@ export default function CommentThread({
         </div>
         {error && <p className="auth-message">{error}</p>}
       </form>
+
+      {confirmDeleteId && (
+        <PopupSheet
+          open={Boolean(confirmDeleteId)}
+          onClose={() => setConfirmDeleteId(null)}
+          title="Delete Comment"
+          size="sm"
+        >
+          <div className="author-block-confirm-box" style={{ margin: 0 }}>
+            <p style={{ margin: 0 }}>
+              Are you sure you want to delete this comment? This action cannot be undone.
+            </p>
+            <div className="confirm-btn-row" style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                className="btn-confirm-danger"
+                onClick={() => executeDeleteComment(confirmDeleteId)}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="btn-confirm-cancel"
+                onClick={() => setConfirmDeleteId(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </PopupSheet>
+      )}
     </div>
   );
 }

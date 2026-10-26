@@ -11,6 +11,7 @@ import {
   Globe,
   AlertCircle,
 } from 'lucide-react';
+import PopupSheet from './PopupSheet';
 import {
   generateWatermarkedCanvas,
   downloadWatermarkedImage,
@@ -145,97 +146,87 @@ export default function WatermarkShareModal({
   }
 
   return (
-    <div className="vis-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="Watermarked Share Card">
-      <div
-        className="vis-modal-card neon-glow-modal watermark-modal-container"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="watermark-modal-header">
-          <div className="watermark-modal-badge">
-            <Sparkles size={14} className="text-amber-400" />
-            <span>Watermarked Share Card</span>
-          </div>
-          <button
-            type="button"
-            className="inst-modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
+    <PopupSheet
+      open={true}
+      onClose={onClose}
+      size="md"
+      title={
+        <div className="watermark-modal-badge">
+          <Sparkles size={14} className="text-amber-400" />
+          <span>Watermarked Share Card</span>
         </div>
-
-        <div className="watermark-modal-intro">
-          <h3>Share to WhatsApp, Instagram &amp; Socials</h3>
-          <p>
-            Any content shared outside the app is automatically watermarked with {BRAND.appName}&apos;s flame logo, &ldquo;{BRAND.tagline}&rdquo; tagline, and verified website link (<strong>{BRAND.domain}</strong>).
-          </p>
-        </div>
-
-        {/* Live Canvas Preview Frame */}
-        <div className="watermark-preview-box">
-          {loading ? (
-            <div className="watermark-loading-state">
-              <Flame size={32} className="text-amber-500 animate-pulse" />
-              <span>Generating watermarked view...</span>
-            </div>
-          ) : previewUrl ? (
-            <div className="watermark-img-wrap">
-              <img
-                src={previewUrl}
-                alt="Watermarked Content"
-                className="watermark-rendered-img"
-              />
-            </div>
-          ) : (
-            <div className="watermark-loading-state">
-              <AlertCircle size={28} className="text-amber-400 mb-2" />
-              <span className="text-rose-400 font-medium">{errorMsg || 'Could not generate preview'}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Action Buttons */}
-        <div className="watermark-actions-grid">
-          <button
-            type="button"
-            className="watermark-btn primary"
-            onClick={handleDownload}
-            disabled={loading || Boolean(errorMsg)}
-          >
-            {downloaded ? <Check size={16} /> : <Download size={16} />}
-            <span>{downloaded ? 'Downloaded ✓' : 'Download Image'}</span>
-          </button>
-
-          <button
-            type="button"
-            className="watermark-btn secondary"
-            onClick={handleCopyImage}
-            disabled={loading}
-          >
-            {copied ? <Check size={16} /> : <Copy size={16} />}
-            <span>{copied ? 'Copied ✓' : 'Copy Image'}</span>
-          </button>
-
-          <button
-            type="button"
-            className="watermark-btn share"
-            onClick={handleWebShare}
-            disabled={loading}
-          >
-            <Share2 size={16} />
-            <span>Share Sheet</span>
-          </button>
-        </div>
-
-        <div className="watermark-footer-note">
+      }
+      footer={
+        <div className="watermark-footer-note" style={{ paddingTop: 0 }}>
           <Globe size={13} className="text-sky-400" />
           <span>Includes verified watermark: <strong>{BRAND.domain}</strong></span>
         </div>
-
-        {toast && <div className="inst-modal-toast">{toast}</div>}
+      }
+    >
+      <div className="watermark-modal-intro">
+        <h3>Share to WhatsApp, Instagram &amp; Socials</h3>
+        <p>
+          Any content shared outside the app is automatically watermarked with {BRAND.appName}&apos;s flame logo, &ldquo;{BRAND.tagline}&rdquo; tagline, and verified website link (<strong>{BRAND.domain}</strong>).
+        </p>
       </div>
-    </div>
+
+      {/* Live Canvas Preview Frame */}
+      <div className="watermark-preview-box">
+        {loading ? (
+          <div className="watermark-loading-state">
+            <Flame size={32} className="text-amber-500 animate-pulse" />
+            <span>Generating watermarked view...</span>
+          </div>
+        ) : previewUrl ? (
+          <div className="watermark-img-wrap">
+            <img
+              src={previewUrl}
+              alt="Watermarked Content"
+              className="watermark-rendered-img"
+            />
+          </div>
+        ) : (
+          <div className="watermark-loading-state">
+            <AlertCircle size={28} className="text-amber-400 mb-2" />
+            <span className="text-rose-400 font-medium">{errorMsg || 'Could not generate preview'}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="watermark-actions-grid">
+        <button
+          type="button"
+          className="watermark-btn primary"
+          onClick={handleDownload}
+          disabled={loading || Boolean(errorMsg)}
+        >
+          {downloaded ? <Check size={16} /> : <Download size={16} />}
+          <span>{downloaded ? 'Downloaded ✓' : 'Download Image'}</span>
+        </button>
+
+        <button
+          type="button"
+          className="watermark-btn secondary"
+          onClick={handleCopyImage}
+          disabled={loading}
+        >
+          {copied ? <Check size={16} /> : <Copy size={16} />}
+          <span>{copied ? 'Copied ✓' : 'Copy Image'}</span>
+        </button>
+
+        <button
+          type="button"
+          className="watermark-btn share"
+          onClick={handleWebShare}
+          disabled={loading}
+        >
+          <Share2 size={16} />
+          <span>Share Sheet</span>
+        </button>
+      </div>
+
+      {toast && <div className="inst-modal-toast">{toast}</div>}
+    </PopupSheet>
   );
 }

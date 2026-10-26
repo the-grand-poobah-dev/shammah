@@ -38,10 +38,15 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 
-// Module-level stacking counter and z-index calculation
-let activePopupCount = 0;
+// Module-level stacking tracker and z-index calculation
+const openPopupStack = [];
+let popupZSequence = 0;
 const BASE_Z_INDEX = 200;
 const STEP_Z_INDEX = 10;
+
+function isTopmostPopup(id) {
+  return openPopupStack.length > 0 && openPopupStack[openPopupStack.length - 1] === id;
+}
 
 // Module-level body scroll lock with counter
 let scrollLockCount = 0;
@@ -79,6 +84,8 @@ export default function PopupSheet({
   children,
   footer = null,
   labelledBy,
+  dialogClassName = '',
+  bodyClassName = '',
 }) {
   const [mounted, setMounted] = useState(false);
   const [currentZIndex, setCurrentZIndex] = useState(BASE_Z_INDEX);
@@ -99,16 +106,23 @@ export default function PopupSheet({
   useEffect(() => {
     if (!open) return;
 
-    activePopupCount += 1;
-    const assignedZIndex = BASE_Z_INDEX + (activePopupCount * STEP_Z_INDEX);
+    openPopupStack.push(generatedId);
+    popupZSequence += 1;
+    const assignedZIndex = BASE_Z_INDEX + (popupZSequence * STEP_Z_INDEX);
     setCurrentZIndex(assignedZIndex);
     lockBodyScroll();
 
     return () => {
-      activePopupCount = Math.max(0, activePopupCount - 1);
+      const idx = openPopupStack.lastIndexOf(generatedId);
+      if (idx !== -1) {
+        openPopupStack.splice(idx, 1);
+      }
+      if (openPopupStack.length === 0) {
+        popupZSequence = 0;
+      }
       unlockBodyScroll();
     };
-  }, [open]);
+  }, [open, generatedId]);
 
   // Focus trap and trigger restoration
   useEffect(() => {
@@ -141,13 +155,18 @@ export default function PopupSheet({
     };
   }, [open]);
 
-  // Keyboard navigation: Escape closes, Tab traps
+  // Keyboard navigation: Escape closes topmost popup only, Tab traps focus inside topmost popup
   useEffect(() => {
     if (!open) return;
 
     function handleKeyDown(e) {
+      if (!isTopmostPopup(generatedId)) return;
+
       if (e.key === 'Escape') {
         e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') {
+          e.stopImmediatePropagation();
+        }
         e.preventDefault();
         onClose?.();
         return;
@@ -185,7 +204,7 @@ export default function PopupSheet({
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [open, onClose]);
+  }, [open, onClose, generatedId]);
 
   if (!mounted) return null;
 
@@ -235,7 +254,7 @@ export default function PopupSheet({
             aria-modal="true"
             aria-labelledby={titleId}
             tabIndex={-1}
-            className={`popup-sheet-dialog popup-sheet-${size}`}
+            className={`popup-sheet-dialog popup-sheet-${size}${dialogClassName ? ` ${dialogClassName}` : ''}`}
             variants={dialogVariants}
             initial="hidden"
             animate="visible"
@@ -261,7 +280,7 @@ export default function PopupSheet({
             </div>
 
             {/* Scrollable Body Content */}
-            <div className="popup-sheet-body">
+            <div className={`popup-sheet-body${bodyClassName ? ` ${bodyClassName}` : ''}`}>
               {children}
             </div>
 

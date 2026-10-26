@@ -150,7 +150,6 @@ export default function CreatePostBox({
   const photoInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const audioInputRef = useRef(null);
-  const categoryMenuRef = useRef(null);
   const categoryTriggerRef = useRef(null);
   const visMenuRef = useRef(null);
   const identityMenuRef = useRef(null);
@@ -170,30 +169,6 @@ export default function CreatePostBox({
     postIdentity === 'anonymous' || postIdentity === 'pseudo'
       ? null
       : profile?.avatar_url;
-
-  // Close category dropdown on click outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (
-        categoryMenuRef.current &&
-        !categoryMenuRef.current.contains(event.target) &&
-        categoryTriggerRef.current &&
-        !categoryTriggerRef.current.contains(event.target)
-      ) {
-        setShowCategoryMenu(false);
-      }
-      if (visMenuRef.current && !visMenuRef.current.contains(event.target)) {
-        setShowVisMenu(false);
-      }
-      if (identityMenuRef.current && !identityMenuRef.current.contains(event.target)) {
-        setShowIdentityMenu(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   function handleFileSelected(file) {
     if (!file) return;
@@ -568,101 +543,83 @@ export default function CreatePostBox({
           </div>
         </div>
 
-        {/* Dropdown Menu Popover */}
-        {showCategoryMenu && (
-          <>
-            <div className="category-modal-backdrop" onClick={() => setShowCategoryMenu(false)} />
-            <div
-              ref={categoryMenuRef}
-              className="category-popover neon-glow-modal category-modal-sheet"
-              onClick={(e) => e.stopPropagation()}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Select a category"
-            >
-              <div className="category-popover-header">
-                <div className="category-popover-title-row">
-                  <div className="category-popover-title">
-                    <Tag size={16} className="cat-popover-icon" />
-                    <span>Select a category</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="category-popover-close"
-                    onClick={() => setShowCategoryMenu(false)}
-                    aria-label="Close category selector"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                {/* Instant search input */}
-                <div className="category-search-box">
-                  <Search size={15} className="category-search-icon" />
-                  <input
-                    type="text"
-                    placeholder="Search categories (e.g. prayer, worship, lessons)..."
-                    value={categorySearch}
-                    onChange={(e) => setCategorySearch(e.target.value)}
-                    className="category-search-input"
-                    autoFocus
-                  />
-                  {categorySearch && (
-                    <button
-                      type="button"
-                      className="category-search-clear"
-                      onClick={() => setCategorySearch('')}
-                      aria-label="Clear search"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="category-popover-grid no-scrollbar">
-                {filteredCategories.length === 0 ? (
-                  <div className="category-popover-empty">No category found matching &quot;{categorySearch}&quot;</div>
-                ) : (
-                  filteredCategories.map(([id, c]) => {
-                    const isCurrent = composeCategory === id;
-                    const isHovered = hoveredCat === id;
-                    const isHighlighted = isCurrent || isHovered;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        className={`cat-popover-item${isHighlighted ? ' active is-highlighted' : ''}`}
-                        style={{
-                          '--accent': c.accent,
-                          '--item-accent': c.accent,
-                          '--accent-soft': c.soft,
-                          '--accent-text': c.text,
-                        }}
-                        onMouseEnter={() => setHoveredCat(id)}
-                        onMouseLeave={() => setHoveredCat(null)}
-                        onClick={() => {
-                          setComposeCategory(id);
-                          setCategoryError(false);
-                          setShowCategoryMenu(false);
-                          playSound('reaction');
-                        }}
-                      >
-                        <span className="cat-dot" style={{ background: c.accent }} />
-                        <span className="cat-popover-label">{c.label}</span>
-                        {isCurrent && <Check size={16} className="cat-check" />}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-
-              <div className="category-popover-footer">
-                <span>Select a category so community members can easily discover and pray over your post.</span>
-              </div>
+        {/* Category Selector Modal using canonical PopupSheet */}
+        <PopupSheet
+          open={showCategoryMenu}
+          onClose={() => setShowCategoryMenu(false)}
+          size="md"
+          title={
+            <div className="category-popover-title">
+              <Tag size={16} className="cat-popover-icon" />
+              <span>Select a category</span>
             </div>
-          </>
-        )}
+          }
+          footer={
+            <div className="category-popover-footer" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+              <span>Select a category so community members can easily discover and pray over your post.</span>
+            </div>
+          }
+        >
+          {/* Instant search input */}
+          <div className="category-search-box" style={{ marginBottom: 12 }}>
+            <Search size={15} className="category-search-icon" />
+            <input
+              type="text"
+              placeholder="Search categories (e.g. prayer, worship, lessons)..."
+              value={categorySearch}
+              onChange={(e) => setCategorySearch(e.target.value)}
+              className="category-search-input"
+              autoFocus
+            />
+            {categorySearch && (
+              <button
+                type="button"
+                className="category-search-clear"
+                onClick={() => setCategorySearch('')}
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className="category-popover-grid no-scrollbar" style={{ maxHeight: 'none', paddingRight: 0 }}>
+            {filteredCategories.length === 0 ? (
+              <div className="category-popover-empty">No category found matching &quot;{categorySearch}&quot;</div>
+            ) : (
+              filteredCategories.map(([id, c]) => {
+                const isCurrent = composeCategory === id;
+                const isHovered = hoveredCat === id;
+                const isHighlighted = isCurrent || isHovered;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`cat-popover-item${isHighlighted ? ' active is-highlighted' : ''}`}
+                    style={{
+                      '--accent': c.accent,
+                      '--item-accent': c.accent,
+                      '--accent-soft': c.soft,
+                      '--accent-text': c.text,
+                    }}
+                    onMouseEnter={() => setHoveredCat(id)}
+                    onMouseLeave={() => setHoveredCat(null)}
+                    onClick={() => {
+                      setComposeCategory(id);
+                      setCategoryError(false);
+                      setShowCategoryMenu(false);
+                      playSound('reaction');
+                    }}
+                  >
+                    <span className="cat-dot" style={{ background: c.accent }} />
+                    <span className="cat-popover-label">{c.label}</span>
+                    {isCurrent && <Check size={16} className="cat-check" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </PopupSheet>
       </div>
 
       {categoryError && (

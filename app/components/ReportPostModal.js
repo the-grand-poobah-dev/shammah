@@ -1,15 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
-  X,
   Flag,
   ShieldCheck,
   ShieldAlert,
-  Check,
-  AlertTriangle,
-  HelpCircle,
-  Flame,
 } from 'lucide-react';
+import PopupSheet from './PopupSheet';
 import { reportPost } from '../lib/feedAlgorithm';
 import { playSound } from '../lib/soundEffects';
 
@@ -58,19 +54,10 @@ export default function ReportPostModal({ post, onClose }) {
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  // Prevent background body scrolling to eliminate glitching & jump
-  useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, []);
-
   if (!post) return null;
 
   async function handleSubmit(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     await reportPost(post.id, selectedReason, post.author_id || post.user_id, additionalNotes);
     setSubmitted(true);
     playSound('reaction');
@@ -80,140 +67,127 @@ export default function ReportPostModal({ post, onClose }) {
   }
 
   return (
-    <div
-      className="report-modal-backdrop"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Report Content"
-    >
-      <div
-        className="report-modal-card neon-glow-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="report-modal-header">
-          <div className="report-title-row">
-            <span className="report-icon-box">
-              <Flag size={18} className="report-flag-icon" />
-            </span>
-            <div className="report-header-text">
-              <h3>Report Content</h3>
-              <p>Keeping Shammah safe, edifying, and Christ-centered</p>
-            </div>
+    <PopupSheet
+      open={true}
+      onClose={onClose}
+      size="md"
+      title={
+        <div className="report-title-row">
+          <span className="report-icon-box">
+            <Flag size={18} className="report-flag-icon" />
+          </span>
+          <div className="report-header-text">
+            <h3>Report Content</h3>
+            <p>Keeping Shammah safe, edifying, and Christ-centered</p>
           </div>
-          <button
-            type="button"
-            className="report-close-btn"
-            onClick={onClose}
-            aria-label="Close report dialog"
-          >
-            <X size={17} />
-          </button>
         </div>
-
-        {submitted ? (
-          <div className="report-success-state">
-            <div className="report-success-icon-wrap">
-              <ShieldCheck size={44} className="report-success-icon" />
-            </div>
-            <h4>Report Received Confidentially</h4>
-            <p>
-              Thank you for caring for the flock. Our pastoral moderation team has received this report and will review it promptly. This publication has been muted from your feed.
-            </p>
+      }
+      footer={
+        !submitted ? (
+          <div className="report-modal-actions" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
             <button
               type="button"
-              className="signin-btn report-done-btn"
+              className="report-cancel-btn"
               onClick={onClose}
             >
-              Done
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="report-submit-btn"
+              onClick={handleSubmit}
+            >
+              Submit Confidential Report
             </button>
           </div>
-        ) : (
-          <form className="report-form" onSubmit={handleSubmit}>
-            <div className="report-modal-scroll-area">
-              <div className="report-banner-note">
-                <ShieldAlert size={15} className="text-amber-500 flex-shrink-0" />
-                <span>Reports are strictly confidential and reviewed by ordained church elders.</span>
-              </div>
+        ) : null
+      }
+    >
+      {submitted ? (
+        <div className="report-success-state">
+          <div className="report-success-icon-wrap">
+            <ShieldCheck size={44} className="report-success-icon" />
+          </div>
+          <h4>Report Received Confidentially</h4>
+          <p>
+            Thank you for caring for the flock. Our pastoral moderation team has received this report and will review it promptly. This publication has been muted from your feed.
+          </p>
+          <button
+            type="button"
+            className="signin-btn report-done-btn"
+            onClick={onClose}
+          >
+            Done
+          </button>
+        </div>
+      ) : (
+        <form className="report-form" onSubmit={handleSubmit}>
+          <div className="report-modal-scroll-area" style={{ overflowY: 'visible', paddingRight: 0 }}>
+            <div className="report-banner-note">
+              <ShieldAlert size={15} className="text-amber-500 flex-shrink-0" />
+              <span>Reports are strictly confidential and reviewed by ordained church elders.</span>
+            </div>
 
-              <div className="report-reasons-list no-scrollbar">
-                {REPORT_REASONS.map((r) => {
-                  const isSelected = selectedReason === r.id;
-                  const isHovered = hoveredReason === r.id;
-                  const isHighlighted = isSelected || isHovered;
-                  return (
-                    <label
-                      key={r.id}
-                      className={`report-reason-item${isHighlighted ? ' active is-highlighted' : ''}`}
-                      style={{
-                        '--reason-color': r.color,
-                        '--item-accent': r.color,
-                      }}
-                      onMouseEnter={() => setHoveredReason(r.id)}
-                      onMouseLeave={() => setHoveredReason(null)}
+            <div className="report-reasons-list no-scrollbar">
+              {REPORT_REASONS.map((r) => {
+                const isSelected = selectedReason === r.id;
+                const isHovered = hoveredReason === r.id;
+                const isHighlighted = isSelected || isHovered;
+                return (
+                  <label
+                    key={r.id}
+                    className={`report-reason-item${isHighlighted ? ' active is-highlighted' : ''}`}
+                    style={{
+                      '--reason-color': r.color,
+                      '--item-accent': r.color,
+                    }}
+                    onMouseEnter={() => setHoveredReason(r.id)}
+                    onMouseLeave={() => setHoveredReason(null)}
+                  >
+                    <input
+                      type="radio"
+                      name="reportReason"
+                      value={r.id}
+                      checked={isSelected}
+                      onChange={() => setSelectedReason(r.id)}
+                      className="report-radio-input"
+                    />
+                    <div className="report-reason-text">
+                      <strong>
+                        {r.label}
+                      </strong>
+                      <small>{r.desc}</small>
+                    </div>
+
+                    <span
+                      className={`item-color-picker-box${isHighlighted ? ' active-picker' : ''}`}
+                      style={{ '--picker-color': r.color }}
                     >
-                      <input
-                        type="radio"
-                        name="reportReason"
-                        value={r.id}
-                        checked={isSelected}
-                        onChange={() => setSelectedReason(r.id)}
-                        className="report-radio-input"
-                      />
-                      <div className="report-reason-text">
-                        <strong>
-                          {r.label}
-                        </strong>
-                        <small>{r.desc}</small>
-                      </div>
-
-                      <span
-                        className={`item-color-picker-box${isHighlighted ? ' active-picker' : ''}`}
-                        style={{ '--picker-color': r.color }}
-                      >
-                        <span className="picker-box-swatch" style={{ background: r.color }} />
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-
-              <div className="report-notes-wrap">
-                <label htmlFor="report-notes" className="report-notes-label">
-                  Additional context or scripture concern (optional):
-                </label>
-                <textarea
-                  id="report-notes"
-                  rows={2}
-                  placeholder="Share any details to assist church moderators..."
-                  value={additionalNotes}
-                  onChange={(e) => setAdditionalNotes(e.target.value)}
-                  className="report-textarea"
-                  maxLength={300}
-                />
-                <span className="report-char-count">{additionalNotes.length} / 300</span>
-              </div>
+                      <span className="picker-box-swatch" style={{ background: r.color }} />
+                    </span>
+                  </label>
+                );
+              })}
             </div>
 
-            <div className="report-modal-actions">
-              <button
-                type="button"
-                className="report-cancel-btn"
-                onClick={onClose}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="report-submit-btn"
-              >
-                Submit Confidential Report
-              </button>
+            <div className="report-notes-wrap">
+              <label htmlFor="report-notes" className="report-notes-label">
+                Additional context or scripture concern (optional):
+              </label>
+              <textarea
+                id="report-notes"
+                rows={2}
+                placeholder="Share any details to assist church moderators..."
+                value={additionalNotes}
+                onChange={(e) => setAdditionalNotes(e.target.value)}
+                className="report-textarea"
+                maxLength={300}
+              />
+              <span className="report-char-count">{additionalNotes.length} / 300</span>
             </div>
-          </form>
-        )}
-      </div>
-    </div>
+          </div>
+        </form>
+      )}
+    </PopupSheet>
   );
 }

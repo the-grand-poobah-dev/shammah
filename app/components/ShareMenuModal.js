@@ -4,7 +4,6 @@ import {
   Share2,
   Copy,
   Check,
-  X,
   Sparkles,
   MessageCircle,
   ExternalLink,
@@ -12,6 +11,7 @@ import {
   Share,
   FileText,
 } from 'lucide-react';
+import PopupSheet from './PopupSheet';
 import { playSound } from '../lib/soundEffects';
 import { BRAND, getPostShareUrl, formatShareText } from '../lib/brand';
 
@@ -51,9 +51,7 @@ function openSafeUrl(url) {
     a.click();
     document.body.removeChild(a);
   } catch {
-    if (typeof window !== 'undefined') {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
+    // ignore fallback
   }
 }
 
@@ -89,7 +87,7 @@ export default function ShareMenuModal({
 
   async function handleCopyLink() {
     playSound('share');
-    const success = await copyToClipboard(shareUrl);
+    await copyToClipboard(shareUrl);
     setCopiedLink(true);
     triggerToast('Post link copied to clipboard ✓');
     onLinkCopied?.();
@@ -143,7 +141,6 @@ export default function ShareMenuModal({
 
   function handleOpenWatermarkCard() {
     playSound('reaction');
-    onClose();
     onOpenWatermark?.();
   }
 
@@ -237,91 +234,74 @@ export default function ShareMenuModal({
   }
 
   return (
-    <div
-      className="share-modal-backdrop"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Share Post"
+    <PopupSheet
+      open={true}
+      onClose={onClose}
+      size="sm"
+      title={
+        <div className="share-modal-title-row">
+          <span className="share-modal-icon-badge">
+            <Share2 size={18} />
+          </span>
+          <div className="share-modal-title-text">
+            <h3>Share Fellowship Post</h3>
+            <p>Spread Gospel encouragement and edify the church</p>
+          </div>
+        </div>
+      }
     >
-      <div
-        className="share-modal-card neon-glow-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="share-modal-header">
-          <div className="share-modal-title-row">
-            <span className="share-modal-icon-badge">
-              <Share2 size={18} />
-            </span>
-            <div className="share-modal-title-text">
-              <h3>Share Fellowship Post</h3>
-              <p>Spread Gospel encouragement and edify the church</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="share-modal-close-btn"
-            onClick={onClose}
-            aria-label="Close share menu"
-          >
-            <X size={17} />
-          </button>
+      {/* In-Modal Feedback Toast */}
+      {toastMessage && (
+        <div className="share-modal-toast-banner">
+          <Check size={16} className="text-emerald-400 flex-shrink-0" />
+          <span>{toastMessage}</span>
         </div>
+      )}
 
-        {/* In-Modal Feedback Toast */}
-        {toastMessage && (
-          <div className="share-modal-toast-banner">
-            <Check size={16} className="text-emerald-400 flex-shrink-0" />
-            <span>{toastMessage}</span>
-          </div>
-        )}
-
-        {/* Share Options List with outline card shadows only on highlighted items */}
-        <div className="share-menu-options-list no-scrollbar">
-          {SHARE_OPTIONS.map((opt) => {
-            const Icon = opt.icon;
-            const isHighlighted = activeItem === opt.id;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                className={`share-menu-item-card${isHighlighted ? ' is-highlighted is-active' : ''}`}
-                style={{
-                  '--item-accent': opt.color,
-                }}
-                onMouseEnter={() => setActiveItem(opt.id)}
-                onMouseLeave={() => setActiveItem(null)}
-                onClick={opt.action}
+      {/* Share Options List */}
+      <div className="share-menu-options-list no-scrollbar" style={{ maxHeight: 'none', marginTop: 0 }}>
+        {SHARE_OPTIONS.map((opt) => {
+          const Icon = opt.icon;
+          const isHighlighted = activeItem === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              className={`share-menu-item-card${isHighlighted ? ' is-highlighted is-active' : ''}`}
+              style={{
+                '--item-accent': opt.color,
+              }}
+              onMouseEnter={() => setActiveItem(opt.id)}
+              onMouseLeave={() => setActiveItem(null)}
+              onClick={opt.action}
+            >
+              <span
+                className="share-menu-icon-wrap"
+                style={{ '--item-accent': opt.color }}
               >
-                <span
-                  className="share-menu-icon-wrap"
-                  style={{ '--item-accent': opt.color }}
-                >
-                  <Icon size={17} strokeWidth={2.2} />
-                </span>
+                <Icon size={17} strokeWidth={2.2} />
+              </span>
 
-                <div className="share-menu-text-wrap">
-                  <div className="share-menu-title-row">
-                    <strong>{opt.title}</strong>
-                    <span className="share-menu-chip">
-                      {opt.badge}
-                    </span>
-                  </div>
-                  <small>{opt.desc}</small>
+              <div className="share-menu-text-wrap">
+                <div className="share-menu-title-row">
+                  <strong>{opt.title}</strong>
+                  <span className="share-menu-chip">
+                    {opt.badge}
+                  </span>
                 </div>
+                <small>{opt.desc}</small>
+              </div>
 
-                <span
-                  className={`item-color-picker-box${isHighlighted ? ' active-picker' : ''}`}
-                  style={{ '--picker-color': opt.color }}
-                >
-                  <span className="picker-box-swatch" style={{ background: opt.color }} />
-                </span>
-              </button>
-            );
-          })}
-        </div>
+              <span
+                className={`item-color-picker-box${isHighlighted ? ' active-picker' : ''}`}
+                style={{ '--picker-color': opt.color }}
+              >
+                <span className="picker-box-swatch" style={{ background: opt.color }} />
+              </span>
+            </button>
+          );
+        })}
       </div>
-    </div>
+    </PopupSheet>
   );
 }

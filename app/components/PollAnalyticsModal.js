@@ -22,6 +22,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
+import PopupSheet from './PopupSheet';
 import { playSound } from '../lib/soundEffects';
 import { usePollCountdown } from '../lib/useNow';
 
@@ -129,249 +130,41 @@ export default function PollAnalyticsModal({
   }, [options, counts, totalVotes]);
 
   return (
-    <div className="author-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div
-        className="inst-profile-modal-card neon-glow-modal max-w-xl w-full"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '620px' }}
-      >
-        {/* Header */}
-        <div className="inst-modal-header">
-          <div className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400">
-              <TrendingUp size={18} />
-            </span>
-            <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
-                <span>Poll Analytics</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                  Creator View
+    <PopupSheet
+      open={true}
+      onClose={onClose}
+      size="lg"
+      title={
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400 shrink-0">
+            <TrendingUp size={18} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold flex items-center gap-2 flex-wrap">
+              <span>Poll Analytics</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                Creator View
+              </span>
+              {hasExpiration && isExpired && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-1">
+                  🏁 Poll Closed
                 </span>
-                {hasExpiration && isExpired && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-1">
-                    🏁 Poll Closed
-                  </span>
-                )}
-                {hasExpiration && !isExpired && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
-                    <Clock size={10} />
-                    <span>{label}</span>
-                  </span>
-                )}
-              </h3>
-              <p className="text-xs text-gray-400 truncate max-w-sm">
-                {poll?.question || poll?.text_content || 'Voting patterns & response progression'}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="inst-modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Modal Body */}
-        <div className="p-5 max-h-[80vh] overflow-y-auto space-y-4 text-sm text-gray-200">
-          {/* Expiration Status Banner */}
-          {hasExpiration && isExpired && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-between text-xs text-rose-200">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🏁</span>
-                <div>
-                  <p className="font-bold text-rose-300">Poll Closed · Final Results</p>
-                  <p className="text-[11px] text-rose-200/70">
-                    Voting has officially concluded for this poll. Results are locked and finalized.
-                  </p>
-                </div>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider font-semibold">
-                Concluded
-              </span>
-            </div>
-          )}
-
-          {hasExpiration && !isExpired && (
-            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-xs text-amber-200">
-              <div className="flex items-center gap-2">
-                <Clock size={13} className="text-amber-400 shrink-0" />
-                <span className="text-amber-300 font-medium">Actively accepting votes ({label})</span>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider font-semibold">
-                Live
-              </span>
-            </div>
-          )}
-
-          {/* Quick Metrics Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
-              <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
-                <Users size={13} className="text-cyan-400" />
-                <span>Total Votes</span>
-              </div>
-              <div className="text-xl font-extrabold text-white">
-                {totalVotes.toLocaleString()}
-              </div>
-              <p className="text-[10px] text-emerald-400 mt-0.5">Voter names hidden from other members</p>
-            </div>
-
-            <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
-              <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
-                <Award size={13} className="text-amber-400" />
-                <span>Top Pick</span>
-              </div>
-              <div className="text-base font-bold text-amber-300 truncate">
-                {leadingOption?.percent || 0}%
-              </div>
-              <p className="text-[10px] text-gray-400 truncate mt-0.5">
-                {leadingOption?.label || 'Option'}
-              </p>
-            </div>
-
-            <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
-              <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
-                <Clock size={13} className="text-purple-400" />
-                <span>Peak Velocity</span>
-              </div>
-              <div className="text-base font-bold text-purple-300">
-                Post +2 hrs
-              </div>
-              <p className="text-[10px] text-gray-400 mt-0.5">Highest voting surge</p>
-            </div>
-          </div>
-
-          {/* Chart Header & Toggle Controls */}
-          <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-300">
-                Voting Pattern Over Time
-              </h4>
-              <p className="text-[11px] text-gray-400">
-                {viewMode === 'cumulative' ? 'Cumulative responses over time' : 'New votes per interval'}
-              </p>
-            </div>
-            <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
-              <button
-                type="button"
-                onClick={() => setViewMode('cumulative')}
-                className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  viewMode === 'cumulative'
-                    ? 'bg-cyan-500 text-black font-bold'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Cumulative
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('hourly')}
-                className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  viewMode === 'hourly'
-                    ? 'bg-cyan-500 text-black font-bold'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Hourly Velocity
-              </button>
-            </div>
-          </div>
-
-          {/* Recharts Line Chart */}
-          <div className="h-64 w-full p-2 rounded-xl bg-black/40 border border-white/10">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis
-                  dataKey="time"
-                  stroke="#94a3b8"
-                  fontSize={10}
-                  tickLine={false}
-                />
-                <YAxis
-                  stroke="#94a3b8"
-                  fontSize={10}
-                  tickLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0f172a',
-                    borderColor: 'rgba(255,255,255,0.15)',
-                    borderRadius: '0.75rem',
-                    color: '#f8fafc',
-                    fontSize: '11px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-                  }}
-                  itemStyle={{ padding: '2px 0' }}
-                />
-                <Legend
-                  wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
-                />
-                {options.map((opt, idx) => (
-                  <Line
-                    key={opt.id}
-                    type="monotone"
-                    dataKey={`opt_${idx}`}
-                    name={opt.label.length > 22 ? `${opt.label.slice(0, 20)}…` : opt.label}
-                    stroke={PALETTE[idx % PALETTE.length]}
-                    strokeWidth={2.4}
-                    dot={{ r: 3, fill: PALETTE[idx % PALETTE.length] }}
-                    activeDot={{ r: 6 }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Option Breakdown List */}
-          <div className="space-y-2 pt-1">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-300">
-              Option Breakdown &amp; Share
-            </h4>
-            <div className="space-y-2">
-              {options.map((opt, idx) => {
-                const count = counts[opt.id] || 0;
-                const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-                const color = PALETTE[idx % PALETTE.length];
-
-                return (
-                  <div
-                    key={opt.id}
-                    className="p-3 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-between gap-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between text-xs mb-1.5">
-                        <span className="font-semibold text-white truncate flex items-center gap-1.5">
-                          <span
-                            className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
-                            style={{ backgroundColor: color }}
-                          />
-                          <span>{opt.label}</span>
-                        </span>
-                        <span className="font-bold text-gray-300 shrink-0">
-                          {pct}% ({count} votes)
-                        </span>
-                      </div>
-                      <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${pct}%`, backgroundColor: color }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+              )}
+              {hasExpiration && !isExpired && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
+                  <Clock size={10} />
+                  <span>{label}</span>
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-gray-400 truncate max-w-sm">
+              {poll?.question || poll?.text_content || 'Voting patterns & response progression'}
+            </p>
           </div>
         </div>
-
-        {/* Modal Footer */}
-        <div className="p-4 border-t border-white/10 flex items-center justify-between">
+      }
+      footer={
+        <div className="flex items-center justify-between gap-2 flex-wrap w-full">
           <span className="text-[11px] text-gray-400 flex items-center gap-1">
             <Sparkles size={13} className="text-cyan-400" />
             <span>Interactive Line Chart via Recharts</span>
@@ -384,7 +177,202 @@ export default function PollAnalyticsModal({
             Close
           </button>
         </div>
+      }
+    >
+      <div className="space-y-4 text-sm text-gray-200">
+        {/* Expiration Status Banner */}
+        {hasExpiration && isExpired && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-between gap-2 flex-wrap text-xs text-rose-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-base">🏁</span>
+              <div>
+                <p className="font-bold text-rose-300">Poll Closed · Final Results</p>
+                <p className="text-[11px] text-rose-200/70">
+                  Voting has officially concluded for this poll. Results are locked and finalized.
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider font-semibold">
+              Concluded
+            </span>
+          </div>
+        )}
+
+        {hasExpiration && !isExpired && (
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 flex-wrap text-xs text-amber-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <Clock size={13} className="text-amber-400 shrink-0" />
+              <span className="text-amber-300 font-medium">Actively accepting votes ({label})</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider font-semibold">
+              Live
+            </span>
+          </div>
+        )}
+
+        {/* Quick Metrics Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
+            <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
+              <Users size={13} className="text-cyan-400" />
+              <span>Total Votes</span>
+            </div>
+            <div className="text-xl font-extrabold text-white">
+              {totalVotes.toLocaleString()}
+            </div>
+            <p className="text-[10px] text-emerald-400 mt-0.5">Voter names hidden from other members</p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
+            <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
+              <Award size={13} className="text-amber-400" />
+              <span>Top Pick</span>
+            </div>
+            <div className="text-base font-bold text-amber-300 truncate">
+              {leadingOption?.percent || 0}%
+            </div>
+            <p className="text-[10px] text-gray-400 truncate mt-0.5">
+              {leadingOption?.label || 'Option'}
+            </p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
+            <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
+              <Clock size={13} className="text-purple-400" />
+              <span>Peak Velocity</span>
+            </div>
+            <div className="text-base font-bold text-purple-300">
+              Post +2 hrs
+            </div>
+            <p className="text-[10px] text-gray-400 mt-0.5">Highest voting surge</p>
+          </div>
+        </div>
+
+        {/* Chart Header & Toggle Controls */}
+        <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-300">
+              Voting Pattern Over Time
+            </h4>
+            <p className="text-[11px] text-gray-400">
+              {viewMode === 'cumulative' ? 'Cumulative responses over time' : 'New votes per interval'}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+            <button
+              type="button"
+              onClick={() => setViewMode('cumulative')}
+              className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
+                viewMode === 'cumulative'
+                  ? 'bg-cyan-500 text-black font-bold'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Cumulative
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('hourly')}
+              className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
+                viewMode === 'hourly'
+                  ? 'bg-cyan-500 text-black font-bold'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Hourly Velocity
+            </button>
+          </div>
+        </div>
+
+        {/* Recharts Line Chart */}
+        <div className="h-64 w-full p-2 rounded-xl bg-black/40 border border-white/10">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <XAxis
+                dataKey="time"
+                stroke="#94a3b8"
+                fontSize={10}
+                tickLine={false}
+              />
+              <YAxis
+                stroke="#94a3b8"
+                fontSize={10}
+                tickLine={false}
+                allowDecimals={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#0f172a',
+                  borderColor: 'rgba(255,255,255,0.15)',
+                  borderRadius: '0.75rem',
+                  color: '#f8fafc',
+                  fontSize: '11px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+                }}
+                itemStyle={{ padding: '2px 0' }}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
+              />
+              {options.map((opt, idx) => (
+                <Line
+                  key={opt.id}
+                  type="monotone"
+                  dataKey={`opt_${idx}`}
+                  name={opt.label.length > 22 ? `${opt.label.slice(0, 20)}…` : opt.label}
+                  stroke={PALETTE[idx % PALETTE.length]}
+                  strokeWidth={2.4}
+                  dot={{ r: 3, fill: PALETTE[idx % PALETTE.length] }}
+                  activeDot={{ r: 6 }}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Option Breakdown List */}
+        <div className="space-y-2 pt-1">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-300">
+            Option Breakdown &amp; Share
+          </h4>
+          <div className="space-y-2">
+            {options.map((opt, idx) => {
+              const count = counts[opt.id] || 0;
+              const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+              const color = PALETTE[idx % PALETTE.length];
+
+              return (
+                <div
+                  key={opt.id}
+                  className="p-3 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-between gap-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 flex-wrap text-xs mb-1.5">
+                      <span className="font-semibold text-white truncate flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="truncate">{opt.label}</span>
+                      </span>
+                      <span className="font-bold text-gray-300 shrink-0">
+                        {pct}% ({count} votes)
+                      </span>
+                    </div>
+                    <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, backgroundColor: color }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
-    </div>
+    </PopupSheet>
   );
 }

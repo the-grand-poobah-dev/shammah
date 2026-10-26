@@ -3,17 +3,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  X,
   UserCheck,
   UserPlus,
   MessageCircle,
   ShieldAlert,
-  ShieldCheck,
   ExternalLink,
   Church,
-  Heart,
-  Lock,
 } from 'lucide-react';
+import PopupSheet from './PopupSheet';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import { isFollowing, toggleFollow, isBlocked, toggleBlock, getProfileSettings, fetchFollowStats } from '../lib/profileManager';
@@ -147,20 +144,13 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
   }
 
   return (
-    <div
-      className="author-modal-backdrop toast-backdrop-overlay"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div
-        className="author-modal-card toast-popup-box multicolored-glow-shadow"
-        onClick={(e) => e.stopPropagation()}
+    <>
+      <PopupSheet
+        open={true}
+        onClose={onClose}
+        size="sm"
+        title="Member Overview"
       >
-        <button type="button" className="author-modal-close" onClick={onClose} aria-label="Close">
-          <X size={18} />
-        </button>
-
         {/* Profile Card Header */}
         <div className="author-modal-header">
           <div className="author-modal-avatar-wrap">
@@ -179,7 +169,6 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
                 className="author-modal-church author-church-clickable"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onClose();
                   window.dispatchEvent(
                     new CustomEvent('shammah:open-institution-profile', {
                       detail: {
@@ -260,28 +249,14 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
               <span>Visit Page</span>
             </Link>
 
-            {confirmingBlock ? (
-              <div className="author-block-confirm-box">
-                <span>Block {name}? You won&apos;t see their posts or messages.</span>
-                <div className="confirm-btn-row">
-                  <button type="button" className="btn-confirm-danger" onClick={handleBlockToggle}>
-                    Yes, Block
-                  </button>
-                  <button type="button" className="btn-confirm-cancel" onClick={() => setConfirmingBlock(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className={`author-action-btn block-btn${blocked ? ' is-blocked' : ''}`}
-                onClick={handleBlockToggle}
-              >
-                <ShieldAlert size={15} />
-                <span>{blocked ? 'Unblock User' : 'Block User'}</span>
-              </button>
-            )}
+            <button
+              type="button"
+              className={`author-action-btn block-btn${blocked ? ' is-blocked' : ''}`}
+              onClick={handleBlockToggle}
+            >
+              <ShieldAlert size={15} />
+              <span>{blocked ? 'Unblock User' : 'Block User'}</span>
+            </button>
           </div>
         ) : (
           <div className="author-modal-self-actions">
@@ -297,7 +272,37 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
             <span>{toastMsg}</span>
           </div>
         )}
-      </div>
-    </div>
+      </PopupSheet>
+
+      {/* Stacked Confirmation PopupSheet for Blocking */}
+      <PopupSheet
+        open={confirmingBlock}
+        onClose={() => setConfirmingBlock(false)}
+        size="sm"
+        title="Confirm Block"
+        footer={
+          <div className="visibility-modal-actions">
+            <button
+              type="button"
+              className="vis-cancel-btn"
+              onClick={() => setConfirmingBlock(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="report-submit-btn"
+              onClick={handleBlockToggle}
+            >
+              Yes, Block
+            </button>
+          </div>
+        }
+      >
+        <p className="visibility-desc" style={{ marginBottom: 0 }}>
+          Block <strong>{name}</strong>? You won&apos;t see their posts or messages.
+        </p>
+      </PopupSheet>
+    </>
   );
 }
