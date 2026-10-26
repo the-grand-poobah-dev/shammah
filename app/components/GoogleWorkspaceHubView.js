@@ -33,6 +33,8 @@ import {
   ChevronRight,
   Download,
   Share2,
+  Globe,
+  Bell,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import {
@@ -78,6 +80,15 @@ const HUB_TABS = [
   { id: 'tasks', label: 'To-Do List', icon: CheckSquare, color: '#06b6d4' },
   { id: 'chat', label: 'Group Chat', icon: MessageSquare, color: '#6366f1' },
   { id: 'firebase', label: 'Prayer Wall', icon: Flame, color: '#ec4899' },
+];
+
+const COMMUNITY_FILTER_TABS = [
+  { id: 'all', label: 'All Items', icon: LayoutGrid, color: '#0d766e' },
+  { id: 'calendar', label: 'Events', icon: Calendar, color: '#0d766e' },
+  { id: 'meet', label: 'Video Rooms', icon: Video, color: '#10b981' },
+  { id: 'forms', label: 'Sign-Up Forms', icon: FileSpreadsheet, color: '#8b5cf6' },
+  { id: 'slides', label: 'Slide Decks', icon: Presentation, color: '#d97706' },
+  { id: 'classroom', label: 'Classes', icon: GraduationCap, color: '#f59e0b' },
 ];
 
 export default function GoogleWorkspaceHubView({ session, currentUser, onShareToFeed }) {
@@ -771,7 +782,7 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
   // Loading skeleton while resolving plan
   if (checkingPlan) {
     return (
-      <div className="gws-shell">
+      <div className="gws-page-shell">
         <div className="gws-hero-card">
           <div className="st-skeleton st-skel-title" style={{ width: '40%', marginBottom: 12 }} />
           <div className="st-skeleton st-skel-sub" style={{ width: '70%', height: 16 }} />
@@ -785,95 +796,119 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
   // =========================================================================
   if (isChurchAdmin && !hasWorkspacePlan) {
     return (
-      <div className="gws-shell">
-        <div className="gws-hero-card gws-locked-hero">
-          <div className="gws-hero-content">
-            <div className="gws-plan-pill-row">
-              <span className="gws-badge-gold">
-                <Lock size={12} />
-                <span>{WORKSPACE_PLAN_LABEL}</span>
+      <div className="gws-page-shell">
+        <div className="gws-hero-card">
+          <div className="gws-hero-top-row">
+            <div className="gws-hero-title-group">
+              <div className="gws-hero-icon-box">
+                <Lock size={18} />
+              </div>
+              <div className="gws-hero-text-wrap">
+                <div className="gws-hero-heading-line">
+                  <h2 className="gws-hero-title">
+                    Google Workspace Creation is Locked for {activeChurch?.name || 'Your Church'}
+                  </h2>
+                  <span className="gws-status-badge gws-status-badge-gold">
+                    <Lock size={12} />
+                    <span>{WORKSPACE_PLAN_LABEL} Required</span>
+                  </span>
+                </div>
+                <p className="gws-hero-sub">
+                  To create and publish official Google Forms, live Calendar schedules, Google Meet video rooms, Google Classroom discipleship courses, and sermon slide decks for your congregation, activate the Workspace Premium plan.
+                </p>
+              </div>
+            </div>
+            <div className="shrink-0">
+              <span className="gws-status-badge gws-status-badge-gold">
+                {formatKes(WORKSPACE_PLAN_PRICE_KES)} / mo
               </span>
-              <span className="gws-price-tag">
-                {formatKes(WORKSPACE_PLAN_PRICE_KES)} / month
-              </span>
             </div>
+          </div>
 
-            <h2 className="gws-hero-title">
-              Google Workspace Creation is Locked for {activeChurch?.name || 'Your Church'}
-            </h2>
-            <p className="gws-hero-sub">
-              To create and publish official Google Forms, live Calendar schedules, Google Meet video rooms, Google Classroom discipleship courses, and sermon slide decks for your congregation, activate the Workspace Premium plan.
-            </p>
-
-            <div className="gws-features-grid">
-              <div className="gws-feature-item">
-                <span className="gws-check-icon">✓</span>
-                <div>
-                  <strong>Official Church Sign-Up Forms</strong>
-                  <p>Baptisms, dedications, ministry volunteer forms with real-time response tracking.</p>
-                </div>
-              </div>
-              <div className="gws-feature-item">
-                <span className="gws-check-icon">✓</span>
-                <div>
-                  <strong>Live Church Calendar &amp; .ics Sync</strong>
-                  <p>1-click calendar sync for your entire congregation without requiring Google sign-in.</p>
-                </div>
-              </div>
-              <div className="gws-feature-item">
-                <span className="gws-check-icon">✓</span>
-                <div>
-                  <strong>Google Meet Video Rooms</strong>
-                  <p>Instant video rooms for mid-week fellowship, intercession, and leadership meetings.</p>
-                </div>
-              </div>
-              <div className="gws-feature-item">
-                <span className="gws-check-icon">✓</span>
-                <div>
-                  <strong>Google Classroom &amp; Discipleship Tracks</strong>
-                  <p>Structured courses, Bible study assignments, and announcements for believers.</p>
-                </div>
-              </div>
-              <div className="gws-feature-item">
-                <span className="gws-check-icon">✓</span>
-                <div>
-                  <strong>Sermon Slide Decks &amp; Cloud Documents</strong>
-                  <p>Automatic publishing and archiving of Sunday sermon presentation slides.</p>
-                </div>
-              </div>
-              <div className="gws-feature-item">
-                <span className="gws-check-icon">✓</span>
-                <div>
-                  <strong>Tasks &amp; Group Chat Spaces</strong>
-                  <p>Department task delegation and official church ministry team communication.</p>
-                </div>
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
+            <div className="flex items-start gap-2 text-xs text-[var(--ink-muted)]">
+              <span className="text-[var(--teal)] font-bold">✓</span>
+              <span><strong>Sign-Up Forms:</strong> Baptisms, dedications & volunteers</span>
             </div>
-
-            <div className="gws-locked-actions">
-              <Link href="/settings/billing" className="gws-btn-primary gws-btn-lg">
-                <Sparkles size={16} />
-                <span>Activate Workspace Premium ({formatKes(WORKSPACE_PLAN_PRICE_KES)}/mo)</span>
-              </Link>
-              <button
-                type="button"
-                className="gws-btn-secondary gws-btn-lg"
-                onClick={() => setShowActivationRequestModal(true)}
-              >
-                <ShieldCheck size={16} />
-                <span>Request Activation / Invoice</span>
-              </button>
+            <div className="flex items-start gap-2 text-xs text-[var(--ink-muted)]">
+              <span className="text-[var(--teal)] font-bold">✓</span>
+              <span><strong>Live Calendar & .ics:</strong> 1-click congregation sync</span>
             </div>
+            <div className="flex items-start gap-2 text-xs text-[var(--ink-muted)]">
+              <span className="text-[var(--teal)] font-bold">✓</span>
+              <span><strong>Meet Video Rooms:</strong> Prayer watch & meetings</span>
+            </div>
+            <div className="flex items-start gap-2 text-xs text-[var(--ink-muted)]">
+              <span className="text-[var(--teal)] font-bold">✓</span>
+              <span><strong>Google Classroom:</strong> Discipleship courses</span>
+            </div>
+            <div className="flex items-start gap-2 text-xs text-[var(--ink-muted)]">
+              <span className="text-[var(--teal)] font-bold">✓</span>
+              <span><strong>Sermon Slide Decks:</strong> Presentation archiving</span>
+            </div>
+            <div className="flex items-start gap-2 text-xs text-[var(--ink-muted)]">
+              <span className="text-[var(--teal)] font-bold">✓</span>
+              <span><strong>Tasks & Spaces:</strong> Team ministry delegation</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2 flex-wrap">
+            <Link href="/settings/billing" className="gws-btn-primary">
+              <Sparkles size={14} />
+              <span>Activate Workspace Premium ({formatKes(WORKSPACE_PLAN_PRICE_KES)}/mo)</span>
+            </Link>
+            <button
+              type="button"
+              className="gws-btn-secondary"
+              onClick={() => setShowActivationRequestModal(true)}
+            >
+              <ShieldCheck size={14} />
+              <span>Request Activation / Invoice</span>
+            </button>
           </div>
         </div>
 
         {/* Community View below for what other churches have shared */}
-        <div className="gws-community-divider">
-          <h3>Community Workspace Items You Can Access</h3>
-          <p>You can still open and interact with items shared by other churches in the fellowship.</p>
+        <div className="mt-4 mb-1">
+          <div className="flex items-center gap-2 mb-1">
+            <Users size={16} className="text-[var(--teal)]" />
+            <h3 className="text-sm font-bold text-[var(--ink)]">Community Workspace Items You Can Access</h3>
+          </div>
+          <p className="text-xs text-[var(--ink-muted)]">
+            You can still open and interact with items shared by other churches in the fellowship.
+          </p>
         </div>
 
-        <CommunityWorkspaceSection items={filteredSharedItems} onShareToFeed={onShareToFeed} />
+        {/* Community Filter Tabs */}
+        <div className="gws-nav-card">
+          <div className="gws-nav-tabs no-scrollbar">
+            {COMMUNITY_FILTER_TABS.map((cat) => {
+              const Icon = cat.icon;
+              const isActive = sharedCategoryFilter === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  className={`gws-tab-pill ${isActive ? 'active' : ''}`}
+                  style={{ '--gws-tab-color': cat.color }}
+                  onClick={() => {
+                    setSharedCategoryFilter(cat.id);
+                    playSound('reaction');
+                  }}
+                >
+                  <Icon size={14} className="gws-tab-icon" />
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <CommunityWorkspaceSection
+          items={filteredSharedItems}
+          onShareToFeed={onShareToFeed}
+          emptyMessage="No workspace items have been shared yet by churches you follow or belong to."
+        />
 
         {/* Request Activation Modal using PopupSheet standard */}
         <PopupSheet
@@ -887,8 +922,8 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
               <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-3 text-xl">
                 ✓
               </div>
-              <h3 className="text-lg font-bold mb-2">Activation Request Received!</h3>
-              <p className="text-sm text-slate-300 mb-4">
+              <h3 className="text-lg font-bold mb-2 text-[var(--ink)]">Activation Request Received!</h3>
+              <p className="text-sm text-[var(--ink-muted)] mb-4">
                 We have recorded your request for <strong>{activeChurch?.name || 'your church'}</strong> for the {WORKSPACE_PLAN_LABEL} ({formatKes(WORKSPACE_PLAN_PRICE_KES)}/month). An onboarding specialist will verify your church details and activate your workspace integration shortly.
               </p>
               <button
@@ -904,10 +939,10 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
             </div>
           ) : (
             <div className="p-4 space-y-4">
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-[var(--ink-muted)]">
                 Submit an activation request for <strong>{activeChurch?.name || 'your church'}</strong>. For M-Pesa business paybills, church bank transfer invoices, or pilot church grants, our administration team will review your account.
               </p>
-              <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-300 space-y-1">
+              <div className="p-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-xs text-[var(--ink-muted)] space-y-1">
                 <div><strong>Church:</strong> {activeChurch?.name || 'Selected Church'}</div>
                 <div><strong>Admin Email:</strong> {session?.user?.email || 'Your account email'}</div>
                 <div><strong>Standard Price:</strong> {formatKes(WORKSPACE_PLAN_PRICE_KES)} / month (KES billing)</div>
@@ -934,42 +969,52 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
   // =========================================================================
   if (!isChurchAdmin) {
     return (
-      <div className="gws-shell">
+      <div className="gws-page-shell">
         <div className="gws-hero-card">
-          <div className="gws-hero-content">
-            <span className="gws-badge-teal">
-              <Users size={12} />
-              <span>Church Community Hub</span>
-            </span>
-            <h2 className="gws-hero-title">Church Workspace Resources</h2>
-            <p className="gws-hero-sub">
-              Access upcoming calendar events, join video prayer rooms, fill baptism and dedication sign-up forms, and open discipleship course material shared by your church communities.
-            </p>
+          <div className="gws-hero-top-row">
+            <div className="gws-hero-title-group">
+              <div className="gws-hero-icon-box">
+                <Users size={18} />
+              </div>
+              <div className="gws-hero-text-wrap">
+                <div className="gws-hero-heading-line">
+                  <h2 className="gws-hero-title">Church Workspace Resources</h2>
+                  <span className="gws-status-badge gws-status-badge-teal">
+                    <Users size={12} />
+                    <span>Church Community Hub</span>
+                  </span>
+                </div>
+                <p className="gws-hero-sub">
+                  Access upcoming calendar events, join video prayer rooms, fill baptism and dedication sign-up forms, and open discipleship course material shared by your church communities.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Filter Pills */}
-        <div className="gws-shared-filter-bar">
-          {[
-            { id: 'all', label: 'All Items' },
-            { id: 'calendar', label: '📅 Events' },
-            { id: 'meet', label: '📹 Video Rooms' },
-            { id: 'forms', label: '📝 Sign-Up Forms' },
-            { id: 'slides', label: '📊 Slide Decks' },
-            { id: 'classroom', label: '🎓 Classes' },
-          ].map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              className={`gws-filter-pill ${sharedCategoryFilter === cat.id ? 'active' : ''}`}
-              onClick={() => {
-                setSharedCategoryFilter(cat.id);
-                playSound('reaction');
-              }}
-            >
-              {cat.label}
-            </button>
-          ))}
+        {/* Community Workspace Filter Tabs (Assimilated to Shammah UI) */}
+        <div className="gws-nav-card">
+          <div className="gws-nav-tabs no-scrollbar">
+            {COMMUNITY_FILTER_TABS.map((cat) => {
+              const Icon = cat.icon;
+              const isActive = sharedCategoryFilter === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  className={`gws-tab-pill ${isActive ? 'active' : ''}`}
+                  style={{ '--gws-tab-color': cat.color }}
+                  onClick={() => {
+                    setSharedCategoryFilter(cat.id);
+                    playSound('reaction');
+                  }}
+                >
+                  <Icon size={14} className="gws-tab-icon" />
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <CommunityWorkspaceSection
@@ -985,172 +1030,171 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
   // VIEW 3: CHURCH ADMIN WITH ACTIVE PLAN (FULL HUB WITH CREATE ACTIONS)
   // =========================================================================
   return (
-    <div className="gws-shell">
+    <div className="gws-page-shell">
       {/* Top Banner / Active Church Switcher */}
       <div className="gws-hero-card">
-        <div className="gws-hero-content">
-          <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="gws-badge-teal">
-                <ShieldCheck size={12} />
-                <span>Admin Portal</span>
-              </span>
-              <span className="gws-badge-gold">
-                <Sparkles size={12} />
-                <span>{WORKSPACE_PLAN_LABEL} · Active</span>
-              </span>
+        <div className="gws-hero-top-row">
+          <div className="gws-hero-title-group">
+            <div className="gws-hero-icon-box">
+              <ShieldCheck size={18} />
             </div>
-
-            {ownedChurches.length > 1 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Managing:</span>
-                <select
-                  value={activeChurch?.id || ''}
-                  onChange={(e) => {
-                    const c = ownedChurches.find((x) => x.id === e.target.value);
-                    if (c) handleSelectChurch(c);
-                  }}
-                  className="bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs"
-                >
-                  {ownedChurches.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+            <div className="gws-hero-text-wrap">
+              <div className="gws-hero-heading-line">
+                <h2 className="gws-hero-title">
+                  {activeChurch?.name || 'Church'} Google Workspace Hub
+                </h2>
+                <span className="gws-status-badge gws-status-badge-teal">
+                  <ShieldCheck size={12} />
+                  <span>Admin Portal</span>
+                </span>
+                <span className="gws-status-badge gws-status-badge-gold">
+                  <Sparkles size={12} />
+                  <span>{WORKSPACE_PLAN_LABEL} · Active</span>
+                </span>
               </div>
-            )}
+              <p className="gws-hero-sub">
+                Create and publish live Google Calendar schedules, instant Google Meet rooms, member sign-up forms, and discipleship materials for your congregation.
+              </p>
+            </div>
           </div>
 
-          <h2 className="gws-hero-title">
-            {activeChurch?.name || 'Church'} Google Workspace Hub
-          </h2>
-          <p className="gws-hero-sub">
-            Create and publish live Google Calendar schedules, instant Google Meet rooms, member sign-up forms, and discipleship materials for your congregation.
-          </p>
+          {ownedChurches.length > 1 && (
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-[var(--ink-muted)]">Managing:</span>
+              <select
+                value={activeChurch?.id || ''}
+                onChange={(e) => {
+                  const c = ownedChurches.find((x) => x.id === e.target.value);
+                  if (c) handleSelectChurch(c);
+                }}
+                className="bg-[var(--surface)] border border-[var(--border)] text-[var(--ink)] rounded-lg px-2.5 py-1 text-xs"
+              >
+                {ownedChurches.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
 
-          {/* Google Auth Status Bar */}
-          <div className="gws-auth-status-bar">
-            {needsAuth ? (
-              <div className="flex items-center justify-between flex-wrap gap-3 w-full">
-                <div className="flex items-center gap-2 text-xs text-amber-300">
-                  <AlertTriangle size={15} />
-                  <span>Connect your Google account to create and manage workspace items</span>
-                </div>
-                <button
-                  type="button"
-                  className="gsi-material-button"
-                  onClick={handleGoogleLogin}
-                  disabled={isLoggingIn}
-                >
-                  <div className="gsi-material-button-state"></div>
-                  <div className="gsi-material-button-content-wrapper">
-                    <div className="gsi-material-button-icon">
-                      <svg version="1.1" viewBox="0 0 48 48" style={{ display: 'block' }}>
-                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                        <path fill="none" d="M0 0h48v48H0z"></path>
-                      </svg>
-                    </div>
-                    <span className="gsi-material-button-contents">
-                      {isLoggingIn ? 'Connecting...' : 'Connect Google Workspace'}
-                    </span>
-                  </div>
-                </button>
+        {/* Google Auth Status Bar */}
+        <div className="gws-auth-bar">
+          {needsAuth ? (
+            <div className="flex items-center justify-between flex-wrap gap-3 w-full">
+              <div className="flex items-center gap-2 text-xs text-amber-400">
+                <AlertTriangle size={15} />
+                <span>Connect your Google account to create and publish workspace items</span>
               </div>
-            ) : (
-              <div className="flex items-center justify-between flex-wrap gap-2 w-full">
-                <div className="flex items-center gap-2 text-xs text-emerald-300">
-                  <Check size={14} />
-                  <span>Connected as {user?.email || user?.displayName || 'Google Account'}</span>
-                </div>
-                <button
-                  type="button"
-                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1 underline"
-                  onClick={handleGoogleLogout}
-                >
-                  <LogOut size={12} />
-                  <span>Disconnect</span>
-                </button>
+              <button
+                type="button"
+                className="gws-btn-primary gws-btn-sm"
+                onClick={handleGoogleLogin}
+                disabled={isLoggingIn}
+              >
+                <LogIn size={13} />
+                <span>{isLoggingIn ? 'Connecting...' : 'Connect Google Workspace'}</span>
+              </button>
+            </div>
+          ) : (
+            <div className="gws-connected-row">
+              <div className="flex items-center gap-2 text-xs text-emerald-400">
+                <Check size={14} />
+                <span>Connected as {user?.email || user?.displayName || 'Google Account'}</span>
               </div>
-            )}
-          </div>
+              <button
+                type="button"
+                className="text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] flex items-center gap-1 underline"
+                onClick={handleGoogleLogout}
+              >
+                <LogOut size={12} />
+                <span>Disconnect</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Global Status / Error notifications */}
       {statusMessage && (
-        <div className="p-3 mb-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs flex items-center gap-2">
+        <div className="gws-banner gws-banner-ok">
           <Check size={14} />
           <span>{statusMessage}</span>
         </div>
       )}
       {errorMessage && (
-        <div className="p-3 mb-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-200 text-xs flex items-center gap-2">
+        <div className="gws-banner gws-banner-err">
           <AlertTriangle size={14} />
           <span>{errorMessage}</span>
         </div>
       )}
 
       {/* Navigation Tabs (Horizontal Scrollable container) */}
-      <div className="gws-tabs-bar no-scrollbar">
-        {HUB_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              className={`gws-tab-btn ${isActive ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab(tab.id);
-                playSound('reaction');
-              }}
-            >
-              <Icon size={15} style={{ color: isActive ? tab.color : 'inherit' }} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+      <div className="gws-nav-card">
+        <div className="gws-nav-tabs no-scrollbar">
+          {HUB_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                className={`gws-tab-pill ${isActive ? 'active' : ''}`}
+                style={{ '--gws-tab-color': tab.color }}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  playSound('reaction');
+                }}
+              >
+                <Icon size={14} className="gws-tab-icon" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Item Visibility Selector (Used when creating any new item) */}
-      <div className="gws-visibility-selector-card">
-        <span className="text-xs font-semibold text-slate-300">Default Share Visibility:</span>
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap px-1">
+        <span className="text-xs font-semibold text-[var(--ink-muted)]">Default Share Visibility:</span>
+        <div className="gws-mode-switch">
           {[
-            { id: 'public', label: '🌐 Public (Everyone)' },
-            { id: 'members', label: '👥 Members Only' },
-            { id: 'followers', label: '🔔 Followers & Members' },
-          ].map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              className={`gws-vis-pill ${itemVisibility === v.id ? 'active' : ''}`}
-              onClick={() => {
-                setItemVisibility(v.id);
-                playSound('reaction');
-              }}
-            >
-              {v.label}
-            </button>
-          ))}
+            { id: 'public', label: 'Public (Everyone)', icon: Globe },
+            { id: 'members', label: 'Members Only', icon: Users },
+            { id: 'followers', label: 'Followers & Members', icon: Bell },
+          ].map((v) => {
+            const VIcon = v.icon;
+            const isActive = itemVisibility === v.id;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                className={`gws-mode-btn ${isActive ? 'active' : ''}`}
+                onClick={() => {
+                  setItemVisibility(v.id);
+                  playSound('reaction');
+                }}
+              >
+                <VIcon size={12} />
+                <span>{v.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* TAB 1: CALENDAR */}
       {activeTab === 'calendar' && (
-        <div className="gws-tab-body">
-          <div className="gws-card">
-            <h3 className="gws-card-title flex items-center gap-2">
-              <Calendar size={18} className="text-teal-400" />
+        <div className="gws-tab-body space-y-4">
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+              <Calendar size={18} className="text-[var(--teal)]" />
               <span>Schedule Church Event</span>
             </h3>
             <form onSubmit={handleCreateEvent} className="space-y-3 mt-3">
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Event Title *</label>
+                <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Event Title *</label>
                 <input
                   type="text"
                   className="st-input"
@@ -1163,7 +1207,7 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-slate-300 block mb-1">Date &amp; Time *</label>
+                  <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Date &amp; Time *</label>
                   <input
                     type="datetime-local"
                     className="st-input"
@@ -1174,7 +1218,7 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-300 block mb-1">Description</label>
+                  <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Description</label>
                   <input
                     type="text"
                     className="st-input"
@@ -1196,10 +1240,13 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
             </form>
           </div>
 
-          <div className="gws-card mt-4">
-            <h3 className="gws-card-title">Live Upcoming Events ({calendarEvents.length})</h3>
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+              <Calendar size={16} className="text-[var(--teal)]" />
+              <span>Live Upcoming Events ({calendarEvents.length})</span>
+            </h3>
             {calendarEvents.length === 0 ? (
-              <p className="text-xs text-slate-400 py-3">No upcoming events scheduled yet.</p>
+              <p className="text-xs text-[var(--ink-faint)] py-3">No upcoming events scheduled yet.</p>
             ) : (
               <div className="space-y-2.5 mt-3">
                 {calendarEvents.map((ev) => {
@@ -1224,11 +1271,12 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
                     <div key={ev.id} className="gws-item-card">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <strong className="text-sm font-bold text-white block">{ev.summary}</strong>
-                          <span className="text-xs text-teal-300 block">
-                            📅 {startStr ? new Date(startStr).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'All Day'}
+                          <strong className="text-sm font-bold text-[var(--ink)] block">{ev.summary}</strong>
+                          <span className="text-xs text-[var(--teal)] font-semibold flex items-center gap-1.5 mt-0.5">
+                            <Calendar size={12} />
+                            <span>{startStr ? new Date(startStr).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'All Day'}</span>
                           </span>
-                          {ev.description && <p className="text-xs text-slate-300 mt-1">{ev.description}</p>}
+                          {ev.description && <p className="text-xs text-[var(--ink-muted)] mt-1">{ev.description}</p>}
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <a
@@ -1271,18 +1319,18 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
 
       {/* TAB 2: MEET */}
       {activeTab === 'meet' && (
-        <div className="gws-tab-body">
-          <div className="gws-card">
-            <h3 className="gws-card-title flex items-center gap-2">
+        <div className="gws-tab-body space-y-4">
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
               <Video size={18} className="text-emerald-400" />
               <span>Instant Google Meet Video Room</span>
             </h3>
-            <p className="text-xs text-slate-300 mb-3">
+            <p className="text-xs text-[var(--ink-muted)] mb-3">
               Generate an instant Google Meet room for your church prayer watch, mid-week Bible study, or leadership meeting.
             </p>
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Meeting Room Topic</label>
+                <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Meeting Room Topic</label>
                 <input
                   type="text"
                   className="st-input"
@@ -1303,10 +1351,13 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
             </div>
           </div>
 
-          <div className="gws-card mt-4">
-            <h3 className="gws-card-title">Recent Video Rooms</h3>
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+              <Video size={16} className="text-emerald-400" />
+              <span>Recent Video Rooms</span>
+            </h3>
             {meetSpaces.length === 0 ? (
-              <p className="text-xs text-slate-400 py-3">No active video rooms created in this session.</p>
+              <p className="text-xs text-[var(--ink-faint)] py-3">No active video rooms created in this session.</p>
             ) : (
               <div className="space-y-2 mt-3">
                 {meetSpaces.map((s, idx) => {
@@ -1314,8 +1365,8 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
                   return (
                     <div key={idx} className="gws-item-card flex items-center justify-between gap-3">
                       <div>
-                        <strong className="text-sm font-bold text-white block">{meetTopic}</strong>
-                        <span className="text-xs text-emerald-300">{uri}</span>
+                        <strong className="text-sm font-bold text-[var(--ink)] block">{meetTopic}</strong>
+                        <span className="text-xs text-emerald-400">{uri}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -1344,18 +1395,17 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
           </div>
         </div>
       )}
-
       {/* TAB 3: FORMS */}
       {activeTab === 'forms' && (
-        <div className="gws-tab-body">
-          <div className="gws-card">
-            <h3 className="gws-card-title flex items-center gap-2">
+        <div className="gws-tab-body space-y-4">
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
               <FileSpreadsheet size={18} className="text-purple-400" />
               <span>Create Official Church Sign-Up Form</span>
             </h3>
             <form onSubmit={handleCreateForm} className="space-y-3 mt-3">
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Form Title *</label>
+                <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Form Title *</label>
                 <input
                   type="text"
                   className="st-input"
@@ -1368,7 +1418,7 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-slate-300 block mb-1">Form Category</label>
+                  <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Form Category</label>
                   <select
                     className="st-input"
                     value={newFormType}
@@ -1393,17 +1443,20 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
             </form>
           </div>
 
-          <div className="gws-card mt-4">
-            <h3 className="gws-card-title">Existing Church Forms ({formsList.length})</h3>
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+              <FileSpreadsheet size={16} className="text-purple-400" />
+              <span>Existing Church Forms ({formsList.length})</span>
+            </h3>
             {formsList.length === 0 ? (
-              <p className="text-xs text-slate-400 py-3">No forms found in your church Google Drive.</p>
+              <p className="text-xs text-[var(--ink-faint)] py-3">No forms found in your church Google Drive.</p>
             ) : (
               <div className="space-y-2 mt-3">
                 {formsList.map((f) => (
                   <div key={f.id} className="gws-item-card flex items-center justify-between gap-3 flex-wrap">
                     <div>
-                      <strong className="text-sm font-bold text-white block">{f.name}</strong>
-                      <span className="text-xs text-purple-300">
+                      <strong className="text-sm font-bold text-[var(--ink)] block">{f.name}</strong>
+                      <span className="text-xs text-purple-400">
                         Updated {f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString() : 'Recently'}
                       </span>
                     </div>
@@ -1428,15 +1481,15 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
 
       {/* TAB 4: SLIDES */}
       {activeTab === 'slides' && (
-        <div className="gws-tab-body">
-          <div className="gws-card">
-            <h3 className="gws-card-title flex items-center gap-2">
+        <div className="gws-tab-body space-y-4">
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
               <Presentation size={18} className="text-amber-400" />
               <span>Create Sermon Slide Deck</span>
             </h3>
             <form onSubmit={handleCreatePresentation} className="space-y-3 mt-3">
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Sermon Title *</label>
+                <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Sermon Title *</label>
                 <input
                   type="text"
                   className="st-input"
@@ -1458,17 +1511,20 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
             </form>
           </div>
 
-          <div className="gws-card mt-4">
-            <h3 className="gws-card-title">Sermon Slide Decks ({presentations.length})</h3>
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+              <Presentation size={16} className="text-amber-400" />
+              <span>Sermon Slide Decks ({presentations.length})</span>
+            </h3>
             {presentations.length === 0 ? (
-              <p className="text-xs text-slate-400 py-3">No sermon presentations found.</p>
+              <p className="text-xs text-[var(--ink-faint)] py-3">No sermon presentations found.</p>
             ) : (
               <div className="space-y-2 mt-3">
                 {presentations.map((deck) => (
                   <div key={deck.id} className="gws-item-card flex items-center justify-between gap-3 flex-wrap">
                     <div>
-                      <strong className="text-sm font-bold text-white block">{deck.name}</strong>
-                      <span className="text-xs text-amber-300">
+                      <strong className="text-sm font-bold text-[var(--ink)] block">{deck.name}</strong>
+                      <span className="text-xs text-amber-400">
                         {deck.modifiedTime ? `Updated ${new Date(deck.modifiedTime).toLocaleDateString()}` : 'Slide Deck'}
                       </span>
                     </div>
@@ -1491,15 +1547,15 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
 
       {/* TAB 5: CLASSROOM */}
       {activeTab === 'classroom' && (
-        <div className="gws-tab-body">
-          <div className="gws-card">
-            <h3 className="gws-card-title flex items-center gap-2">
+        <div className="gws-tab-body space-y-4">
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
               <GraduationCap size={18} className="text-amber-500" />
               <span>Create Google Classroom Discipleship Course</span>
             </h3>
             <form onSubmit={handleCreateCourse} className="space-y-3 mt-3">
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Course Title *</label>
+                <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Course Title *</label>
                 <input
                   type="text"
                   className="st-input"
@@ -1511,7 +1567,7 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Course Track</label>
+                <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Course Track</label>
                 <input
                   type="text"
                   className="st-input"
@@ -1531,17 +1587,20 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
             </form>
           </div>
 
-          <div className="gws-card mt-4">
-            <h3 className="gws-card-title">Active Discipleship Courses ({courses.length})</h3>
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+              <GraduationCap size={16} className="text-amber-500" />
+              <span>Active Discipleship Courses ({courses.length})</span>
+            </h3>
             {courses.length === 0 ? (
-              <p className="text-xs text-slate-400 py-3">No courses created yet.</p>
+              <p className="text-xs text-[var(--ink-faint)] py-3">No courses created yet.</p>
             ) : (
               <div className="space-y-2 mt-3">
                 {courses.map((c) => (
                   <div key={c.id} className="gws-item-card flex items-center justify-between gap-3 flex-wrap">
                     <div>
-                      <strong className="text-sm font-bold text-white block">{c.name}</strong>
-                      <span className="text-xs text-amber-300">{c.section || 'General Track'}</span>
+                      <strong className="text-sm font-bold text-[var(--ink)] block">{c.name}</strong>
+                      <span className="text-xs text-amber-400">{c.section || 'General Track'}</span>
                     </div>
                     <a
                       href={c.alternateLink || `https://classroom.google.com/c/${c.id}`}
@@ -1562,15 +1621,15 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
 
       {/* TAB 6: TASKS */}
       {activeTab === 'tasks' && (
-        <div className="gws-tab-body">
-          <div className="gws-card">
-            <h3 className="gws-card-title flex items-center gap-2">
+        <div className="gws-tab-body space-y-4">
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
               <CheckSquare size={18} className="text-cyan-400" />
               <span>Ministry To-Do &amp; Task Assignment</span>
             </h3>
             <form onSubmit={handleCreateTask} className="space-y-3 mt-3">
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Task Title *</label>
+                <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Task Title *</label>
                 <input
                   type="text"
                   className="st-input"
@@ -1592,18 +1651,21 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
             </form>
           </div>
 
-          <div className="gws-card mt-4">
-            <h3 className="gws-card-title">Tasks ({tasks.length})</h3>
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+              <CheckSquare size={16} className="text-cyan-400" />
+              <span>Tasks ({tasks.length})</span>
+            </h3>
             {tasks.length === 0 ? (
-              <p className="text-xs text-slate-400 py-3">No tasks found in your to-do list.</p>
+              <p className="text-xs text-[var(--ink-faint)] py-3">No tasks found in your to-do list.</p>
             ) : (
               <div className="space-y-2 mt-3">
                 {tasks.map((t) => (
                   <div key={t.id} className="gws-item-card flex items-center justify-between gap-2">
-                    <span className={`text-sm ${t.status === 'completed' ? 'line-through text-slate-400' : 'text-white'}`}>
+                    <span className={`text-sm ${t.status === 'completed' ? 'line-through text-[var(--ink-faint)]' : 'text-[var(--ink)]'}`}>
                       {t.title}
                     </span>
-                    <span className="text-xs text-cyan-300">
+                    <span className="text-xs text-cyan-400 font-semibold">
                       {t.status === 'completed' ? '✓ Done' : 'Pending'}
                     </span>
                   </div>
@@ -1616,26 +1678,26 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
 
       {/* TAB 7: CHAT */}
       {activeTab === 'chat' && (
-        <div className="gws-tab-body">
-          <div className="gws-card">
-            <h3 className="gws-card-title flex items-center gap-2">
+        <div className="gws-tab-body space-y-4">
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
               <MessageSquare size={18} className="text-indigo-400" />
               <span>Google Chat Spaces</span>
             </h3>
-            <p className="text-xs text-slate-300 mb-3">
+            <p className="text-xs text-[var(--ink-muted)] mb-3">
               Google Chat spaces provide departmental and ministry team collaboration.
             </p>
             {chatSpaces.length === 0 ? (
-              <p className="text-xs text-slate-400 py-3">No Google Chat spaces found for this account.</p>
+              <p className="text-xs text-[var(--ink-faint)] py-3">No Google Chat spaces found for this account.</p>
             ) : (
               <div className="space-y-2">
                 {chatSpaces.map((s) => (
                   <div key={s.name} className="gws-item-card flex items-center justify-between gap-3">
                     <div>
-                      <strong className="text-sm font-bold text-white block">
+                      <strong className="text-sm font-bold text-[var(--ink)] block">
                         {s.displayName || s.name}
                       </strong>
-                      <span className="text-xs text-indigo-300">Space Type: {s.type || 'Group'}</span>
+                      <span className="text-xs text-indigo-400">Space Type: {s.type || 'Group'}</span>
                     </div>
                     <a
                       href={s.spaceUri || 'https://chat.google.com'}
@@ -1656,15 +1718,15 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
 
       {/* TAB 8: FIREBASE PRAYER WALL */}
       {activeTab === 'firebase' && (
-        <div className="gws-tab-body">
-          <div className="gws-card">
-            <h3 className="gws-card-title flex items-center gap-2">
+        <div className="gws-tab-body space-y-4">
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
               <Flame size={18} className="text-pink-400" />
               <span>Post to Community Prayer Wall</span>
             </h3>
             <form onSubmit={handleAddPrayerRequest} className="space-y-3 mt-3">
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Prayer Title *</label>
+                <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Prayer Title *</label>
                 <input
                   type="text"
                   className="st-input"
@@ -1676,7 +1738,7 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-slate-300 block mb-1">Category</label>
+                  <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Category</label>
                   <select
                     className="st-input"
                     value={prayerCategory}
@@ -1691,7 +1753,7 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Prayer Details *</label>
+                <label className="text-xs font-medium text-[var(--ink-muted)] block mb-1">Prayer Details *</label>
                 <textarea
                   className="st-input"
                   rows={3}
@@ -1708,21 +1770,24 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
             </form>
           </div>
 
-          <div className="gws-card mt-4">
-            <h3 className="gws-card-title">Live Prayer Wall ({prayerRequests.length})</h3>
+          <div className="gws-panel-card">
+            <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+              <Flame size={16} className="text-pink-400" />
+              <span>Live Prayer Wall ({prayerRequests.length})</span>
+            </h3>
             {prayerRequests.length === 0 ? (
-              <p className="text-xs text-slate-400 py-3">No prayer requests posted yet.</p>
+              <p className="text-xs text-[var(--ink-faint)] py-3">No prayer requests posted yet.</p>
             ) : (
               <div className="space-y-3 mt-3">
                 {prayerRequests.map((pr) => (
                   <div key={pr.id} className="gws-item-card">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <strong className="text-sm font-bold text-white block">{pr.title}</strong>
-                        <span className="text-xs text-pink-300 font-semibold">{pr.category}</span>
-                        <p className="text-xs text-slate-300 mt-1">{pr.content}</p>
-                        <span className="text-[11px] text-slate-400 mt-2 block">
-                          By {pr.authorName} • 🙏 {pr.prayedCount || 0} prayers
+                        <strong className="text-sm font-bold text-[var(--ink)] block">{pr.title}</strong>
+                        <span className="text-xs text-pink-400 font-semibold">{pr.category}</span>
+                        <p className="text-xs text-[var(--ink-muted)] mt-1">{pr.content}</p>
+                        <span className="text-[11px] text-[var(--ink-faint)] mt-2 block">
+                          By {pr.authorName} • <Heart size={11} className="inline text-pink-400 mr-1" />{pr.prayedCount || 0} prayers
                         </span>
                       </div>
                       <button
@@ -1748,13 +1813,13 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
       {/* CHURCH SHARED ITEMS SECTION (ADMIN OVERVIEW) */}
       <div className="mt-6">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Share2 size={16} className="text-teal-400" />
+          <h3 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+            <Share2 size={16} className="text-[var(--teal)]" />
             <span>Items Shared with Community by {activeChurch?.name || 'Your Church'} ({sharedItems.length})</span>
           </h3>
           <button
             type="button"
-            className="text-xs text-teal-300 hover:underline flex items-center gap-1"
+            className="text-xs text-[var(--teal)] hover:underline flex items-center gap-1"
             onClick={reloadSharedItems}
           >
             <RefreshCw size={12} />
@@ -1763,8 +1828,9 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
         </div>
 
         {sharedItems.length === 0 ? (
-          <div className="gws-item-card text-center py-6 text-xs text-slate-400">
-            No items shared yet. Create an event, meeting room, or sign-up form above to share it with your congregation.
+          <div className="gws-empty-card py-6 text-xs text-[var(--ink-muted)]">
+            <LayoutGrid size={24} className="mx-auto mb-2 text-[var(--teal)] opacity-60" />
+            <p>No items shared yet. Create an event, meeting room, or sign-up form above to share it with your congregation.</p>
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -1772,15 +1838,15 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
               <div key={item.id} className="gws-item-card flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <div className="flex items-center gap-2">
-                    <strong className="text-sm font-bold text-white">{item.title}</strong>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 border border-white/15 uppercase">
+                    <strong className="text-sm font-bold text-[var(--ink)]">{item.title}</strong>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--surface)] text-[var(--ink-muted)] border border-[var(--border)] uppercase">
                       {item.kind.replace('_', ' ')}
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-400 border border-teal-500/30">
                       {item.visibility}
                     </span>
                   </div>
-                  {item.description && <p className="text-xs text-slate-300 mt-1">{item.description}</p>}
+                  {item.description && <p className="text-xs text-[var(--ink-muted)] mt-1">{item.description}</p>}
                 </div>
                 <div className="flex items-center gap-2">
                   <a
@@ -1852,8 +1918,9 @@ export default function GoogleWorkspaceHubView({ session, currentUser, onShareTo
 function CommunityWorkspaceSection({ items, onShareToFeed, emptyMessage = 'No items found.' }) {
   if (items.length === 0) {
     return (
-      <div className="gws-item-card text-center py-8 text-xs text-slate-400">
-        {emptyMessage}
+      <div className="gws-empty-card">
+        <LayoutGrid size={24} className="mx-auto mb-2 text-[var(--teal)] opacity-60" />
+        <p>{emptyMessage}</p>
       </div>
     );
   }
@@ -1882,6 +1949,7 @@ function CommunityWorkspaceSection({ items, onShareToFeed, emptyMessage = 'No it
           });
         } else if (item.kind === 'form') {
           actionLabel = 'Open Sign-Up Form';
+          actionIcon = FileSpreadsheet;
         } else if (item.kind === 'meet') {
           actionLabel = 'Join Video Room';
           actionIcon = Video;
@@ -1893,25 +1961,28 @@ function CommunityWorkspaceSection({ items, onShareToFeed, emptyMessage = 'No it
           actionIcon = Presentation;
         }
 
+        const ActionIcon = actionIcon;
+
         return (
           <div key={item.id} className="gws-item-card">
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 uppercase">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-400 border border-teal-500/30 uppercase">
                     {item.kind.replace('_', ' ')}
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--surface)] text-[var(--ink-muted)] border border-[var(--border)]">
                     {item.visibility}
                   </span>
                 </div>
-                <strong className="text-sm font-bold text-white block mb-1">{item.title}</strong>
+                <strong className="text-sm font-bold text-[var(--ink)] block mb-1">{item.title}</strong>
                 {item.description && (
-                  <p className="text-xs text-slate-300 mb-2 leading-relaxed">{item.description}</p>
+                  <p className="text-xs text-[var(--ink-muted)] mb-2 leading-relaxed">{item.description}</p>
                 )}
                 {isCal && item.starts_at && (
-                  <span className="text-xs text-teal-300 font-semibold block mb-2">
-                    📅 {new Date(item.starts_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                  <span className="text-xs text-[var(--teal)] font-semibold flex items-center gap-1.5 mb-2">
+                    <Calendar size={13} />
+                    <span>{new Date(item.starts_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
                   </span>
                 )}
               </div>
@@ -1945,7 +2016,7 @@ function CommunityWorkspaceSection({ items, onShareToFeed, emptyMessage = 'No it
                     rel="noopener noreferrer"
                     className="gws-btn-primary gws-btn-sm"
                   >
-                    <ExternalLink size={13} />
+                    <ActionIcon size={13} />
                     <span>{actionLabel}</span>
                   </a>
                 )}
