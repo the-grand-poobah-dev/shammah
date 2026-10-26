@@ -30,7 +30,10 @@ import {
   Share2,
   Heart,
   Tv,
+  Shield,
+  Loader2,
 } from 'lucide-react';
+import PopupSheet from './PopupSheet';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
 import { CATEGORY_STYLES, categoryStyle, initials } from '../lib/postDisplay';
@@ -84,6 +87,8 @@ export default function CreatePostBox({
   const [pseudoProfile, setPseudoProfile] = useState(() => generatePseudoIdentity());
   const [showIdentityMenu, setShowIdentityMenu] = useState(false);
   const [aiEnhancing, setAiEnhancing] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [prePolishText, setPrePolishText] = useState(null);
   const [allowOfflineDownload, setAllowOfflineDownload] = useState(true);
   const [previewTestVote, setPreviewTestVote] = useState(null);
   const [previewSimulateResults, setPreviewSimulateResults] = useState(false);
@@ -101,29 +106,42 @@ export default function CreatePostBox({
   }, [pollOptions.length, previewTestVote]);
 
   async function handleAiEnhance() {
-    if (!composeText.trim()) {
-      playSound('reaction');
-      window.dispatchEvent(new CustomEvent('shammah:open-chatbot'));
-      return;
-    }
+    if (!composeText.trim()) return;
     setAiEnhancing(true);
+    setAiError(null);
     playSound('reaction');
     try {
+      const token = session?.access_token || 'authenticated-token';
       const res = await fetch('/api/gemini/enhance', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           action: isPoll ? 'generate_poll' : 'polish_testimony',
           text: composeText,
         }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        let msg = data.error || 'Failed to polish text';
+        try {
+          if (typeof msg === 'string' && (msg.startsWith('{') || msg.startsWith('['))) {
+            const parsed = JSON.parse(msg);
+            msg = parsed?.error?.message || parsed?.message || msg;
+          }
+        } catch {}
+        throw new Error(msg);
+      }
       if (data.enhancedText) {
+        setPrePolishText(composeText);
         setComposeText(data.enhancedText);
         playSound('badge');
       }
     } catch (err) {
       console.error('Enhance error:', err);
+      setAiError(err.message || 'Unable to polish text. Please try again.');
     } finally {
       setAiEnhancing(false);
     }
@@ -331,88 +349,103 @@ export default function CreatePostBox({
                       : 'Community Member'}
             </span>
 
-            {/* Identity Dropdown Menu */}
-            {showIdentityMenu && (
-              <>
-                <div className="dropdown-fixed-backdrop" onClick={() => setShowIdentityMenu(false)} />
-                <div className="compose-identity-dropdown neon-glow-modal" role="menu">
-                  <button
-                    type="button"
-                    className={`ident-opt-btn${(postIdentity === 'real' || hoveredIdent === 'real') ? ' active is-highlighted' : ''}`}
-                    style={{ '--item-accent': 'var(--teal)' }}
-                    onMouseEnter={() => setHoveredIdent('real')}
-                    onMouseLeave={() => setHoveredIdent(null)}
-                    onClick={() => {
-                      setPostIdentity('real');
-                      setShowIdentityMenu(false);
-                      playSound('reaction');
-                    }}
-                  >
-                    <User size={15} />
-                    <div className="ident-opt-text">
-                      <strong>Post as Yourself</strong>
-                      <small>{headerName}</small>
-                    </div>
-                    {postIdentity === 'real' && <Check size={14} className="ident-opt-check" />}
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`ident-opt-btn${(postIdentity === 'anonymous' || hoveredIdent === 'anonymous') ? ' active is-highlighted' : ''}`}
-                    style={{ '--item-accent': '#8b5cf6' }}
-                    onMouseEnter={() => setHoveredIdent('anonymous')}
-                    onMouseLeave={() => setHoveredIdent(null)}
-                    onClick={() => {
-                      setPostIdentity('anonymous');
-                      setShowIdentityMenu(false);
-                      playSound('reaction');
-                    }}
-                  >
-                    <EyeOff size={15} />
-                    <div className="ident-opt-text">
-                      <strong>Post Anonymously</strong>
-                      <small>Name and avatar hidden from community</small>
-                    </div>
-                    {postIdentity === 'anonymous' && <Check size={14} className="ident-opt-check" />}
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`ident-opt-btn${(postIdentity === 'pseudo' || hoveredIdent === 'pseudo') ? ' active is-highlighted' : ''}`}
-                    style={{ '--item-accent': '#f59e0b' }}
-                    onMouseEnter={() => setHoveredIdent('pseudo')}
-                    onMouseLeave={() => setHoveredIdent(null)}
-                    onClick={() => {
-                      setPostIdentity('pseudo');
-                      setShowIdentityMenu(false);
-                      playSound('reaction');
-                    }}
-                  >
-                    <Sparkles size={15} />
-                    <div className="ident-opt-text">
-                      <strong>Auto Pseudo Name</strong>
-                      <small>{pseudoProfile.name}</small>
-                    </div>
-                    {postIdentity === 'pseudo' && <Check size={14} className="ident-opt-check" />}
-                  </button>
-
-                  {postIdentity === 'pseudo' && (
-                    <button
-                      type="button"
-                      className="ident-reroll-action-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPseudoProfile(generatePseudoIdentity());
-                        playSound('reaction');
-                      }}
-                    >
-                      <RefreshCw size={12} />
-                      <span>Generate New Pseudo Name</span>
-                    </button>
-                  )}
+            {/* Identity Selector Modal using canonical PopupSheet */}
+            <PopupSheet
+              open={showIdentityMenu}
+              onClose={() => setShowIdentityMenu(false)}
+              title={
+                <div className="visibility-modal-title">
+                  <User size={18} className="vis-icon-shield" />
+                  <span>Post Identity</span>
                 </div>
-              </>
-            )}
+              }
+              size="sm"
+            >
+              <p className="visibility-desc">
+                Choose how your name and avatar appear to others on this post:
+              </p>
+              <div className="visibility-options-list">
+                <button
+                  type="button"
+                  className={`visibility-option-item${postIdentity === 'real' ? ' active' : ''}`}
+                  onClick={() => {
+                    setPostIdentity('real');
+                    setShowIdentityMenu(false);
+                    playSound('reaction');
+                  }}
+                >
+                  <div className="vis-option-left">
+                    <span className="vis-option-icon" style={{ background: 'rgba(6, 182, 212, 0.12)', color: '#0891b2' }}>
+                      <User size={18} />
+                    </span>
+                    <div className="vis-option-text">
+                      <span className="vis-option-label">Post as Yourself</span>
+                      <span className="vis-option-sub">{headerName}</span>
+                    </div>
+                  </div>
+                  {postIdentity === 'real' && <Check size={16} className="vis-check-icon" />}
+                </button>
+
+                <button
+                  type="button"
+                  className={`visibility-option-item${postIdentity === 'anonymous' ? ' active' : ''}`}
+                  onClick={() => {
+                    setPostIdentity('anonymous');
+                    setShowIdentityMenu(false);
+                    playSound('reaction');
+                  }}
+                >
+                  <div className="vis-option-left">
+                    <span className="vis-option-icon" style={{ background: 'rgba(139, 92, 246, 0.12)', color: '#8b5cf6' }}>
+                      <EyeOff size={18} />
+                    </span>
+                    <div className="vis-option-text">
+                      <span className="vis-option-label">Post Anonymously</span>
+                      <span className="vis-option-sub">Name and avatar hidden from community</span>
+                    </div>
+                  </div>
+                  {postIdentity === 'anonymous' && <Check size={16} className="vis-check-icon" />}
+                </button>
+
+                <button
+                  type="button"
+                  className={`visibility-option-item${postIdentity === 'pseudo' ? ' active' : ''}`}
+                  onClick={() => {
+                    setPostIdentity('pseudo');
+                    setShowIdentityMenu(false);
+                    playSound('reaction');
+                  }}
+                >
+                  <div className="vis-option-left">
+                    <span className="vis-option-icon" style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b' }}>
+                      <Sparkles size={18} />
+                    </span>
+                    <div className="vis-option-text">
+                      <span className="vis-option-label">Pseudonym Protected</span>
+                      <span className="vis-option-sub">{pseudoProfile.name}</span>
+                    </div>
+                  </div>
+                  {postIdentity === 'pseudo' && <Check size={16} className="vis-check-icon" />}
+                </button>
+              </div>
+              {postIdentity === 'pseudo' && (
+                <div style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    className="ident-reroll-action-btn"
+                    style={{ width: '100%', justifyContent: 'center' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPseudoProfile(generatePseudoIdentity());
+                      playSound('reaction');
+                    }}
+                  >
+                    <RefreshCw size={13} />
+                    <span>Generate New Pseudo Name</span>
+                  </button>
+                </div>
+              )}
+            </PopupSheet>
           </div>
         </div>
 
@@ -431,51 +464,51 @@ export default function CreatePostBox({
               <ChevronDown size={11} className="vis-chevron" />
             </button>
 
-            {showVisMenu && (
-              <>
-                <div className="dropdown-fixed-backdrop" onClick={() => setShowVisMenu(false)} />
-                <div className="compose-vis-dropdown neon-glow-modal" role="menu">
-                  {VISIBILITY_OPTIONS.map((opt) => {
-                    const OptIcon = VIS_ICONS[opt.id] || Globe;
-                    const isActive = visibility === opt.id;
-                    const isHovered = hoveredVis === opt.id;
-                    const isHighlighted = isActive || isHovered;
-                    const accentColor =
-                      opt.id === 'public'
-                        ? 'var(--teal)'
-                        : opt.id === 'church'
-                          ? 'var(--gold)'
-                          : opt.id === 'followers'
-                            ? '#8b5cf6'
-                            : '#ec4899';
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        className={`compose-vis-opt-btn${isHighlighted ? ' active is-highlighted' : ''}`}
-                        style={{ '--item-accent': accentColor }}
-                        onMouseEnter={() => setHoveredVis(opt.id)}
-                        onMouseLeave={() => setHoveredVis(null)}
-                        onClick={() => {
-                          setVisibility(opt.id);
-                          setShowVisMenu(false);
-                          playSound('reaction');
-                        }}
-                      >
-                        <span className="vis-opt-icon">
-                          <OptIcon size={15} />
-                        </span>
-                        <div className="vis-opt-details">
-                          <strong>{opt.label}</strong>
-                          <small>{opt.desc}</small>
-                        </div>
-                        {isActive && <Check size={14} className="vis-opt-check" />}
-                      </button>
-                    );
-                  })}
+            {/* Post Visibility Modal using canonical PopupSheet */}
+            <PopupSheet
+              open={showVisMenu}
+              onClose={() => setShowVisMenu(false)}
+              title={
+                <div className="visibility-modal-title">
+                  <Shield size={18} className="vis-icon-shield" />
+                  <span>Post Visibility &amp; Privacy</span>
                 </div>
-              </>
-            )}
+              }
+              size="sm"
+            >
+              <p className="visibility-desc">
+                Choose who can see this post on Shammah:
+              </p>
+              <div className="visibility-options-list">
+                {VISIBILITY_OPTIONS.map((opt) => {
+                  const OptIcon = VIS_ICONS[opt.id] || Globe;
+                  const isSelected = visibility === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={`visibility-option-item${isSelected ? ' active' : ''}`}
+                      onClick={() => {
+                        setVisibility(opt.id);
+                        setShowVisMenu(false);
+                        playSound('reaction');
+                      }}
+                    >
+                      <div className="vis-option-left">
+                        <span className="vis-option-icon">
+                          <OptIcon size={18} />
+                        </span>
+                        <div className="vis-option-text">
+                          <span className="vis-option-label">{opt.label}</span>
+                          <span className="vis-option-sub">{opt.desc}</span>
+                        </div>
+                      </div>
+                      {isSelected && <Check size={16} className="vis-check-icon" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </PopupSheet>
           </div>
 
           {/* Admin Pinned Announcement quick badge */}
@@ -641,6 +674,57 @@ export default function CreatePostBox({
 
       {/* Modern Textarea */}
       <div className="compose-input-wrapper">
+        {/* AI Polish Undo Notification */}
+        {prePolishText !== null && (
+          <div className="flex items-center justify-between p-2.5 px-3 mb-2 rounded-xl border border-teal-500/30 bg-teal-500/10 text-xs">
+            <div className="flex items-center gap-2">
+              <Sparkles size={14} className="text-amber-400" />
+              <span className="font-semibold text-teal-300">Polished with Shammah AI</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition-colors"
+                onClick={() => {
+                  setComposeText(prePolishText);
+                  setPrePolishText(null);
+                  playSound('reaction');
+                }}
+              >
+                Undo
+              </button>
+              <button
+                type="button"
+                className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 font-medium transition-colors"
+                onClick={() => {
+                  setPrePolishText(null);
+                  playSound('badge');
+                }}
+              >
+                Keep
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* AI Polish Error Alert */}
+        {aiError && (
+          <div className="flex items-center justify-between p-2.5 px-3 mb-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs" role="alert">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={14} className="text-rose-400 flex-shrink-0" />
+              <span>{aiError}</span>
+            </div>
+            <button
+              type="button"
+              className="p-1 text-rose-400 hover:text-rose-200 transition-colors"
+              onClick={() => setAiError(null)}
+              aria-label="Dismiss error"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
         <textarea
           id="compose-box"
           value={composeText}
@@ -666,6 +750,11 @@ export default function CreatePostBox({
           maxLength={2000}
           className="compose-textarea"
         />
+        <div className="compose-char-counter-row">
+          <span className={`char-counter${composeText.length > 1800 ? ' warn' : ''}`}>
+            {composeText.length} / 2000
+          </span>
+        </div>
       </div>
 
       {/* Media Preview (Photo / Video / Audio) */}
@@ -1276,7 +1365,7 @@ export default function CreatePostBox({
 
       {/* Bottom Action Bar */}
       <div className="compose-bottom-toolbar">
-        <div className="compose-tools-group" role="group" aria-label="Attachments">
+        <div className="compose-tools-group" role="group" aria-label="Attachments and options">
           <button
             type="button"
             className="tool-btn"
@@ -1316,6 +1405,7 @@ export default function CreatePostBox({
             onClick={() => setIsPoll((v) => !v)}
             title="Create a community poll"
             aria-label="Toggle poll"
+            aria-pressed={isPoll}
           >
             <BarChart3 size={18} className="tool-icon tool-poll" />
             <span className="tool-label">Poll</span>
@@ -1324,36 +1414,43 @@ export default function CreatePostBox({
           {/* AI Scripture & Polish Tool Button */}
           <button
             type="button"
-            className={`tool-btn ai-tool-btn${aiEnhancing ? ' enhancing' : ''}`}
+            className={`tool-btn ai-tool-btn${aiEnhancing ? ' enhancing' : ''}${!composeText.trim() ? ' opacity-50 cursor-not-allowed' : ''}`}
             onClick={handleAiEnhance}
-            disabled={aiEnhancing}
-            title="Polish with relevant scripture references using Shammah AI"
+            disabled={aiEnhancing || !composeText.trim()}
+            title={
+              !composeText.trim()
+                ? 'Type your message above to polish with Shammah AI'
+                : 'Polish spelling, grammar & sentence flow with Shammah AI'
+            }
             aria-label="AI Polish"
           >
-            <Bot size={18} className="tool-icon tool-ai" />
+            {aiEnhancing ? (
+              <RefreshCw size={18} className="tool-icon tool-ai animate-spin" />
+            ) : (
+              <Bot size={18} className="tool-icon tool-ai" />
+            )}
             <span className="tool-label">{aiEnhancing ? 'Refining…' : 'AI Polish'}</span>
+          </button>
+
+          {/* 30-Day Offline Download Option for Author */}
+          <button
+            type="button"
+            className={`tool-btn${allowOfflineDownload ? ' active' : ''}`}
+            onClick={() => {
+              setAllowOfflineDownload((v) => !v);
+              playSound('reaction');
+            }}
+            title={allowOfflineDownload ? '30-Day Offline Enabled (Tap to disable)' : 'Allow 30-Day Offline Download'}
+            aria-label="30-day offline download"
+            aria-pressed={allowOfflineDownload}
+          >
+            <DownloadCloud size={18} className="tool-icon tool-offline" />
+            <span className="tool-label">Offline</span>
           </button>
         </div>
 
-        {/* Post CTA + Char count + Offline Toggle */}
+        {/* Post CTA */}
         <div className="compose-cta-group">
-          {/* Offline Download Option for Author */}
-          <label className="compose-offline-pill" title="Allow 30-day offline download of this content">
-            <input
-              type="checkbox"
-              checked={allowOfflineDownload}
-              onChange={(e) => setAllowOfflineDownload(e.target.checked)}
-              className="compose-offline-chk"
-            />
-            <DownloadCloud size={13} className="text-cyan-400" />
-            <span>30-Day Offline</span>
-          </label>
-          {composeText.length > 0 && (
-            <span className={`char-counter${composeText.length > 1800 ? ' warn' : ''}`}>
-              {composeText.length}/2000
-            </span>
-          )}
-
           <button
             type="submit"
             className={`compose-submit-btn${!composeCategory ? ' needs-category' : ''}`}

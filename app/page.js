@@ -635,7 +635,7 @@ export default function Feed() {
       let query = supabase
         .from('posts')
         .select(
-          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, poll_expires_at, quoted_post_id, profiles(display_name, avatar_url, badge, badge_verified, role)'
+          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, visibility, poll_expires_at, quoted_post_id, profiles(display_name, avatar_url, badge, badge_verified, role)'
         )
         .order('created_at', { ascending: false })
         .limit(50);
@@ -777,7 +777,20 @@ export default function Feed() {
     (results || []).forEach((r) => {
       counts[r.option_id] = r.votes;
     });
-    setPollCountsByPost((c) => ({ ...c, [postId]: counts }));
+    if (!counts[optionId] && (results || []).length === 0) {
+      setPollCountsByPost((prev) => {
+        const existing = prev[postId] || {};
+        return {
+          ...prev,
+          [postId]: {
+            ...existing,
+            [optionId]: (existing[optionId] || 0) + 1,
+          },
+        };
+      });
+    } else {
+      setPollCountsByPost((c) => ({ ...c, [postId]: counts }));
+    }
   }
 
   function addPollOption() {
@@ -899,6 +912,7 @@ export default function Feed() {
         text_content: text || null,
         media_url,
         media_type,
+        visibility: validVisibility,
         poll_expires_at: pollExpiresAtToSave,
       })
       .select('id')
@@ -950,32 +964,6 @@ export default function Feed() {
 
     saveUserCreatedPost(newPost);
 
-    if (error || !inserted?.id) {
-      setPosts((prev) => {
-        const nextList = sortPostsWithPinned([newPost, ...prev]);
-        cacheMainFeedPosts(activeCategory, nextList, pollOptionsByPost, pollCountsByPost);
-        setLastSwCachedAt(new Date().toISOString());
-        return nextList;
-      });
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        addPendingSyncItem({ type: 'post_sync', label: 'New community post' });
-      }
-
-      if (isPoll && optionsToInsert.length > 0) {
-        const generatedOpts = optionsToInsert.map((o, idx) => ({
-          id: `opt-${newPost.id}-${idx}`,
-          label: o.label,
-          image_url: o.image_url,
-          is_correct: o.is_correct ?? false,
-          position: idx,
-        }));
-        setPollOptionsByPost((prev) => ({
-          ...prev,
-          [newPost.id]: generatedOpts,
-        }));
-      }
-    }
-
     if (isPoll && inserted?.id) {
       const { error: optError } = await supabase
         .from('poll_options')
@@ -984,6 +972,35 @@ export default function Feed() {
         setPosting(false);
         setPostError('Post created, but the poll options failed to save: ' + optError.message);
         return;
+      }
+    }
+
+    // Always update feed state with the new post and poll options
+    setPosts((prev) => {
+      const nextList = sortPostsWithPinned([newPost, ...prev]);
+      cacheMainFeedPosts(activeCategory, nextList, pollOptionsByPost, pollCountsByPost);
+      setLastSwCachedAt(new Date().toISOString());
+      return nextList;
+    });
+
+    if (isPoll && optionsToInsert.length > 0) {
+      const generatedOpts = optionsToInsert.map((o, idx) => ({
+        id: `opt-${newPost.id}-${idx}`,
+        label: o.label,
+        image_url: o.image_url,
+        is_correct: o.is_correct ?? false,
+        position: idx,
+        post_id: newPost.id,
+      }));
+      setPollOptionsByPost((prev) => ({
+        ...prev,
+        [newPost.id]: generatedOpts,
+      }));
+    }
+
+    if (error || !inserted?.id) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        addPendingSyncItem({ type: 'post_sync', label: 'New community post' });
       }
     }
     setPosting(false);
