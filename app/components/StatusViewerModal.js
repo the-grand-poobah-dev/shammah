@@ -20,6 +20,8 @@ import {
   ShieldAlert,
   Trash2,
   Loader2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
@@ -112,6 +114,11 @@ export default function StatusViewerModal({
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
 
+  // Caption expansion state for media statuses (image/video/audio)
+  const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
+  const [isCaptionOverflowing, setIsCaptionOverflowing] = useState(false);
+  const captionTextRef = useRef(null);
+
   // Story Options Sheets state
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -137,6 +144,16 @@ export default function StatusViewerModal({
 
   const currentStatus = statuses[currentIndex];
   const resolvedMediaType = currentStatus ? inferMediaType(currentStatus.mediaUrl, currentStatus.mediaType) : null;
+  const hasMedia = Boolean(
+    (resolvedMediaType && ['image', 'video', 'audio'].includes(resolvedMediaType)) ||
+    currentStatus?.mediaUrl
+  );
+  const captionText = (
+    currentStatus?.text_content ||
+    currentStatus?.text ||
+    currentStatus?.caption ||
+    ''
+  ).trim();
 
   // Mark current status as viewed client-side
   useEffect(() => {
@@ -220,18 +237,39 @@ export default function StatusViewerModal({
     setIsDeleting(false);
     setAudioDuration(0);
     setAudioCurrentTime(0);
+    setIsCaptionExpanded(false);
   }, [currentIndex]);
 
+  // Determine if caption overflows 2-3 lines to conditionally show "Read more"
+  useEffect(() => {
+    if (!hasMedia || !captionText) {
+      setIsCaptionOverflowing(false);
+      return;
+    }
+    // Fast path: long strings (> 95 chars) or multi-line strings always overflow on mobile
+    if (captionText.length > 95 || captionText.includes('\n')) {
+      setIsCaptionOverflowing(true);
+      return;
+    }
+    // Check DOM client height vs scroll height
+    if (captionTextRef.current) {
+      const el = captionTextRef.current;
+      const isOver = el.scrollHeight > el.clientHeight + 2;
+      setIsCaptionOverflowing(isOver);
+    }
+  }, [captionText, hasMedia, currentIndex]);
+
   // Story menu / dialog sheets interaction state:
-  // Whenever user is interacting with ANY menu options, pause the status until done/closed
-  // to prevent the menu being closed by another loaded status in view.
+  // Whenever user is interacting with ANY menu options or reading expanded caption,
+  // pause the status until done/closed so story doesn't auto-advance or audio/video play.
   const isMenuInteracting = Boolean(
     menuOpen || reportOpen || reshareOpen || deleteConfirmOpen || showEmojiSheet
   );
-  const isInteracting = Boolean(isPaused || isMenuInteracting);
+  const isInteracting = Boolean(isPaused || isMenuInteracting || isCaptionExpanded);
 
   // Programmatic advance used strictly after finishing an action (e.g. after reporting or deleting)
   const advanceAfterAction = useCallback(() => {
+    setIsCaptionExpanded(false);
     if (currentIndex < statuses.length - 1) {
       setSlideAnim('slide-from-right');
       setCurrentIndex((i) => i + 1);
@@ -243,6 +281,7 @@ export default function StatusViewerModal({
 
   const handlePrev = useCallback(() => {
     if (isMenuInteracting) return;
+    setIsCaptionExpanded(false);
     if (currentIndex > 0) {
       setSlideAnim('slide-from-left');
       setCurrentIndex((i) => i - 1);
@@ -252,6 +291,7 @@ export default function StatusViewerModal({
 
   const handleNext = useCallback(() => {
     if (isMenuInteracting) return;
+    setIsCaptionExpanded(false);
     if (currentIndex < statuses.length - 1) {
       setSlideAnim('slide-from-right');
       setCurrentIndex((i) => i + 1);
@@ -265,6 +305,7 @@ export default function StatusViewerModal({
   // Jump to NEXT USER's story on swipe left
   const handleNextUser = useCallback(() => {
     if (isMenuInteracting || !currentStatus) return;
+    setIsCaptionExpanded(false);
     const nextIdx = statuses.findIndex(
       (s, idx) =>
         idx > currentIndex &&
@@ -283,6 +324,7 @@ export default function StatusViewerModal({
   // Jump to PREVIOUS USER's story on swipe right
   const handlePrevUser = useCallback(() => {
     if (isMenuInteracting || !currentStatus) return;
+    setIsCaptionExpanded(false);
     let prevUserIdx = -1;
     for (let i = currentIndex - 1; i >= 0; i--) {
       const s = statuses[i];
@@ -314,16 +356,20 @@ export default function StatusViewerModal({
     function handleKeyDown(e) {
       if (isMenuInteracting) return;
       if (e.key === 'Escape') {
+        if (isCaptionExpanded) {
+          setIsCaptionExpanded(false);
+          return;
+        }
         onClose();
-      } else if (e.key === 'ArrowRight' || e.key === ' ') {
+      } else if (!isCaptionExpanded && (e.key === 'ArrowRight' || e.key === ' ')) {
         handleNext();
-      } else if (e.key === 'ArrowLeft') {
+      } else if (!isCaptionExpanded && e.key === 'ArrowLeft') {
         handlePrev();
       }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNext, handlePrev, onClose, isMenuInteracting]);
+  }, [handleNext, handlePrev, onClose, isMenuInteracting, isCaptionExpanded]);
 
   // Progress Bar timer:
   // For text and images: 5 seconds fixed duration.
@@ -377,7 +423,7 @@ export default function StatusViewerModal({
     if (isMenuInteracting) return;
     if (
       e.target.closest(
-        'button, input, textarea, form, .status-viewer-footer, .status-viewer-header, .faith-reaction-picker-bubble, .status-viewer-sound-toggle-btn, .popup-sheet-dialog'
+        'button, input, textarea, form, .status-viewer-footer, .status-media-caption-box, .status-viewer-header, .faith-reaction-picker-bubble, .status-viewer-sound-toggle-btn, .popup-sheet-dialog'
       )
     ) {
       return;
@@ -412,6 +458,13 @@ export default function StatusViewerModal({
     setIsPaused(false);
 
     if (isMenuInteracting) return;
+
+    // If caption is expanded and user taps media backdrop, collapse caption and resume
+    if (isCaptionExpanded) {
+      setIsCaptionExpanded(false);
+      return;
+    }
+
     if (!pointerStartRef.current) return;
     const start = pointerStartRef.current;
     pointerStartRef.current = null;
@@ -743,17 +796,21 @@ export default function StatusViewerModal({
           title="Tap right edge for next story"
         />
 
-        {/* Story Body: Scripture tag, text, and media */}
+        {/* Story Body:
+            - For TEXT-ONLY statuses (no media): Scripture tag and text retain their centered presentation unchanged.
+            - For MEDIA statuses: Media player is displayed cleanly without text obstructing the middle.
+        */}
         <div className={`status-viewer-body ${resolvedMediaType ? `has-media has-media-${resolvedMediaType}` : ''}`}>
-          {currentStatus.scriptureTag && (
+          {/* Text-only statuses: Keep exact existing presentation */}
+          {!hasMedia && currentStatus.scriptureTag && (
             <span className="status-scripture-tag">
               <Sparkles size={14} />
               <span>{currentStatus.scriptureTag}</span>
             </span>
           )}
 
-          {currentStatus.text && (
-            <p className="status-viewer-text">{currentStatus.text}</p>
+          {!hasMedia && captionText && (
+            <p className="status-viewer-text">{captionText}</p>
           )}
 
           {/* Video Status: Autoplays muted with tap-to-unmute and pauses when story is paused */}
@@ -773,7 +830,7 @@ export default function StatusViewerModal({
                   }
                 }}
                 onEnded={() => {
-                  if (!isMenuInteracting) {
+                  if (!isMenuInteracting && !isCaptionExpanded) {
                     handleNext();
                   }
                 }}
@@ -834,7 +891,7 @@ export default function StatusViewerModal({
                   }
                 }}
                 onEnded={() => {
-                  if (!isMenuInteracting) {
+                  if (!isMenuInteracting && !isCaptionExpanded) {
                     handleNext();
                   }
                 }}
@@ -883,7 +940,11 @@ export default function StatusViewerModal({
           </button>
         )}
 
-        {/* Story Footer: Quick Reactions + Direct Inbox Comment Input */}
+        {/* Story Footer:
+            1. Media Status Caption (image/video/audio) anchored at bottom, expands upward with subtle scrim.
+            2. Quick Reactions (minimal and low-profile).
+            3. Comment Form (minimal and low-profile).
+        */}
         <div className="status-viewer-footer" onClick={(e) => e.stopPropagation()}>
           {sentFeedback && (
             <div className="status-sent-banner">
@@ -896,6 +957,111 @@ export default function StatusViewerModal({
               style={{ background: 'rgba(239, 68, 68, 0.2)', borderColor: 'rgba(239, 68, 68, 0.45)', color: '#fecaca' }}
             >
               {replyError}
+            </div>
+          )}
+
+          {/* Media Status Caption:
+              - Appears at the very bottom of the screen, horizontally centered, with comfortable side padding.
+              - Semi-transparent scrim background ensures crisp readability on every background and theme.
+              - Truncates to 2-3 lines max when collapsed + 'Read more' button.
+              - Automatically pauses progress & autoplay when expanded, scrolls if long, and resumes on 'See less'.
+          */}
+          {hasMedia && captionText && (
+            <div
+              className="status-media-caption-box"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: '460px',
+                margin: '0 auto 4px auto',
+                padding: '10px 14px',
+                borderRadius: '16px',
+                background: 'rgba(12, 18, 15, 0.74)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255, 255, 255, 0.16)',
+                boxShadow: '0 6px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                boxSizing: 'border-box',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                maxHeight: isCaptionExpanded ? 'min(50vh, 320px)' : 'none',
+                overflowY: isCaptionExpanded ? 'auto' : 'visible',
+                overscrollBehavior: 'contain',
+                WebkitOverflowScrolling: 'touch',
+                transition: 'max-height 0.22s ease-out',
+                zIndex: 35,
+              }}
+            >
+              {currentStatus.scriptureTag && (
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 5 }}>
+                  <span
+                    className="status-scripture-tag"
+                    style={{
+                      margin: 0,
+                      padding: '2.5px 9px',
+                      fontSize: '11px',
+                      background: 'rgba(255, 255, 255, 0.18)',
+                      borderColor: 'rgba(255, 255, 255, 0.28)',
+                    }}
+                  >
+                    <Sparkles size={11} />
+                    <span>{currentStatus.scriptureTag}</span>
+                  </span>
+                </div>
+              )}
+
+              <p
+                ref={captionTextRef}
+                style={{
+                  margin: 0,
+                  fontSize: '13.5px',
+                  lineHeight: 1.45,
+                  fontWeight: 500,
+                  color: '#ffffff',
+                  textShadow: '0 1px 3px rgba(0, 0, 0, 0.65)',
+                  wordBreak: 'break-word',
+                  whiteSpace: isCaptionExpanded ? 'pre-wrap' : 'normal',
+                  display: isCaptionExpanded ? 'block' : '-webkit-box',
+                  WebkitLineClamp: isCaptionExpanded ? 'unset' : 3,
+                  WebkitBoxOrient: isCaptionExpanded ? 'unset' : 'vertical',
+                  overflow: isCaptionExpanded ? 'visible' : 'hidden',
+                  textOverflow: isCaptionExpanded ? 'clip' : 'ellipsis',
+                  textAlign: 'left',
+                }}
+              >
+                {captionText}
+              </p>
+
+              {isCaptionOverflowing && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCaptionExpanded((prev) => !prev);
+                  }}
+                  aria-expanded={isCaptionExpanded}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: '4px 0 0 0',
+                    marginTop: 3,
+                    cursor: 'pointer',
+                    color: 'var(--gold, #f59e0b)',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    alignSelf: 'flex-start',
+                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.6)',
+                  }}
+                >
+                  <span>{isCaptionExpanded ? 'See less' : 'Read more'}</span>
+                  {isCaptionExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
+              )}
             </div>
           )}
 
@@ -1224,9 +1390,9 @@ export default function StatusViewerModal({
                 <span style={{ fontSize: 11, color: 'var(--ink-muted)', display: 'block' }}>Original Story</span>
               </div>
             </div>
-            {currentStatus.text && (
+            {captionText && (
               <p style={{ fontSize: 13.5, fontStyle: 'italic', color: 'var(--ink)', margin: '4px 0 0' }}>
-                &ldquo;{currentStatus.text}&rdquo;
+                &ldquo;{captionText}&rdquo;
               </p>
             )}
             {currentStatus.mediaUrl && (
