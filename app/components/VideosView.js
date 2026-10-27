@@ -25,6 +25,7 @@ import ReactionBar from './ReactionBar';
 import CommentThread from './CommentThread';
 import RepostModal from './RepostModal';
 import ReelViewerModal from './ReelViewerModal';
+import { ScrollAffordanceWrapper } from './ScrollAffordance';
 import { isPostReposted, getPostRepostCount, toggleRepost } from '../lib/postInteractions';
 import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
@@ -520,7 +521,8 @@ export default function VideosView({ feedPosts = [], session, currentUser, openA
   return (
     <div className="section-feed-view videos-view-container">
       {/* Sub-navigation bar inside Videos segment */}
-      <div className="video-subnav-bar no-scrollbar" role="tablist">
+      <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll video tabs left" rightLabel="Scroll video tabs right">
+        <div className="video-subnav-bar no-scrollbar" role="tablist">
         <button
           type="button"
           role="tab"
@@ -574,7 +576,8 @@ export default function VideosView({ feedPosts = [], session, currentUser, openA
           <Bookmark size={13} />
           <span>Saved &amp; Downloads</span>
         </button>
-      </div>
+        </div>
+      </ScrollAffordanceWrapper>
 
       {/* Playlists view */}
       {subTab === 'playlists' && (

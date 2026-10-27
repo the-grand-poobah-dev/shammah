@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Plus, ChevronLeft, ChevronRight, Music, Video, Eye, EyeOff, RotateCcw } from 'lucide-react';
+import { ScrollAffordanceButtons } from './ScrollAffordance';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
@@ -229,32 +230,18 @@ export default function StatusTray({ currentUser }) {
 
   return (
     <section className="status-tray-container" aria-label="24-Hour Stories">
-      {/* Scroll to and fro navigation controls */}
-      {canScrollLeft && (
-        <button
-          type="button"
-          className="status-tray-scroll-btn left"
-          onClick={() => scrollTray('left')}
-          aria-label="Scroll stories back"
-        >
-          <ChevronLeft size={18} />
-        </button>
-      )}
-
-      {canScrollRight && (
-        <button
-          type="button"
-          className="status-tray-scroll-btn right"
-          onClick={() => scrollTray('right')}
-          aria-label="Scroll stories forward"
-        >
-          <ChevronRight size={18} />
-        </button>
-      )}
+      {/* Shared scroll affordance navigation controls */}
+      <ScrollAffordanceButtons
+        targetRef={scrollRef}
+        axis="horizontal"
+        leftLabel="Scroll stories back"
+        rightLabel="Scroll stories forward"
+      />
 
       <div
         ref={scrollRef}
         className="status-tray-scroll no-scrollbar"
+        data-has-scroll-affordance="true"
         onScroll={checkScroll}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

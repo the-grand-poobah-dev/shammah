@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 import PopupSheet from './PopupSheet';
+import { ScrollAffordanceWrapper } from './ScrollAffordance';
 
 export const TOP_NAV_SECTIONS = [
   { id: 'all', label: 'All', icon: Flame },
@@ -199,7 +200,8 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
           {/* Subtle perimeter glow accent */}
           <span className="top-nav-snake-glow" aria-hidden="true" />
 
-          <div className="section-menu-inner" role="tablist">
+          <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll navigation left" rightLabel="Scroll navigation right">
+            <div className="section-menu-inner" role="tablist">
             {TOP_NAV_SECTIONS.map((s) => {
               const Icon = s.icon;
               const isActive = pathname === '/' && currentSection === s.id;
@@ -350,7 +352,8 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                 </div>
               </PopupSheet>
             </div>
-          </div>
+            </div>
+          </ScrollAffordanceWrapper>
         </div>
       </div>
     </nav>

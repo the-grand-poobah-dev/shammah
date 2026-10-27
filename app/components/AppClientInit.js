@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { initGlobalHorizontalDrag } from '../lib/useDragScroll';
+import { initGlobalHorizontalDrag, initGlobalScrollAffordances } from '../lib/useDragScroll';
 import GlobalSearchModal from './GlobalSearchModal';
 import {
   registerServiceWorker,
@@ -30,8 +30,9 @@ export default function AppClientInit() {
       }
     }
 
-    // 1. Enable global mouse drag-to-scroll on all horizontal items
+    // 1. Enable global mouse drag-to-scroll and consistent scroll affordances on all shelves
     const cleanupDrag = initGlobalHorizontalDrag();
+    const cleanupAffordances = initGlobalScrollAffordances();
 
     // 2. Register Service Worker (/sw.js) for offline feed caching & FCM push notifications
     registerServiceWorker();
@@ -79,6 +80,7 @@ export default function AppClientInit() {
 
     return () => {
       cleanupDrag?.();
+      cleanupAffordances?.();
       unsubPush?.();
       unsubAuth?.();
       window.removeEventListener('keydown', handleKeyDown);

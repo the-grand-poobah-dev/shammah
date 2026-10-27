@@ -37,6 +37,7 @@ import { useState, useEffect, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
+import { ScrollAffordanceWrapper } from './ScrollAffordance';
 
 // Module-level stacking tracker and z-index calculation
 const openPopupStack = [];
@@ -280,9 +281,11 @@ export default function PopupSheet({
             </div>
 
             {/* Scrollable Body Content */}
-            <div className={`popup-sheet-body${bodyClassName ? ` ${bodyClassName}` : ''}`}>
-              {children}
-            </div>
+            <ScrollAffordanceWrapper axis="vertical" upLabel="Scroll popup up" downLabel="Scroll popup down">
+              <div className={`popup-sheet-body${bodyClassName ? ` ${bodyClassName}` : ''}`}>
+                {children}
+              </div>
+            </ScrollAffordanceWrapper>
 
             {/* Docked Footer (optional) */}
             {footer && (

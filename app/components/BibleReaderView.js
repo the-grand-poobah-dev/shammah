@@ -40,6 +40,7 @@ import {
 } from '../lib/offlineSyncManager';
 import { playSound } from '../lib/soundEffects';
 import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
+import { ScrollAffordanceWrapper } from './ScrollAffordance';
 
 export default function BibleReaderView({ session, currentUser, openAuth }) {
   const now = useRelativeTimeTick();
@@ -327,41 +328,45 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         </div>
 
         {/* Book Selector Bar */}
-        <div className="bible-books-scroll no-scrollbar">
-          {filteredBooks.map((b) => (
-            <button
-              key={b.id}
-              type="button"
-              className={`bible-book-pill${selectedBookId === b.id ? ' active' : ''}`}
-              onClick={() => {
-                setSelectedBookId(b.id);
-                setSelectedChapter(1);
-                playSound('reaction');
-              }}
-            >
-              <span>{b.name}</span>
-            </button>
-          ))}
-        </div>
+        <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll books left" rightLabel="Scroll books right">
+          <div className="bible-books-scroll no-scrollbar">
+            {filteredBooks.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                className={`bible-book-pill${selectedBookId === b.id ? ' active' : ''}`}
+                onClick={() => {
+                  setSelectedBookId(b.id);
+                  setSelectedChapter(1);
+                  playSound('reaction');
+                }}
+              >
+                <span>{b.name}</span>
+              </button>
+            ))}
+          </div>
+        </ScrollAffordanceWrapper>
 
         {/* Chapter numbers row */}
         <div className="bible-chapters-wrapper">
           <span className="bible-chapters-label">Chapter:</span>
-          <div className="bible-chapters-scroll no-scrollbar">
-            {Array.from({ length: currentBook.chapters }, (_, i) => i + 1).map((ch) => (
-              <button
-                key={ch}
-                type="button"
-                className={`bible-ch-btn${selectedChapter === ch ? ' active' : ''}`}
-                onClick={() => {
-                  setSelectedChapter(ch);
-                  playSound('reaction');
-                }}
-              >
-                {ch}
-              </button>
-            ))}
-          </div>
+          <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll chapters left" rightLabel="Scroll chapters right">
+            <div className="bible-chapters-scroll no-scrollbar">
+              {Array.from({ length: currentBook.chapters }, (_, i) => i + 1).map((ch) => (
+                <button
+                  key={ch}
+                  type="button"
+                  className={`bible-ch-btn${selectedChapter === ch ? ' active' : ''}`}
+                  onClick={() => {
+                    setSelectedChapter(ch);
+                    playSound('reaction');
+                  }}
+                >
+                  {ch}
+                </button>
+              ))}
+            </div>
+          </ScrollAffordanceWrapper>
         </div>
       </div>
 

@@ -35,6 +35,7 @@ import MemberBadge from './MemberBadge';
 import PostCard from './PostCard';
 import WatermarkShareModal from './WatermarkShareModal';
 import ProjectionModeModal from './ProjectionModeModal';
+import { ScrollAffordanceWrapper } from './ScrollAffordance';
 import { COURSES_CATALOG } from './CoursesView';
 import {
   setAuthorOfflineDownloadPermission,
@@ -352,7 +353,8 @@ export default function UserProfileView({
           {/* Media Type Tabs & Layout Controls */}
           <div className="profile-nav-controls-bar">
             {/* Tabs separating media types */}
-            <div className="profile-media-tabs" role="tablist">
+            <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll tabs left" rightLabel="Scroll tabs right">
+              <div className="profile-media-tabs" role="tablist">
               <button
                 type="button"
                 role="tab"
@@ -441,7 +443,8 @@ export default function UserProfileView({
                   <span>Activity Log</span>
                 </button>
               )}
-            </div>
+              </div>
+            </ScrollAffordanceWrapper>
 
             {/* Layout Mode Switcher (Magazine 1x, 2x, 3x, and List Rich) */}
             {activeTab !== 'playlists' && activeTab !== 'activity' && (

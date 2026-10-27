@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
+import { ScrollAffordanceWrapper } from './ScrollAffordance';
 import { playSound } from '../lib/soundEffects';
 import InstitutionProfileModal from './InstitutionProfileModal';
 import AuthorOverviewModal from './AuthorOverviewModal';
@@ -348,14 +349,15 @@ export function ChurchesToFollowCard({ onFollowToggle, session: propSession, cur
         </Link>
       </div>
 
-      <div
-        ref={ref}
-        className="churches-horizontal-scroll no-scrollbar"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
+      <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll churches back" rightLabel="Scroll churches forward">
+        <div
+          ref={ref}
+          className="churches-horizontal-scroll no-scrollbar"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
         {SAMPLE_CHURCHES.map((c) => {
           const isFollowing = followedIds.includes(c.id);
           const membershipStatus = memberships[c.id] || getChurchMembershipStatus(c.id);
@@ -461,7 +463,8 @@ export function ChurchesToFollowCard({ onFollowToggle, session: propSession, cur
             </div>
           );
         })}
-      </div>
+        </div>
+      </ScrollAffordanceWrapper>
 
       {selectedInst && (
         <InstitutionProfileModal
@@ -542,14 +545,15 @@ export function PeopleToFollowCard({ onFollowToggle }) {
         </Link>
       </div>
 
-      <div
-        ref={ref}
-        className="people-horizontal-scroll no-scrollbar"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
+      <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll people back" rightLabel="Scroll people forward">
+        <div
+          ref={ref}
+          className="people-horizontal-scroll no-scrollbar"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
         {SAMPLE_PEOPLE.map((p) => {
           const isFollowing = followedList.includes(p.id);
           return (
@@ -607,7 +611,8 @@ export function PeopleToFollowCard({ onFollowToggle }) {
             </div>
           );
         })}
-      </div>
+        </div>
+      </ScrollAffordanceWrapper>
 
       {selectedPerson && (
         <AuthorOverviewModal
@@ -641,14 +646,15 @@ export function TrendingReelsCard({ onSelectSection }) {
         </button>
       </div>
 
-      <div
-        ref={ref}
-        className="reels-shelf-scroll no-scrollbar"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
+      <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll reels back" rightLabel="Scroll reels forward">
+        <div
+          ref={ref}
+          className="reels-shelf-scroll no-scrollbar"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
         {SAMPLE_REELS.map((reel) => (
           <div
             key={reel.id}
@@ -678,7 +684,8 @@ export function TrendingReelsCard({ onSelectSection }) {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      </ScrollAffordanceWrapper>
     </div>
   );
 }
