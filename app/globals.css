@@ -13282,6 +13282,283 @@ html, body, *, *::before, *::after {
   transform: translateY(-1px);
 }
 
+.post-location-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2.5px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+  color: var(--gold);
+  border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
+}
+
+.post-author-name-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.post-feeling-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.post-feeling-lead {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.post-feeling-val {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.post-tagged-members-text {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--teal);
+  font-weight: 500;
+}
+
+.post-tagged-summary {
+  font-weight: 600;
+}
+
+.pending-tag-review-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--teal) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--teal) 35%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.pending-tag-review-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.pending-tag-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--teal) 20%, transparent);
+  color: var(--teal);
+}
+
+.pending-tag-review-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-review-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  min-height: 28px;
+}
+
+.tag-review-btn-accept {
+  background: var(--teal);
+  color: #ffffff;
+  border: 1px solid var(--teal);
+}
+
+.tag-review-btn-accept:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.tag-review-btn-decline {
+  background: transparent;
+  color: var(--ink-muted);
+  border: 1px solid var(--border);
+}
+
+.tag-review-btn-decline:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+}
+
+.compose-meta-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.compose-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--teal) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--teal) 30%, transparent);
+  color: var(--ink);
+}
+
+.compose-meta-chip-feeling {
+  background: color-mix(in srgb, var(--gold) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--gold) 35%, transparent);
+}
+
+.compose-meta-chip-location {
+  background: color-mix(in srgb, var(--teal) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--teal) 35%, transparent);
+}
+
+.compose-meta-chip-tag {
+  background: color-mix(in srgb, #6366f1 12%, var(--surface));
+  border-color: color-mix(in srgb, #6366f1 35%, transparent);
+}
+
+.compose-meta-chip-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 2px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-faint);
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.compose-meta-chip-remove:hover {
+  color: var(--ink);
+}
+
+.feeling-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.feeling-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.16s ease;
+}
+
+.feeling-card:hover {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 8%, var(--surface));
+}
+
+.feeling-card.is-active {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 16%, var(--surface));
+  font-weight: 600;
+}
+
+.feeling-card-emoji {
+  font-size: 18px;
+}
+
+.feeling-custom-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.tag-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.tag-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: all 0.16s ease;
+}
+
+.tag-member-row.is-selected {
+  border-color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 8%, var(--surface));
+}
+
+.tag-member-row.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tag-member-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.tag-member-privacy-note {
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-top: 1px;
+}
+
+.tag-member-checkbox-wrap {
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+}
+
 .post-visibility-pill {
   display: inline-flex;
   align-items: center;

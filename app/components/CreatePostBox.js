@@ -35,15 +35,24 @@ import {
   Tv,
   Shield,
   Loader2,
+  MapPin,
+  Smile,
+  UserCheck,
 } from 'lucide-react';
 import PopupSheet from './PopupSheet';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
+import LocationPicker from './LocationPicker';
 import { CATEGORY_STYLES, categoryStyle, initials } from '../lib/postDisplay';
 import { VISIBILITY_OPTIONS } from '../lib/postInteractions';
 import { playSound } from '../lib/soundEffects';
 import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousManager';
 import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
+import {
+  FEELINGS_LIST,
+  formatFeelingString,
+  fetchEligibleTagMembers,
+} from '../lib/mentions';
 
 const MAX_POLL_OPTIONS = 6;
 
@@ -101,6 +110,35 @@ export default function CreatePostBox({
   const [isQuizMode, setIsQuizMode] = useState(false);
   const [correctOptionIdx, setCorrectOptionIdx] = useState(0);
   const [quizExplanation, setQuizExplanation] = useState('');
+
+  // Location, Feeling & Member Tagging state
+  const [location, setLocation] = useState(null);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [feeling, setFeeling] = useState(null);
+  const [customFeelingText, setCustomFeelingText] = useState('');
+  const [showFeelingModal, setShowFeelingModal] = useState(false);
+  const [taggedUsers, setTaggedUsers] = useState([]);
+  const [showTagModal, setShowTagModal] = useState(false);
+  const [eligibleMembers, setEligibleMembers] = useState([]);
+  const [loadingEligible, setLoadingEligible] = useState(false);
+  const [tagSearch, setTagSearch] = useState('');
+
+  async function loadEligibleMembers() {
+    if (!session?.user?.id) return;
+    setLoadingEligible(true);
+    try {
+      const list = await fetchEligibleTagMembers(session.user.id);
+      setEligibleMembers(list);
+    } catch (err) {
+      console.error('Failed to load eligible members for tagging:', err);
+    } finally {
+      setLoadingEligible(false);
+    }
+  }
+
+  const filteredEligibleMembers = eligibleMembers.filter((m) =>
+    (m.display_name || '').toLowerCase().includes(tagSearch.toLowerCase().trim())
+  );
 
   // Keep preview vote index valid when poll options are added or removed
   useEffect(() => {
@@ -343,7 +381,15 @@ export default function CreatePostBox({
       isQuiz: isPoll ? isQuizMode : false,
       correctOptionIdx: isPoll && isQuizMode ? correctOptionIdx : null,
       quizExplanation: isPoll && isQuizMode ? quizExplanation : '',
+      location,
+      feeling: feeling ? formatFeelingString(feeling) : null,
+      taggedUsers,
     });
+    // Reset selected metadata
+    setLocation(null);
+    setFeeling(null);
+    setCustomFeelingText('');
+    setTaggedUsers([]);
   }
 
   const CurrentVisIcon = VIS_ICONS[visibility] || Globe;
@@ -770,6 +816,61 @@ export default function CreatePostBox({
             {composeText.length} / 2000
           </span>
         </div>
+
+        {/* Selected Location, Feeling & Tagged Members metadata chips */}
+        {(location || feeling || taggedUsers.length > 0) && (
+          <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-white/10">
+            {feeling && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-300">
+                <span>feeling {formatFeelingString(feeling)}</span>
+                <button
+                  type="button"
+                  className="p-0.5 hover:text-white transition-colors"
+                  onClick={() => setFeeling(null)}
+                  title="Remove feeling"
+                  aria-label="Remove feeling"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+
+            {location && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-rose-500/30 bg-rose-500/10 text-rose-300">
+                <MapPin size={12} className="text-rose-400" />
+                <span>{location.label}</span>
+                <button
+                  type="button"
+                  className="p-0.5 hover:text-white transition-colors"
+                  onClick={() => setLocation(null)}
+                  title="Remove location"
+                  aria-label="Remove location"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+
+            {taggedUsers.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-teal-500/30 bg-teal-500/10 text-teal-300">
+                <Tag size={12} className="text-teal-400" />
+                <span>
+                  with {taggedUsers[0].display_name}
+                  {taggedUsers.length > 1 ? ` +${taggedUsers.length - 1}` : ''}
+                </span>
+                <button
+                  type="button"
+                  className="p-0.5 hover:text-white transition-colors"
+                  onClick={() => setTaggedUsers([])}
+                  title="Remove tagged members"
+                  aria-label="Remove tags"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Media Preview (Photo / Video / Audio) */}
@@ -1584,6 +1685,45 @@ export default function CreatePostBox({
             <span className="tool-label">{aiEnhancing ? 'Refining…' : 'AI Polish'}</span>
           </button>
 
+          {/* Location Picker Tool Button */}
+          <button
+            type="button"
+            className={`tool-btn${location ? ' active' : ''}`}
+            onClick={() => setShowLocationModal(true)}
+            title={location ? `Location: ${location.label}` : 'Add church or city location'}
+            aria-label="Add location"
+          >
+            <MapPin size={18} className="tool-icon text-rose-400" />
+            <span className="tool-label">{location ? 'Located' : 'Location'}</span>
+          </button>
+
+          {/* Feeling / Mood Tool Button */}
+          <button
+            type="button"
+            className={`tool-btn${feeling ? ' active' : ''}`}
+            onClick={() => setShowFeelingModal(true)}
+            title={feeling ? `Feeling: ${formatFeelingString(feeling)}` : 'Add feeling or devotion mood'}
+            aria-label="Add feeling"
+          >
+            <Smile size={18} className="tool-icon text-amber-400" />
+            <span className="tool-label">{feeling ? 'Feeling' : 'Feeling'}</span>
+          </button>
+
+          {/* Tag People Tool Button */}
+          <button
+            type="button"
+            className={`tool-btn${taggedUsers.length > 0 ? ' active' : ''}`}
+            onClick={() => {
+              setShowTagModal(true);
+              loadEligibleMembers();
+            }}
+            title={taggedUsers.length > 0 ? `${taggedUsers.length} members tagged` : 'Tag fellow members you follow or who follow you'}
+            aria-label="Tag members"
+          >
+            <Tag size={18} className="tool-icon text-teal-400" />
+            <span className="tool-label">{taggedUsers.length > 0 ? `${taggedUsers.length} Tagged` : 'Tag'}</span>
+          </button>
+
           {/* 30-Day Offline Download Option for Author */}
           <button
             type="button"
@@ -1624,6 +1764,306 @@ export default function CreatePostBox({
       </div>
 
       {postError && <p className="auth-message compose-error-msg">{postError}</p>}
+
+      {/* Location Picker Modal using canonical PopupSheet */}
+      <PopupSheet
+        open={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+        title={
+          <div className="visibility-modal-title">
+            <MapPin size={18} className="text-rose-400" />
+            <span>Add Location</span>
+          </div>
+        }
+        size="sm"
+      >
+        <div style={{ padding: '4px 0 16px' }}>
+          <p className="visibility-desc" style={{ marginBottom: 14 }}>
+            Share where you are fellowshipping, praying, or gathering with your church community.
+          </p>
+          <LocationPicker
+            value={location}
+            onChange={(loc) => {
+              setLocation(loc);
+              if (loc) {
+                playSound('reaction');
+              }
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            {location && (
+              <button
+                type="button"
+                className="st-btn st-btn-ghost"
+                style={{ fontSize: 13, padding: '6px 14px' }}
+                onClick={() => {
+                  setLocation(null);
+                  setShowLocationModal(false);
+                }}
+              >
+                Remove
+              </button>
+            )}
+            <button
+              type="button"
+              className="st-btn st-btn-primary"
+              style={{ fontSize: 13, padding: '6px 18px' }}
+              onClick={() => setShowLocationModal(false)}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </PopupSheet>
+
+      {/* Feeling Selector Modal using canonical PopupSheet */}
+      <PopupSheet
+        open={showFeelingModal}
+        onClose={() => setShowFeelingModal(false)}
+        title={
+          <div className="visibility-modal-title">
+            <Smile size={18} className="text-amber-400" />
+            <span>How are you feeling?</span>
+          </div>
+        }
+        size="md"
+      >
+        <div style={{ padding: '4px 0 16px' }}>
+          <p className="visibility-desc" style={{ marginBottom: 14 }}>
+            Express your spiritual mood, praise, or devotional reflection with the church.
+          </p>
+
+          {/* Curated Feelings Grid */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+              gap: 8,
+              maxHeight: '260px',
+              overflowY: 'auto',
+              marginBottom: 16,
+              paddingRight: 4,
+            }}
+          >
+            {FEELINGS_LIST.map((f) => {
+              const isSelected = feeling?.id === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`st-btn ${isSelected ? 'st-btn-primary' : 'st-btn-ghost'}`}
+                  style={{
+                    fontSize: 13,
+                    padding: '8px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    borderRadius: 12,
+                  }}
+                  onClick={() => {
+                    if (isSelected) {
+                      setFeeling(null);
+                    } else {
+                      setFeeling(f);
+                      setCustomFeelingText('');
+                      playSound('reaction');
+                    }
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>{f.emoji}</span>
+                  <span>{f.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Custom feeling / mood input */}
+          <div style={{ marginTop: 12 }}>
+            <label style={{ fontSize: 12, color: 'var(--ink-muted)', display: 'block', marginBottom: 6 }}>
+              Or write a custom feeling:
+            </label>
+            <input
+              type="text"
+              className="st-input"
+              placeholder="e.g. Resting in God's Grace 🕊️"
+              value={customFeelingText}
+              maxLength={50}
+              onChange={(e) => {
+                setCustomFeelingText(e.target.value);
+                if (e.target.value.trim()) {
+                  setFeeling({ label: e.target.value.trim(), emoji: '' });
+                } else {
+                  setFeeling(null);
+                }
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            {feeling && (
+              <button
+                type="button"
+                className="st-btn st-btn-ghost"
+                style={{ fontSize: 13, padding: '6px 14px' }}
+                onClick={() => {
+                  setFeeling(null);
+                  setCustomFeelingText('');
+                  setShowFeelingModal(false);
+                }}
+              >
+                Clear
+              </button>
+            )}
+            <button
+              type="button"
+              className="st-btn st-btn-primary"
+              style={{ fontSize: 13, padding: '6px 18px' }}
+              onClick={() => setShowFeelingModal(false)}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </PopupSheet>
+
+      {/* Tag People Modal using canonical PopupSheet */}
+      <PopupSheet
+        open={showTagModal}
+        onClose={() => setShowTagModal(false)}
+        title={
+          <div className="visibility-modal-title">
+            <Tag size={18} className="text-teal-400" />
+            <span>Tag People</span>
+          </div>
+        }
+        size="md"
+      >
+        <div style={{ padding: '4px 0 16px' }}>
+          <p className="visibility-desc" style={{ marginBottom: 12 }}>
+            Tag believers you follow or who follow you. Tagged members will be mentioned on your post.
+          </p>
+
+          {/* Search Box */}
+          <div className="category-search-box" style={{ marginBottom: 12 }}>
+            <Search size={15} className="category-search-icon" />
+            <input
+              type="text"
+              placeholder="Search followers & following…"
+              value={tagSearch}
+              onChange={(e) => setTagSearch(e.target.value)}
+              className="category-search-input"
+            />
+            {tagSearch && (
+              <button
+                type="button"
+                className="category-search-clear"
+                onClick={() => setTagSearch('')}
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Member List */}
+          <div
+            style={{
+              maxHeight: '300px',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              paddingRight: 4,
+            }}
+          >
+            {loadingEligible ? (
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--ink-muted)', fontSize: 13 }}>
+                Loading your connections…
+              </div>
+            ) : filteredEligibleMembers.length === 0 ? (
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--ink-muted)', fontSize: 13 }}>
+                {tagSearch ? 'No matching members found.' : 'You have no connections to tag yet. Follow members in the community first!'}
+              </div>
+            ) : (
+              filteredEligibleMembers.map((m) => {
+                const isSelected = taggedUsers.some((u) => u.id === m.id);
+                const isBlocked = !m.allowed;
+
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    disabled={isBlocked}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 12px',
+                      borderRadius: 12,
+                      background: isSelected ? 'rgba(6, 182, 212, 0.12)' : 'var(--surface-sunken)',
+                      border: isSelected ? '1px solid var(--teal)' : '1px solid var(--border)',
+                      cursor: isBlocked ? 'not-allowed' : 'pointer',
+                      opacity: isBlocked ? 0.5 : 1,
+                      textAlign: 'left',
+                    }}
+                    onClick={() => {
+                      if (isBlocked) return;
+                      playSound('reaction');
+                      if (isSelected) {
+                        setTaggedUsers((prev) => prev.filter((u) => u.id !== m.id));
+                      } else {
+                        setTaggedUsers((prev) => [...prev, m]);
+                      }
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Avatar name={m.display_name} src={m.avatar_url} size={32} />
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <strong style={{ fontSize: 13, color: 'var(--ink)' }}>{m.display_name}</strong>
+                          {m.badge_verified && <span style={{ color: '#06b6d4', fontSize: 11 }}>✓</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--ink-muted)' }}>
+                          {isBlocked ? (
+                            <span style={{ color: '#ef4444' }}>{m.reason}</span>
+                          ) : m.requiresReview ? (
+                            <span style={{ color: '#f59e0b' }}>Requires review before appearing</span>
+                          ) : (
+                            <span>Direct tag</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      {isSelected ? (
+                        <span style={{ color: 'var(--teal)', fontWeight: 700, fontSize: 16 }}>✓</span>
+                      ) : !isBlocked ? (
+                        <span style={{ color: 'var(--ink-muted)', fontSize: 14 }}>+</span>
+                      ) : null}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
+              {taggedUsers.length} member{taggedUsers.length === 1 ? '' : 's'} selected
+            </span>
+            <button
+              type="button"
+              className="st-btn st-btn-primary"
+              style={{ fontSize: 13, padding: '6px 18px' }}
+              onClick={() => setShowTagModal(false)}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </PopupSheet>
     </form>
   );
 }

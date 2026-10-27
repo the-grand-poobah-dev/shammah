@@ -75,6 +75,7 @@ import {
   savePostIdentityMeta,
   getPostVisibility,
 } from './lib/postInteractions';
+import { createPostTags } from './lib/mentions';
 
 const SECTIONS = TOP_NAV_SECTIONS;
 
@@ -641,7 +642,7 @@ export default function Feed() {
       let query = supabase
         .from('posts')
         .select(
-          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, visibility, poll_expires_at, quoted_post_id, profiles(display_name, avatar_url, badge, badge_verified, role)'
+          'id, text_content, media_url, media_type, created_at, category_id, church_id, author_id, visibility, poll_expires_at, quoted_post_id, location_label, location_place_id, location_lat, location_lng, feeling, profiles(display_name, avatar_url, badge, badge_verified, role)'
         )
         .order('created_at', { ascending: false })
         .limit(50);
@@ -909,6 +910,12 @@ export default function Feed() {
         ? identityMeta?.pseudoName || 'Faith Pilgrim'
         : profile?.display_name || session?.user?.email || 'Member';
 
+    const locationLabelToSave = identityMeta?.location?.label || null;
+    const locationPlaceIdToSave = identityMeta?.location?.place_id || null;
+    const locationLatToSave = identityMeta?.location?.lat ?? null;
+    const locationLngToSave = identityMeta?.location?.lng ?? null;
+    const feelingToSave = identityMeta?.feeling || null;
+
     const { data: inserted, error } = await supabase
       .from('posts')
       .insert({
@@ -920,6 +927,11 @@ export default function Feed() {
         media_type,
         visibility: validVisibility,
         poll_expires_at: pollExpiresAtToSave,
+        location_label: locationLabelToSave,
+        location_place_id: locationPlaceIdToSave,
+        location_lat: locationLatToSave,
+        location_lng: locationLngToSave,
+        feeling: feelingToSave,
       })
       .select('id')
       .single();
@@ -932,6 +944,15 @@ export default function Feed() {
       is_anonymous: isAnon,
       author_id: session.user.id,
     });
+
+    let createdTags = [];
+    if (identityMeta?.taggedUsers && identityMeta.taggedUsers.length > 0) {
+      createdTags = await createPostTags({
+        postId: finalPostId,
+        authorId: session.user.id,
+        taggedUsers: identityMeta.taggedUsers,
+      });
+    }
 
     const newPost = {
       id: finalPostId,
@@ -956,6 +977,12 @@ export default function Feed() {
       is_quiz: Boolean(identityMeta?.isQuiz),
       quiz_explanation: identityMeta?.quizExplanation || null,
       correct_option_idx: identityMeta?.correctOptionIdx ?? null,
+      location_label: locationLabelToSave,
+      location_place_id: locationPlaceIdToSave,
+      location_lat: locationLatToSave,
+      location_lng: locationLngToSave,
+      feeling: feelingToSave,
+      post_tags: createdTags,
       profiles: {
         id: session.user.id,
         display_name: displayName,

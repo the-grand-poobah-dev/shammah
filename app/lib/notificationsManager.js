@@ -100,7 +100,7 @@ export async function fetchRealNotifications(userId) {
       (myPosts || []).map((p) => [p.id, (p.text_content || 'your post').slice(0, 60)])
     );
 
-    const [commentsRes, reactionsRes, mentionsRes, dmsRes, followsRes] = await Promise.all([
+    const [commentsRes, reactionsRes, mentionsRes, dmsRes, followsRes, tagsRes] = await Promise.all([
       myPostIds.length > 0
         ? supabase
             .from('comments')
@@ -139,6 +139,12 @@ export async function fetchRealNotifications(userId) {
         .eq('followed_id', uid)
         .order('created_at', { ascending: false })
         .limit(20),
+      supabase
+        .from('post_tags')
+        .select('id, post_id, tagged_by, status, created_at')
+        .eq('tagged_user', uid)
+        .order('created_at', { ascending: false })
+        .limit(20),
     ]);
 
     const actorIds = new Set();
@@ -147,6 +153,7 @@ export async function fetchRealNotifications(userId) {
     (mentionsRes.data || []).forEach((m) => m.author_id && actorIds.add(m.author_id));
     (dmsRes.data || []).forEach((d) => d.sender_id && actorIds.add(d.sender_id));
     (followsRes.data || []).forEach((f) => f.follower_id && actorIds.add(f.follower_id));
+    (tagsRes.data || []).forEach((t) => t.tagged_by && actorIds.add(t.tagged_by));
 
     let profileById = new Map();
     if (actorIds.size > 0) {
@@ -262,6 +269,32 @@ export async function fetchRealNotifications(userId) {
         actorBadge: actor?.badge || null,
         targetLink: '/?tab=home',
         icon: '🤝',
+      });
+    }
+
+    for (const t of tagsRes.data || []) {
+      const id = `db-tag-${t.id}`;
+      if (deletedIds.has(id)) continue;
+      const actor = profileById.get(t.tagged_by);
+      const actorName = actor?.display_name || 'Member';
+      const isPending = t.status === 'pending';
+      derived.push({
+        id,
+        type: 'mentions',
+        category: 'mentions',
+        title: isPending
+          ? `${actorName} tagged you in a post (Review needed)`
+          : `${actorName} tagged you in a post`,
+        body: isPending
+          ? 'Review this tag before it appears publicly on the post.'
+          : 'You were tagged in a community post.',
+        timestamp: t.created_at,
+        isRead: readIds.has(id),
+        actorName,
+        actorAvatar: actor?.avatar_url || null,
+        actorBadge: actor?.badge || null,
+        targetLink: '/?tab=home',
+        icon: '🏷️',
       });
     }
 

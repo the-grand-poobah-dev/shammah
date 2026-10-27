@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check, Eye, EyeOff, BookOpen, AlertCircle, Sparkles, MessageCircle, Share2, Pin } from 'lucide-react';
+import { Repeat, Globe, Users, Church, Lock, MoreHorizontal, Rss, ExternalLink, Tv, DownloadCloud, Check, Eye, EyeOff, BookOpen, AlertCircle, Sparkles, MessageCircle, Share2, Pin, MapPin, Tag, X } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { categoryStyle, timeAgo, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
+import { fetchTagsForPost, updatePostTagStatus, formatTaggedMembersSummary } from '../lib/mentions';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
 import ReactionBar from './ReactionBar';
@@ -349,6 +350,68 @@ export default function PostCard({
       : author?.name || author?.display_name || 'Member';
   const authorAvatar = isProtectedIdentity ? null : author?.avatar_url;
 
+  // Post tagging & tag-review state
+  const [postTags, setPostTags] = useState(() => post?.post_tags || []);
+  const [isUpdatingTag, setIsUpdatingTag] = useState(false);
+
+  useEffect(() => {
+    if (!post?.id) return;
+    let cancelled = false;
+
+    async function loadTags() {
+      const tags = await fetchTagsForPost(post.id, session?.user?.id);
+      if (!cancelled && tags) {
+        setPostTags(tags);
+      }
+    }
+
+    if (post.post_tags && Array.isArray(post.post_tags) && post.post_tags.length > 0) {
+      setPostTags(post.post_tags);
+    }
+    loadTags();
+
+    function onTagsUpdated(e) {
+      if (!e?.detail?.postId || e.detail.postId === post.id) {
+        loadTags();
+      }
+    }
+    window.addEventListener('shammah:post-tags-updated', onTagsUpdated);
+    window.addEventListener('shammah:post-tag-status-changed', onTagsUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('shammah:post-tags-updated', onTagsUpdated);
+      window.removeEventListener('shammah:post-tag-status-changed', onTagsUpdated);
+    };
+  }, [post?.id, session?.user?.id]);
+
+  const myPendingTag = postTags.find(
+    (t) => t.tagged_user === session?.user?.id && t.status === 'pending'
+  );
+
+  const acceptedTags = postTags.filter((t) => t.status === 'accepted');
+  const acceptedTagsSummary = formatTaggedMembersSummary(acceptedTags);
+  const acceptedTagsTooltip = acceptedTags
+    .map((t) => t.profiles?.display_name || t.profiles?.name || 'Member')
+    .join(', ');
+
+  async function handleTagAction(newStatus) {
+    if (!myPendingTag || isUpdatingTag) return;
+    setIsUpdatingTag(true);
+    try {
+      const ok = await updatePostTagStatus(myPendingTag.id, newStatus, session?.user?.id, post.id);
+      if (ok) {
+        setPostTags((prev) =>
+          prev.map((t) => (t.id === myPendingTag.id ? { ...t, status: newStatus } : t))
+        );
+        playSound(newStatus === 'accepted' ? 'reaction' : 'offline_remove');
+      }
+    } catch (err) {
+      console.warn('Failed to update tag status:', err);
+    } finally {
+      setIsUpdatingTag(false);
+    }
+  }
+
   // Hydrate quoted post if this post is a quote repost
   const [quotedPostData, setQuotedPostData] = useState(() => post?.quoted_post || null);
 
@@ -548,6 +611,44 @@ export default function PostCard({
         </div>
       )}
 
+      {/* Pending Tag Review Banner for current tagged user */}
+      {myPendingTag && (
+        <div className="pending-tag-review-banner">
+          <div className="pending-tag-review-info">
+            <span className="pending-tag-icon-wrap" aria-hidden="true">
+              <Tag size={13} className="pending-tag-icon" />
+            </span>
+            <span className="pending-tag-text">
+              <strong>{authorName}</strong> tagged you in this post
+            </span>
+          </div>
+          <div className="pending-tag-review-actions">
+            <button
+              type="button"
+              className="tag-review-btn tag-review-btn-accept"
+              disabled={isUpdatingTag}
+              onClick={() => handleTagAction('accepted')}
+              title="Accept tag to appear on this post"
+              aria-label="Accept tag"
+            >
+              <Check size={12} />
+              <span>Accept</span>
+            </button>
+            <button
+              type="button"
+              className="tag-review-btn tag-review-btn-decline"
+              disabled={isUpdatingTag}
+              onClick={() => handleTagAction('declined')}
+              title="Decline tag"
+              aria-label="Decline tag"
+            >
+              <X size={12} />
+              <span>Decline</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Post Header with Author Interaction, Category, Time, and Options Menu */}
       <div className="post-header">
         <button
@@ -563,22 +664,35 @@ export default function PostCard({
         </button>
 
         <div className="post-header-text">
-          <button
-            type="button"
-            className="post-author-name-btn"
-            onClick={() => {
-              if (!isProtectedIdentity) setShowAuthorModal(true);
-            }}
-            title={isProtectedIdentity ? `${authorName} (Identity Protected)` : `View ${authorName}'s profile`}
-          >
-            <MemberName
-              name={authorName}
-              badge={isProtectedIdentity ? (isAnonymous ? null : 'pilgrim') : author?.badge}
-              verified={isProtectedIdentity ? false : author?.badge_verified}
-              role={isProtectedIdentity ? 'member' : author?.role}
-              nameClassName="post-author"
-            />
-          </button>
+          <div className="post-author-name-line">
+            <button
+              type="button"
+              className="post-author-name-btn"
+              onClick={() => {
+                if (!isProtectedIdentity) setShowAuthorModal(true);
+              }}
+              title={isProtectedIdentity ? `${authorName} (Identity Protected)` : `View ${authorName}'s profile`}
+            >
+              <MemberName
+                name={authorName}
+                badge={isProtectedIdentity ? (isAnonymous ? null : 'pilgrim') : author?.badge}
+                verified={isProtectedIdentity ? false : author?.badge_verified}
+                role={isProtectedIdentity ? 'member' : author?.role}
+                nameClassName="post-author"
+              />
+            </button>
+            {post.feeling && (
+              <span className="post-feeling-text">
+                <span className="post-feeling-lead">is feeling </span>
+                <span className="post-feeling-val">{post.feeling}</span>
+              </span>
+            )}
+            {acceptedTagsSummary && (
+              <span className="post-tagged-members-text" title={acceptedTagsTooltip}>
+                <span className="post-tagged-summary">{acceptedTagsSummary}</span>
+              </span>
+            )}
+          </div>
 
           <div className="post-sub-badges-row">
             {/* Category Chip (Interactive) */}
@@ -637,6 +751,17 @@ export default function PostCard({
                 <Church size={11} className="post-church-icon" />
                 <span>{post.church_name || post.churches?.name || author?.church_name}</span>
               </button>
+            )}
+
+            {/* Tagged Location Badge */}
+            {post.location_label && (
+              <span
+                className="post-location-pill"
+                title={`Location: ${post.location_label}`}
+              >
+                <MapPin size={11} className="post-location-icon" />
+                <span>{post.location_label}</span>
+              </span>
             )}
           </div>
         </div>

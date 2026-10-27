@@ -10,7 +10,7 @@ import BadgeIcon from './BadgeIcon';
 import MemberName from './MemberName';
 import LocationPicker from './LocationPicker';
 import VerificationBadgeModal from './VerificationBadgeModal';
-import { DownloadCloud, EyeOff, Repeat } from 'lucide-react';
+import { DownloadCloud, EyeOff, Repeat, Tag, ShieldCheck } from 'lucide-react';
 import {
   getAuthorOfflineDownloadPermission,
   setAuthorOfflineDownloadPermission,
@@ -21,7 +21,7 @@ import {
 } from '../lib/statusManager';
 
 const COLS =
-  'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, location_place_id, location_lat, location_lng, onboarding_completed_at, display_name_changed_at, allow_status_reshare';
+  'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, location_place_id, location_lat, location_lng, onboarding_completed_at, display_name_changed_at, allow_status_reshare, who_can_tag_me, review_tags';
 const ABOUT_MAX = 250;
 const MIN_AGE = 13;
 
@@ -61,6 +61,8 @@ export default function ProfileSettings({ session }) {
   const [location, setLocation] = useState(null);
   const [allowOffline, setAllowOffline] = useState(() => getAuthorOfflineDownloadPermission(uid));
   const [allowReshare, setAllowReshare] = useState(false);
+  const [whoCanTagMe, setWhoCanTagMe] = useState('everyone');
+  const [reviewTags, setReviewTags] = useState(false);
   const [mutedUsers, setMutedUsers] = useState(() => getMutedStatusUsers());
 
   function handleToggleOffline() {
@@ -95,6 +97,58 @@ export default function ProfileSettings({ session }) {
     }
   }
 
+  async function handleSetWhoCanTagMe(newPref) {
+    const prev = whoCanTagMe;
+    setWhoCanTagMe(newPref);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ who_can_tag_me: newPref })
+        .eq('id', uid);
+      if (error) {
+        setWhoCanTagMe(prev);
+        notify('error', 'Could not update tagging preference.');
+      } else {
+        notify(
+          'success',
+          newPref === 'everyone'
+            ? 'Anyone in the community can tag you in posts.'
+            : newPref === 'following'
+              ? 'Only people you follow can tag you in posts.'
+              : 'Tagging disabled: no one can tag you in posts.'
+        );
+      }
+    } catch (err) {
+      setWhoCanTagMe(prev);
+      notify('error', 'Network error updating tagging preference.');
+    }
+  }
+
+  async function handleToggleReviewTags() {
+    const nextVal = !reviewTags;
+    setReviewTags(nextVal);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ review_tags: nextVal })
+        .eq('id', uid);
+      if (error) {
+        setReviewTags(!nextVal);
+        notify('error', 'Could not update tag review preference.');
+      } else {
+        notify(
+          'success',
+          nextVal
+            ? 'Tag review enabled: tags will require your approval before appearing publicly.'
+            : 'Tag review disabled: tags appear automatically on posts.'
+        );
+      }
+    } catch (err) {
+      setReviewTags(!nextVal);
+      notify('error', 'Network error updating tag review preference.');
+    }
+  }
+
   function handleUnmute(targetId) {
     unmuteStatusUser(targetId);
     const fresh = getMutedStatusUsers();
@@ -120,6 +174,8 @@ export default function ProfileSettings({ session }) {
     setName(p.display_name || '');
     setAbout(p.about || '');
     setAllowReshare(Boolean(p.allow_status_reshare));
+    setWhoCanTagMe(p.who_can_tag_me || 'everyone');
+    setReviewTags(Boolean(p.review_tags));
     setLocation(
       p.location_label
         ? { label: p.location_label, placeId: p.location_place_id, lat: p.location_lat, lng: p.location_lng }
@@ -502,6 +558,66 @@ export default function ProfileSettings({ session }) {
               onClick={handleToggleOffline}
             >
               {allowOffline ? 'Downloads Allowed ✓' : 'Restricted ✕'}
+            </button>
+          </div>
+        </div>
+
+        {/* Post Tagging Permission */}
+        <div className="st-field" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Tag size={16} className="text-teal-400" />
+                <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>Who can tag me in posts</strong>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--ink-muted)', margin: '3px 0 8px' }}>
+                Choose which community members are permitted to tag you when creating fellowship posts.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[
+                { id: 'everyone', label: 'Everyone' },
+                { id: 'following', label: 'People I follow' },
+                { id: 'no_one', label: 'No one' },
+              ].map((opt) => {
+                const isSelected = whoCanTagMe === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`st-btn ${isSelected ? 'st-btn-primary' : 'st-btn-ghost'}`}
+                    style={{ fontSize: '12.5px', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    onClick={() => handleSetWhoCanTagMe(opt.id)}
+                  >
+                    <span>{opt.label}</span>
+                    {isSelected && <span style={{ fontSize: '11px', opacity: 0.9 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Review Tags before they appear */}
+        <div className="st-field" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ShieldCheck size={16} className="text-amber-400" />
+                <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>Review tags before they appear on my profile/posts</strong>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--ink-muted)', margin: '2px 0 0' }}>
+                When review is on, tags will require your acceptance before appearing on posts or on your profile. Declined tags are never shown publicly.
+              </p>
+            </div>
+            <button
+              type="button"
+              className={`st-btn ${reviewTags ? 'st-btn-primary' : 'st-btn-ghost'}`}
+              style={{ flexShrink: 0, fontSize: '12px', padding: '6px 14px' }}
+              onClick={handleToggleReviewTags}
+            >
+              {reviewTags ? 'Review On ✓' : 'Automatic ✕'}
             </button>
           </div>
         </div>
