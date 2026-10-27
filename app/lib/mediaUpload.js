@@ -23,10 +23,15 @@ const ALLOWED = {
  * Returns 'image' | 'video' | 'audio' | null
  */
 export function detectMediaType(file) {
-  if (!file || !file.type) return null;
-  if (ALLOWED.image.includes(file.type)) return 'image';
-  if (ALLOWED.video.includes(file.type)) return 'video';
-  if (ALLOWED.audio.includes(file.type)) return 'audio';
+  if (!file) return null;
+  const mime = (file.type || '').split(';')[0].trim().toLowerCase();
+  if (ALLOWED.image.includes(mime) || mime.startsWith('image/')) return 'image';
+  if (ALLOWED.video.includes(mime) || mime.startsWith('video/')) return 'video';
+  if (ALLOWED.audio.includes(mime) || mime.startsWith('audio/')) return 'audio';
+  const name = (file.name || '').toLowerCase();
+  if (/\.(jpg|jpeg|png|webp|gif|avif)$/i.test(name)) return 'image';
+  if (/\.(mp4|webm|mov|m4v)$/i.test(name)) return 'video';
+  if (/\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i.test(name)) return 'audio';
   return null;
 }
 
@@ -62,10 +67,12 @@ export async function uploadPostMedia(file, userId) {
 
   const path = `${userId}/${Date.now()}-${safeName}`;
 
+  const cleanContentType = (file.type || '').split(';')[0] || (type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'audio/webm');
+
   const { error } = await supabase.storage.from('post-media').upload(path, file, {
     cacheControl: '3600',
     upsert: false,
-    contentType: file.type,
+    contentType: cleanContentType,
   });
 
   if (error) {

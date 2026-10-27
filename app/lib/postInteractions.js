@@ -119,8 +119,13 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
   let isNowReposted = false;
 
   try {
+    const isQuote = Boolean(quoteText);
+    const trimmedQuote = typeof quoteText === 'object' ? (quoteText?.text || '').trim() : (quoteText || '').trim();
+    const quoteMediaUrl = typeof quoteText === 'object' ? quoteText?.mediaUrl || null : null;
+    const quoteMediaType = typeof quoteText === 'object' ? quoteText?.mediaType || null : null;
+
     if (isValidUuid(postId) && isValidUuid(userId)) {
-      if (!quoteText) {
+      if (!isQuote) {
         // Check existing instant repost
         const { data: existing } = await supabase
           .from('post_reposts')
@@ -150,15 +155,14 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
           isNowReposted = true;
         }
       } else {
-        // Add quote repost with thoughts
-        const trimmedQuote = quoteText.trim();
+        // Add quote repost with thoughts & optional media
         await supabase
           .from('post_reposts')
           .insert({
             post_id: postId,
             user_id: userId,
-            comment: trimmedQuote,
-            quote_text: trimmedQuote,
+            comment: trimmedQuote || (quoteMediaType ? `[${quoteMediaType}]` : null),
+            quote_text: trimmedQuote || null,
           });
         isNowReposted = true;
 
@@ -166,7 +170,9 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
         try {
           await supabase.from('posts').insert({
             author_id: userId,
-            text_content: trimmedQuote,
+            text_content: trimmedQuote || (quoteMediaUrl ? '' : 'Shared post'),
+            media_url: quoteMediaUrl,
+            media_type: quoteMediaType,
             quoted_post_id: postId,
             category_id: post?.category_id || null,
             church_id: user?.user_metadata?.church_id || null,
@@ -185,7 +191,7 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
           (r) => String(r.post_id) === String(postId) && String(r.user_id) === String(userId) && !r.comment
         );
 
-        if (existingIdx >= 0 && !quoteText) {
+        if (existingIdx >= 0 && !isQuote) {
           list.splice(existingIdx, 1);
           isNowReposted = false;
         } else {
@@ -193,8 +199,10 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
             id: 'rep-' + Date.now(),
             post_id: postId,
             user_id: userId,
-            comment: quoteText || null,
-            quote_text: quoteText || null,
+            comment: trimmedQuote || null,
+            quote_text: trimmedQuote || null,
+            media_url: quoteMediaUrl,
+            media_type: quoteMediaType,
             created_at: new Date().toISOString(),
           });
           isNowReposted = true;
@@ -204,7 +212,7 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
     }
 
     // If quoteText provided, construct quoted post attributed to the reposter and display in feed
-    if (quoteText) {
+    if (isQuote) {
       const reposterName =
         user?.user_metadata?.display_name ||
         user?.user_metadata?.name ||
@@ -221,7 +229,9 @@ export async function toggleRepost(postId, post, user, quoteText = null) {
 
       const quotedPost = {
         id: `quote-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        text_content: quoteText,
+        text_content: trimmedQuote || '',
+        media_url: quoteMediaUrl,
+        media_type: quoteMediaType,
         author_id: userId,
         author_name: reposterName,
         created_at: new Date().toISOString(),

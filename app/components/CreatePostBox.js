@@ -4,6 +4,9 @@ import {
   Image as ImageIcon,
   Video as VideoIcon,
   Mic as MicIcon,
+  Camera,
+  Film,
+  FileAudio,
   BarChart3,
   Pin,
   X,
@@ -40,6 +43,7 @@ import { CATEGORY_STYLES, categoryStyle, initials } from '../lib/postDisplay';
 import { VISIBILITY_OPTIONS } from '../lib/postInteractions';
 import { playSound } from '../lib/soundEffects';
 import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousManager';
+import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
 
 const MAX_POLL_OPTIONS = 6;
 
@@ -150,9 +154,16 @@ export default function CreatePostBox({
   const photoInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const audioInputRef = useRef(null);
+  const cameraPhotoInputRef = useRef(null);
+  const cameraVideoInputRef = useRef(null);
+  const cameraAudioInputRef = useRef(null);
+  const voiceRecorderRef = useRef(null);
   const categoryTriggerRef = useRef(null);
   const visMenuRef = useRef(null);
   const identityMenuRef = useRef(null);
+
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [voiceSeconds, setVoiceSeconds] = useState(0);
 
   const headerName = profile?.display_name || session?.user?.email || 'Member';
   const cat = composeCategory ? categoryStyle(composeCategory) : null;
@@ -190,6 +201,53 @@ export default function CreatePostBox({
     if (photoInputRef.current) photoInputRef.current.value = '';
     if (videoInputRef.current) videoInputRef.current.value = '';
     if (audioInputRef.current) audioInputRef.current.value = '';
+    if (cameraPhotoInputRef.current) cameraPhotoInputRef.current.value = '';
+    if (cameraVideoInputRef.current) cameraVideoInputRef.current.value = '';
+    if (cameraAudioInputRef.current) cameraAudioInputRef.current.value = '';
+  }
+
+  async function handleStartVoiceNote() {
+    if (!isAudioRecordingSupported()) {
+      cameraAudioInputRef.current?.click();
+      return;
+    }
+    try {
+      setVoiceSeconds(0);
+      setIsRecordingVoice(true);
+      const recorder = await startAudioRecording({
+        maxSeconds: 120,
+        onTimeTick: (sec) => setVoiceSeconds(sec),
+      });
+      voiceRecorderRef.current = recorder;
+    } catch (err) {
+      console.warn('Voice record init failed:', err);
+      setIsRecordingVoice(false);
+      cameraAudioInputRef.current?.click();
+    }
+  }
+
+  async function handleStopVoiceNote() {
+    if (!voiceRecorderRef.current) return;
+    try {
+      const res = await voiceRecorderRef.current.stop();
+      setIsRecordingVoice(false);
+      voiceRecorderRef.current = null;
+      if (res?.file) {
+        handleFileSelected(res.file);
+      }
+    } catch (err) {
+      console.error('Error stopping voice note:', err);
+      setIsRecordingVoice(false);
+    }
+  }
+
+  function handleCancelVoiceNote() {
+    if (voiceRecorderRef.current) {
+      voiceRecorderRef.current.cancel();
+      voiceRecorderRef.current = null;
+    }
+    setIsRecordingVoice(false);
+    setVoiceSeconds(0);
   }
 
   function handleAddPollOption() {
@@ -1289,6 +1347,7 @@ export default function CreatePostBox({
       )}
 
       {/* Hidden File Inputs */}
+      {/* Hidden File Picker Inputs */}
       <input
         ref={photoInputRef}
         type="file"
@@ -1320,14 +1379,150 @@ export default function CreatePostBox({
         }}
       />
 
+      {/* Hidden Live Camera & Microphone Fallback Inputs */}
+      <input
+        ref={cameraPhotoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => {
+          handleFileSelected(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={cameraVideoInputRef}
+        type="file"
+        accept="video/*"
+        capture="environment"
+        hidden
+        onChange={(e) => {
+          handleFileSelected(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={cameraAudioInputRef}
+        type="file"
+        accept="audio/*"
+        capture
+        hidden
+        onChange={(e) => {
+          handleFileSelected(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+
+      {/* Active Live Voice Recording Status Bar */}
+      {isRecordingVoice && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            borderRadius: 12,
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            marginBottom: 10,
+            width: '100%',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                background: '#ef4444',
+                display: 'inline-block',
+                animation: 'pulse 1s infinite',
+              }}
+            />
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#fca5a5' }}>
+              Recording Voice Note: {Math.floor(voiceSeconds / 60)}:{String(voiceSeconds % 60).padStart(2, '0')}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              type="button"
+              onClick={handleCancelVoiceNote}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 8,
+                background: 'rgba(255,255,255,0.1)',
+                border: 'none',
+                color: 'var(--ink)',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleStopVoiceNote}
+              style={{
+                padding: '4px 12px',
+                borderRadius: 8,
+                background: 'var(--teal, #14b8a6)',
+                border: 'none',
+                color: '#ffffff',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Done &amp; Attach
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Bottom Action Bar */}
       <div className="compose-bottom-toolbar">
         <div className="compose-tools-group" role="group" aria-label="Attachments and options">
+          {/* Live Capture Tools */}
+          <button
+            type="button"
+            className="tool-btn"
+            onClick={() => cameraPhotoInputRef.current?.click()}
+            title="Take a photo with camera"
+            aria-label="Take photo"
+          >
+            <Camera size={18} className="tool-icon text-emerald-400" />
+            <span className="tool-label">Camera</span>
+          </button>
+
+          <button
+            type="button"
+            className="tool-btn"
+            onClick={() => cameraVideoInputRef.current?.click()}
+            title="Record video with camera"
+            aria-label="Record video"
+          >
+            <VideoIcon size={18} className="tool-icon text-amber-400" />
+            <span className="tool-label">Record</span>
+          </button>
+
+          <button
+            type="button"
+            className={`tool-btn${isRecordingVoice ? ' active' : ''}`}
+            onClick={isRecordingVoice ? handleStopVoiceNote : handleStartVoiceNote}
+            title={isRecordingVoice ? 'Stop recording voice note' : 'Record voice note or prayer'}
+            aria-label="Record voice note"
+          >
+            <MicIcon size={18} className="tool-icon text-cyan-400" />
+            <span className="tool-label">{isRecordingVoice ? 'Recording…' : 'Voice Note'}</span>
+          </button>
+
+          {/* Storage File Pickers */}
           <button
             type="button"
             className="tool-btn"
             onClick={() => photoInputRef.current?.click()}
-            title="Attach a photo"
+            title="Attach a photo from device"
             aria-label="Attach photo"
           >
             <ImageIcon size={18} className="tool-icon tool-photo" />
@@ -1338,10 +1533,10 @@ export default function CreatePostBox({
             type="button"
             className="tool-btn"
             onClick={() => videoInputRef.current?.click()}
-            title="Attach a video or reel"
+            title="Attach a video from device"
             aria-label="Attach video"
           >
-            <VideoIcon size={18} className="tool-icon tool-video" />
+            <Film size={18} className="tool-icon tool-video" />
             <span className="tool-label">Video</span>
           </button>
 
@@ -1349,10 +1544,10 @@ export default function CreatePostBox({
             type="button"
             className="tool-btn"
             onClick={() => audioInputRef.current?.click()}
-            title="Attach audio or podcast clip"
+            title="Attach an audio file from device"
             aria-label="Attach audio"
           >
-            <MicIcon size={18} className="tool-icon tool-audio" />
+            <FileAudio size={18} className="tool-icon tool-audio" />
             <span className="tool-label">Audio</span>
           </button>
 

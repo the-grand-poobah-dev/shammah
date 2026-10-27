@@ -18,6 +18,8 @@ import {
   Plus,
   Trash2,
   ChevronDown,
+  Camera,
+  Mic,
 } from 'lucide-react';
 import {
   createStatusUpdate,
@@ -26,6 +28,7 @@ import {
   STATUS_AUDIENCE_OPTIONS,
 } from '../lib/statusManager';
 import { uploadPostMedia } from '../lib/mediaUpload';
+import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
 import { supabase } from '../../lib/supabaseClient';
 import { cleanDisplayName } from '../lib/postDisplay';
 import Avatar from './Avatar';
@@ -91,6 +94,13 @@ function checkMediaDuration(file, type) {
   });
 }
 
+function formatMediaTime(seconds) {
+  if (!seconds || isNaN(seconds)) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
 function createEmptySlide() {
   return {
     id: `slide-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -121,6 +131,15 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
   const [publishProgress, setPublishProgress] = useState('');
 
   const fileInputRef = useRef(null);
+  const cameraPhotoInputRef = useRef(null);
+  const cameraVideoInputRef = useRef(null);
+  const cameraAudioInputRef = useRef(null);
+
+  // Live Voice Note Recording State
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [voiceSeconds, setVoiceSeconds] = useState(0);
+  const voiceRecorderRef = useRef(null);
+
   const displayName = cleanDisplayName(currentUser?.name || currentUser?.display_name || 'You', 'You');
 
   useEffect(() => {
@@ -146,11 +165,9 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
     });
   }
 
-  // Handle Bulk File Selection
-  async function handleFileSelect(e) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
+  // Common file processing for file picker, camera photo/video capture, and voice note recordings
+  async function processFiles(files) {
+    if (!files || files.length === 0) return;
     setGlobalError('');
 
     const newSlides = [];
@@ -195,15 +212,13 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
       });
     }
 
-    if (fileInputRef.current) fileInputRef.current.value = '';
     if (newSlides.length === 0) return;
 
     // If currently on an empty slide (no media and empty caption), replace it
     setSlides((prev) => {
       const isEmptyFirst =
         prev.length === 1 && !prev[0].file && !prev[0].previewUrl && !prev[0].caption.trim();
-      const combined = isEmptyFirst ? newSlides : [...prev, ...newSlides];
-      return combined;
+      return isEmptyFirst ? newSlides : [...prev, ...newSlides];
     });
 
     // Start background uploads for each new slide
@@ -232,6 +247,65 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
         );
       }
     });
+  }
+
+  // Handle Bulk File Selection or Live Camera Captures
+  async function handleFileSelect(e) {
+    const files = Array.from(e.target.files || []);
+    if (e.target) e.target.value = '';
+    await processFiles(files);
+  }
+
+  // Live Voice Note handlers
+  async function handleStartVoiceNote() {
+    setGlobalError('');
+    if (!isAudioRecordingSupported()) {
+      cameraAudioInputRef.current?.click();
+      return;
+    }
+
+    try {
+      setVoiceSeconds(0);
+      setIsRecordingVoice(true);
+      const recorder = await startAudioRecording({
+        maxSeconds: 60, // STATUS_MEDIA_LIMITS.audio.maxSeconds
+        onTimeTick: (sec) => setVoiceSeconds(sec),
+      });
+      voiceRecorderRef.current = recorder;
+    } catch (err) {
+      console.warn('Live voice recording init error:', err);
+      setIsRecordingVoice(false);
+      if (cameraAudioInputRef.current) {
+        cameraAudioInputRef.current.click();
+      } else {
+        setGlobalError(err.message || 'Could not access microphone.');
+      }
+    }
+  }
+
+  async function handleStopVoiceNote() {
+    if (!voiceRecorderRef.current) return;
+    try {
+      const res = await voiceRecorderRef.current.stop();
+      setIsRecordingVoice(false);
+      voiceRecorderRef.current = null;
+      if (res?.file) {
+        await processFiles([res.file]);
+      }
+    } catch (err) {
+      console.error('Error stopping voice note:', err);
+      setIsRecordingVoice(false);
+      setGlobalError('Could not save voice note recording.');
+    }
+  }
+
+  function handleCancelVoiceNote() {
+    if (voiceRecorderRef.current) {
+      voiceRecorderRef.current.cancel();
+      voiceRecorderRef.current = null;
+    }
+    setIsRecordingVoice(false);
+    setVoiceSeconds(0);
   }
 
   // Delete an individual slide (like WhatsApp status delete item)
@@ -618,27 +692,204 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
             style={{ display: 'none' }}
           />
 
-          {/* Import Media Button (Bulk photos/videos/audio) */}
-          <button
-            type="button"
-            className="status-media-picker-btn"
-            onClick={() => fileInputRef.current?.click()}
-            style={{ marginTop: 4 }}
-          >
-            <div className="status-media-picker-icons">
-              <ImagePlus size={18} className="text-emerald-400" />
-              <Video size={18} className="text-amber-400" />
-              <FileAudio size={18} className="text-cyan-400" />
+          {/* Hidden Device Camera / Capture Inputs */}
+          <input
+            ref={cameraPhotoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+          />
+          <input
+            ref={cameraVideoInputRef}
+            type="file"
+            accept="video/*"
+            capture="environment"
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+          />
+          <input
+            ref={cameraAudioInputRef}
+            type="file"
+            accept="audio/*"
+            capture
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+          />
+
+          {/* Media Capture & Import Options Group */}
+          <div className="status-media-options-group" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+            {/* Live Camera & Voice Note Capture Chips */}
+            <div
+              className="status-live-capture-row"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 8,
+              }}
+            >
+              <button
+                type="button"
+                className="status-capture-chip"
+                onClick={() => cameraPhotoInputRef.current?.click()}
+                title="Take a photo with your camera"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '10px 8px',
+                  borderRadius: 12,
+                  background: 'var(--surface-sunken)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--ink)',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  minHeight: 40,
+                }}
+              >
+                <Camera size={16} className="text-emerald-400 shrink-0" />
+                <span>Take Photo</span>
+              </button>
+
+              <button
+                type="button"
+                className="status-capture-chip"
+                onClick={() => cameraVideoInputRef.current?.click()}
+                title="Record a video with your camera (up to 60s)"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '10px 8px',
+                  borderRadius: 12,
+                  background: 'var(--surface-sunken)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--ink)',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  minHeight: 40,
+                }}
+              >
+                <Video size={16} className="text-amber-400 shrink-0" />
+                <span>Record Video</span>
+              </button>
+
+              <button
+                type="button"
+                className="status-capture-chip"
+                onClick={handleStartVoiceNote}
+                title="Record an audio voice note or prayer (up to 60s)"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '10px 8px',
+                  borderRadius: 12,
+                  background: isRecordingVoice ? 'rgba(239, 68, 68, 0.15)' : 'var(--surface-sunken)',
+                  border: isRecordingVoice ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border)',
+                  color: isRecordingVoice ? '#fca5a5' : 'var(--ink)',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  minHeight: 40,
+                }}
+              >
+                <Mic size={16} className="text-cyan-400 shrink-0" />
+                <span>Voice Note</span>
+              </button>
             </div>
-            <div className="status-media-picker-text">
-              <span className="status-media-picker-title">
-                {slides.some((s) => s.previewUrl) ? 'Import more photos / videos / audio' : 'Import media (single or bulk)'}
-              </span>
-              <span className="status-media-picker-sub">
-                Select multiple photos, videos or audio clips to caption &amp; share together
-              </span>
-            </div>
-          </button>
+
+            {/* Active Live Voice Recording Status Bar */}
+            {isRecordingVoice && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  borderRadius: 12,
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: '#ef4444',
+                      display: 'inline-block',
+                      animation: 'pulse 1s infinite',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#fca5a5' }}>
+                    Recording Voice Note: {formatMediaTime(voiceSeconds)} / 1:00
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={handleCancelVoiceNote}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 8,
+                      background: 'rgba(255,255,255,0.1)',
+                      border: 'none',
+                      color: 'var(--ink)',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStopVoiceNote}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: 8,
+                      background: 'var(--teal, #14b8a6)',
+                      border: 'none',
+                      color: '#ffffff',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Done &amp; Attach
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Import Media Button (Bulk photos/videos/audio file picker) */}
+            <button
+              type="button"
+              className="status-media-picker-btn"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <div className="status-media-picker-icons">
+                <ImagePlus size={18} className="text-emerald-400" />
+                <Video size={18} className="text-amber-400" />
+                <FileAudio size={18} className="text-cyan-400" />
+              </div>
+              <div className="status-media-picker-text">
+                <span className="status-media-picker-title">
+                  {slides.some((s) => s.previewUrl) ? 'Upload more photos / videos / audio files' : 'Upload media from device files'}
+                </span>
+                <span className="status-media-picker-sub">
+                  Select existing photos, videos or audio clips from storage
+                </span>
+              </div>
+            </button>
+          </div>
 
           {globalError && (
             <div className="status-upload-error-row" role="alert" style={{ marginTop: 10 }}>
