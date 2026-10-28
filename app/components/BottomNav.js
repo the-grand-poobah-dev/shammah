@@ -16,6 +16,7 @@ import {
   Calendar,
   LayoutGrid,
   Film,
+  FileText,
 } from 'lucide-react';
 import { getTotalUnreadMessagesCount } from '../lib/inboxManager';
 import { getUnreadNotificationCount, fetchRealNotifications } from '../lib/notificationsManager';
@@ -76,6 +77,14 @@ export default function BottomNav() {
       icon: Film,
       color: '#8b5cf6', // Violet
       action: handleOpenCreateReel,
+    },
+    {
+      id: 'sermon-note',
+      label: 'Take Sermon Note',
+      desc: 'Capture points & view scriptures',
+      icon: FileText,
+      color: '#f59e0b', // Sanctuary Amber
+      action: handleOpenSermonNote,
     },
     {
       id: 'workspace',
@@ -321,6 +330,21 @@ export default function BottomNav() {
     setMenuOpen(false);
     playSound('reaction');
     window.dispatchEvent(new CustomEvent('shammah:open-chatbot'));
+  }
+
+  function handleOpenSermonNote() {
+    setMenuOpen(false);
+    playSound('reaction');
+    if (pathname === '/') {
+      window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
+      window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'bible' }));
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('shammah:open-sermon-note'));
+      }, 80);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      router.push('/?section=bible&note=1');
+    }
   }
 
   function handleOpenWorkspace() {

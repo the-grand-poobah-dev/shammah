@@ -11,6 +11,7 @@ import {
   Settings,
   User,
   MessageSquare,
+  HeartHandshake,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 import PopupSheet from './PopupSheet';
@@ -24,6 +25,7 @@ import {
 // Route icon & accent mapping for non-Home routes
 export const ROUTE_ICON_MAP = {
   '/categories': { icon: Compass, label: 'Categories', color: '#0d9488' },
+  '/fundraisers': { icon: HeartHandshake, label: 'Fundraisers', color: '#10b981' },
   '/churches': { icon: Church, label: 'Churches', color: '#8b5cf6' },
   '/settings': { icon: Settings, label: 'Settings', color: '#64748b' },
   '/profile': { icon: User, label: 'Profile', color: '#10b981' },
@@ -38,12 +40,20 @@ export const SECTION_METADATA = {
   polls: { desc: 'Community faith polls & votes', color: '#06b6d4' },
   courses: { desc: 'Kingdom discipleship courses', color: '#10b981' },
   bible: { desc: 'Scripture reader & notes', color: '#3b82f6' },
+  rss: { desc: 'Christian news, blogs & devotionals', color: '#f97316' },
+  fundraisers: { desc: 'Kingdom missions, church building & relief', color: '#10b981' },
+  challenges: { desc: 'Daily devotion & video challenges', color: '#8b5cf6' },
+  games: { desc: 'Bible trivia & scripture arcade', color: '#06b6d4' },
+  'category-topics': { desc: 'Browse topics & filter feed', color: '#0d9488' },
 };
 
 function getNavDisplayInfo(pathname, currentSection) {
   if (pathname !== '/') {
     if (ROUTE_ICON_MAP[pathname]) {
       return ROUTE_ICON_MAP[pathname];
+    }
+    if (pathname.startsWith('/fundraisers')) {
+      return { icon: HeartHandshake, label: 'Fundraisers', color: '#10b981' };
     }
     if (pathname.startsWith('/churches')) {
       return { icon: Church, label: 'Churches', color: '#8b5cf6' };

@@ -31,6 +31,7 @@ import RssFeedsView from './components/RssFeedsView';
 import BibleReaderView from './components/BibleReaderView';
 import FaithChallengesView from './components/FaithChallengesView';
 import FaithArcadeGamesView from './components/FaithArcadeGamesView';
+import FundraisersView from './components/FundraisersView';
 import GoogleWorkspaceHubView from './components/GoogleWorkspaceHubView';
 import PWAInstallButton from './components/PWAInstallButton';
 import {
@@ -324,7 +325,7 @@ export default function Feed() {
           setTab(t);
         }
         const sec = params.get('section');
-        if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss', 'workspace'].includes(sec)) {
+        if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'rss', 'fundraisers', 'challenges', 'games', 'workspace'].includes(sec)) {
           setSection(sec);
         } else {
           setSection('all');
@@ -349,7 +350,7 @@ export default function Feed() {
     syncUrlParams();
 
     function onSectionSet(e) {
-      if (e.detail && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss', 'workspace'].includes(e.detail)) {
+      if (e.detail && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'rss', 'fundraisers', 'challenges', 'games', 'workspace'].includes(e.detail)) {
         setTab('home');
         setSection(e.detail);
         if (typeof window !== 'undefined') {
@@ -1491,6 +1492,15 @@ export default function Feed() {
         {/* Holy Bible Reader Section */}
         {tab === 'home' && section === 'bible' && (
           <BibleReaderView session={session} currentUser={profile} openAuth={openAuth} />
+        )}
+
+        {/* Kingdom Fundraisers & Missions Section */}
+        {tab === 'home' && section === 'fundraisers' && (
+          <FundraisersView
+            session={session}
+            currentUser={profile}
+            openAuth={openAuth}
+          />
         )}
 
         {/* Faith Challenges (TikTok-like creative video challenges) */}

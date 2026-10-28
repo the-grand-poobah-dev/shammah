@@ -12,11 +12,11 @@ import {
   BookOpen,
   Sparkles,
   Gamepad2,
+  HeartHandshake,
   MoreHorizontal,
   Compass,
   ChevronDown,
   Check,
-  FileText,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 import PopupSheet from './PopupSheet';
@@ -33,24 +33,6 @@ export const TOP_NAV_SECTIONS = [
 
 export const MORE_DROPDOWN_ITEMS = [
   {
-    id: 'sermon-note',
-    label: 'Take Sermon Note',
-    navLabel: 'Sermon Note',
-    desc: 'Capture points & view scriptures',
-    icon: FileText,
-    isSermonNote: true,
-    color: '#f59e0b', // Sanctuary Amber
-  },
-  {
-    id: 'category-topics',
-    label: 'Category Topics',
-    navLabel: 'Topics',
-    desc: 'Browse topics & filter home feed',
-    icon: Compass,
-    isCategories: true,
-    color: '#0d9488', // Emerald Teal
-  },
-  {
     id: 'rss',
     label: 'RSS Feeds',
     navLabel: 'RSS Feeds',
@@ -58,6 +40,15 @@ export const MORE_DROPDOWN_ITEMS = [
     icon: Rss,
     isSection: true,
     color: '#f97316', // Warm Orange
+  },
+  {
+    id: 'fundraisers',
+    label: 'Fundraisers',
+    navLabel: 'Fundraisers',
+    desc: 'Missions, church building & relief causes',
+    icon: HeartHandshake,
+    isSection: true,
+    color: '#10b981', // Emerald
   },
   {
     id: 'challenges',
@@ -76,6 +67,15 @@ export const MORE_DROPDOWN_ITEMS = [
     icon: Gamepad2,
     isSection: true,
     color: '#06b6d4', // Radiant Cyan
+  },
+  {
+    id: 'category-topics',
+    label: 'Category Topics',
+    navLabel: 'Topics',
+    desc: 'Browse topics & filter home feed',
+    icon: Compass,
+    isCategories: true,
+    color: '#0d9488', // Emerald Teal
   },
 ];
 
@@ -126,22 +126,6 @@ export function handleMoreItemClick(item, context = {}) {
   playSound('reaction');
   if (setMoreOpen) setMoreOpen(false);
 
-  if (item.isSermonNote) {
-    if (pathname === '/') {
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
-        window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'bible' }));
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('shammah:open-sermon-note'));
-        }, 80);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    } else if (router) {
-      router.push('/?section=bible&note=1');
-    }
-    return;
-  }
-
   if (item.isCategories) {
     if (router) {
       router.push('/categories');
@@ -188,7 +172,10 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
   };
 
   const isMoreActive =
-    currentSection === 'rss' || currentSection === 'challenges' || currentSection === 'games';
+    currentSection === 'rss' ||
+    currentSection === 'fundraisers' ||
+    currentSection === 'challenges' ||
+    currentSection === 'games';
 
   return (
     <nav
@@ -294,6 +281,8 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                   {isMoreActive ? (
                     currentSection === 'rss' ? (
                       <Rss size={18} strokeWidth={2.3} className="top-nav-icon" />
+                    ) : currentSection === 'fundraisers' ? (
+                      <HeartHandshake size={18} strokeWidth={2.3} className="top-nav-icon" />
                     ) : currentSection === 'challenges' ? (
                       <Sparkles size={18} strokeWidth={2.3} className="top-nav-icon" />
                     ) : (

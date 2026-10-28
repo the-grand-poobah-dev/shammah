@@ -212,7 +212,7 @@ export default function AppHeader() {
         const sec = params.get('section');
         if (
           sec &&
-          ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss', 'workspace'].includes(
+          ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'rss', 'fundraisers', 'challenges', 'games', 'workspace'].includes(
             sec
           )
         ) {
@@ -227,7 +227,7 @@ export default function AppHeader() {
     function onSectionSet(e) {
       if (
         e.detail &&
-        ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'challenges', 'games', 'rss', 'workspace'].includes(
+        ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'rss', 'fundraisers', 'challenges', 'games', 'workspace'].includes(
           e.detail
         )
       ) {
