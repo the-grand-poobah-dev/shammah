@@ -536,6 +536,12 @@ export default function AppHeader() {
             </div>
           </div>
         </div>
+
+        {/* Broken Multi-Color Outline (Separates header & main content in collapsed state) */}
+        <div
+          className={`header-broken-outline ${isCollapsed ? 'is-active' : ''}`}
+          aria-hidden="true"
+        />
       </div>
 
       {/* Permanent in-flow spacer matching the fixed header height so content is never covered and document height never oscillates */}
