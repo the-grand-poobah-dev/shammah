@@ -57,7 +57,7 @@
     }
   }
 
-  /* Tablet Viewports (768px - 1099px): Two Columns (Right Panel Drawer hidden for now) */
+  /* Tablet Viewports (768px - 1099px): Two Columns (72px Left Rail) */
   @media (max-width: 1099px) {
     .app-layout[data-enabled='true'] {
       grid-template-columns: 72px minmax(0, 1fr);
@@ -83,6 +83,7 @@
     box-sizing: border-box;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    z-index: 40;
   }
 
   .app-layout[data-enabled='true'] .dl-left::-webkit-scrollbar,
@@ -119,24 +120,426 @@
     padding-right: 0;
   }
 
-  /* Hide only the pill navigation bar on tablet and desktop.
-     Do NOT hide .floating-left-actions-wrap or the modals BottomNav owns. */
+  /* Hide only the bottom pill navigation bar on tablet and desktop.
+     Do NOT hide .floating-left-actions-wrap or modals BottomNav owns. */
   .bottom-nav {
     display: none !important;
-  }
-
-  /* Position floating left action menu comfortably on desktop */
-  .floating-left-actions-wrap {
-    bottom: 24px !important;
   }
 
   /* Move persistent audio player bar down (no longer needs to clear the bottom nav pill) */
   .persistent-audio-player-bar {
     bottom: 16px !important;
+    z-index: 42 !important;
   }
 
-  /* Placeholder Card Styling Assimilated to Shammah Design System */
-  .dl-left-placeholder-card,
+  /* --------------------------------------------------------------------------
+     Left Navigation Rail Container & Structure
+     -------------------------------------------------------------------------- */
+  .dl-left-rail {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100%;
+    box-sizing: border-box;
+  }
+
+  .dl-rail-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  /* Optional Top Profile / Auth Row */
+  .dl-profile-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.18s ease, transform 0.16s ease;
+    border: 1px solid transparent;
+    box-sizing: border-box;
+    outline: none;
+    margin-bottom: 4px;
+  }
+
+  .dl-profile-row:hover,
+  .dl-profile-row:focus-visible {
+    background: var(--surface-sunken);
+    border-color: var(--border);
+  }
+
+  .dl-profile-avatar {
+    flex-shrink: 0;
+  }
+
+  .dl-profile-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .dl-profile-sub {
+    font-size: 11.5px;
+    color: var(--ink-muted);
+    line-height: 1.3;
+  }
+
+  .dl-auth-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+  }
+
+  .dl-auth-btn {
+    flex: 1;
+    padding: 7px 10px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    transition: all 0.16s ease;
+    text-align: center;
+    outline: none;
+  }
+
+  .dl-auth-btn.signup {
+    background: var(--teal);
+    color: #ffffff;
+    border-color: var(--teal);
+  }
+
+  .dl-auth-btn:hover,
+  .dl-auth-btn:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Navigation Items List */
+  .dl-nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+
+  /* Single Navigation Item Row: Full width, 48px high, 14px radius, 1px transparent border */
+  .dl-nav-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 48px;
+    border-radius: 14px;
+    padding: 0 12px;
+    gap: 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    position: relative;
+    box-sizing: border-box;
+    outline: none;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Hover and Focus-visible Colored Outline Effect */
+  .dl-nav-item:hover,
+  .dl-nav-item:focus-visible {
+    border-color: var(--sec-color);
+    background: color-mix(in srgb, var(--sec-color) 10%, var(--surface));
+    box-shadow: 0 0 14px color-mix(in srgb, var(--sec-color) 35%, transparent);
+  }
+
+  /* Active State Colored Outline Effect (14% Tint) */
+  .dl-nav-item.active {
+    border-color: var(--sec-color);
+    background: color-mix(in srgb, var(--sec-color) 14%, var(--surface));
+    box-shadow: 0 0 14px color-mix(in srgb, var(--sec-color) 35%, transparent);
+  }
+
+  /* Icon Wrap: 36px Circular with Masked Rotating Neon Glow Ring */
+  .dl-icon-wrap {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--surface);
+    color: var(--sec-color);
+    transition: all 0.18s ease;
+    z-index: 2;
+  }
+
+  /* Masked Conic-Gradient 1.5px Rotating Neon Glow Ring */
+  .dl-icon-wrap::before {
+    content: '';
+    position: absolute;
+    inset: -1.5px;
+    border-radius: 50%;
+    padding: 1.5px;
+    background: conic-gradient(
+      from var(--neon-angle, 0deg),
+      var(--sec-color) 0%,
+      var(--sec-complement, #6366f1) 50%,
+      var(--sec-color) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.45;
+    animation: rotate-neon-glow 3.2s linear infinite;
+    filter: drop-shadow(0 0 2px color-mix(in srgb, var(--sec-color) 45%, transparent));
+    transition: opacity 0.2s ease, filter 0.2s ease;
+  }
+
+  .dl-nav-item:hover .dl-icon-wrap::before,
+  .dl-nav-item:focus-visible .dl-icon-wrap::before {
+    opacity: 0.85;
+    filter: drop-shadow(0 0 4.5px color-mix(in srgb, var(--sec-color) 70%, transparent));
+  }
+
+  .dl-nav-item.active .dl-icon-wrap::before {
+    opacity: 1;
+    animation-duration: 2s;
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--sec-color) 85%, transparent));
+  }
+
+  .dl-nav-icon {
+    position: relative;
+    z-index: 3;
+    transition: transform 0.18s ease, stroke 0.18s ease;
+  }
+
+  .dl-nav-item:hover .dl-nav-icon,
+  .dl-nav-item:focus-visible .dl-nav-icon {
+    transform: scale(1.08);
+  }
+
+  /* Nav Item Label: 14.5px, weight 600, positioned to the right */
+  .dl-nav-label {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    transition: color 0.18s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  .dl-nav-item:hover .dl-nav-label,
+  .dl-nav-item:focus-visible .dl-nav-label {
+    color: var(--ink);
+  }
+
+  .dl-nav-item.active .dl-nav-label {
+    color: var(--sec-color);
+    font-weight: 700;
+  }
+
+  /* Unread Badge: Reuses .tab-badge-num look */
+  .dl-badge {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9999px;
+    background: #ec4899;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(236, 72, 153, 0.4);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Slots */
+  .dl-rail-widget-slot {
+    flex: 1 1 auto;
+    min-height: 16px;
+  }
+
+  .dl-rail-footer {
+    margin-top: auto;
+    position: relative;
+    padding-top: 12px;
+  }
+
+  /* --------------------------------------------------------------------------
+     Quick Actions Footer Portal Placement (Tablet & Desktop)
+     -------------------------------------------------------------------------- */
+  .dl-rail-footer .floating-left-actions-wrap {
+    position: relative !important;
+    bottom: auto !important;
+    left: auto !important;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    z-index: 45;
+    margin: 0;
+    padding: 0;
+  }
+
+  .dl-rail-footer .floating-plus-btn-container {
+    position: relative;
+    width: 48px;
+    height: 48px;
+  }
+
+  .dl-rail-footer .floating-plus-btn {
+    position: relative;
+    width: 48px;
+    height: 48px;
+  }
+
+  .dl-rail-footer .floating-scroll-top-btn {
+    position: relative !important;
+    bottom: auto !important;
+    left: auto !important;
+  }
+
+  /* Quick Actions Menu: Opens upward and stays inside viewport */
+  .dl-rail-footer .floating-quick-menu {
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 0;
+    max-height: calc(100dvh - 160px);
+    overflow-y: auto;
+    z-index: 55;
+    width: 320px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 24px rgba(6, 182, 212, 0.25);
+  }
+
+  /* --------------------------------------------------------------------------
+     Tablet Viewport Adaptations (768px - 1099px): 72px Icon-Only Rail
+     -------------------------------------------------------------------------- */
+  @media (max-width: 1099px) {
+    .dl-left-rail {
+      align-items: center;
+    }
+
+    .dl-rail-nav {
+      align-items: center;
+    }
+
+    .dl-profile-row {
+      justify-content: center;
+      padding: 6px 0;
+      width: 48px;
+      height: 48px;
+    }
+
+    .dl-profile-meta {
+      display: none !important;
+    }
+
+    .dl-auth-row {
+      flex-direction: column;
+      padding: 4px 0 8px;
+      width: 100%;
+    }
+
+    .dl-auth-btn {
+      width: 100%;
+      padding: 5px 4px;
+      font-size: 11px;
+    }
+
+    .dl-nav-item {
+      width: 48px;
+      height: 48px;
+      padding: 0;
+      justify-content: center;
+      margin: 0 auto;
+    }
+
+    .dl-nav-item .dl-nav-label {
+      display: none !important;
+    }
+
+    /* Badge pinned to top-right of 48px button on tablet */
+    .dl-nav-item .dl-badge {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      margin-left: 0;
+    }
+
+    .dl-rail-footer .floating-left-actions-wrap {
+      align-items: center;
+    }
+
+    .dl-rail-footer .floating-quick-menu {
+      left: 0;
+      width: 290px;
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     Light Theme Variants
+     -------------------------------------------------------------------------- */
+  [data-theme='light'] .dl-nav-item:hover,
+  [data-theme='light'] .dl-nav-item:focus-visible {
+    border-color: var(--sec-color);
+    background: color-mix(in srgb, var(--sec-color) 10%, #ffffff);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--sec-color) 25%, transparent);
+  }
+
+  [data-theme='light'] .dl-nav-item.active {
+    border-color: var(--sec-color);
+    background: color-mix(in srgb, var(--sec-color) 14%, #ffffff);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--sec-color) 30%, transparent);
+  }
+
+  [data-theme='light'] .dl-icon-wrap {
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  [data-theme='light'] .dl-profile-row:hover,
+  [data-theme='light'] .dl-profile-row:focus-visible {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  [data-theme='light'] .dl-auth-btn {
+    background: #ffffff;
+    color: var(--ink);
+    border-color: var(--border);
+  }
+
+  [data-theme='light'] .dl-rail-footer .floating-quick-menu {
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12), 0 0 20px rgba(6, 182, 212, 0.15);
+  }
+
+  /* Reduced Motion Support */
+  @media (prefers-reduced-motion: reduce) {
+    .dl-icon-wrap::before {
+      animation: none !important;
+    }
+  }
+
+  /* Placeholder Card Styling for Right Panel */
   .dl-right-placeholder-card {
     background: var(--surface);
     border: 1px dashed var(--border);

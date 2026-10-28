@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
@@ -13,15 +14,14 @@ import {
   Flame,
   Sparkles,
   ChevronUp,
-  Calendar,
   LayoutGrid,
   Film,
   FileText,
 } from 'lucide-react';
-import { getTotalUnreadMessagesCount } from '../lib/inboxManager';
-import { getUnreadNotificationCount, fetchRealNotifications } from '../lib/notificationsManager';
 import { playSound } from '../lib/soundEffects';
 import { useSession } from '../../lib/useSession';
+import { useLayoutMode } from '../lib/useLayoutMode';
+import { useMainNav } from '../lib/useMainNav';
 import StatusCreatorModal from './StatusCreatorModal';
 import ReelCreatorModal from './ReelCreatorModal';
 
@@ -29,9 +29,16 @@ export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { session, profile } = useSession();
-  const [activeTab, setActiveTab] = useState('home');
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const layoutMode = useLayoutMode();
+  const isDesktopOrTablet = layoutMode === 'tablet' || layoutMode === 'desktop';
+
+  const {
+    activeTab,
+    unreadMessages,
+    unreadAlerts,
+    handleTabClick,
+  } = useMainNav();
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [highlightColor] = useState('#06b6d4');
   const [activeHighlightId, setActiveHighlightId] = useState(null);
@@ -40,6 +47,7 @@ export default function BottomNav() {
   const [isContentHovered, setIsContentHovered] = useState(false);
   const [showStatusCreator, setShowStatusCreator] = useState(false);
   const [showReelCreator, setShowReelCreator] = useState(false);
+  const [railFooterEl, setRailFooterEl] = useState(null);
   const menuRef = useRef(null);
 
   const currentUser = session?.user
@@ -52,6 +60,28 @@ export default function BottomNav() {
         role: profile?.role,
       }
     : null;
+
+  // Mount Quick Actions inside Left Rail footer on tablet/desktop via Portal
+  useEffect(() => {
+    if (!isDesktopOrTablet || typeof document === 'undefined') {
+      setRailFooterEl(null);
+      return;
+    }
+
+    function findFooter() {
+      const el = document.getElementById('dl-rail-footer');
+      if (el) {
+        setRailFooterEl(el);
+        return true;
+      }
+      return false;
+    }
+
+    if (!findFooter()) {
+      const timer = setTimeout(findFooter, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isDesktopOrTablet]);
 
   const QUICK_ACTIONS = [
     {
@@ -96,30 +126,6 @@ export default function BottomNav() {
     },
   ];
 
-  async function syncBadges() {
-    try {
-      const count = await getTotalUnreadMessagesCount();
-      setUnreadMessages(Number(count) || 0);
-    } catch {
-      setUnreadMessages(0);
-    }
-    setUnreadAlerts(getUnreadNotificationCount());
-  }
-
-  useEffect(() => {
-    syncBadges();
-
-    function onBadgeUpdate() {
-      syncBadges();
-    }
-    window.addEventListener('shammah:inbox-updated', onBadgeUpdate);
-    window.addEventListener('shammah:notifications-updated', onBadgeUpdate);
-    return () => {
-      window.removeEventListener('shammah:inbox-updated', onBadgeUpdate);
-      window.removeEventListener('shammah:notifications-updated', onBadgeUpdate);
-    };
-  }, []);
-
   // Track scroll direction: show Move to Top button only when intending to scroll back upwards
   useEffect(() => {
     let lastY = typeof window !== 'undefined' ? window.scrollY : 0;
@@ -159,7 +165,9 @@ export default function BottomNav() {
       if (
         target &&
         target.closest &&
-        target.closest('.post-card, .feed-container, .home-highlights, .reels-shelf-container, .explore-container, .churches-container, .sermon-notes-section')
+        target.closest(
+          '.post-card, .feed-container, .home-highlights, .reels-shelf-container, .explore-container, .churches-container, .sermon-notes-section'
+        )
       ) {
         setIsContentHovered(true);
       } else {
@@ -188,41 +196,6 @@ export default function BottomNav() {
   }
 
   const isScrollTopVisible = showScrollTop && !isContentHovered;
-
-  useEffect(() => {
-    fetchRealNotifications().catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!pathname) return;
-
-    if (pathname.startsWith('/churches')) {
-      setActiveTab('churches');
-    } else if (pathname.startsWith('/categories') || pathname.startsWith('/settings')) {
-      setActiveTab('menu');
-    } else if (pathname === '/') {
-      if (typeof window !== 'undefined') {
-        const params = new URLSearchParams(window.location.search);
-        const tabParam = params.get('tab');
-        if (tabParam && ['home', 'churches', 'messages', 'alerts', 'menu'].includes(tabParam)) {
-          setActiveTab(tabParam);
-        } else {
-          setActiveTab('home');
-        }
-      }
-    }
-  }, [pathname]);
-
-  // Listen to tab changes from the home feed
-  useEffect(() => {
-    function handleTabEvent(e) {
-      if (e.detail) {
-        setActiveTab(e.detail);
-      }
-    }
-    window.addEventListener('shammah:tab-changed', handleTabEvent);
-    return () => window.removeEventListener('shammah:tab-changed', handleTabEvent);
-  }, []);
 
   // Listen for global open requests for status and reel creators
   useEffect(() => {
@@ -260,35 +233,6 @@ export default function BottomNav() {
     }
     return () => window.removeEventListener('pointerdown', handleClickOutside);
   }, [menuOpen]);
-
-  function handleTabClick(tabId, href) {
-    setActiveTab(tabId);
-    setMenuOpen(false);
-    playSound('reaction');
-
-    if (tabId === 'home') {
-      // Whenever Home is clicked, always redirect to the home feed with the 'All' tab
-      window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
-      window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'all' }));
-      if (pathname === '/') {
-        if (typeof window !== 'undefined') {
-          if (window.location.search) {
-            window.history.pushState(null, '', '/');
-          }
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      } else {
-        router.push('/');
-      }
-      return;
-    }
-
-    if (pathname === '/') {
-      window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: tabId }));
-    } else {
-      router.push(href);
-    }
-  }
 
   function handleCreatePost() {
     setMenuOpen(false);
@@ -359,140 +303,148 @@ export default function BottomNav() {
     }
   }
 
-  return (
-    <>
-      {/* Floating Action Buttons Wrap on Bottom Left */}
-      <div className="floating-left-actions-wrap" ref={menuRef}>
-        {/* Move to Top Icon (Placed Above the Plus Icon) */}
-        <button
-          type="button"
-          className={`floating-scroll-top-btn${isScrollTopVisible ? ' is-visible' : ''}`}
-          onClick={handleScrollToTop}
-          aria-label="Scroll back to top"
-          title="Scroll to top of feed"
-        >
-          <span className="floating-neon-ring" aria-hidden="true" />
-          <span className="floating-scroll-top-inner">
-            <ChevronUp size={20} strokeWidth={2.8} />
-          </span>
-        </button>
+  // Floating Actions Node (Scroll-to-top button + Quick Actions (+) button and menu)
+  const floatingActionsNode = (
+    <div className="floating-left-actions-wrap" ref={menuRef}>
+      {/* Move to Top Icon (Placed Above the Plus Icon) */}
+      <button
+        type="button"
+        className={`floating-scroll-top-btn${isScrollTopVisible ? ' is-visible' : ''}`}
+        onClick={handleScrollToTop}
+        aria-label="Scroll back to top"
+        title="Scroll to top of feed"
+      >
+        <span className="floating-neon-ring" aria-hidden="true" />
+        <span className="floating-scroll-top-inner">
+          <ChevronUp size={20} strokeWidth={2.8} />
+        </span>
+      </button>
 
-        {/* Floating Circular Plus Action Button Container (Placed Directly Above Bottom Nav Bar) */}
-        <div className="floating-plus-btn-container">
-          {/* Quick Actions Speed-Dial Menu */}
-          {menuOpen && (
-            <div className="floating-quick-menu neon-glow-modal" role="menu">
-              <div className="floating-quick-header">
-                <div className="floating-quick-title-wrap">
-                  <Sparkles size={15} style={{ color: highlightColor }} />
-                  <span>Quick Actions</span>
-                </div>
-                <button
-                  type="button"
-                  className="floating-menu-close"
-                  onClick={() => setMenuOpen(false)}
-                  aria-label="Close menu"
-                >
-                  <X size={14} />
-                </button>
+      {/* Floating Circular Plus Action Button Container */}
+      <div className="floating-plus-btn-container">
+        {/* Quick Actions Speed-Dial Menu */}
+        {menuOpen && (
+          <div className="floating-quick-menu neon-glow-modal" role="menu">
+            <div className="floating-quick-header">
+              <div className="floating-quick-title-wrap">
+                <Sparkles size={15} style={{ color: highlightColor }} />
+                <span>Quick Actions</span>
               </div>
-
-              {/* Circular Pop-Up Shammah AI Chatbot Trigger */}
-              <div
-                className="circular-bot-popup-hero"
-                style={{ '--sec-color': highlightColor }}
-                onClick={handleOpenChatbot}
-                role="button"
-                tabIndex={0}
-                title="Open Shammah AI Chatbot"
+              <button
+                type="button"
+                className="floating-menu-close"
+                onClick={() => setMenuOpen(false)}
+                aria-label="Close menu"
               >
-                <div className="circular-bot-ring-pulse">
-                  <Flame size={22} className="text-amber-400" />
-                  <span className="bot-active-dot" />
-                </div>
-                <div className="circular-bot-hero-text">
-                  <div className="circular-bot-title-line">
-                    <strong>Shammah AI Chatbot</strong>
-                    <span className="live-sparkle-pill">AI Companion</span>
-                  </div>
-                  <small>Pastoral counsel, study outlines &amp; prayer</small>
-                </div>
-              </div>
+                <X size={14} />
+              </button>
+            </div>
 
-              {/* Quick Actions with Clean Outlines Appearing Only on Highlight/Hover/Select */}
-              <div className="floating-quick-actions-list">
-                {QUICK_ACTIONS.map((item) => {
-                  const Icon = item.icon;
-                  const isItemActive = activeHighlightId === item.id;
-                  const isHovered = hoveredActionId === item.id;
-                  const effectiveColor = item.color;
-                  return (
-                    <div
-                      key={item.id}
-                      className={`quick-action-row-wrap${isItemActive ? ' is-active-row' : ''}`}
-                    >
-                      <button
-                        type="button"
-                        className={`quick-action-item explore-channel-card${isItemActive ? ' item-active' : ''}`}
-                        style={{
-                          '--sec-color': effectiveColor,
-                          borderColor: isItemActive || isHovered ? effectiveColor : undefined,
-                        }}
-                        onMouseEnter={() => setHoveredActionId(item.id)}
-                        onMouseLeave={() => setHoveredActionId(null)}
-                        onFocus={() => setHoveredActionId(item.id)}
-                        onBlur={() => setHoveredActionId(null)}
-                        onClick={() => {
-                          setActiveHighlightId(item.id);
-                          item.action();
-                        }}
-                        role="menuitem"
-                      >
-                        <span className="channel-icon-wrap" style={{ '--sec-color': effectiveColor }}>
-                          <Icon size={17} />
-                        </span>
-                        <div className="channel-meta">
-                          <strong>{item.label}</strong>
-                          <small>{item.desc}</small>
-                        </div>
-                        <span
-                          className={`item-color-picker-box${isItemActive || isHovered ? ' active-picker' : ''}`}
-                          style={{
-                            '--picker-color': effectiveColor,
-                            borderColor: isItemActive || isHovered ? effectiveColor : undefined,
-                          }}
-                        >
-                          <span className="picker-box-swatch" style={{ background: effectiveColor }} />
-                        </span>
-                      </button>
-                    </div>
-                  );
-                })}
+            {/* Circular Pop-Up Shammah AI Chatbot Trigger */}
+            <div
+              className="circular-bot-popup-hero"
+              style={{ '--sec-color': highlightColor }}
+              onClick={handleOpenChatbot}
+              role="button"
+              tabIndex={0}
+              title="Open Shammah AI Chatbot"
+            >
+              <div className="circular-bot-ring-pulse">
+                <Flame size={22} className="text-amber-400" />
+                <span className="bot-active-dot" />
+              </div>
+              <div className="circular-bot-hero-text">
+                <div className="circular-bot-title-line">
+                  <strong>Shammah AI Chatbot</strong>
+                  <span className="live-sparkle-pill">AI Companion</span>
+                </div>
+                <small>Pastoral counsel, study outlines &amp; prayer</small>
               </div>
             </div>
-          )}
 
-          <button
-            type="button"
-            className={`floating-plus-btn${menuOpen ? ' open' : ''}`}
-            onClick={() => {
-              playSound('reaction');
-              setMenuOpen(!menuOpen);
-            }}
-            aria-label={menuOpen ? 'Close actions menu' : 'Open actions menu'}
-            title={menuOpen ? 'Close menu' : 'Quick Actions & Create Post'}
-          >
-            <span className="floating-neon-ring" aria-hidden="true" />
-            <span className="floating-plus-inner">
-              <Plus size={18} strokeWidth={2.8} className={menuOpen ? 'rotate-icon' : ''} />
-            </span>
-          </button>
-        </div>
+            {/* Quick Actions List */}
+            <div className="floating-quick-actions-list">
+              {QUICK_ACTIONS.map((item) => {
+                const Icon = item.icon;
+                const isItemActive = activeHighlightId === item.id;
+                const isHovered = hoveredActionId === item.id;
+                const effectiveColor = item.color;
+                return (
+                  <div
+                    key={item.id}
+                    className={`quick-action-row-wrap${isItemActive ? ' is-active-row' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className={`quick-action-item explore-channel-card${isItemActive ? ' item-active' : ''}`}
+                      style={{
+                        '--sec-color': effectiveColor,
+                        borderColor: isItemActive || isHovered ? effectiveColor : undefined,
+                      }}
+                      onMouseEnter={() => setHoveredActionId(item.id)}
+                      onMouseLeave={() => setHoveredActionId(null)}
+                      onFocus={() => setHoveredActionId(item.id)}
+                      onBlur={() => setHoveredActionId(null)}
+                      onClick={() => {
+                        setActiveHighlightId(item.id);
+                        item.action();
+                      }}
+                      role="menuitem"
+                    >
+                      <span className="channel-icon-wrap" style={{ '--sec-color': effectiveColor }}>
+                        <Icon size={17} />
+                      </span>
+                      <div className="channel-meta">
+                        <strong>{item.label}</strong>
+                        <small>{item.desc}</small>
+                      </div>
+                      <span
+                        className={`item-color-picker-box${isItemActive || isHovered ? ' active-picker' : ''}`}
+                        style={{
+                          '--picker-color': effectiveColor,
+                          borderColor: isItemActive || isHovered ? effectiveColor : undefined,
+                        }}
+                      >
+                        <span className="picker-box-swatch" style={{ background: effectiveColor }} />
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          className={`floating-plus-btn${menuOpen ? ' open' : ''}`}
+          onClick={() => {
+            playSound('reaction');
+            setMenuOpen(!menuOpen);
+          }}
+          aria-label={menuOpen ? 'Close actions menu' : 'Open actions menu'}
+          title={menuOpen ? 'Close menu' : 'Quick Actions & Create Post'}
+        >
+          <span className="floating-neon-ring" aria-hidden="true" />
+          <span className="floating-plus-inner">
+            <Plus size={18} strokeWidth={2.8} className={menuOpen ? 'rotate-icon' : ''} />
+          </span>
+        </button>
       </div>
+    </div>
+  );
 
+  return (
+    <>
+      {/* On tablet/desktop, portal floating actions to the left rail footer; on phones, render in place */}
+      {railFooterEl && isDesktopOrTablet
+        ? createPortal(floatingActionsNode, railFooterEl)
+        : floatingActionsNode}
+
+      {/* Phone Bottom Navigation Bar (Hidden on >=768px via desktop-layout.css) */}
       <nav className="bottom-nav" aria-label="Main Navigation">
         <div className="bottom-nav-pill">
-          {/* Very thin rotating neon glow that snakes around (broken in two places) */}
+          {/* Very thin rotating neon glow that snakes around */}
           <span className="bottom-nav-snake-glow" aria-hidden="true" />
 
           {/* Tab 1: Home */}
