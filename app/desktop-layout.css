@@ -1,0 +1,182 @@
+/* ==========================================================================
+   Desktop & Tablet Layout System for Shammah (Facebook 3-Column Responsive Frame)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Mobile Default Behavior (Phones <= 767px or when data-enabled='false')
+   Display: contents removes any container box from the DOM flow so phones
+   remain 100% pixel-identical with zero layout shift or hydration mismatch.
+   -------------------------------------------------------------------------- */
+.app-layout {
+  display: contents;
+}
+
+.dl-center {
+  display: contents;
+}
+
+.dl-left,
+.dl-right {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Tablet & Desktop Layouts (>= 768px)
+   All responsive layout rules are scoped strictly inside min-width: 768px
+   and gated by .app-layout[data-enabled='true'].
+   -------------------------------------------------------------------------- */
+@media (min-width: 768px) {
+  /* Prevent horizontal scroll while preserving position: sticky */
+  html,
+  body,
+  .app-layout[data-enabled='true'],
+  .app-layout[data-enabled='true'] .shell {
+    overflow-x: clip !important;
+  }
+
+  /* Base grid frame for tablet & desktop */
+  .app-layout[data-enabled='true'] {
+    display: grid;
+    width: 100%;
+    min-height: calc(100dvh - var(--sticky-header-h, 62px));
+    box-sizing: border-box;
+    padding: 16px 16px 0;
+    column-gap: 16px;
+    align-items: start;
+    justify-content: center;
+  }
+
+  /* Desktop Viewports (>= 1100px): Three Columns */
+  @media (min-width: 1100px) {
+    .app-layout[data-enabled='true'] {
+      grid-template-columns: clamp(232px, 20vw, 280px) minmax(0, 680px) clamp(320px, 26vw, 380px);
+    }
+
+    .app-layout[data-enabled='true'] .dl-right {
+      display: block;
+    }
+  }
+
+  /* Tablet Viewports (768px - 1099px): Two Columns (Right Panel Drawer hidden for now) */
+  @media (max-width: 1099px) {
+    .app-layout[data-enabled='true'] {
+      grid-template-columns: 72px minmax(0, 1fr);
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .app-layout[data-enabled='true'] .dl-right {
+      position: fixed;
+      display: none; /* Drawer to be implemented in a subsequent phase */
+    }
+  }
+
+  /* Side Columns: Sticky Positioning & Internal Containment */
+  .app-layout[data-enabled='true'] .dl-left,
+  .app-layout[data-enabled='true'] .dl-right {
+    display: block;
+    position: sticky;
+    top: calc(var(--sticky-header-h, 62px) + 16px);
+    height: calc(100dvh - var(--sticky-header-h, 62px) - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .app-layout[data-enabled='true'] .dl-left::-webkit-scrollbar,
+  .app-layout[data-enabled='true'] .dl-right::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  /* Center Column: Expands cleanly to fill grid track */
+  .app-layout[data-enabled='true'] .dl-center {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* Neutralize old phone-first .shell constraints inside .app-layout */
+  .app-layout[data-enabled='true'] .shell {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    background: transparent !important;
+    padding-bottom: 32px !important;
+  }
+
+  /* Ensure .feed and children cleanly fill the centre column */
+  .app-layout[data-enabled='true'] .feed {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Hide only the pill navigation bar on tablet and desktop.
+     Do NOT hide .floating-left-actions-wrap or the modals BottomNav owns. */
+  .bottom-nav {
+    display: none !important;
+  }
+
+  /* Position floating left action menu comfortably on desktop */
+  .floating-left-actions-wrap {
+    bottom: 24px !important;
+  }
+
+  /* Move persistent audio player bar down (no longer needs to clear the bottom nav pill) */
+  .persistent-audio-player-bar {
+    bottom: 16px !important;
+  }
+
+  /* Placeholder Card Styling Assimilated to Shammah Design System */
+  .dl-left-placeholder-card,
+  .dl-right-placeholder-card {
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius, 16px);
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+
+  .dl-placeholder-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .dl-placeholder-badge {
+    align-self: flex-start;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(79, 179, 171, 0.15);
+    color: var(--teal);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .dl-placeholder-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .dl-placeholder-desc {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-muted);
+  }
+}

@@ -1,10 +1,12 @@
 import { Fraunces, Work_Sans } from 'next/font/google';
 import './globals.css';
 import './cx.css';
+import './desktop-layout.css';
 import AppClientInit from './components/AppClientInit';
 import BottomNav from './components/BottomNav';
 import ScrollProgressIndicator from './components/ScrollProgressIndicator';
 import AppHeader from './components/AppHeader';
+import AppFrame from './components/AppFrame';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +39,9 @@ export default function RootLayout({ children }) {
         <AppClientInit />
         <ScrollProgressIndicator />
         <AppHeader />
-        {children}
+        <AppFrame>
+          {children}
+        </AppFrame>
         <BottomNav />
       </body>
     </html>
