@@ -2933,6 +2933,9 @@ button:focus-visible, a:focus-visible {
   max-width: 410px;
   padding: 28px 24px 24px;
   max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  scrollbar-width: thin;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1.5px solid #06b6d4;
@@ -3103,6 +3106,27 @@ button:focus-visible, a:focus-visible {
   line-height: 1.4;
 }
 
+.auth-divider {
+  display: flex;
+  align-items: center;
+  margin: 18px 0 14px;
+  text-align: center;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.auth-divider span {
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
 .auth-oauth {
   display: flex;
   flex-direction: column;
@@ -3110,8 +3134,12 @@ button:focus-visible, a:focus-visible {
 }
 
 .auth-oauth-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: 100%;
-  padding: 12px;
+  padding: 11px 16px;
   border-radius: 999px;
   border: 1px solid var(--border);
   font-size: 14px;
@@ -3119,11 +3147,12 @@ button:focus-visible, a:focus-visible {
   cursor: pointer;
   background: var(--surface);
   color: var(--ink);
-  transition: background 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .auth-oauth-btn:hover:not(:disabled) {
-  background: #f7f8f3;
+  background: var(--gold-soft);
+  border-color: var(--ink-muted);
 }
 
 .auth-oauth-btn:disabled {
