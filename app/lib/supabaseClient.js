@@ -1,2 +1,2 @@
-export * from '../../lib/supabaseClient';
-export { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
+export * from '../../lib/supabaseClient.js';
+export { supabase, isSupabaseConfigured } from '../../lib/supabaseClient.js';

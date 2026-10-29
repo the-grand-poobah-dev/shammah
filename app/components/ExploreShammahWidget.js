@@ -22,6 +22,9 @@ import {
   resetShortcuts,
   runShortcut,
   isValidExternalUrl,
+  syncUserShortcuts,
+  subscribeShortcutsSyncStatus,
+  getShortcutsSyncStatus,
 } from '../lib/shortcutsManager';
 import { useSession } from '../../lib/useSession';
 import { useLayoutMode } from '../lib/useLayoutMode';
@@ -37,6 +40,7 @@ export default function ExploreShammahWidget() {
 
   const userId = session?.user?.id || 'guest';
   const [shortcuts, setShortcuts] = useState(DEFAULT_SHORTCUTS);
+  const [syncStatus, setSyncStatus] = useState(() => getShortcutsSyncStatus());
   const [isEditing, setIsEditing] = useState(false);
   const [tabletPopoverOpen, setTabletPopoverOpen] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
@@ -61,10 +65,37 @@ export default function ExploreShammahWidget() {
   const popoverRef = useRef(null);
   const announceTimerRef = useRef(null);
 
-  // Load shortcuts from localStorage after mount to match SSR default
+  // Subscribe to cloud sync status & remote shortcuts updates
+  useEffect(() => {
+    const unsubscribe = subscribeShortcutsSyncStatus((status) => {
+      setSyncStatus(status);
+    });
+
+    function handleShortcutsUpdated(e) {
+      if (e.detail?.shortcuts && (!e.detail.userId || e.detail.userId === userId)) {
+        setShortcuts(e.detail.shortcuts);
+      }
+    }
+
+    window.addEventListener('shammah:shortcuts-updated', handleShortcutsUpdated);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('shammah:shortcuts-updated', handleShortcutsUpdated);
+    };
+  }, [userId]);
+
+  // Load shortcuts from offline-first cache immediately and sync with cloud for signed-in user
   useEffect(() => {
     const loaded = loadShortcuts(userId);
     setShortcuts(loaded);
+
+    if (userId && userId !== 'guest') {
+      syncUserShortcuts(userId).then((synced) => {
+        if (Array.isArray(synced) && synced.length > 0) {
+          setShortcuts(synced);
+        }
+      });
+    }
   }, [userId]);
 
   // Close tablet popover on route change
@@ -294,6 +325,41 @@ export default function ExploreShammahWidget() {
           <Sparkles size={14} className="dl-tableau-title-icon" />
           <span className="dl-tableau-title">Explore Shammah</span>
         </div>
+
+        {/* Tiny sync status in edit mode */}
+        {isEditing && (
+          <div
+            className="dl-sync-status-badge"
+            role="status"
+            aria-live="polite"
+            title={`Cloud sync: ${
+              syncStatus === 'syncing'
+                ? 'Syncing changes to cloud...'
+                : syncStatus === 'offline'
+                ? 'Offline, will sync when connection returns'
+                : 'All changes saved'
+            }`}
+          >
+            <span
+              className={`dl-sync-dot ${
+                syncStatus === 'syncing'
+                  ? 'dl-sync-syncing'
+                  : syncStatus === 'offline'
+                  ? 'dl-sync-offline'
+                  : 'dl-sync-saved'
+              }`}
+              aria-hidden="true"
+            />
+            <span className="dl-sync-label">
+              {syncStatus === 'syncing'
+                ? 'Syncing...'
+                : syncStatus === 'offline'
+                ? 'Offline, will sync'
+                : 'Saved'}
+            </span>
+          </div>
+        )}
+
         <button
           type="button"
           className={`dl-tableau-edit-toggle dl-outline-interactive${isEditing ? ' active' : ''}`}
