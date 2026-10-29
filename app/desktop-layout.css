@@ -673,42 +673,8 @@
       margin-left: 0;
     }
 
-    /* CSS Tooltip appearing to the right on hover / focus-visible */
     .dl-rail-tooltip {
-      display: block;
-      position: absolute;
-      left: calc(100% + 12px);
-      top: 50%;
-      transform: translateY(-50%) scale(0.94);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 5px 11px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--ink);
-      white-space: nowrap;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.16s ease, transform 0.16s ease;
-      z-index: 60;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    }
-
-    @media (hover: hover) {
-      .dl-nav-item:hover .dl-rail-tooltip,
-      .dl-profile-row:hover .dl-rail-tooltip,
-      .dl-auth-btn:hover .dl-rail-tooltip {
-        opacity: 1;
-        transform: translateY(-50%) scale(1);
-      }
-    }
-
-    .dl-nav-item:focus-visible .dl-rail-tooltip,
-    .dl-profile-row:focus-visible .dl-rail-tooltip,
-    .dl-auth-btn:focus-visible .dl-rail-tooltip {
-      opacity: 1;
-      transform: translateY(-50%) scale(1);
+      display: none !important;
     }
 
     /* Tablet Explore Shammah Widget Popover */

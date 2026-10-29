@@ -530,7 +530,6 @@ export default function ExploreShammahWidget() {
             <span className="dl-icon-wrap" aria-hidden="true">
               <LayoutGrid size={20} strokeWidth={tabletPopoverOpen ? 2.4 : 1.8} className="dl-nav-icon" />
             </span>
-            <span className="dl-rail-tooltip" role="tooltip">Shortcuts</span>
           </button>
 
           {/* Tablet Popover anchored to the right of the 72px rail */}

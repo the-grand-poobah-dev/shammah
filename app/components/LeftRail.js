@@ -47,7 +47,6 @@ export default function LeftRail() {
               />
               <span className="dl-profile-sub">View profile</span>
             </div>
-            <span className="dl-rail-tooltip" role="tooltip">Profile</span>
           </Link>
         ) : (
           <div className="dl-auth-row">
@@ -64,7 +63,6 @@ export default function LeftRail() {
               data-nav-id="signin"
             >
               Sign In
-              <span className="dl-rail-tooltip" role="tooltip">Sign In</span>
             </button>
             <button
               type="button"
@@ -79,7 +77,6 @@ export default function LeftRail() {
               data-nav-id="signup"
             >
               Sign Up
-              <span className="dl-rail-tooltip" role="tooltip">Sign Up</span>
             </button>
           </div>
         )}
@@ -127,7 +124,6 @@ export default function LeftRail() {
                     {badgeCount}
                   </span>
                 )}
-                <span className="dl-rail-tooltip" role="tooltip">{item.label}</span>
               </button>
             );
           })}
