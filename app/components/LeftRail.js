@@ -4,6 +4,7 @@ import Avatar from './Avatar';
 import MemberName from './MemberName';
 import { useSession } from '../../lib/useSession';
 import { useMainNav } from '../lib/useMainNav';
+import ExploreShammahWidget from './ExploreShammahWidget';
 
 export default function LeftRail() {
   const { session, profile } = useSession();
@@ -123,7 +124,9 @@ export default function LeftRail() {
       </nav>
 
       {/* Slot for Explore Shammah widget */}
-      <div className="dl-rail-widget-slot" />
+      <div className="dl-rail-widget-slot">
+        <ExploreShammahWidget />
+      </div>
 
       {/* Slot for Quick Actions footer portal */}
       <div className="dl-rail-footer" id="dl-rail-footer" />
