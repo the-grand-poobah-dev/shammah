@@ -67,7 +67,12 @@ export default function ExploreShammahWidget() {
     setShortcuts(loaded);
   }, [userId]);
 
-  // Handle tablet popover outside click and Escape
+  // Close tablet popover on route change
+  useEffect(() => {
+    setTabletPopoverOpen(false);
+  }, [pathname]);
+
+  // Handle tablet popover outside click, Escape, and open-panel event
   useEffect(() => {
     function handleClickOutside(e) {
       if (popoverRef.current && !popoverRef.current.contains(e.target)) {
@@ -79,14 +84,19 @@ export default function ExploreShammahWidget() {
         setTabletPopoverOpen(false);
       }
     }
+    function handleOpenPanel() {
+      setTabletPopoverOpen(false);
+    }
 
     if (tabletPopoverOpen) {
       document.addEventListener('pointerdown', handleClickOutside);
       window.addEventListener('keydown', handleKeyDown);
     }
+    window.addEventListener('shammah:open-panel', handleOpenPanel);
     return () => {
       document.removeEventListener('pointerdown', handleClickOutside);
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('shammah:open-panel', handleOpenPanel);
     };
   }, [tabletPopoverOpen]);
 
@@ -448,6 +458,7 @@ export default function ExploreShammahWidget() {
             <span className="dl-icon-wrap" aria-hidden="true">
               <LayoutGrid size={20} strokeWidth={tabletPopoverOpen ? 2.4 : 1.8} className="dl-nav-icon" />
             </span>
+            <span className="dl-rail-tooltip" role="tooltip">Shortcuts</span>
           </button>
 
           {/* Tablet Popover anchored to the right of the 72px rail */}

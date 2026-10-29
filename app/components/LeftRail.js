@@ -28,6 +28,7 @@ export default function LeftRail() {
             href="/profile"
             className="dl-profile-row"
             title={`Signed in as ${displayName}. View profile.`}
+            data-nav-id="profile"
           >
             <Avatar
               name={displayName}
@@ -45,6 +46,7 @@ export default function LeftRail() {
               />
               <span className="dl-profile-sub">View profile</span>
             </div>
+            <span className="dl-rail-tooltip" role="tooltip">Profile</span>
           </Link>
         ) : (
           <div className="dl-auth-row">
@@ -57,8 +59,10 @@ export default function LeftRail() {
                 )
               }
               title="Sign in to your account"
+              data-nav-id="signin"
             >
               Sign In
+              <span className="dl-rail-tooltip" role="tooltip">Sign In</span>
             </button>
             <button
               type="button"
@@ -69,8 +73,10 @@ export default function LeftRail() {
                 )
               }
               title="Join Shammah community"
+              data-nav-id="signup"
             >
               Sign Up
+              <span className="dl-rail-tooltip" role="tooltip">Sign Up</span>
             </button>
           </div>
         )}
@@ -100,6 +106,7 @@ export default function LeftRail() {
                 aria-current={ariaCurrent}
                 title={item.label}
                 role="listitem"
+                data-nav-id={item.id}
               >
                 <span className="dl-icon-wrap" aria-hidden="true">
                   <Icon
@@ -117,6 +124,7 @@ export default function LeftRail() {
                     {badgeCount}
                   </span>
                 )}
+                <span className="dl-rail-tooltip" role="tooltip">{item.label}</span>
               </button>
             );
           })}

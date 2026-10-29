@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { usePathname } from 'next/navigation';
 import {
   MessageCircle,
   Bell,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useSidePanel } from '../lib/useSidePanel';
 import { useSession } from '../../lib/useSession';
+import { useLayoutMode } from '../lib/useLayoutMode';
 import { getTotalUnreadMessagesCount } from '../lib/inboxManager';
 import { getUnreadNotificationCount } from '../lib/notificationsManager';
 import { isDarkThemeActive, toggleTheme } from '../lib/themeHelper';
@@ -49,6 +51,10 @@ const PANEL_TABS = [
 ];
 
 export default function RightPanel() {
+  const pathname = usePathname();
+  const layoutMode = useLayoutMode();
+  const isTablet = layoutMode === 'tablet';
+
   const {
     activePanel,
     openPanel,
@@ -57,6 +63,8 @@ export default function RightPanel() {
     initialConversationId,
   } = useSidePanel();
   const { session, profile, signOut } = useSession();
+
+  const isDrawerOpen = isTablet && Boolean(activePanel) && !isCollapsed;
 
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
@@ -71,6 +79,10 @@ export default function RightPanel() {
   });
 
   const panelBodyRef = useRef(null);
+  const drawerPanelRef = useRef(null);
+  const triggerFocusRef = useRef(null);
+  const touchStartXRef = useRef(null);
+  const touchStartYRef = useRef(null);
   const messagesWrapRef = useRef(null);
   const alertsWrapRef = useRef(null);
   const exploreWrapRef = useRef(null);
@@ -117,6 +129,117 @@ export default function RightPanel() {
       setMountedViews((prev) => ({ ...prev, [activePanel]: true }));
     }
   }, [activePanel, mountedViews]);
+
+  // Close tablet drawer on route change
+  useEffect(() => {
+    if (isTablet && isDrawerOpen) {
+      closePanel();
+    }
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle tablet drawer focus trap, Esc key & focus restoration
+  useEffect(() => {
+    if (!isTablet || !isDrawerOpen) return;
+
+    // Remember the element that had focus before drawer opened
+    triggerFocusRef.current = document.activeElement;
+
+    // Focus the first interactive control inside the drawer
+    const timer = setTimeout(() => {
+      const focusable = drawerPanelRef.current?.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable && focusable.length > 0) {
+        focusable[0].focus();
+      }
+    }, 60);
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closePanel();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusableEls = drawerPanelRef.current?.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusableEls || focusableEls.length === 0) return;
+
+        const first = focusableEls[0];
+        const last = focusableEls[focusableEls.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', handleKeyDown);
+
+      // Restore focus to previous element or the rail button
+      if (triggerFocusRef.current && document.contains(triggerFocusRef.current)) {
+        triggerFocusRef.current.focus();
+      } else if (activePanel) {
+        const railBtn = document.querySelector(`[data-nav-id="${activePanel}"]`);
+        railBtn?.focus?.();
+      }
+    };
+  }, [isTablet, isDrawerOpen, activePanel, closePanel]);
+
+  // Lock background scroll on tablet while drawer is open (compensate for scrollbar)
+  useEffect(() => {
+    if (isTablet && isDrawerOpen) {
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+      const originalOverflow = document.body.style.overflow;
+      const originalPaddingRight = document.body.style.paddingRight;
+
+      document.body.style.overflow = 'hidden';
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`;
+      }
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.paddingRight = originalPaddingRight;
+      };
+    }
+  }, [isTablet, isDrawerOpen]);
+
+  // Touch Swipe-Right Gesture Handler for Tablet Drawer
+  function handleTouchStart(e) {
+    if (!isTablet) return;
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+  }
+
+  function handleTouchEnd(e) {
+    if (!isTablet || touchStartXRef.current === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaX = touchEndX - touchStartXRef.current;
+    const deltaY = touchEndY - touchStartYRef.current;
+
+    // Swipe right gesture (at least 60px rightward and predominantly horizontal)
+    if (deltaX > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
+      playSound('reaction');
+      closePanel();
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+  }
 
   // Handle focus when already-open view is clicked on LeftRail
   useEffect(() => {
@@ -176,15 +299,15 @@ export default function RightPanel() {
     window.dispatchEvent(new CustomEvent('shammah:mark-all-notifications-read'));
   }
 
-  function handleToggleDark(nextVal) {
+  function handleToggleDark() {
     const updated = toggleTheme(dark);
     setDark(updated);
   }
 
   const currentUser = session?.user ? { ...profile, id: session.user.id } : null;
 
-  // If collapsed, render sleek mini dock strip
-  if (isCollapsed || !activePanel) {
+  // On desktop (>=1100px), if collapsed, render sleek mini dock strip
+  if ((isCollapsed || !activePanel) && !isTablet) {
     return (
       <aside className="dl-right-panel dl-panel-card dl-panel-collapsed" aria-label="Collapsed Side Panel">
         <div className="dl-collapsed-dock">
@@ -223,8 +346,21 @@ export default function RightPanel() {
     );
   }
 
+  // On tablet, when not open, don't show any collapsed dock (drawer sits hidden offscreen)
+  if (isTablet && !isDrawerOpen) {
+    return null;
+  }
+
   return (
-    <aside className="dl-right-panel dl-panel-card" aria-label="Side Panel">
+    <aside
+      ref={drawerPanelRef}
+      className={`dl-right-panel dl-panel-card${isTablet ? ' dl-drawer-panel' : ''}`}
+      aria-label={isTablet ? activeTabObj.title : 'Side Panel'}
+      role={isTablet ? 'dialog' : 'complementary'}
+      aria-modal={isTablet ? 'true' : undefined}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Pinned Header: Segmented 3-tab control */}
       <div className="dl-panel-header">
         <div className="dl-panel-tabs" role="tablist" aria-label="Panel tabs">
@@ -294,10 +430,10 @@ export default function RightPanel() {
               type="button"
               className="dl-panel-action-btn icon-only"
               onClick={closePanel}
-              title="Collapse panel"
-              aria-label="Collapse panel"
+              title={isTablet ? 'Close drawer' : 'Collapse panel'}
+              aria-label={isTablet ? 'Close drawer' : 'Collapse panel'}
             >
-              <ChevronRight size={15} />
+              {isTablet ? <X size={16} /> : <ChevronRight size={15} />}
             </button>
           </div>
         </div>

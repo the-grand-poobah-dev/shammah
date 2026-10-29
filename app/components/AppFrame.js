@@ -1,14 +1,17 @@
 'use client';
 import { useEffect } from 'react';
 import { LayoutModeProvider, useLayoutMode } from '../lib/useLayoutMode';
-import { SidePanelProvider } from '../lib/useSidePanel';
+import { SidePanelProvider, useSidePanel } from '../lib/useSidePanel';
 import LeftRail from './LeftRail';
 import RightPanel from './RightPanel';
 
 function AppFrameLayout({ children }) {
   const mode = useLayoutMode();
+  const { activePanel, isCollapsed, closePanel } = useSidePanel();
   // Default to 'on' unless explicitly set to 'off'
   const isEnabled = process.env.NEXT_PUBLIC_DESKTOP_LAYOUT !== 'off';
+  const isTablet = mode === 'tablet';
+  const isDrawerOpen = isTablet && Boolean(activePanel) && !isCollapsed;
 
   // Live measurement of .sticky-header height so desktop columns remain pinned at exact top offset
   useEffect(() => {
@@ -56,7 +59,21 @@ function AppFrameLayout({ children }) {
         <LeftRail />
       </aside>
       <div className="dl-center">{children}</div>
-      <aside className="dl-right" aria-label="Side panel">
+
+      {/* Tablet Drawer Scrim at z-index 58 */}
+      <div
+        className={`dl-drawer-scrim${isDrawerOpen ? ' open' : ''}`}
+        onClick={closePanel}
+        aria-hidden="true"
+      />
+
+      <aside
+        className={`dl-right${isDrawerOpen ? ' dl-drawer-open' : ''}`}
+        aria-label="Side panel"
+        data-open={isDrawerOpen ? 'true' : 'false'}
+        role={isTablet ? 'dialog' : undefined}
+        aria-modal={isTablet && isDrawerOpen ? 'true' : undefined}
+      >
         <RightPanel />
       </aside>
     </div>
