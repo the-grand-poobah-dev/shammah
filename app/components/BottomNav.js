@@ -490,9 +490,6 @@ export default function BottomNav() {
           >
             <span className="tab-icon-wrap">
               <Building2 size={19} strokeWidth={activeTab === 'churches' ? 2.4 : 1.8} className="tab-icon" />
-              {getBadgeCount('churches') > 0 && (
-                <span className="tab-badge-num">{getBadgeCount('churches')}</span>
-              )}
             </span>
             <span className="tab-label">Institutions</span>
           </button>
@@ -522,11 +519,6 @@ export default function BottomNav() {
           >
             <span className="tab-icon-wrap">
               <Compass size={19} strokeWidth={activeTab === 'menu' ? 2.4 : 1.8} className="tab-icon" />
-              {((getBadgeCount('polls') || 0) + (getBadgeCount('fundraisers') || 0) + (getBadgeCount('challenges') || 0) + (getBadgeCount('games') || 0)) > 0 && activeTab !== 'menu' && (
-                <span className="tab-badge-num">
-                  {(getBadgeCount('polls') || 0) + (getBadgeCount('fundraisers') || 0) + (getBadgeCount('challenges') || 0) + (getBadgeCount('games') || 0)}
-                </span>
-              )}
             </span>
             <span className="tab-label">Explore</span>
           </button>

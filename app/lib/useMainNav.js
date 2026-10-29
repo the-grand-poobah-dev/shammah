@@ -251,13 +251,7 @@ export function useMainNav() {
     if (itemId === 'messages') return unreadMessages;
     if (itemId === 'alerts') return unreadAlerts;
     if (itemId === 'home') return Number(contentBadges.home) || 0;
-    if (itemId === 'polls') return Number(contentBadges.polls) || 0;
-    if (itemId === 'fundraisers') return Number(contentBadges.fundraisers) || 0;
-    if (itemId === 'podcasts' || itemId === 'audio') return Number(contentBadges.podcasts) || 0;
-    if (itemId === 'courses') return Number(contentBadges.courses) || 0;
-    if (itemId === 'challenges') return Number(contentBadges.challenges) || 0;
-    if (itemId === 'games') return Number(contentBadges.games) || 0;
-    return Number(contentBadges[itemId]) || 0;
+    return 0;
   }, [unreadMessages, unreadAlerts, contentBadges]);
 
   return {
