@@ -52,6 +52,15 @@ import {
   ExploreTabsBanner,
   CommunityProjectsGivingCard,
 } from './components/HomeHighlights';
+import {
+  PollsShelfWidget,
+  AudioShelfWidget,
+  CoursesShelfWidget,
+  DailyVerseShelfWidget,
+  FundraisersShelfWidget,
+  FaithChallengesShelfWidget,
+  ArcadeGamesShelfWidget,
+} from './components/FeedShelves';
 import { getHomefeedPostsWithRss } from './lib/rssManager';
 import { playSound, isSoundEnabled, setSoundEnabled } from './lib/soundEffects';
 import { rankPostsWithAlgorithm } from './lib/feedAlgorithm';
@@ -1771,14 +1780,6 @@ export default function Feed() {
           </>
         )}
 
-        {tab === 'home' && section === 'all' && session && (
-          <div className="verse-card">
-            <span className="mut-light">Verse of the day</span>
-            <p>God is our refuge and strength, a very present help in trouble.</p>
-            <span className="mut-light">Psalm 46:1</span>
-          </div>
-        )}
-
         {/* Active Category Filter Banner */}
         {tab === 'home' && section === 'all' && activeCategory && (
           <div className="active-category-banner">
@@ -1875,41 +1876,111 @@ export default function Feed() {
                 </button>
               </div>
             )}
+            {!searchTerm && (
+              <div className="mt-4 flex flex-col gap-3 w-full">
+                <DailyVerseShelfWidget onSelectSection={(secId) => setSection(secId)} />
+                <PollsShelfWidget onSelectSection={(secId) => setSection(secId)} />
+                <AudioShelfWidget onSelectSection={(secId) => setSection(secId)} />
+                <CoursesShelfWidget onSelectSection={(secId) => setSection(secId)} />
+                <FundraisersShelfWidget onSelectSection={(secId) => setSection(secId)} currentUser={profile} />
+                <FaithChallengesShelfWidget onSelectSection={(secId) => setSection(secId)} />
+                <ArcadeGamesShelfWidget onSelectSection={(secId) => setSection(secId)} />
+              </div>
+            )}
           </div>
         )}
 
         {tab === 'home' &&
           section === 'all' &&
-          visiblePosts.map((p, i) => (
-            <Fragment key={p.id}>
-              {i === 1 && !searchTerm && (
-                <TrendingReelsCard onSelectSection={(secId) => setSection(secId)} />
-              )}
-              {i === 2 && !searchTerm && (
-                <CommunityProjectsGivingCard currentUser={profile} />
-              )}
-              {i === 3 && !searchTerm && (
-                <PeopleToFollowCard />
-              )}
-              <PostCard
-                post={p}
-                session={session}
-                openAuth={openAuth}
-                pollOptions={pollOptionsByPost[p.id]}
-                pollCounts={pollCountsByPost[p.id] || {}}
-                myVote={myVoteByPost[p.id]}
-                onVote={(optionId) => handleVote(p.id, optionId)}
-                isAdmin={isAdmin}
-                onTogglePin={handleTogglePin}
-                onSelectCategory={handleFilterCategory}
-                onOpenDirectMessage={(recipient) => {
-                  const convId =
-                    recipient?.id || p.author_id || p.user_id || p.profiles?.id;
-                  requestTab('messages', { conversationId: convId });
-                }}
-              />
-            </Fragment>
-          ))}
+          visiblePosts.map((p, i) => {
+            // Intermittent shelf insertion algorithm:
+            // Appears after every 3-5 posts even if user scrolls deep downwards.
+            // i=1 (slot 0) -> Reels & Testimonies
+            // i=4 (slot 1) -> Polls
+            // i=8 (slot 2) -> Audio Sermons & Worship
+            // i=12 (slot 3) -> Daily Verse of the Day
+            // i=16 (slot 4) -> Courses & Discipleship Academy
+            // i=20 (slot 5) -> Kingdom Causes & Fundraisers
+            // i=24 (slot 6) -> Faith Challenges & Streaks
+            // i=28 (slot 7) -> Faith Arcade Games
+            // i=32 (slot 8) -> People to Follow
+            // i=36 (slot 9) -> Cycles through again seamlessly!
+            let interleavedWidget = null;
+            if (!searchTerm) {
+              if (i === 1) {
+                interleavedWidget = <TrendingReelsCard onSelectSection={(secId) => setSection(secId)} />;
+              } else if (i === 4) {
+                interleavedWidget = <PollsShelfWidget onSelectSection={(secId) => setSection(secId)} />;
+              } else if (i > 4 && (i - 4) % 4 === 0) {
+                const slotIndex = Math.floor((i - 4) / 4);
+                const shelfType = slotIndex % 8;
+                switch (shelfType) {
+                  case 1:
+                    interleavedWidget = <AudioShelfWidget onSelectSection={(secId) => setSection(secId)} />;
+                    break;
+                  case 2:
+                    interleavedWidget = <DailyVerseShelfWidget onSelectSection={(secId) => setSection(secId)} />;
+                    break;
+                  case 3:
+                    interleavedWidget = <CoursesShelfWidget onSelectSection={(secId) => setSection(secId)} />;
+                    break;
+                  case 4:
+                    interleavedWidget = <FundraisersShelfWidget onSelectSection={(secId) => setSection(secId)} currentUser={profile} />;
+                    break;
+                  case 5:
+                    interleavedWidget = <FaithChallengesShelfWidget onSelectSection={(secId) => setSection(secId)} />;
+                    break;
+                  case 6:
+                    interleavedWidget = <ArcadeGamesShelfWidget onSelectSection={(secId) => setSection(secId)} />;
+                    break;
+                  case 7:
+                    interleavedWidget = <PeopleToFollowCard />;
+                    break;
+                  case 0:
+                    interleavedWidget = <TrendingReelsCard onSelectSection={(secId) => setSection(secId)} />;
+                    break;
+                  default:
+                    interleavedWidget = null;
+                }
+              }
+            }
+
+            return (
+              <Fragment key={p.id}>
+                {interleavedWidget}
+                <PostCard
+                  post={p}
+                  session={session}
+                  openAuth={openAuth}
+                  pollOptions={pollOptionsByPost[p.id]}
+                  pollCounts={pollCountsByPost[p.id] || {}}
+                  myVote={myVoteByPost[p.id]}
+                  onVote={(optionId) => handleVote(p.id, optionId)}
+                  isAdmin={isAdmin}
+                  onTogglePin={handleTogglePin}
+                  onSelectCategory={handleFilterCategory}
+                  onOpenDirectMessage={(recipient) => {
+                    const convId =
+                      recipient?.id || p.author_id || p.user_id || p.profiles?.id;
+                    requestTab('messages', { conversationId: convId });
+                  }}
+                />
+              </Fragment>
+            );
+          })}
+
+        {/* If fewer than 5 posts, ensure upcoming shelves remain accessible below */}
+        {tab === 'home' && section === 'all' && visiblePosts.length > 0 && visiblePosts.length < 5 && !searchTerm && (
+          <div className="feed-tail-shelves flex flex-col gap-3 my-3">
+            <PollsShelfWidget onSelectSection={(secId) => setSection(secId)} />
+            <AudioShelfWidget onSelectSection={(secId) => setSection(secId)} />
+            <DailyVerseShelfWidget onSelectSection={(secId) => setSection(secId)} />
+            <CoursesShelfWidget onSelectSection={(secId) => setSection(secId)} />
+            <FundraisersShelfWidget onSelectSection={(secId) => setSection(secId)} currentUser={profile} />
+            <FaithChallengesShelfWidget onSelectSection={(secId) => setSection(secId)} />
+            <ArcadeGamesShelfWidget onSelectSection={(secId) => setSection(secId)} />
+          </div>
+        )}
       </main>
 
       {/* Create Post Dialog / Modal (Triggered by Bottom Nav Plus Icon or Compose Action) */}

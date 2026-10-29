@@ -11,6 +11,7 @@ import {
 import { getTotalUnreadMessagesCount } from './inboxManager';
 import { getUnreadNotificationCount, fetchRealNotifications } from './notificationsManager';
 import { playSound } from './soundEffects';
+import { subscribeToBadges, getAllContentBadges } from './contentBadgeManager';
 
 import { useLayoutMode } from './useLayoutMode';
 
@@ -73,6 +74,14 @@ export function useMainNav() {
   const [activePanel, setActivePanel] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const [contentBadges, setContentBadges] = useState(() => getAllContentBadges());
+
+  useEffect(() => {
+    const unsub = subscribeToBadges((badges) => {
+      setContentBadges(badges);
+    });
+    return unsub;
+  }, []);
 
   const syncBadges = useCallback(async () => {
     try {
@@ -241,8 +250,15 @@ export function useMainNav() {
   const getBadgeCount = useCallback((itemId) => {
     if (itemId === 'messages') return unreadMessages;
     if (itemId === 'alerts') return unreadAlerts;
-    return 0;
-  }, [unreadMessages, unreadAlerts]);
+    if (itemId === 'home') return Number(contentBadges.home) || 0;
+    if (itemId === 'polls') return Number(contentBadges.polls) || 0;
+    if (itemId === 'fundraisers') return Number(contentBadges.fundraisers) || 0;
+    if (itemId === 'podcasts' || itemId === 'audio') return Number(contentBadges.podcasts) || 0;
+    if (itemId === 'courses') return Number(contentBadges.courses) || 0;
+    if (itemId === 'challenges') return Number(contentBadges.challenges) || 0;
+    if (itemId === 'games') return Number(contentBadges.games) || 0;
+    return Number(contentBadges[itemId]) || 0;
+  }, [unreadMessages, unreadAlerts, contentBadges]);
 
   return {
     navItems: NAV_ITEMS,
@@ -250,6 +266,7 @@ export function useMainNav() {
     activePanel,
     unreadMessages,
     unreadAlerts,
+    contentBadges,
     getBadgeCount,
     handleTabClick,
     handleRailItemClick,

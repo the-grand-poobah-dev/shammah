@@ -21,6 +21,7 @@ import {
 import { playSound } from '../lib/soundEffects';
 import PopupSheet from './PopupSheet';
 import { ScrollAffordanceWrapper } from './ScrollAffordance';
+import { subscribeToBadges, getAllContentBadges } from '../lib/contentBadgeManager';
 
 export const TOP_NAV_SECTIONS = [
   { id: 'all', label: 'All', icon: Flame },
@@ -143,6 +144,14 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
   const router = useRouter();
   const [currentSection, setCurrentSection] = useState(activeSection);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [contentBadges, setContentBadges] = useState(() => getAllContentBadges());
+
+  useEffect(() => {
+    const unsub = subscribeToBadges((badges) => {
+      setContentBadges(badges);
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     setCurrentSection(activeSection);
@@ -177,6 +186,11 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
     currentSection === 'challenges' ||
     currentSection === 'games';
 
+  const moreItemsTotalBadges = MORE_DROPDOWN_ITEMS.reduce(
+    (sum, item) => sum + (Number(contentBadges[item.id]) || 0),
+    0
+  );
+
   return (
     <nav
       className={`top-nav-wrapper${isHome ? ' top-nav-home' : ' top-nav-subpage'} no-scrollbar`}
@@ -192,6 +206,8 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
             {TOP_NAV_SECTIONS.map((s) => {
               const Icon = s.icon;
               const isActive = pathname === '/' && currentSection === s.id;
+              const badgeNum = Number(contentBadges[s.id]) || 0;
+
               return (
                 <motion.button
                   key={s.id}
@@ -215,6 +231,9 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                     transition={{ duration: 0.32, ease: 'easeInOut' }}
                   >
                     <Icon size={18} strokeWidth={isActive ? 2.3 : 1.8} className="top-nav-icon" />
+                    {badgeNum > 0 && !isActive && (
+                      <span className="top-nav-badge-num">{badgeNum}</span>
+                    )}
                   </motion.span>
                   <span className="top-nav-label-small">{s.label}</span>
                 </motion.button>
@@ -227,6 +246,8 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
               const isItemActive =
                 (item.isCategories && pathname === '/categories') ||
                 (pathname === '/' && currentSection === item.id);
+              const itemBadge = Number(contentBadges[item.id]) || 0;
+
               return (
                 <motion.button
                   key={item.id}
@@ -251,6 +272,9 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                     style={{ color: isItemActive ? undefined : item.color }}
                   >
                     <ItemIcon size={18} strokeWidth={isItemActive ? 2.3 : 2} className="top-nav-icon" />
+                    {itemBadge > 0 && !isItemActive && (
+                      <span className="top-nav-badge-num">{itemBadge}</span>
+                    )}
                   </motion.span>
                   <span className="top-nav-label-small">{item.label}</span>
                 </motion.button>
@@ -291,6 +315,9 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                   ) : (
                     <MoreHorizontal size={18} strokeWidth={moreOpen ? 2.3 : 1.8} className="top-nav-icon" />
                   )}
+                  {moreItemsTotalBadges > 0 && !isMoreActive && (
+                    <span className="top-nav-badge-num">{moreItemsTotalBadges}</span>
+                  )}
                 </motion.span>
                 <span className="top-nav-label-small flex-center-gap">
                   <span>More</span>
@@ -308,6 +335,8 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                   {MORE_DROPDOWN_ITEMS.map((item) => {
                     const ItemIcon = item.icon;
                     const isItemActive = currentSection === item.id;
+                    const itemBadge = Number(contentBadges[item.id]) || 0;
+
                     return (
                       <button
                         key={item.id}
@@ -328,6 +357,9 @@ export default function TopNav({ activeSection = 'all', onSelectSection, isHome 
                         <div className="top-nav-more-text">
                           <span className="top-nav-more-title">
                             <span>{item.label}</span>
+                            {itemBadge > 0 && (
+                              <span className="top-nav-badge-inline">{itemBadge} new</span>
+                            )}
                             {isItemActive && <Check size={14} style={{ color: item.color }} />}
                           </span>
                           <span className="top-nav-more-desc">{item.desc}</span>
