@@ -259,7 +259,24 @@ export default function UserProfileView({
                   </button>
 
                   <Link
-                    href={`/?tab=messages`}
+                    href={`/?tab=messages${targetProfile?.id ? `&recipient=${targetProfile.id}` : ''}`}
+                    onClick={(e) => {
+                      if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+                        e.preventDefault();
+                        window.dispatchEvent(
+                          new CustomEvent('shammah:open-panel', {
+                            detail: { panel: 'messages', conversationId: targetProfile?.id },
+                          })
+                        );
+                        if (targetProfile?.id) {
+                          window.dispatchEvent(
+                            new CustomEvent('shammah:open-conversation', {
+                              detail: { recipientId: targetProfile.id },
+                            })
+                          );
+                        }
+                      }
+                    }}
                     className={`profile-action-btn secondary${privacySettings.inboxPermission === 'no_one' ? ' disabled' : ''}`}
                     title={privacySettings.inboxPermission === 'no_one' ? 'Inbox closed by user' : 'Send direct message'}
                   >

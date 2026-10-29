@@ -322,7 +322,7 @@ export default function RightPanel() {
   // On desktop (>=1100px), if collapsed, render sleek mini dock strip
   if ((isCollapsed || !activePanel) && !isTablet) {
     return (
-      <aside className="dl-right-panel dl-panel-card dl-panel-collapsed" aria-label="Collapsed Side Panel">
+      <div className="dl-right-panel dl-panel-card dl-panel-collapsed" aria-label="Collapsed Side Panel">
         <div className="dl-collapsed-dock">
           <button
             type="button"
@@ -356,7 +356,7 @@ export default function RightPanel() {
             })}
           </div>
         </div>
-      </aside>
+      </div>
     );
   }
 
@@ -366,11 +366,11 @@ export default function RightPanel() {
   }
 
   return (
-    <aside
+    <div
       ref={drawerPanelRef}
       className={`dl-right-panel dl-panel-card${isTablet ? ' dl-drawer-panel' : ''}`}
-      aria-label={isTablet ? activeTabObj.title : 'Side Panel'}
-      role={isTablet ? 'dialog' : 'complementary'}
+      aria-label={isTablet ? activeTabObj.title : 'Side Panel Content'}
+      role={isTablet ? 'dialog' : undefined}
       aria-modal={isTablet ? 'true' : undefined}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -573,6 +573,6 @@ export default function RightPanel() {
           </div>,
           document.body
         )}
-    </aside>
+    </div>
   );
 }

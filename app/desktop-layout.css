@@ -117,8 +117,8 @@
   }
 
   /* Prevent horizontal scroll while preserving position: sticky */
-  html,
-  body,
+  html:has(.app-layout[data-enabled='true']),
+  body:has(.app-layout[data-enabled='true']),
   .app-layout[data-enabled='true'],
   .app-layout[data-enabled='true'] .shell {
     overflow-x: clip !important;
@@ -287,14 +287,17 @@
     box-sizing: border-box;
   }
 
-  /* Hide only the bottom pill navigation bar on tablet and desktop.
+  /* Hide only the bottom pill navigation bar on tablet and desktop when desktop layout is enabled.
      Do NOT hide .floating-left-actions-wrap or modals BottomNav owns. */
-  .bottom-nav {
+  .app-layout[data-enabled='true'] ~ .bottom-nav,
+  body:has(.app-layout[data-enabled='true']) .bottom-nav {
     display: none !important;
   }
 
   /* Move persistent audio player bar down (no longer needs to clear the bottom nav pill) */
-  .persistent-audio-player-bar {
+  .app-layout[data-enabled='true'] ~ .persistent-audio-player-bar,
+  .app-layout[data-enabled='true'] ~ * .persistent-audio-player-bar,
+  body:has(.app-layout[data-enabled='true']) .persistent-audio-player-bar {
     bottom: 16px !important;
     z-index: 42 !important;
   }
@@ -805,9 +808,9 @@
 
   /* Reduced Motion Support */
   @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
+    .app-layout[data-enabled='true'] *,
+    .app-layout[data-enabled='true'] *::before,
+    .app-layout[data-enabled='true'] *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
@@ -2097,7 +2100,7 @@
   }
 
   .app-layout[data-enabled='true'] .dl-right .inbox-back-to-list-btn,
-  .is-panel-back-btn {
+  .app-layout[data-enabled='true'] .is-panel-back-btn {
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
