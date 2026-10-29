@@ -26,6 +26,96 @@
    and gated by .app-layout[data-enabled='true'].
    -------------------------------------------------------------------------- */
 @media (min-width: 768px) {
+  /* ==========================================================================
+     Layout Design Tokens & Unified Interactive Outline Scale
+     ========================================================================== */
+  :root {
+    /* Radius Scale (10 / 14 / 18 / 22 / Pill) */
+    --dl-radius-control: 10px;
+    --dl-radius-tile: 14px;
+    --dl-radius-card: 18px;
+    --dl-radius-sheet: 22px;
+    --dl-radius-pill: 9999px;
+
+    /* Spacing Scale (4 / 8 / 12 / 16 / 24) */
+    --dl-gap-xs: 4px;
+    --dl-gap-sm: 8px;
+    --dl-gap-md: 12px;
+    --dl-gap: 16px;
+    --dl-gap-lg: 24px;
+
+    /* Outlines & Interactive Physics */
+    --dl-outline-w: 1.5px;
+    --dl-ease: 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    --dl-ease-in-out: 0.22s ease-out;
+    --dl-active-scale: 0.98;
+
+    /* Dynamic Sec-Color Tint & Glows */
+    --dl-hover-tint: color-mix(in srgb, var(--sec-color, var(--teal)) 10%, var(--surface));
+    --dl-active-tint: color-mix(in srgb, var(--sec-color, var(--teal)) 14%, var(--surface));
+    --dl-glow: 0 0 14px color-mix(in srgb, var(--sec-color, var(--teal)) 35%, transparent);
+    --dl-glow-subtle: 0 0 10px color-mix(in srgb, var(--sec-color, var(--teal)) 24%, transparent);
+    --dl-skeleton-bg: color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+
+  [data-theme='light'] {
+    --dl-hover-tint: color-mix(in srgb, var(--sec-color, var(--teal)) 8%, #ffffff);
+    --dl-active-tint: color-mix(in srgb, var(--sec-color, var(--teal)) 12%, #ffffff);
+    --dl-glow: 0 0 12px color-mix(in srgb, var(--sec-color, var(--teal)) 24%, transparent);
+    --dl-glow-subtle: 0 0 8px color-mix(in srgb, var(--sec-color, var(--teal)) 16%, transparent);
+    --dl-skeleton-bg: color-mix(in srgb, var(--ink) 7%, transparent);
+  }
+
+  /* Unified Interactive Surface across Rails, Tiles, Tabs & Rows */
+  .dl-outline-interactive {
+    position: relative;
+    border: var(--dl-outline-w) solid transparent;
+    transition:
+      border-color var(--dl-ease),
+      background var(--dl-ease),
+      box-shadow var(--dl-ease),
+      transform var(--dl-ease),
+      color var(--dl-ease),
+      opacity var(--dl-ease);
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (hover: hover) {
+    .dl-outline-interactive:hover:not(:disabled):not([aria-disabled='true']) {
+      border-color: var(--sec-color, var(--teal));
+      background: var(--dl-hover-tint);
+      box-shadow: var(--dl-glow);
+    }
+  }
+
+  .dl-outline-interactive:focus-visible:not(:disabled):not([aria-disabled='true']) {
+    border-color: var(--sec-color, var(--teal));
+    background: var(--dl-hover-tint);
+    box-shadow: var(--dl-glow);
+  }
+
+  .dl-outline-interactive.active:not(:disabled):not([aria-disabled='true']),
+  .dl-outline-interactive[aria-selected='true']:not(:disabled):not([aria-disabled='true']) {
+    border-color: var(--sec-color, var(--teal));
+    background: var(--dl-active-tint);
+    box-shadow: var(--dl-glow);
+  }
+
+  .dl-outline-interactive:active:not(:disabled):not([aria-disabled='true']) {
+    transform: scale(var(--dl-active-scale));
+  }
+
+  .dl-outline-interactive:disabled,
+  .dl-outline-interactive[aria-disabled='true'],
+  .dl-outline-interactive.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed !important;
+    pointer-events: none;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
   /* Prevent horizontal scroll while preserving position: sticky */
   html,
   body,
@@ -120,7 +210,7 @@
     }
   }
 
-  /* Side Columns: Sticky Positioning & Internal Containment */
+  /* Side Columns: Sticky Positioning, Internal Containment & Soft Scroll Fades */
   .app-layout[data-enabled='true'] .dl-left,
   .app-layout[data-enabled='true'] .dl-right {
     display: block;
@@ -133,6 +223,9 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
     z-index: 40;
+    /* Soft top & bottom scroll edge fades when content overflows */
+    mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
   }
 
   .app-layout[data-enabled='true'] .dl-left::-webkit-scrollbar,
@@ -712,8 +805,29 @@
 
   /* Reduced Motion Support */
   @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
     .dl-icon-wrap::before {
       animation: none !important;
+    }
+    .dl-outline-interactive,
+    .dl-tableau-tile,
+    .dl-nav-item,
+    .dl-profile-row,
+    .dl-auth-btn {
+      transform: none !important;
+      transition: none !important;
+    }
+    .dl-outline-interactive:active,
+    .dl-nav-item:active,
+    .dl-tableau-tile:active {
+      transform: none !important;
     }
     .app-layout[data-enabled='true'] .dl-right {
       transition: none !important;
@@ -1841,7 +1955,7 @@
     justify-content: center;
   }
 
-  /* Panel Body: Container Query & Scrolling */
+  /* Panel Body: Container Query & Scrolling with Soft Edge Fades */
   .dl-panel-body {
     flex: 1 1 0%;
     min-height: 0;
@@ -1853,6 +1967,9 @@
     container-name: dl-panel;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    /* Soft top & bottom scroll edge fades when messages or alerts overflow */
+    mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
   }
 
   .dl-panel-body::-webkit-scrollbar {
@@ -1914,6 +2031,38 @@
     display: flex !important;
     flex-direction: column !important;
     min-height: 0 !important;
+  }
+
+  .app-layout[data-enabled='true'] .dl-right .inbox-conv-item {
+    border-radius: var(--dl-radius-tile, 14px) !important;
+    border: var(--dl-outline-w) solid transparent !important;
+    margin: 2px 8px !important;
+    padding: 8px 10px !important;
+    box-sizing: border-box !important;
+    --sec-color: #0ea5e9;
+    transition:
+      border-color var(--dl-ease),
+      background var(--dl-ease),
+      box-shadow var(--dl-ease),
+      transform var(--dl-ease) !important;
+  }
+
+  @media (hover: hover) {
+    .app-layout[data-enabled='true'] .dl-right .inbox-conv-item:hover {
+      border-color: var(--sec-color) !important;
+      background: var(--dl-hover-tint) !important;
+      box-shadow: var(--dl-glow-subtle) !important;
+    }
+  }
+
+  .app-layout[data-enabled='true'] .dl-right .inbox-conv-item.active {
+    border-color: var(--sec-color) !important;
+    background: var(--dl-active-tint) !important;
+    box-shadow: var(--dl-glow-subtle) !important;
+  }
+
+  .app-layout[data-enabled='true'] .dl-right .inbox-conv-item:active {
+    transform: scale(var(--dl-active-scale)) !important;
   }
 
   .app-layout[data-enabled='true'] .dl-right .inbox-main-thread,
@@ -2189,10 +2338,30 @@
   }
 
   .app-layout[data-enabled='true'] .dl-right .notif-card-item {
-    padding: 10px !important;
-    border-radius: 10px !important;
+    padding: 10px 12px !important;
+    border-radius: var(--dl-radius-tile, 14px) !important;
+    border: var(--dl-outline-w) solid transparent !important;
     gap: 10px !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 6px !important;
+    box-sizing: border-box !important;
+    --sec-color: #ec4899;
+    transition:
+      border-color var(--dl-ease),
+      background var(--dl-ease),
+      box-shadow var(--dl-ease),
+      transform var(--dl-ease) !important;
+  }
+
+  @media (hover: hover) {
+    .app-layout[data-enabled='true'] .dl-right .notif-card-item:hover {
+      border-color: var(--sec-color) !important;
+      background: var(--dl-hover-tint) !important;
+      box-shadow: var(--dl-glow-subtle) !important;
+    }
+  }
+
+  .app-layout[data-enabled='true'] .dl-right .notif-card-item:active {
+    transform: scale(var(--dl-active-scale)) !important;
   }
 
   .app-layout[data-enabled='true'] .dl-right .notif-card-title {
@@ -2236,6 +2405,31 @@
     justify-content: flex-start !important;
   }
 
+  .dl-explore-panel-shell .explore-channel-card,
+  .dl-explore-panel-shell .explore-tool-btn {
+    border-radius: var(--dl-radius-tile, 14px) !important;
+    border: var(--dl-outline-w) solid transparent !important;
+    transition:
+      border-color var(--dl-ease),
+      background var(--dl-ease),
+      box-shadow var(--dl-ease),
+      transform var(--dl-ease) !important;
+  }
+
+  @media (hover: hover) {
+    .dl-explore-panel-shell .explore-channel-card:hover,
+    .dl-explore-panel-shell .explore-tool-btn:hover {
+      border-color: var(--sec-color, #10b981) !important;
+      background: var(--dl-hover-tint) !important;
+      box-shadow: var(--dl-glow-subtle) !important;
+    }
+  }
+
+  .dl-explore-panel-shell .explore-channel-card:active,
+  .dl-explore-panel-shell .explore-tool-btn:active {
+    transform: scale(var(--dl-active-scale)) !important;
+  }
+
   /* --------------------------------------------------------------------------
      Signed-Out Gate Card for Panel
      -------------------------------------------------------------------------- */
@@ -2273,7 +2467,7 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--dl-skeleton-bg);
     flex-shrink: 0;
   }
 
@@ -2287,7 +2481,7 @@
   .dl-skeleton-line {
     height: 10px;
     border-radius: 5px;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--dl-skeleton-bg);
     width: 80%;
   }
 
@@ -2320,8 +2514,8 @@
   .dl-skeleton-bubble {
     width: 60%;
     height: 34px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.08);
+    border-radius: var(--dl-radius-tile, 14px);
+    background: var(--dl-skeleton-bg);
   }
 
   @keyframes dlPulse {

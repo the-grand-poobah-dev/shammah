@@ -296,7 +296,8 @@ export default function ExploreShammahWidget() {
         </div>
         <button
           type="button"
-          className={`dl-tableau-edit-toggle${isEditing ? ' active' : ''}`}
+          className={`dl-tableau-edit-toggle dl-outline-interactive${isEditing ? ' active' : ''}`}
+          style={{ '--sec-color': 'var(--teal)' }}
           onClick={() => {
             playSound('reaction');
             setIsEditing(!isEditing);
@@ -333,7 +334,7 @@ export default function ExploreShammahWidget() {
               >
                 <button
                   type="button"
-                  className={`dl-tableau-tile${isEditing ? ' is-editing' : ''}`}
+                  className={`dl-tableau-tile dl-outline-interactive${isEditing ? ' is-editing' : ''}`}
                   style={{
                     '--sec-color': item.color,
                   }}
@@ -393,13 +394,14 @@ export default function ExploreShammahWidget() {
             <div className="dl-tableau-tile-wrap sm">
               <button
                 type="button"
-                className="dl-tableau-add-tile"
+                className="dl-tableau-add-tile dl-outline-interactive"
+                style={{ '--sec-color': 'var(--teal)' }}
                 onClick={openEditorForAdd}
                 aria-label="Add new shortcut"
                 title="Add new shortcut"
               >
                 <Plus size={18} />
-                <span>Add tile</span>
+                <span>Add Tile</span>
               </button>
             </div>
           )}
@@ -407,14 +409,18 @@ export default function ExploreShammahWidget() {
       ) : (
         /* Empty State */
         <div className="dl-tableau-empty-state">
-          <p className="dl-empty-desc">No shortcuts pinned to your tableau.</p>
+          <p className="dl-empty-desc">No shortcuts pinned to your tableau yet.</p>
+          <p className="dl-empty-subdesc" style={{ fontSize: '11px', color: 'var(--ink-muted)', margin: '0 0 10px' }}>
+            Pin your favourite devotionals, Bible tools, or fellowship spaces for quick access.
+          </p>
           <button
             type="button"
-            className="dl-restore-btn"
+            className="dl-restore-btn dl-outline-interactive"
+            style={{ '--sec-color': 'var(--teal)' }}
             onClick={handleResetDefaults}
           >
             <RotateCcw size={13} />
-            <span>Restore defaults</span>
+            <span>Restore Defaults</span>
           </button>
         </div>
       )}

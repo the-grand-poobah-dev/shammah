@@ -26,7 +26,8 @@ export default function LeftRail() {
         {isSignedIn ? (
           <Link
             href="/profile"
-            className="dl-profile-row"
+            className="dl-profile-row dl-outline-interactive"
+            style={{ '--sec-color': 'var(--teal)' }}
             title={`Signed in as ${displayName}. View profile.`}
             data-nav-id="profile"
           >
@@ -52,7 +53,8 @@ export default function LeftRail() {
           <div className="dl-auth-row">
             <button
               type="button"
-              className="dl-auth-btn signin"
+              className="dl-auth-btn dl-outline-interactive signin"
+              style={{ '--sec-color': 'var(--border-strong, #3b82f6)' }}
               onClick={() =>
                 window.dispatchEvent(
                   new CustomEvent('shammah:open-auth', { detail: 'signin' })
@@ -66,7 +68,8 @@ export default function LeftRail() {
             </button>
             <button
               type="button"
-              className="dl-auth-btn signup"
+              className="dl-auth-btn dl-outline-interactive signup"
+              style={{ '--sec-color': 'var(--teal)' }}
               onClick={() =>
                 window.dispatchEvent(
                   new CustomEvent('shammah:open-auth', { detail: 'signup' })
@@ -96,7 +99,7 @@ export default function LeftRail() {
               <button
                 key={item.id}
                 type="button"
-                className={`dl-nav-item${isActive ? ' active' : ''}`}
+                className={`dl-nav-item dl-outline-interactive${isActive ? ' active' : ''}`}
                 style={{
                   '--sec-color': item.color,
                   '--sec-complement': item.complementColor || '#6366f1',

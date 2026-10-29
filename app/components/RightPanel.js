@@ -26,7 +26,7 @@ import ExploreView from './ExploreView';
 const PANEL_TABS = [
   {
     id: 'messages',
-    label: 'Chats',
+    label: 'Messages',
     title: 'Messages & Chats',
     icon: MessageCircle,
     color: '#0ea5e9',
@@ -86,6 +86,7 @@ export default function RightPanel() {
   const messagesWrapRef = useRef(null);
   const alertsWrapRef = useRef(null);
   const exploreWrapRef = useRef(null);
+  const tabScrollMapRef = useRef({ messages: 0, alerts: 0, explore: 0 });
 
   // Sync unread counts
   const syncBadges = useCallback(async () => {
@@ -291,8 +292,20 @@ export default function RightPanel() {
       target?.focus?.();
       return;
     }
+    // Save current scroll position before switching views
+    if (panelBodyRef.current && activePanel) {
+      tabScrollMapRef.current[activePanel] = panelBodyRef.current.scrollTop;
+    }
     openPanel(tabId);
   }
+
+  // Restore scroll position after activePanel switches
+  useEffect(() => {
+    if (panelBodyRef.current && activePanel) {
+      const savedTop = tabScrollMapRef.current[activePanel] || 0;
+      panelBodyRef.current.scrollTop = savedTop;
+    }
+  }, [activePanel]);
 
   function handleMarkAllRead() {
     playSound('alert');
@@ -313,7 +326,8 @@ export default function RightPanel() {
         <div className="dl-collapsed-dock">
           <button
             type="button"
-            className="dl-collapsed-toggle-btn"
+            className="dl-collapsed-toggle-btn dl-outline-interactive"
+            style={{ '--sec-color': 'var(--teal)' }}
             onClick={() => openPanel('messages')}
             title="Expand Side Panel"
             aria-label="Expand Side Panel"
@@ -329,7 +343,7 @@ export default function RightPanel() {
                 <button
                   key={tab.id}
                   type="button"
-                  className="dl-collapsed-icon-btn"
+                  className="dl-collapsed-icon-btn dl-outline-interactive"
                   style={{ '--sec-color': tab.color }}
                   onClick={() => openPanel(tab.id)}
                   title={`Open ${tab.label}`}
@@ -378,7 +392,7 @@ export default function RightPanel() {
                 aria-selected={isActive}
                 aria-controls={`dl-panel-view-${tab.id}`}
                 id={`dl-panel-tab-${tab.id}`}
-                className={`dl-panel-tab-btn${isActive ? ' active' : ''}`}
+                className={`dl-panel-tab-btn dl-outline-interactive${isActive ? ' active' : ''}`}
                 style={{
                   '--sec-color': tab.color,
                   '--sec-complement': tab.complementColor,
@@ -404,7 +418,8 @@ export default function RightPanel() {
             {activePanel === 'alerts' && (
               <button
                 type="button"
-                className="dl-panel-action-btn"
+                className="dl-panel-action-btn dl-outline-interactive"
+                style={{ '--sec-color': '#ec4899' }}
                 onClick={handleMarkAllRead}
                 title="Mark all notifications as read"
                 aria-label="Mark all notifications as read"
@@ -417,7 +432,8 @@ export default function RightPanel() {
             {(activePanel === 'messages' || activePanel === 'alerts') && (
               <button
                 type="button"
-                className="dl-panel-action-btn icon-only"
+                className="dl-panel-action-btn dl-outline-interactive icon-only"
+                style={{ '--sec-color': activePanel === 'messages' ? '#0ea5e9' : '#ec4899' }}
                 onClick={() => setExpandedModal(activePanel)}
                 title="Expand to full window modal"
                 aria-label="Expand to full window modal"
@@ -428,7 +444,8 @@ export default function RightPanel() {
 
             <button
               type="button"
-              className="dl-panel-action-btn icon-only"
+              className="dl-panel-action-btn dl-outline-interactive icon-only"
+              style={{ '--sec-color': 'var(--teal)' }}
               onClick={closePanel}
               title={isTablet ? 'Close drawer' : 'Collapse panel'}
               aria-label={isTablet ? 'Close drawer' : 'Collapse panel'}
