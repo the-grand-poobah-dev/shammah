@@ -211,9 +211,6 @@ export function useMainNav() {
 
     // 'center' item (Home, Institutions)
     setActiveTab(item.id);
-    setActivePanel(null);
-    window.dispatchEvent(new CustomEvent('shammah:close-panel'));
-    window.dispatchEvent(new CustomEvent('shammah:panel-changed', { detail: { panel: null } }));
 
     if (item.id === 'home') {
       window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));

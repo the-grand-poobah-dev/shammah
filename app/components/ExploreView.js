@@ -67,7 +67,8 @@ const FAITH_FAQS = [
   },
 ];
 
-export default function ExploreView({ session, profile, dark, setDark, onSignOut, openAuth, onSelectCategory }) {
+export default function ExploreView({ session, profile, dark, setDark, onSignOut, openAuth, onSelectCategory, variant }) {
+  const isPanelMode = variant === 'panel';
   const router = useRouter();
   const [soundOn, setSoundOn] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState('general-shammah');
@@ -157,21 +158,23 @@ export default function ExploreView({ session, profile, dark, setDark, onSignOut
   }
 
   return (
-    <div className="explore-shell">
-      {/* Top Header */}
-      <div className="explore-header">
-        <div className="explore-header-left">
-          <div className="explore-title-row">
-            <span className="explore-icon-box">
-              <Compass size={22} className="explore-compass-icon" />
-            </span>
-            <h2>Explore &amp; App Settings</h2>
+    <div className={`explore-shell${isPanelMode ? ' dl-explore-panel-shell' : ''}`}>
+      {/* Top Header (hidden in panel mode because RightPanel header already displays title) */}
+      {!isPanelMode && (
+        <div className="explore-header">
+          <div className="explore-header-left">
+            <div className="explore-title-row">
+              <span className="explore-icon-box">
+                <Compass size={22} className="explore-compass-icon" />
+              </span>
+              <h2>Explore &amp; App Settings</h2>
+            </div>
+            <p className="explore-subtext">
+              Discover categories, configure your app experience, support development, and find answers.
+            </p>
           </div>
-          <p className="explore-subtext">
-            Discover categories, configure your app experience, support development, and find answers.
-          </p>
         </div>
-      </div>
+      )}
 
       {/* Account Profile Card */}
       <div className="explore-profile-card">

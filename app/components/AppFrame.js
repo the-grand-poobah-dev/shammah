@@ -1,6 +1,7 @@
 'use client';
 import { useEffect } from 'react';
 import { LayoutModeProvider, useLayoutMode } from '../lib/useLayoutMode';
+import { SidePanelProvider } from '../lib/useSidePanel';
 import LeftRail from './LeftRail';
 import RightPanel from './RightPanel';
 
@@ -65,7 +66,9 @@ function AppFrameLayout({ children }) {
 export default function AppFrame({ children }) {
   return (
     <LayoutModeProvider>
-      <AppFrameLayout>{children}</AppFrameLayout>
+      <SidePanelProvider>
+        <AppFrameLayout>{children}</AppFrameLayout>
+      </SidePanelProvider>
     </LayoutModeProvider>
   );
 }

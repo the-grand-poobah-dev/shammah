@@ -14,6 +14,8 @@ import {
   Send,
   Copy,
   Check,
+  Sliders,
+  Lock,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
@@ -34,10 +36,13 @@ import {
 import { isSoundEnabled, setSoundEnabled, playSound } from '../lib/soundEffects';
 import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
-export default function NotificationsView({ currentUser, openAuth }) {
+export default function NotificationsView({ currentUser, openAuth, variant }) {
+  const isPanelMode = variant === 'panel';
   const now = useRelativeTimeTick();
   const [notifications, setNotifications] = useState([]);
   const [activeCategory, setActiveCategory] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [showPushSettings, setShowPushSettings] = useState(false);
   const [pushConfig, setPushConfig] = useState({
     enabled: true,
     pushPermission: 'default',
@@ -63,20 +68,30 @@ export default function NotificationsView({ currentUser, openAuth }) {
 
   useEffect(() => {
     reload();
-    fetchRealNotifications(currentUser?.id).then((fresh) => {
-      if (Array.isArray(fresh)) setNotifications(fresh);
-    });
+    fetchRealNotifications(currentUser?.id)
+      .then((fresh) => {
+        if (Array.isArray(fresh)) setNotifications(fresh);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
     function onUpdate() {
+      reload();
+    }
+    function onMarkAll() {
+      markAllNotificationsAsRead();
       reload();
     }
     window.addEventListener('shammah:notifications-updated', onUpdate);
     window.addEventListener('shammah:firebase-config-updated', onUpdate);
     window.addEventListener('shammah:sound-toggled', onUpdate);
+    window.addEventListener('shammah:mark-all-notifications-read', onMarkAll);
     return () => {
       window.removeEventListener('shammah:notifications-updated', onUpdate);
       window.removeEventListener('shammah:firebase-config-updated', onUpdate);
       window.removeEventListener('shammah:sound-toggled', onUpdate);
+      window.removeEventListener('shammah:mark-all-notifications-read', onMarkAll);
     };
   }, [currentUser?.id]);
 
@@ -164,38 +179,73 @@ export default function NotificationsView({ currentUser, openAuth }) {
     if (next) playSound('alert');
   }
 
-  return (
-    <div className="notif-shell">
-      {/* Header */}
-      <div className="notif-header">
-        <div className="notif-header-left">
-          <div className="notif-header-title-row">
-            <span className="notif-header-icon-wrap">
-              <Bell size={20} className="notif-bell-icon" />
-              {unreadCount > 0 && <span className="notif-header-badge">{unreadCount}</span>}
-            </span>
-            <h2>Notifications &amp; Push Alerts</h2>
+  if (!currentUser?.id) {
+    if (isPanelMode) {
+      return (
+        <div className="notif-shell dl-notif-panel-shell">
+          <div className="dl-panel-gate-card">
+            <div className="inbox-gate-icon-wrap" style={{ width: 44, height: 44, margin: '0 auto 12px' }}>
+              <Lock size={22} className="inbox-gate-lock-icon" />
+            </div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: 'var(--ink)' }}>
+              Community Alerts
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: '0 0 16px', lineHeight: 1.4 }}>
+              Sign in to receive instant alerts, amens, and fellowship notifications.
+            </p>
+            <button
+              type="button"
+              className="inbox-gate-signin-btn"
+              onClick={() => {
+                if (openAuth) openAuth('signin');
+                else if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('shammah:open-auth', { detail: 'signin' }));
+                }
+              }}
+            >
+              Sign In to View Alerts
+            </button>
           </div>
-          <p className="notif-subtext">
-            Real-time Firebase Cloud Messaging (FCM) push alerts for new posts and @mentions in your church communities.
-          </p>
         </div>
+      );
+    }
+  }
 
-        {notifications.length > 0 && (
-          <button
-            type="button"
-            className="notif-mark-read-btn"
-            onClick={markAllNotificationsAsRead}
-            title="Mark all notifications as read"
-          >
-            <CheckCheck size={16} />
-            <span>Mark all read</span>
-          </button>
-        )}
-      </div>
+  return (
+    <div className={`notif-shell${isPanelMode ? ' dl-notif-panel-shell' : ''}`}>
+      {/* Header (hidden in panel mode because RightPanel header already displays title & actions) */}
+      {!isPanelMode && (
+        <div className="notif-header">
+          <div className="notif-header-left">
+            <div className="notif-header-title-row">
+              <span className="notif-header-icon-wrap">
+                <Bell size={20} className="notif-bell-icon" />
+                {unreadCount > 0 && <span className="notif-header-badge">{unreadCount}</span>}
+              </span>
+              <h2>Notifications &amp; Push Alerts</h2>
+            </div>
+            <p className="notif-subtext">
+              Real-time Firebase Cloud Messaging (FCM) push alerts for new posts and @mentions in your church communities.
+            </p>
+          </div>
 
-      {/* Firebase Cloud Messaging (FCM) Push Alerts & Preferences Card */}
-      <div className="notif-firebase-card">
+          {notifications.length > 0 && (
+            <button
+              type="button"
+              className="notif-mark-read-btn"
+              onClick={markAllNotificationsAsRead}
+              title="Mark all notifications as read"
+            >
+              <CheckCheck size={16} />
+              <span>Mark all read</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Firebase Cloud Messaging (FCM) Push Alerts & Preferences Card (collapsible in panel mode) */}
+      {(!isPanelMode || showPushSettings) && (
+        <div className={`notif-firebase-card${isPanelMode ? ' dl-notif-panel-fcm' : ''}`}>
         <div className="notif-fb-left">
           <div className="notif-fb-icon-box">
             <Smartphone size={20} className="notif-fb-icon" />
@@ -301,33 +351,59 @@ export default function NotificationsView({ currentUser, openAuth }) {
           )}
         </div>
       </div>
+      )}
 
       {/* Category Tabs */}
-      <div className="notif-categories-bar no-scrollbar">
-        {NOTIFICATION_CATEGORIES.map((cat) => {
-          const isActive = activeCategory === cat.id;
-          const count =
-            cat.id === 'all'
-              ? unreadCount
-              : notifications.filter((n) => (n.category === cat.id || n.type === cat.id) && !n.isRead).length;
+      <div className={`notif-categories-bar no-scrollbar${isPanelMode ? ' dl-notif-panel-bar' : ''}`}>
+        <div className="dl-notif-chips-scroll">
+          {NOTIFICATION_CATEGORIES.map((cat) => {
+            const isActive = activeCategory === cat.id;
+            const count =
+              cat.id === 'all'
+                ? unreadCount
+                : notifications.filter((n) => (n.category === cat.id || n.type === cat.id) && !n.isRead).length;
 
-          return (
-            <button
-              key={cat.id}
-              type="button"
-              className={`notif-cat-chip${isActive ? ' active' : ''}`}
-              onClick={() => setActiveCategory(cat.id)}
-            >
-              <span>{cat.label}</span>
-              {count > 0 && <span className="notif-chip-count">{count}</span>}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                className={`notif-cat-chip${isActive ? ' active' : ''}`}
+                onClick={() => setActiveCategory(cat.id)}
+              >
+                <span>{cat.label}</span>
+                {count > 0 && <span className="notif-chip-count">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+        {isPanelMode && (
+          <button
+            type="button"
+            className={`dl-notif-gear-btn${showPushSettings ? ' active' : ''}`}
+            onClick={() => setShowPushSettings((v) => !v)}
+            title="Push notification settings"
+            aria-label="Push notification settings"
+          >
+            <Sliders size={14} />
+          </button>
+        )}
       </div>
 
       {/* Notification List */}
       <div className="notif-list">
-        {filtered.length === 0 ? (
+        {loading && notifications.length === 0 ? (
+          <div className="dl-notif-skeletons">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="dl-notif-skeleton-item">
+                <div className="dl-skeleton-circle" />
+                <div className="dl-skeleton-lines">
+                  <div className="dl-skeleton-line short" />
+                  <div className="dl-skeleton-line" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="notif-empty-state">
             <Bell size={40} className="notif-empty-icon" />
             <h3>No notifications here</h3>

@@ -13,6 +13,7 @@ import {
   Info,
   X,
   AlertCircle,
+  Search,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
@@ -27,10 +28,16 @@ import {
 import { supabase } from '../../lib/supabaseClient';
 import { formatPostDate, getPostDateTitle, useRelativeTimeTick, cleanDisplayName, formatRoleLabel } from '../lib/postDisplay';
 
-export default function InboxView({ currentUser }) {
+export default function InboxView({
+  currentUser,
+  variant,
+  initialConversationId,
+  skipRealtimeSubscription = false,
+}) {
+  const isPanelMode = variant === 'panel';
   const now = useRelativeTimeTick();
   const [conversations, setConversations] = useState([]);
-  const [activeConvId, setActiveConvId] = useState(null);
+  const [activeConvId, setActiveConvId] = useState(initialConversationId || null);
   const [messages, setMessages] = useState([]);
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -38,9 +45,12 @@ export default function InboxView({ currentUser }) {
   const [showPrivacyInfo, setShowPrivacyInfo] = useState(false);
   const [sendError, setSendError] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterChip, setFilterChip] = useState('all'); // 'all' | 'unread'
 
   const messagesEndRef = useRef(null);
   const activeConvRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   // Load conversations from Supabase
   const loadConversations = useCallback(async (preserveActiveId = null) => {
@@ -58,7 +68,8 @@ export default function InboxView({ currentUser }) {
       const currentActive = preserveActiveId || activeConvRef.current;
       if (currentActive && list.some((c) => c.id === currentActive)) {
         setActiveConvId(currentActive);
-      } else if (!currentActive && list.length > 0) {
+      } else if (!isPanelMode && !currentActive && list.length > 0) {
+        // On full desktop/center view, default select first conversation
         setActiveConvId(list[0].id);
       }
     } catch (err) {
@@ -66,7 +77,7 @@ export default function InboxView({ currentUser }) {
     } finally {
       setLoadingConvs(false);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, isPanelMode]);
 
   // Load messages for active conversation
   const loadMessages = useCallback(async (conv) => {
@@ -170,9 +181,36 @@ export default function InboxView({ currentUser }) {
     };
   }, [loadConversations, handleOpenTargetRecipient]);
 
-  // Realtime Supabase Channel Subscription
+  // Check initialConversationId on mount or prop change
   useEffect(() => {
-    if (!currentUser?.id) return;
+    if (initialConversationId) {
+      setActiveConvId(initialConversationId);
+    }
+  }, [initialConversationId]);
+
+  // Handle shammah:open-panel with detail.conversationId
+  useEffect(() => {
+    function onOpenPanel(e) {
+      if (e.detail?.panel === 'messages' && e.detail?.conversationId) {
+        setActiveConvId(e.detail.conversationId);
+      }
+    }
+    function onFocusPanel(e) {
+      if (e.detail?.panel === 'messages') {
+        searchInputRef.current?.focus();
+      }
+    }
+    window.addEventListener('shammah:open-panel', onOpenPanel);
+    window.addEventListener('shammah:focus-panel', onFocusPanel);
+    return () => {
+      window.removeEventListener('shammah:open-panel', onOpenPanel);
+      window.removeEventListener('shammah:focus-panel', onFocusPanel);
+    };
+  }, []);
+
+  // Realtime Supabase Channel Subscription (guarded by skipRealtimeSubscription)
+  useEffect(() => {
+    if (!currentUser?.id || skipRealtimeSubscription) return;
 
     const unsubscribe = subscribeToDirectMessages(currentUser.id, (payload) => {
       const active = activeConvRef.current;
@@ -219,7 +257,7 @@ export default function InboxView({ currentUser }) {
     return () => {
       unsubscribe();
     };
-  }, [currentUser?.id, conversations, loadConversations]);
+  }, [currentUser?.id, conversations, loadConversations, skipRealtimeSubscription]);
 
   // Keep active conversation ref in sync
   useEffect(() => {
@@ -278,8 +316,51 @@ export default function InboxView({ currentUser }) {
     }
   }
 
+  const unreadConversationsCount = conversations.filter((c) => (c.unreadCount || 0) > 0).length;
+  const displayedConversations = conversations.filter((conv) => {
+    if (filterChip === 'unread' && (!conv.unreadCount || conv.unreadCount === 0)) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const nameMatch = (conv.participantName || '').toLowerCase().includes(q);
+      const snippetMatch = (conv.lastMessage || '').toLowerCase().includes(q);
+      return nameMatch || snippetMatch;
+    }
+    return true;
+  });
+
   // Guard: Logged off members cannot send or receive messages
   if (!currentUser?.id) {
+    if (isPanelMode) {
+      return (
+        <div className="inbox-shell dl-inbox-panel-shell">
+          <div className="dl-panel-gate-card">
+            <div className="inbox-gate-icon-wrap" style={{ width: 44, height: 44, margin: '0 auto 12px' }}>
+              <Lock size={22} className="inbox-gate-lock-icon" />
+            </div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: 'var(--ink)' }}>
+              Private Messages
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: '0 0 16px', lineHeight: 1.4 }}>
+              Sign in to message pastors, fellowship leaders, and friends.
+            </p>
+            <button
+              type="button"
+              className="inbox-gate-signin-btn"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('shammah:open-auth', { detail: 'signin' }));
+                }
+              }}
+            >
+              Sign In to Message
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="inbox-shell">
         <div className="inbox-logged-off-gate">
@@ -309,28 +390,33 @@ export default function InboxView({ currentUser }) {
     );
   }
 
-  return (
-    <div className="inbox-shell">
-      {/* Header */}
-      <div className="inbox-header">
-        <div className="inbox-header-title">
-          <MessageCircle size={20} className="inbox-title-icon" />
-          <h2>Direct Messages</h2>
-        </div>
-        <div
-          className="inbox-header-e2ee-tag"
-          onClick={() => setShowPrivacyInfo((v) => !v)}
-          title="Click for security & privacy details"
-          role="button"
-          tabIndex={0}
-        >
-          <ShieldCheck size={13} className="e2ee-lock-icon text-cyan-400" />
-          <span>Encrypted in Transit (TLS) · RLS Protected</span>
-          <Info size={12} />
-        </div>
-      </div>
+  const showSidebar = !isPanelMode || !activeConvId;
+  const showThread = !isPanelMode || Boolean(activeConvId);
 
-      {showPrivacyInfo && (
+  return (
+    <div className={`inbox-shell${isPanelMode ? ' dl-inbox-panel-shell' : ''}`}>
+      {/* Header (hidden in panel mode because RightPanel card header displays it) */}
+      {!isPanelMode && (
+        <div className="inbox-header">
+          <div className="inbox-header-title">
+            <MessageCircle size={20} className="inbox-title-icon" />
+            <h2>Direct Messages</h2>
+          </div>
+          <div
+            className="inbox-header-e2ee-tag"
+            onClick={() => setShowPrivacyInfo((v) => !v)}
+            title="Click for security & privacy details"
+            role="button"
+            tabIndex={0}
+          >
+            <ShieldCheck size={13} className="e2ee-lock-icon text-cyan-400" />
+            <span>Encrypted in Transit (TLS) · RLS Protected</span>
+            <Info size={12} />
+          </div>
+        </div>
+      )}
+
+      {showPrivacyInfo && !isPanelMode && (
         <div className="inbox-e2ee-banner">
           <ShieldCheck size={18} className="e2ee-shield-icon text-cyan-400" />
           <div>
@@ -352,72 +438,131 @@ export default function InboxView({ currentUser }) {
         </div>
       )}
 
-      <div className="inbox-layout">
+      <div className={`inbox-layout${isPanelMode ? ' dl-inbox-panel-layout' : ''}`}>
         {/* Conversations List */}
-        <div className={`inbox-sidebar${activeConvId ? ' has-active-on-mobile' : ''}`}>
-          {loadingConvs ? (
-            <div className="inbox-empty-sidebar">
-              <p>Loading conversations…</p>
-            </div>
-          ) : conversations.length === 0 ? (
-            <div className="inbox-empty-sidebar">
-              <MessageCircle size={32} className="inbox-empty-icon" />
-              <p>No messages yet. Direct messages and chats will appear here!</p>
-            </div>
-          ) : (
-            conversations.map((conv) => {
-              const isSelected = conv.id === activeConvId;
-              const unread = conv.unreadCount || 0;
-              return (
-                <div
-                  key={conv.id}
-                  className={`inbox-conv-item${isSelected ? ' active' : ''}`}
-                  onClick={() => handleSelectConv(conv.id)}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <div className="inbox-conv-avatar-wrap">
-                    <Avatar name={cleanDisplayName(conv.participantName)} src={conv.participantAvatar} className="avatar-sm" />
-                    {unread > 0 && <span className="inbox-unread-count-dot">{unread}</span>}
-                  </div>
-                  <div className="inbox-conv-info">
-                    <div className="inbox-conv-name-row">
-                      <span className="inbox-conv-name">{cleanDisplayName(conv.participantName)}</span>
-                      {conv.participantVerified && <VerifiedBadge badge={conv.participantBadge} size={14} />}
-                    </div>
-                    {conv.participantRole && (
-                      <span className="inbox-conv-member-tag">{formatRoleLabel(conv.participantRole)}</span>
-                    )}
-                    <span className="inbox-conv-snippet">{conv.lastMessage || 'New conversation'}</span>
-                  </div>
-                  <div className="inbox-conv-meta" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {conv.lastMessageTime && (
-                      <span
-                        className="inbox-conv-time"
-                        title={getPostDateTitle(conv.lastMessageTime)}
-                        suppressHydrationWarning
-                        style={{ fontSize: 11, color: 'var(--ink-faint)', whiteSpace: 'nowrap' }}
-                      >
-                        {formatPostDate(conv.lastMessageTime, now)}
-                      </span>
-                    )}
-                    <ShieldCheck size={11} className="inbox-mini-lock text-cyan-400" title="RLS Protected" />
-                  </div>
+        {showSidebar && (
+          <div className={`inbox-sidebar${activeConvId ? ' has-active-on-mobile' : ''}${isPanelMode ? ' dl-inbox-panel-sidebar' : ''}`}>
+            {isPanelMode && (
+              <div className="dl-inbox-toolbar">
+                <div className="dl-inbox-search-box">
+                  <Search size={14} className="dl-inbox-search-icon" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search chats…"
+                    className="dl-inbox-search-input"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      className="dl-inbox-clear-search"
+                      onClick={() => setSearchQuery('')}
+                      aria-label="Clear search"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
                 </div>
-              );
-            })
-          )}
-        </div>
+                <div className="dl-inbox-filter-chips">
+                  <button
+                    type="button"
+                    className={`dl-inbox-chip${filterChip === 'all' ? ' active' : ''}`}
+                    onClick={() => setFilterChip('all')}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    className={`dl-inbox-chip${filterChip === 'unread' ? ' active' : ''}`}
+                    onClick={() => setFilterChip('unread')}
+                  >
+                    Unread{unreadConversationsCount > 0 ? ` (${unreadConversationsCount})` : ''}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {loadingConvs ? (
+              <div className="dl-inbox-skeletons">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="dl-inbox-skeleton-item">
+                    <div className="dl-skeleton-circle" />
+                    <div className="dl-skeleton-lines">
+                      <div className="dl-skeleton-line short" />
+                      <div className="dl-skeleton-line" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : displayedConversations.length === 0 ? (
+              <div className="inbox-empty-sidebar">
+                <MessageCircle size={32} className="inbox-empty-icon" />
+                <p>
+                  {searchQuery
+                    ? `No chats matching "${searchQuery}"`
+                    : filterChip === 'unread'
+                    ? 'No unread messages.'
+                    : 'No messages yet. Direct messages and chats will appear here!'}
+                </p>
+              </div>
+            ) : (
+              displayedConversations.map((conv) => {
+                const isSelected = conv.id === activeConvId;
+                const unread = conv.unreadCount || 0;
+                return (
+                  <div
+                    key={conv.id}
+                    className={`inbox-conv-item${isSelected ? ' active' : ''}`}
+                    onClick={() => handleSelectConv(conv.id)}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div className="inbox-conv-avatar-wrap">
+                      <Avatar name={cleanDisplayName(conv.participantName)} src={conv.participantAvatar} className="avatar-sm" />
+                      {unread > 0 && <span className="inbox-unread-count-dot">{unread}</span>}
+                    </div>
+                    <div className="inbox-conv-info">
+                      <div className="inbox-conv-name-row">
+                        <span className="inbox-conv-name">{cleanDisplayName(conv.participantName)}</span>
+                        {conv.participantVerified && <VerifiedBadge badge={conv.participantBadge} size={14} />}
+                      </div>
+                      {conv.participantRole && (
+                        <span className="inbox-conv-member-tag">{formatRoleLabel(conv.participantRole)}</span>
+                      )}
+                      <span className="inbox-conv-snippet">{conv.lastMessage || 'New conversation'}</span>
+                    </div>
+                    <div className="inbox-conv-meta" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {conv.lastMessageTime && (
+                        <span
+                          className="inbox-conv-time"
+                          title={getPostDateTitle(conv.lastMessageTime)}
+                          suppressHydrationWarning
+                          style={{ fontSize: 11, color: 'var(--ink-faint)', whiteSpace: 'nowrap' }}
+                        >
+                          {formatPostDate(conv.lastMessageTime, now)}
+                        </span>
+                      )}
+                      <ShieldCheck size={11} className="inbox-mini-lock text-cyan-400" title="RLS Protected" />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
 
         {/* Conversation Thread */}
-        <div className="inbox-main-thread">
+        {showThread && (
+          <div className={`inbox-main-thread${isPanelMode ? ' dl-inbox-panel-thread' : ''}`}>
           {activeConv ? (
             <div className="inbox-thread-card">
               {/* Thread Header */}
               <div className="inbox-thread-header">
                 <button
                   type="button"
-                  className="inbox-back-to-list-btn"
+                  className={`inbox-back-to-list-btn${isPanelMode ? ' is-panel-back-btn' : ''}`}
                   onClick={() => setActiveConvId(null)}
                   aria-label="Back to conversations list"
                 >
@@ -445,8 +590,15 @@ export default function InboxView({ currentUser }) {
               {/* Message Bubbles */}
               <div className="inbox-thread-messages">
                 {loadingMessages ? (
-                  <div className="inbox-loading-thread">
-                    <p>Loading messages…</p>
+                  <div className="dl-inbox-messages-skeletons">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className={`dl-skeleton-bubble-wrap ${i % 2 === 0 ? 'from-me' : 'from-them'}`}
+                      >
+                        <div className="dl-skeleton-bubble" />
+                      </div>
+                    ))}
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="inbox-empty-thread-content">
@@ -585,6 +737,7 @@ export default function InboxView({ currentUser }) {
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );
