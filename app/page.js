@@ -1,7 +1,8 @@
 'use client';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { CATEGORY_STYLES, categoryStyle, initials, cleanDisplayName } from './lib/postDisplay';
+import { useLayoutMode } from './lib/useLayoutMode';
 import PostCard from './components/PostCard';
 import CreatePostBox from './components/CreatePostBox';
 import CreatePostModal from './components/CreatePostModal';
@@ -135,6 +136,12 @@ export default function Feed() {
   const [loading, setLoading] = useState(false);
 
   // App shell: bottom tab, content-type pill, theme, search, avatar menu
+  const layoutMode = useLayoutMode();
+  const layoutModeRef = useRef(layoutMode);
+  useEffect(() => {
+    layoutModeRef.current = layoutMode;
+  }, [layoutMode]);
+
   const [tab, setTab] = useState('home'); // home | messages | alerts | churches | menu
   const [section, setSection] = useState('all'); // all | videos | podcasts | courses | polls | bible
   const [dark, setDark] = useState(true);
@@ -237,20 +244,117 @@ export default function Feed() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Sync tab state with global BottomNav
+  // Tablet/Desktop Tab Adapter:
+  // When useLayoutMode() !== 'mobile', requests for 'messages', 'alerts' or 'menu'
+  // open the corresponding right panel instead of switching the centre tab.
+  const requestTab = useCallback((requestedTab, options = {}) => {
+    const normalized = requestedTab === 'institutions' ? 'churches' : requestedTab;
+    if (!normalized || !['home', 'messages', 'alerts', 'churches', 'menu'].includes(normalized)) {
+      return;
+    }
+
+    const panelByTab = {
+      messages: 'messages',
+      alerts: 'alerts',
+      menu: 'explore',
+    };
+
+    const isNonMobile =
+      layoutModeRef.current !== 'mobile' ||
+      (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches);
+
+    if (isNonMobile && panelByTab[normalized]) {
+      const panel = panelByTab[normalized];
+      const conversationId = options.conversationId || undefined;
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('shammah:open-panel', {
+            detail: {
+              panel,
+              ...(conversationId ? { conversationId } : {}),
+            },
+          })
+        );
+        if (conversationId) {
+          window.dispatchEvent(
+            new CustomEvent('shammah:open-conversation', {
+              detail: { recipientId: conversationId },
+            })
+          );
+        }
+
+        // Clean ?tab= (and ?recipient= if consumed) from URL
+        if (window.location.search) {
+          const url = new URL(window.location.href);
+          if (url.searchParams.has('tab') || url.searchParams.has('recipient')) {
+            url.searchParams.delete('tab');
+            url.searchParams.delete('recipient');
+            const nextQuery = url.searchParams.toString();
+            window.history.replaceState(
+              {},
+              '',
+              `${url.pathname}${nextQuery ? `?${nextQuery}` : ''}${url.hash}`
+            );
+          }
+        }
+      }
+
+      setTab((prev) => {
+        const nextCenter = prev === 'churches' && !options.fromUrl ? 'churches' : 'home';
+        if (typeof window !== 'undefined') {
+          if (options.fromEvent) {
+            window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: nextCenter }));
+          }
+          window.dispatchEvent(new CustomEvent('shammah:tab-changed', { detail: nextCenter }));
+        }
+        return nextCenter;
+      });
+      return;
+    }
+
+    // Mobile behaviour (byte-for-byte unchanged) or centre tab ('home' | 'churches')
+    setTab(normalized);
+    if (normalized === 'home' && !options.fromUrl) {
+      setSection('all');
+      setActiveCategory(null);
+    }
+    if (!isNonMobile && normalized === 'messages' && options.conversationId && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('shammah:open-conversation', {
+          detail: { recipientId: options.conversationId },
+        })
+      );
+    }
+  }, []);
+
+  // If layoutMode transitions from initial 'mobile' hydration value to 'tablet'/'desktop'
+  // while tab is 'messages' | 'alerts' | 'menu', route it immediately to the right panel.
+  useEffect(() => {
+    if (layoutMode !== 'mobile' && ['messages', 'alerts', 'menu'].includes(tab)) {
+      const recipientParam =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('recipient')
+          : null;
+      requestTab(tab, {
+        conversationId: recipientParam || undefined,
+        fromUrl: true,
+      });
+    }
+  }, [layoutMode, tab, requestTab]);
+
+  // Sync tab state with global BottomNav / LeftRail
   useEffect(() => {
     function onTabSet(e) {
-      if (e.detail && ['home', 'messages', 'alerts', 'churches', 'menu'].includes(e.detail)) {
-        setTab(e.detail);
-        if (e.detail === 'home') {
-          setSection('all');
-          setActiveCategory(null);
-        }
+      const requested = typeof e.detail === 'string' ? e.detail : e.detail?.tab;
+      const conversationId = typeof e.detail === 'object' ? e.detail?.conversationId : undefined;
+      if (requested && ['home', 'messages', 'alerts', 'churches', 'menu', 'institutions'].includes(requested)) {
+        requestTab(requested, { conversationId, fromEvent: true });
       }
     }
     window.addEventListener('shammah:set-tab', onTabSet);
     return () => window.removeEventListener('shammah:set-tab', onTabSet);
-  }, []);
+  }, [requestTab]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('shammah:tab-changed', { detail: tab }));
@@ -319,16 +423,27 @@ export default function Feed() {
           setShowAuth(true);
         }
         const t = params.get('tab');
+        const recipientParam = params.get('recipient');
         if (t === 'institutions') {
-          setTab('churches');
+          requestTab('churches', { fromUrl: true });
         } else if (t && ['home', 'messages', 'alerts', 'churches', 'menu'].includes(t)) {
-          setTab(t);
+          requestTab(t, {
+            conversationId: recipientParam || undefined,
+            fromUrl: true,
+          });
         }
         const sec = params.get('section');
         if (sec && ['all', 'videos', 'podcasts', 'courses', 'polls', 'bible', 'rss', 'fundraisers', 'challenges', 'games', 'workspace'].includes(sec)) {
           setSection(sec);
+        } else if (params.get('note') === '1') {
+          setSection('bible');
         } else {
           setSection('all');
+        }
+        if (params.get('note') === '1') {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('shammah:open-sermon-note'));
+          }, 120);
         }
         const cat = params.get('category');
         if (cat) {
@@ -364,7 +479,7 @@ export default function Feed() {
       window.removeEventListener('shammah:set-section', onSectionSet);
       window.removeEventListener('popstate', syncUrlParams);
     };
-  }, []);
+  }, [requestTab]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('shammah:section-changed', { detail: section }));
@@ -1787,8 +1902,10 @@ export default function Feed() {
                 isAdmin={isAdmin}
                 onTogglePin={handleTogglePin}
                 onSelectCategory={handleFilterCategory}
-                onOpenDirectMessage={() => {
-                  setTab('messages');
+                onOpenDirectMessage={(recipient) => {
+                  const convId =
+                    recipient?.id || p.author_id || p.user_id || p.profiles?.id;
+                  requestTab('messages', { conversationId: convId });
                 }}
               />
             </Fragment>
@@ -1831,9 +1948,10 @@ export default function Feed() {
           authorId={activeProfileModal.authorId}
           currentUser={profile}
           onClose={() => setActiveProfileModal(null)}
-          onOpenDirectMessage={() => {
+          onOpenDirectMessage={(recipient) => {
+            const convId = recipient?.id || activeProfileModal.authorId;
             setActiveProfileModal(null);
-            setTab('messages');
+            requestTab('messages', { conversationId: convId });
           }}
         />
       )}

@@ -12,6 +12,8 @@ import { getTotalUnreadMessagesCount } from './inboxManager';
 import { getUnreadNotificationCount, fetchRealNotifications } from './notificationsManager';
 import { playSound } from './soundEffects';
 
+import { useLayoutMode } from './useLayoutMode';
+
 export const NAV_ITEMS = [
   {
     id: 'home',
@@ -66,6 +68,7 @@ export const NAV_ITEMS = [
 export function useMainNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const layoutMode = useLayoutMode();
   const [activeTab, setActiveTab] = useState('home');
   const [activePanel, setActivePanel] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -104,19 +107,27 @@ export function useMainNav() {
     if (pathname.startsWith('/churches')) {
       setActiveTab('churches');
     } else if (pathname.startsWith('/categories') || pathname.startsWith('/settings')) {
-      setActiveTab('menu');
+      setActiveTab(layoutMode === 'mobile' ? 'menu' : 'home');
     } else if (pathname === '/') {
       if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         const tabParam = params.get('tab');
-        if (tabParam && ['home', 'churches', 'messages', 'alerts', 'menu'].includes(tabParam)) {
+        if (tabParam === 'institutions' || tabParam === 'churches') {
+          setActiveTab('churches');
+        } else if (
+          layoutMode === 'mobile' &&
+          tabParam &&
+          ['home', 'churches', 'messages', 'alerts', 'menu'].includes(tabParam)
+        ) {
           setActiveTab(tabParam);
         } else {
           setActiveTab('home');
         }
       }
+    } else {
+      setActiveTab('home');
     }
-  }, [pathname]);
+  }, [pathname, layoutMode]);
 
   // Listen for tab and panel changes
   useEffect(() => {
@@ -128,12 +139,23 @@ export function useMainNav() {
     function handlePanelEvent(e) {
       setActivePanel(e.detail?.panel || null);
     }
+    function handleOpenPanel(e) {
+      const nextPanel = e.detail?.panel || null;
+      setActivePanel(nextPanel);
+    }
+    function handleClosePanel() {
+      setActivePanel(null);
+    }
 
     window.addEventListener('shammah:tab-changed', handleTabEvent);
     window.addEventListener('shammah:panel-changed', handlePanelEvent);
+    window.addEventListener('shammah:open-panel', handleOpenPanel);
+    window.addEventListener('shammah:close-panel', handleClosePanel);
     return () => {
       window.removeEventListener('shammah:tab-changed', handleTabEvent);
       window.removeEventListener('shammah:panel-changed', handlePanelEvent);
+      window.removeEventListener('shammah:open-panel', handleOpenPanel);
+      window.removeEventListener('shammah:close-panel', handleClosePanel);
     };
   }, []);
 
@@ -173,9 +195,13 @@ export function useMainNav() {
 
     if (item.kind === 'panel') {
       const targetPanel = item.panel;
-      console.log('[Shammah Navigation] open-panel:', targetPanel);
       window.dispatchEvent(
         new CustomEvent('shammah:open-panel', {
+          detail: { panel: targetPanel },
+        })
+      );
+      window.dispatchEvent(
+        new CustomEvent('shammah:panel-changed', {
           detail: { panel: targetPanel },
         })
       );
@@ -187,6 +213,7 @@ export function useMainNav() {
     setActiveTab(item.id);
     setActivePanel(null);
     window.dispatchEvent(new CustomEvent('shammah:close-panel'));
+    window.dispatchEvent(new CustomEvent('shammah:panel-changed', { detail: { panel: null } }));
 
     if (item.id === 'home') {
       window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
@@ -206,6 +233,9 @@ export function useMainNav() {
 
     if (pathname === '/') {
       window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: item.id }));
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     } else {
       router.push(item.href);
     }

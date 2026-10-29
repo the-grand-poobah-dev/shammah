@@ -82,7 +82,7 @@ export default function LeftRail() {
             const isActive =
               item.kind === 'panel'
                 ? activePanel === item.panel
-                : activeTab === item.id && !activePanel;
+                : activeTab === item.id;
             const ariaCurrent = isActive && item.kind === 'center' ? 'page' : undefined;
             const badgeCount = getBadgeCount(item.id);
 

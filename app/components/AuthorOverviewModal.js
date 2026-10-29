@@ -134,6 +134,20 @@ export default function AuthorOverviewModal({ author, authorId, currentUser, onC
         badge,
         verified,
       });
+    } else if (
+      typeof window !== 'undefined' &&
+      window.matchMedia('(min-width: 768px)').matches
+    ) {
+      window.dispatchEvent(
+        new CustomEvent('shammah:open-panel', {
+          detail: { panel: 'messages', conversationId: authorId },
+        })
+      );
+      window.dispatchEvent(
+        new CustomEvent('shammah:open-conversation', {
+          detail: { recipientId: authorId },
+        })
+      );
     } else {
       window.dispatchEvent(
         new CustomEvent('shammah:set-tab', { detail: 'messages' })

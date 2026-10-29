@@ -93,31 +93,56 @@
     height: 0;
   }
 
-  /* Center Column: Expands cleanly to fill grid track */
+  /* Center Column: 680px max-width, centred in its grid column, with inline-size container query */
   .app-layout[data-enabled='true'] .dl-center {
     display: block;
     min-width: 0;
     width: 100%;
+    max-width: 680px;
+    margin-inline: auto;
+    container-type: inline-size;
+    container-name: dl-center;
   }
 
-  /* Neutralize old phone-first .shell constraints inside .app-layout */
-  .app-layout[data-enabled='true'] .shell {
-    max-width: none !important;
+  /* Neutralize old phone-first .shell constraints and bottom-nav spacing inside .dl-center */
+  .app-layout[data-enabled='true'] .shell,
+  .app-layout[data-enabled='true'] .dl-center .shell {
+    max-width: 100% !important;
     width: 100% !important;
     margin: 0 !important;
     border-left: 0 !important;
     border-right: 0 !important;
+    box-shadow: none !important;
     background: transparent !important;
-    padding-bottom: 32px !important;
+    padding-bottom: 24px !important;
   }
 
-  /* Ensure .feed and children cleanly fill the centre column */
-  .app-layout[data-enabled='true'] .feed {
+  /* Ensure .feed, .section-feed-view and .cx-page fill the 680px column with 16px vertical rhythm */
+  .app-layout[data-enabled='true'] .dl-center .feed,
+  .app-layout[data-enabled='true'] .dl-center .section-feed-view,
+  .app-layout[data-enabled='true'] .dl-center .institutions-feed-view,
+  .app-layout[data-enabled='true'] .dl-center .cx-page,
+  .app-layout[data-enabled='true'] .dl-center .user-profile-page-view {
     width: 100% !important;
     max-width: 100% !important;
+    margin: 0 !important;
     box-sizing: border-box;
-    padding-left: 0;
-    padding-right: 0;
+    padding: 0 0 28px !important;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+
+  /* Normalize direct child vertical margins so the 16px flex gap governs card rhythm */
+  .app-layout[data-enabled='true'] .dl-center .feed > *,
+  .app-layout[data-enabled='true'] .dl-center .section-feed-view > *,
+  .app-layout[data-enabled='true'] .dl-center .institutions-feed-view > * {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   /* Hide only the bottom pill navigation bar on tablet and desktop.
@@ -581,5 +606,255 @@
     font-size: 12px;
     line-height: 1.5;
     color: var(--ink-muted);
+  }
+
+  /* ==========================================================================
+     Centre Column Card Token Consistency & View Width Audit (.dl-center)
+     ========================================================================== */
+
+  /* 1. Shared Card Surface, Border & Radius Tokens (matching PostCard) */
+  .app-layout[data-enabled='true'] .dl-center .post-card,
+  .app-layout[data-enabled='true'] .dl-center .status-tray-container,
+  .app-layout[data-enabled='true'] .dl-center .compose-genz,
+  .app-layout[data-enabled='true'] .dl-center .compose-guest-prompt,
+  .app-layout[data-enabled='true'] .dl-center .gws-hero-card,
+  .app-layout[data-enabled='true'] .dl-center .verse-card,
+  .app-layout[data-enabled='true'] .dl-center .active-category-banner,
+  .app-layout[data-enabled='true'] .dl-center .highlight-widget-card,
+  .app-layout[data-enabled='true'] .dl-center .section-hero-banner,
+  .app-layout[data-enabled='true'] .dl-center .institutions-hero-card,
+  .app-layout[data-enabled='true'] .dl-center .bible-sticky-controls,
+  .app-layout[data-enabled='true'] .dl-center .bible-chapter-sheet,
+  .app-layout[data-enabled='true'] .dl-center .bible-compare-banner,
+  .app-layout[data-enabled='true'] .dl-center .course-card-item,
+  .app-layout[data-enabled='true'] .dl-center .audio-track-card,
+  .app-layout[data-enabled='true'] .dl-center .poll-compose-shortcut,
+  .app-layout[data-enabled='true'] .dl-center .rss-directory-panel,
+  .app-layout[data-enabled='true'] .dl-center .fundraiser-card,
+  .app-layout[data-enabled='true'] .dl-center .fc-card,
+  .app-layout[data-enabled='true'] .dl-center .fag-card,
+  .app-layout[data-enabled='true'] .dl-center .gws-card,
+  .app-layout[data-enabled='true'] .dl-center .inst-rec-card,
+  .app-layout[data-enabled='true'] .dl-center .church-row,
+  .app-layout[data-enabled='true'] .dl-center .cx-cat-card,
+  .app-layout[data-enabled='true'] .dl-center .subpage-nav-header {
+    border-radius: var(--radius, 16px);
+    border-color: var(--border);
+    background: var(--surface);
+    box-sizing: border-box;
+  }
+
+  /* 2. StatusTray, CreatePostBox, HomeHighlights & PostList in 680px Centre */
+  .app-layout[data-enabled='true'] .dl-center .status-tray-container {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+  }
+
+  .app-layout[data-enabled='true'] .dl-center .status-tray-scroll,
+  .app-layout[data-enabled='true'] .dl-center .hl-horizontal-scroll,
+  .app-layout[data-enabled='true'] .dl-center .hl-reels-scroll {
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-layout[data-enabled='true'] .dl-center .compose-genz,
+  .app-layout[data-enabled='true'] .dl-center .compose-guest-prompt {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .app-layout[data-enabled='true'] .dl-center .post-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .app-layout[data-enabled='true'] .dl-center .post-media {
+    width: 100%;
+    max-height: 540px;
+    object-fit: cover;
+  }
+
+  /* 3. VideosView & Reels Grid */
+  .app-layout[data-enabled='true'] .dl-center .video-feed-list,
+  .app-layout[data-enabled='true'] .dl-center .audio-list-stack,
+  .app-layout[data-enabled='true'] .dl-center .polls-feed-list,
+  .app-layout[data-enabled='true'] .dl-center .rss-posts-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+  }
+
+  /* 4. BibleReaderView: Line Length & Controls inside 680px */
+  .app-layout[data-enabled='true'] .dl-center .bible-sticky-controls {
+    position: relative;
+    top: auto;
+    z-index: 10;
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+  }
+
+  .app-layout[data-enabled='true'] .dl-center .bible-selector-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .app-layout[data-enabled='true'] .dl-center .bible-chapter-sheet {
+    width: 100%;
+    padding: 24px 28px;
+  }
+
+  .app-layout[data-enabled='true'] .dl-center .bible-verses-flow {
+    max-width: 65ch;
+    margin-inline: auto;
+    line-height: 1.75;
+  }
+
+  /* 5. GoogleWorkspaceHubView inside 680px Centre */
+  .app-layout[data-enabled='true'] .dl-center .gws-hub {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    max-width: 100%;
+    padding-bottom: 24px;
+  }
+
+  .app-layout[data-enabled='true'] .dl-center .gws-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+    width: 100%;
+  }
+
+  /* 6. FaithArcadeGamesView & FaithChallengesView */
+  .app-layout[data-enabled='true'] .dl-center .fag-stage-card,
+  .app-layout[data-enabled='true'] .dl-center .fag-canvas-wrap,
+  .app-layout[data-enabled='true'] .dl-center .fc-grid-wrap {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  /* 7. Sub-routes (/profile, /profile/[id], /churches, /churches/[id], /churches/new, /fundraisers, /post/[id], /settings, /categories) */
+  .app-layout[data-enabled='true'] .dl-center .subpage-nav-header {
+    position: relative !important;
+    top: auto !important;
+    z-index: 5 !important;
+    width: 100%;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+  }
+
+  /* 8. Container Queries for 680px Centre Column Grids (@container dl-center) */
+  @container dl-center (min-width: 480px) {
+    /* Reels 9:16 cards: multi-column grid instead of stretched single column */
+    .app-layout[data-enabled='true'] .dl-center .reels-grid-layout {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 14px;
+      width: 100%;
+    }
+
+    /* Polls image grid: 2 columns */
+    .app-layout[data-enabled='true'] .dl-center .poll-image-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    /* Categories directory grid (/categories): 2 columns */
+    .app-layout[data-enabled='true'] .dl-center .cx-cat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    /* Faith Arcade games grid: 2 columns */
+    .app-layout[data-enabled='true'] .dl-center .fag-games-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+  }
+
+  @container dl-center (min-width: 520px) {
+    /* Courses Academy grid: 2 columns inside 680px */
+    .app-layout[data-enabled='true'] .dl-center .courses-grid-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      width: 100%;
+    }
+
+    /* Audio Sermon Notes grid: 2 columns */
+    .app-layout[data-enabled='true'] .dl-center .sermon-notes-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      width: 100%;
+    }
+
+    /* RSS Feeds directory grid: 2 columns */
+    .app-layout[data-enabled='true'] .dl-center .rss-directory-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      width: 100%;
+    }
+
+    /* Fundraisers grid: 2 columns */
+    .app-layout[data-enabled='true'] .dl-center .fundraisers-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      width: 100%;
+    }
+
+    /* Faith Challenges grid: 2 columns */
+    .app-layout[data-enabled='true'] .dl-center .fc-challenges-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      width: 100%;
+    }
+
+    /* Google Workspace Hub cards: 2 columns inside 680px, full-span for 2-col cards */
+    .app-layout[data-enabled='true'] .dl-center .gws-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 16px !important;
+    }
+
+    .app-layout[data-enabled='true'] .dl-center .gws-card-span-2 {
+      grid-column: 1 / -1 !important;
+    }
+
+    /* Institutions recommendations grid: 2 columns */
+    .app-layout[data-enabled='true'] .dl-center .inst-recommendations-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      width: 100%;
+    }
+
+    /* Bible parallel translation view: 2 columns */
+    .app-layout[data-enabled='true'] .dl-center .bible-parallel-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    /* Profile playlists grid: 2 columns */
+    .app-layout[data-enabled='true'] .dl-center .profile-playlists-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
   }
 }

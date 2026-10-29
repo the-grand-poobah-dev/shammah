@@ -187,7 +187,25 @@ export default function MemberProfilePage({ params }) {
                 <button
                   type="button"
                   className="inst-action-pill"
-                  onClick={() => router.push('/?tab=messages')}
+                  onClick={() => {
+                    if (
+                      typeof window !== 'undefined' &&
+                      window.matchMedia('(min-width: 768px)').matches
+                    ) {
+                      window.dispatchEvent(
+                        new CustomEvent('shammah:open-panel', {
+                          detail: { panel: 'messages', conversationId: memberId },
+                        })
+                      );
+                      window.dispatchEvent(
+                        new CustomEvent('shammah:open-conversation', {
+                          detail: { recipientId: memberId },
+                        })
+                      );
+                    } else {
+                      router.push('/?tab=messages');
+                    }
+                  }}
                 >
                   <MessageCircle size={14} />
                   <span>Message</span>
