@@ -25,6 +25,7 @@ import { TOP_NAV_SECTIONS } from './components/TopNav';
 import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
 import VideosView from './components/VideosView';
+import ReelsFeed from './components/ReelsFeed';
 import AudioView from './components/AudioView';
 import PollsView from './components/PollsView';
 import CoursesView from './components/CoursesView';
@@ -1574,6 +1575,11 @@ export default function Feed() {
         {/* Videos Section */}
         {tab === 'home' && section === 'videos' && (
           <VideosView session={session} currentUser={profile} openAuth={openAuth} />
+        )}
+
+        {/* Faith Reels Dedicated Section */}
+        {tab === 'home' && section === 'reels' && (
+          <ReelsFeed currentUser={profile} session={session} isModal={false} openAuth={openAuth} />
         )}
 
         {/* Audio Section (Songs, Podcasts, Voice Notes) */}

@@ -48,6 +48,7 @@ create policy "Read comments for visible media"
 
 -- 3. Reels RPC: For You Feed
 -- Combines recency decay, like/view/comment engagement, and a 50-point boost for followed creators
+drop function if exists public.for_you_reels(int, int);
 create or replace function public.for_you_reels(
   p_limit int default 15,
   p_offset int default 0
@@ -55,7 +56,7 @@ create or replace function public.for_you_reels(
 returns table (
   id uuid,
   author_id uuid,
-  church_id text,
+  church_id uuid,
   category_id text,
   text_content text,
   media_url text,
@@ -78,7 +79,7 @@ as $$
   select
     p.id,
     p.author_id,
-    p.church_id::text,
+    p.church_id,
     p.category_id,
     p.text_content,
     p.media_url,
@@ -125,6 +126,7 @@ as $$
 $$;
 
 -- 4. Reels RPC: Following Feed
+drop function if exists public.following_reels(int, int);
 create or replace function public.following_reels(
   p_limit int default 15,
   p_offset int default 0
@@ -132,7 +134,7 @@ create or replace function public.following_reels(
 returns table (
   id uuid,
   author_id uuid,
-  church_id text,
+  church_id uuid,
   category_id text,
   text_content text,
   media_url text,
@@ -155,7 +157,7 @@ as $$
   select
     p.id,
     p.author_id,
-    p.church_id::text,
+    p.church_id,
     p.category_id,
     p.text_content,
     p.media_url,

@@ -18,6 +18,9 @@ import {
   Film,
   FolderPlus,
   Compass,
+  MoreVertical,
+  Flag,
+  Link2,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
@@ -497,7 +500,10 @@ export default function VideosView({ session, currentUser, openAuth }) {
             accent="#ec4899"
             actionLabel="See All"
             onAction={() => {
-              if (typeof window !== 'undefined') window.location.href = '/reels';
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'reels' }));
+                window.location.href = '/reels';
+              }
             }}
           >
             <div className="reels-strip-rail no-scrollbar">
@@ -569,13 +575,42 @@ export default function VideosView({ session, currentUser, openAuth }) {
           </SectionBlock>
         )}
 
-        {/* Block E: Teaching & Sermon Series (Rail) */}
+        {/* Block E: New from Your Church & Follows (Magazine-x2) */}
+        {churchVideos.length > 0 && !debouncedQuery && (
+          <SectionBlock
+            title="From Your Church & Follows"
+            subtitle="Recent messages and broadcasts from ministries you follow"
+            count={churchVideos.length}
+            accent="#10b981"
+          >
+            <ContentLayout
+              layout="magazine-x2"
+              items={churchVideos}
+              renderItem={(video) => (
+                <VideoCardItem
+                  key={video.id}
+                  video={video}
+                  session={session}
+                  currentUser={currentUser}
+                  onOpenWatch={handleOpenWatch}
+                  onToggleSave={handleToggleSaveVideo}
+                  onShare={handleShareVideo}
+                  onDelete={handleDeleteVideo}
+                  formatDuration={formatDuration}
+                  now={now}
+                />
+              )}
+            />
+          </SectionBlock>
+        )}
+
+        {/* Block F: Teaching & Sermon Series (Rail) */}
         {seriesList.length > 0 && !debouncedQuery && (
           <SectionBlock
             title="Study & Sermon Series"
             subtitle="Curated multi-part kingdom teachings"
             count={seriesList.length}
-            accent="#10b981"
+            accent="#8b5cf6"
           >
             <ContentLayout
               layout="rail"
@@ -731,8 +766,18 @@ function VideoCardItem({
   formatDuration,
   now,
 }) {
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const isOwner = session?.user?.id && session.user.id === video.author_id;
   const accent = video.accent || accentFor(video.title || video.id);
+
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    function handleOutsideClick() {
+      setShowMoreMenu(false);
+    }
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, [showMoreMenu]);
 
   return (
     <AccentCard
@@ -810,17 +855,69 @@ function VideoCardItem({
           >
             <Share2 size={15} />
           </button>
-          {isOwner && (
+          <div className="relative">
             <button
               type="button"
-              className="vcard-action-btn danger"
-              onClick={(e) => onDelete(video, e)}
-              title="Delete video"
-              aria-label="Delete video"
+              className="vcard-action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMoreMenu((prev) => !prev);
+              }}
+              title="More options"
+              aria-label="More options"
             >
-              <Trash2 size={15} />
+              <MoreVertical size={15} />
             </button>
-          )}
+            {showMoreMenu && (
+              <div
+                className="vcard-more-dropdown-menu"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className="vcard-more-item"
+                  onClick={(e) => {
+                    setShowMoreMenu(false);
+                    onToggleSave(video, e);
+                  }}
+                >
+                  <Bookmark size={14} /> Watch Later
+                </button>
+                <button
+                  type="button"
+                  className="vcard-more-item"
+                  onClick={(e) => {
+                    setShowMoreMenu(false);
+                    onShare(video, e);
+                  }}
+                >
+                  <Share2 size={14} /> Share Link
+                </button>
+                <button
+                  type="button"
+                  className="vcard-more-item"
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    onOpenWatch(video);
+                  }}
+                >
+                  <Play size={14} /> Watch Now
+                </button>
+                {isOwner && (
+                  <button
+                    type="button"
+                    className="vcard-more-item danger"
+                    onClick={(e) => {
+                      setShowMoreMenu(false);
+                      onDelete(video, e);
+                    }}
+                  >
+                    <Trash2 size={14} /> Delete Video
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </AccentCard>

@@ -567,9 +567,9 @@ begin
   )
   values
     (
-      'b1000000-0000-0000-0000-000000000001',
+      'd1000000-0000-0000-0000-000000000001',
       v_author_id,
-      v_church_id::text,
+      v_church_id,
       'prayer',
       'Never cease praying! When the enemy whispers you are defeated, declare: "No weapon formed against me shall prosper!" 🔥🙌 #PrayerWarrior #Faith',
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
@@ -583,9 +583,9 @@ begin
       now() - interval '2 hours'
     ),
     (
-      'b1000000-0000-0000-0000-000000000002',
+      'd1000000-0000-0000-0000-000000000002',
       v_author_id,
-      v_church_id::text,
+      v_church_id,
       'worship',
       'Live acoustic praise from morning fellowship: "You are the God who does wonders!" Drop an Amen if your soul is blessed today. 🎶🙏 #Praise #Worship',
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
@@ -599,10 +599,10 @@ begin
       now() - interval '6 hours'
     ),
     (
-      'b1000000-0000-0000-0000-000000000003',
+      'd1000000-0000-0000-0000-000000000003',
       v_author_id,
-      v_church_id::text,
-      'testimonies',
+      v_church_id,
+      'stories',
       'Healed of chronic pain after 3 years! Testifying that Jesus Christ is the same yesterday, today and forever. 🌟✨ #Testimony #Miracle',
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
       'reel',
