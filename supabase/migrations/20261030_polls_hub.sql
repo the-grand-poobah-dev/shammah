@@ -2,7 +2,7 @@
 -- Shammah Migration: 20261030_polls_hub.sql
 -- Purpose: Complete database-backed Polls, Surveys, Faith Quizzes, Icebreakers,
 --          cast_vote RPC, Creator Analytics, Early Close, and Quiz Leaderboard.
--- Safe to run multiple times (idempotent).
+-- Safe to run multiple times (100% idempotent).
 -- =============================================================================
 
 -- 0. Ensure role grants on schema and tables so RLS policies never throw 42501
@@ -15,41 +15,60 @@ GRANT ALL PRIVILEGES ON ALL ROUTINES IN SCHEMA public TO postgres, service_role;
 
 -- 1. Extend public.posts with rich Poll & Quiz metadata columns
 ALTER TABLE IF EXISTS public.posts
-  ADD COLUMN IF NOT EXISTS poll_type text DEFAULT 'survey'
-    CHECK (poll_type IS NULL OR poll_type IN ('survey', 'quiz', 'icebreaker')),
+  ADD COLUMN IF NOT EXISTS visibility text NOT NULL DEFAULT 'public',
+  ADD COLUMN IF NOT EXISTS is_anonymous boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS poll_type text DEFAULT 'survey',
   ADD COLUMN IF NOT EXISTS is_quiz boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS quiz_explanation text,
+  ADD COLUMN IF NOT EXISTS poll_explanation text,
   ADD COLUMN IF NOT EXISTS poll_anonymous boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS poll_is_anonymous boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS poll_multi_select boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS poll_allow_multiple boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS hide_results_until_vote boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS reveal_results_after_voting boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS poll_starts_at timestamptz,
   ADD COLUMN IF NOT EXISTS poll_expires_at timestamptz,
   ADD COLUMN IF NOT EXISTS poll_closed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS poll_closed_early boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS poll_accent text,
   ADD COLUMN IF NOT EXISTS poll_category text,
   ADD COLUMN IF NOT EXISTS total_votes_count integer NOT NULL DEFAULT 0;
+
+ALTER TABLE IF EXISTS public.posts
+  DROP CONSTRAINT IF EXISTS posts_poll_type_check;
+
+ALTER TABLE IF EXISTS public.posts
+  ADD CONSTRAINT posts_poll_type_check
+  CHECK (poll_type IS NULL OR poll_type IN ('survey', 'quiz', 'icebreaker'));
 
 CREATE INDEX IF NOT EXISTS idx_posts_poll_type ON public.posts(poll_type) WHERE poll_type IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_posts_poll_expires_at ON public.posts(poll_expires_at) WHERE poll_expires_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_posts_poll_starts_at ON public.posts(poll_starts_at) WHERE poll_starts_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_posts_poll_category ON public.posts(poll_category) WHERE poll_category IS NOT NULL;
 
--- 2. Ensure public.poll_options table and columns exist
+-- 2. Ensure public.poll_options table and all columns exist
 CREATE TABLE IF NOT EXISTS public.poll_options (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id uuid NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
-  label text NOT NULL,
+  label text NOT NULL DEFAULT '',
   image_url text,
   is_correct boolean NOT NULL DEFAULT false,
+  explanation text,
   position integer NOT NULL DEFAULT 0,
+  sort_order integer NOT NULL DEFAULT 0,
   vote_count integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 ALTER TABLE IF EXISTS public.poll_options
+  ADD COLUMN IF NOT EXISTS post_id uuid REFERENCES public.posts(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS label text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS image_url text,
   ADD COLUMN IF NOT EXISTS is_correct boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS explanation text,
   ADD COLUMN IF NOT EXISTS position integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS sort_order integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS vote_count integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 
@@ -94,37 +113,39 @@ CREATE POLICY "poll_options_modify_owner_or_admin"
     )
   );
 
--- 3. Ensure public.poll_votes table, columns, and multi-select constraint exist
+-- 3. Ensure public.poll_votes table and all columns exist (even if created with an older schema)
 CREATE TABLE IF NOT EXISTS public.poll_votes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  post_id uuid NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+  post_id uuid REFERENCES public.posts(id) ON DELETE CASCADE,
   option_id uuid NOT NULL REFERENCES public.poll_options(id) ON DELETE CASCADE,
-  voter_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  voter_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   is_anonymous boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 ALTER TABLE IF EXISTS public.poll_votes
+  ADD COLUMN IF NOT EXISTS post_id uuid REFERENCES public.posts(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS option_id uuid REFERENCES public.poll_options(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS voter_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
   ADD COLUMN IF NOT EXISTS is_anonymous boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 
--- Drop legacy single-choice unique constraint if present so multi-select polls can store multiple options per voter,
--- while single-choice uniqueness is strictly enforced inside cast_vote() and trigger
+-- Backfill post_id on any existing poll_votes rows where post_id was null
+UPDATE public.poll_votes pv
+SET post_id = po.post_id
+FROM public.poll_options po
+WHERE pv.option_id = po.id
+  AND pv.post_id IS NULL;
+
+-- Drop legacy single-choice unique constraint if present so multi-select polls work
 ALTER TABLE IF EXISTS public.poll_votes
   DROP CONSTRAINT IF EXISTS poll_votes_post_id_voter_id_key;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'poll_votes_post_option_voter_unique'
-  ) THEN
-    ALTER TABLE public.poll_votes
-      ADD CONSTRAINT poll_votes_post_option_voter_unique UNIQUE (post_id, option_id, voter_id);
-  END IF;
-EXCEPTION
-  WHEN duplicate_table OR duplicate_object THEN NULL;
-END $$;
+ALTER TABLE IF EXISTS public.poll_votes
+  DROP CONSTRAINT IF EXISTS poll_votes_post_option_voter_unique;
+
+ALTER TABLE IF EXISTS public.poll_votes
+  ADD CONSTRAINT poll_votes_post_option_voter_unique UNIQUE (post_id, option_id, voter_id);
 
 CREATE INDEX IF NOT EXISTS idx_poll_votes_post_id ON public.poll_votes(post_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_poll_votes_option_id ON public.poll_votes(option_id);
@@ -135,36 +156,49 @@ GRANT SELECT ON public.poll_votes TO anon, authenticated, service_role;
 GRANT INSERT, UPDATE, DELETE ON public.poll_votes TO authenticated, service_role;
 
 DROP POLICY IF EXISTS "poll_votes_select_public" ON public.poll_votes;
+DROP POLICY IF EXISTS "Users can read poll votes" ON public.poll_votes;
+DROP POLICY IF EXISTS "Anyone can read poll votes" ON public.poll_votes;
 CREATE POLICY "poll_votes_select_public"
   ON public.poll_votes FOR SELECT
   USING (true);
 
 DROP POLICY IF EXISTS "Block votes on expired polls (INSERT)" ON public.poll_votes;
+DROP POLICY IF EXISTS "members vote as themselves" ON public.poll_votes;
+DROP POLICY IF EXISTS "Users can vote in polls" ON public.poll_votes;
 CREATE POLICY "Block votes on expired polls (INSERT)"
   ON public.poll_votes FOR INSERT
   TO authenticated
   WITH CHECK (
     auth.uid() = voter_id
-    AND EXISTS (
-      SELECT 1 FROM public.posts p
-      WHERE p.id = post_id
-        AND p.poll_closed_at IS NULL
-        AND (p.poll_starts_at IS NULL OR p.poll_starts_at <= now())
-        AND (p.poll_expires_at IS NULL OR p.poll_expires_at > now())
+    AND NOT EXISTS (
+      SELECT 1 FROM public.poll_options po
+      JOIN public.posts p ON p.id = po.post_id
+      WHERE po.id = poll_votes.option_id
+        AND (
+          p.poll_closed_at IS NOT NULL
+          OR COALESCE(p.poll_closed_early, false) = true
+          OR (p.poll_starts_at IS NOT NULL AND p.poll_starts_at > now())
+          OR (p.poll_expires_at IS NOT NULL AND p.poll_expires_at <= now())
+        )
     )
   );
 
 DROP POLICY IF EXISTS "Block vote changes on expired polls (DELETE)" ON public.poll_votes;
+DROP POLICY IF EXISTS "members can remove their own vote" ON public.poll_votes;
 CREATE POLICY "Block vote changes on expired polls (DELETE)"
   ON public.poll_votes FOR DELETE
   TO authenticated
   USING (
     auth.uid() = voter_id
-    AND EXISTS (
-      SELECT 1 FROM public.posts p
-      WHERE p.id = post_id
-        AND p.poll_closed_at IS NULL
-        AND (p.poll_expires_at IS NULL OR p.poll_expires_at > now())
+    AND NOT EXISTS (
+      SELECT 1 FROM public.poll_options po
+      JOIN public.posts p ON p.id = po.post_id
+      WHERE po.id = poll_votes.option_id
+        AND (
+          p.poll_closed_at IS NOT NULL
+          OR COALESCE(p.poll_closed_early, false) = true
+          OR (p.poll_expires_at IS NOT NULL AND p.poll_expires_at <= now())
+        )
     )
   );
 
@@ -205,7 +239,7 @@ CREATE POLICY "quiz_scores_update_own"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- 5. Update trigger public.check_poll_not_expired() to enforce starts_at, closed_at, expires_at, and single-vote
+-- 5. Trigger public.check_poll_not_expired() to auto-populate post_id and enforce expiry/single-vote
 CREATE OR REPLACE FUNCTION public.check_poll_not_expired()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -213,18 +247,33 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
+  v_post_id uuid;
   v_expires_at timestamptz;
   v_starts_at timestamptz;
   v_closed_at timestamptz;
+  v_closed_early boolean;
   v_multi_select boolean;
   v_existing_count integer;
 BEGIN
-  SELECT poll_expires_at, poll_starts_at, poll_closed_at, COALESCE(poll_multi_select, false)
-  INTO v_expires_at, v_starts_at, v_closed_at, v_multi_select
-  FROM public.posts
-  WHERE id = NEW.post_id;
+  IF NEW.post_id IS NULL AND NEW.option_id IS NOT NULL THEN
+    SELECT post_id INTO NEW.post_id
+    FROM public.poll_options
+    WHERE id = NEW.option_id;
+  END IF;
 
-  IF v_closed_at IS NOT NULL THEN
+  v_post_id := NEW.post_id;
+
+  SELECT
+    poll_expires_at,
+    poll_starts_at,
+    poll_closed_at,
+    COALESCE(poll_closed_early, false),
+    COALESCE(poll_multi_select, poll_allow_multiple, false)
+  INTO v_expires_at, v_starts_at, v_closed_at, v_closed_early, v_multi_select
+  FROM public.posts
+  WHERE id = v_post_id;
+
+  IF v_closed_at IS NOT NULL OR v_closed_early THEN
     RAISE EXCEPTION 'Poll has been closed. No further votes can be recorded.'
       USING ERRCODE = 'P0001';
   END IF;
@@ -239,10 +288,10 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
-  IF TG_OP = 'INSERT' AND NOT v_multi_select THEN
+  IF TG_OP = 'INSERT' AND NOT COALESCE(v_multi_select, false) THEN
     SELECT count(*) INTO v_existing_count
     FROM public.poll_votes
-    WHERE post_id = NEW.post_id AND voter_id = NEW.voter_id;
+    WHERE post_id = v_post_id AND voter_id = NEW.voter_id;
 
     IF v_existing_count > 0 THEN
       RAISE EXCEPTION 'You have already voted in this poll. Double voting is not allowed.'
@@ -261,6 +310,7 @@ CREATE TRIGGER trg_check_poll_not_expired
   EXECUTE FUNCTION public.check_poll_not_expired();
 
 -- 6. Server-validated RPC: cast_vote(p_poll_id uuid, p_option_id uuid)
+DROP FUNCTION IF EXISTS public.cast_vote(uuid, uuid);
 CREATE OR REPLACE FUNCTION public.cast_vote(
   p_poll_id uuid,
   p_option_id uuid
@@ -291,13 +341,14 @@ BEGIN
     id,
     poll_type,
     COALESCE(is_quiz, poll_type = 'quiz', false) AS is_quiz,
-    quiz_explanation,
-    COALESCE(poll_anonymous, is_anonymous, false) AS poll_anonymous,
-    COALESCE(poll_multi_select, false) AS poll_multi_select,
-    COALESCE(hide_results_until_vote, false) AS hide_results_until_vote,
+    COALESCE(quiz_explanation, poll_explanation) AS quiz_explanation,
+    COALESCE(poll_anonymous, poll_is_anonymous, is_anonymous, false) AS poll_anonymous,
+    COALESCE(poll_multi_select, poll_allow_multiple, false) AS poll_multi_select,
+    COALESCE(hide_results_until_vote, reveal_results_after_voting, false) AS hide_results_until_vote,
     poll_starts_at,
     poll_expires_at,
-    poll_closed_at
+    poll_closed_at,
+    COALESCE(poll_closed_early, false) AS poll_closed_early
   INTO v_post
   FROM public.posts
   WHERE id = p_poll_id;
@@ -306,7 +357,7 @@ BEGIN
     RAISE EXCEPTION 'Poll not found.' USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_post.poll_closed_at IS NOT NULL THEN
+  IF v_post.poll_closed_at IS NOT NULL OR v_post.poll_closed_early THEN
     RAISE EXCEPTION 'This poll has been closed early by the creator or moderator.' USING ERRCODE = 'P0001';
   END IF;
 
@@ -327,15 +378,12 @@ BEGIN
     RAISE EXCEPTION 'Invalid poll option for this poll.' USING ERRCODE = 'P0002';
   END IF;
 
-  -- Check if user already voted for this specific option
   SELECT id INTO v_existing_vote_id
   FROM public.poll_votes
   WHERE post_id = p_poll_id AND option_id = p_option_id AND voter_id = v_uid
   LIMIT 1;
 
   IF v_post.poll_multi_select AND NOT v_post.is_quiz THEN
-    -- In multi-select surveys, clicking an already selected option toggles it off,
-    -- or clicking a new option adds it.
     IF v_existing_vote_id IS NOT NULL THEN
       DELETE FROM public.poll_votes WHERE id = v_existing_vote_id;
       v_toggled_off := true;
@@ -344,7 +392,6 @@ BEGIN
       VALUES (p_poll_id, p_option_id, v_uid, v_post.poll_anonymous);
     END IF;
   ELSE
-    -- Single-select poll or quiz: reject double votes strictly
     SELECT count(*) INTO v_existing_any_count
     FROM public.poll_votes
     WHERE post_id = p_poll_id AND voter_id = v_uid;
@@ -358,7 +405,6 @@ BEGIN
     VALUES (p_poll_id, p_option_id, v_uid, v_post.poll_anonymous);
   END IF;
 
-  -- Update option vote_count and post total_votes_count
   UPDATE public.poll_options po
   SET vote_count = (
     SELECT count(*)::integer FROM public.poll_votes pv WHERE pv.option_id = po.id
@@ -373,7 +419,6 @@ BEGIN
   SET total_votes_count = v_total_votes
   WHERE id = p_poll_id;
 
-  -- If quiz mode, award points and record quiz_scores
   IF v_post.is_quiz THEN
     SELECT id INTO v_correct_option_id
     FROM public.poll_options
@@ -388,7 +433,6 @@ BEGIN
     ON CONFLICT (poll_id, user_id) DO NOTHING;
   END IF;
 
-  -- Build updated counts map
   SELECT COALESCE(jsonb_object_agg(option_id::text, cnt), '{}'::jsonb)
   INTO v_counts
   FROM (
@@ -398,7 +442,6 @@ BEGIN
     GROUP BY option_id
   ) sub;
 
-  -- Build caller's selected option IDs array
   SELECT COALESCE(jsonb_agg(option_id::text), '[]'::jsonb)
   INTO v_my_votes
   FROM public.poll_votes
@@ -424,6 +467,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.cast_vote(uuid, uuid) TO authenticated, service_role;
 
 -- 7. RPC to close a poll early (creator or platform/church admin)
+DROP FUNCTION IF EXISTS public.close_poll_early(uuid);
 CREATE OR REPLACE FUNCTION public.close_poll_early(p_poll_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -465,6 +509,7 @@ BEGIN
   UPDATE public.posts
   SET
     poll_closed_at = v_now,
+    poll_closed_early = true,
     poll_expires_at = LEAST(COALESCE(poll_expires_at, v_now), v_now)
   WHERE id = p_poll_id;
 
@@ -479,6 +524,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.close_poll_early(uuid) TO authenticated, service_role;
 
 -- 8. RPC for Weekly Quiz Leaderboard
+DROP FUNCTION IF EXISTS public.weekly_quiz_leaderboard(integer);
 CREATE OR REPLACE FUNCTION public.weekly_quiz_leaderboard(p_limit integer DEFAULT 10)
 RETURNS TABLE (
   user_id uuid,
@@ -521,6 +567,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.weekly_quiz_leaderboard(integer) TO anon, authenticated, service_role;
 
 -- 9. Ensure poll_results(uuid[]) helper function exists and works for anon + authenticated
+DROP FUNCTION IF EXISTS public.poll_results(uuid[]);
 CREATE OR REPLACE FUNCTION public.poll_results(p_post_ids uuid[])
 RETURNS TABLE (
   post_id uuid,
@@ -533,12 +580,13 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT
-    pv.post_id,
+    COALESCE(pv.post_id, po.post_id) AS post_id,
     pv.option_id,
     COUNT(*)::bigint AS votes
   FROM public.poll_votes pv
-  WHERE pv.post_id = ANY(p_post_ids)
-  GROUP BY pv.post_id, pv.option_id;
+  LEFT JOIN public.poll_options po ON po.id = pv.option_id
+  WHERE COALESCE(pv.post_id, po.post_id) = ANY(p_post_ids)
+  GROUP BY COALESCE(pv.post_id, po.post_id), pv.option_id;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.poll_results(uuid[]) TO anon, authenticated, service_role;

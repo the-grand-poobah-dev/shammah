@@ -74,3 +74,32 @@ export function nameChangeDaysLeft(changedAt) {
 export function getBadge(id) {
   return badgeById(id);
 }
+
+const ACTION_POINTS = {
+  CREATE_POST: 5,
+  CREATE_POLL: 5,
+  CAST_VOTE: 2,
+  QUIZ_CORRECT: 10,
+  COMMENT: 2,
+  SHARE: 3,
+};
+
+/**
+ * Dispatches a client-side faith points event and caches optimistic progress.
+ * Server-side quiz/poll points are persisted in Supabase (quiz_scores / cast_vote RPC).
+ */
+export function awardPoints(action, customPoints) {
+  if (typeof window === 'undefined') return 0;
+  const pts = typeof customPoints === 'number' ? customPoints : ACTION_POINTS[action] || 1;
+  try {
+    window.dispatchEvent(
+      new CustomEvent('shammah:points-awarded', {
+        detail: { action, points: pts, timestamp: Date.now() },
+      })
+    );
+  } catch {
+    // ignore event dispatch errors in restricted environments
+  }
+  return pts;
+}
+
