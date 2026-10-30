@@ -60,8 +60,21 @@ export async function listReels({ feed = 'foryou', limit = 15, offset = 0 } = {}
         .range(offset, offset + limit - 1);
 
       const { data: fallbackData, error: fallbackError } = await q;
-      if (fallbackError) {
-        return { data: [], count: 0, error: fallbackError };
+      if (fallbackError || !fallbackData || fallbackData.length === 0) {
+        if (typeof window !== 'undefined') {
+          try {
+            const res = await fetch(`/api/media?action=reels&limit=${limit}&offset=${offset}`);
+            if (res.ok) {
+              const fb = await res.json();
+              if (fb && Array.isArray(fb.data) && (fb.data.length > 0 || fallbackError)) {
+                return { data: fb.data, count: fb.count ?? fb.data.length, error: null };
+              }
+            }
+          } catch {}
+        }
+        if (fallbackError) {
+          return { data: [], count: 0, error: fallbackError };
+        }
       }
       return { data: fallbackData || [], count: (fallbackData || []).length, error: null };
     }

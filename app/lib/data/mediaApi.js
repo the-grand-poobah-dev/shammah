@@ -6,6 +6,45 @@
 
 import { supabase } from '../../../lib/supabaseClient';
 
+const CATEGORY_ALIASES = {
+  Sermons: ['Sermons', 'Sermon'],
+  Sermon: ['Sermon', 'Sermons'],
+  Worship: ['Worship'],
+  Testimonies: ['Testimonies', 'Missions'],
+  Teaching: ['Teaching', 'Theology', 'Leadership'],
+  Theology: ['Theology', 'Teaching'],
+  Leadership: ['Leadership', 'Teaching'],
+  'Kids & Family': ['Kids & Family', 'Family'],
+  Family: ['Family', 'Kids & Family'],
+  'Youth & Gen-Z': ['Youth & Gen-Z', 'Youth'],
+  Youth: ['Youth', 'Youth & Gen-Z'],
+  'Live Replays': ['Live Replays', 'Live'],
+  Prayer: ['Prayer'],
+  Missions: ['Missions', 'Testimonies'],
+};
+
+function expandCategories(category) {
+  if (!category || category === 'All') return null;
+  return CATEGORY_ALIASES[category] || [category];
+}
+
+async function fetchMediaFallback(params = {}) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const search = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        search.set(k, String(v));
+      }
+    });
+    const res = await fetch(`/api/media?${search.toString()}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Lists media items with category filtering, search, sorting, and pagination.
  * 
@@ -13,7 +52,7 @@ import { supabase } from '../../../lib/supabaseClient';
  * @param {'video'|'audio'} [params.kind]
  * @param {string} [params.category]
  * @param {string} [params.query]
- * @param {'recent'|'views'|'likes'|'duration'} [params.sort='recent']
+ * @param {'trending'|'recent'|'views'|'likes'|'duration'} [params.sort='recent']
  * @param {number} [params.limit=20]
  * @param {number} [params.offset=0]
  * @param {string} [params.authorId]
@@ -44,9 +83,8 @@ export async function listMedia({
       });
 
       if (error) {
-        // Fallback to standard query if RPC fails
         console.warn('[mediaApi] search_media RPC fallback:', error.message);
-      } else if (data) {
+      } else if (data && data.length > 0) {
         return { data, count: data.length, error: null };
       }
     }
@@ -79,8 +117,13 @@ export async function listMedia({
       q = q.eq('kind', kind);
     }
 
-    if (category && category !== 'All') {
-      q = q.eq('category', category);
+    const cats = expandCategories(category);
+    if (cats && cats.length > 0) {
+      if (cats.length === 1) {
+        q = q.eq('category', cats[0]);
+      } else {
+        q = q.in('category', cats);
+      }
     }
 
     if (authorId) {
@@ -96,8 +139,8 @@ export async function listMedia({
     }
 
     // Sort order
-    if (sort === 'views') {
-      q = q.order('view_count', { ascending: false }).order('published_at', { ascending: false });
+    if (sort === 'trending' || sort === 'views') {
+      q = q.order('view_count', { ascending: false }).order('like_count', { ascending: false }).order('published_at', { ascending: false });
     } else if (sort === 'likes') {
       q = q.order('like_count', { ascending: false }).order('published_at', { ascending: false });
     } else if (sort === 'duration') {
@@ -111,12 +154,43 @@ export async function listMedia({
 
     const { data, count, error } = await q;
 
+    if (error || !data || (data.length === 0 && offset === 0 && !authorId && !seriesId && !churchId)) {
+      const fb = await fetchMediaFallback({
+        action: 'list',
+        kind,
+        category,
+        query: query?.trim(),
+        sort,
+        limit,
+        offset,
+      });
+      if (fb && Array.isArray(fb.data) && (fb.data.length > 0 || error)) {
+        return {
+          data: fb.data,
+          count: fb.count ?? fb.data.length,
+          error: null,
+        };
+      }
+    }
+
     return {
       data: data || [],
       count: count || 0,
       error: error || null,
     };
   } catch (err) {
+    const fb = await fetchMediaFallback({
+      action: 'list',
+      kind,
+      category,
+      query: query?.trim(),
+      sort,
+      limit,
+      offset,
+    });
+    if (fb && Array.isArray(fb.data)) {
+      return { data: fb.data, count: fb.count ?? fb.data.length, error: null };
+    }
     return { data: [], count: 0, error: err };
   }
 }
@@ -155,8 +229,14 @@ export async function getMedia(id) {
       .eq('id', id)
       .maybeSingle();
 
-    if (error) return { data: null, error };
-    if (!data) return { data: null, error: new Error('Media item not found.') };
+    if (error || !data) {
+      const fb = await fetchMediaFallback({ action: 'get', id });
+      if (fb?.data) {
+        return { data: fb.data, error: null };
+      }
+      if (error) return { data: null, error };
+      return { data: null, error: new Error('Media item not found.') };
+    }
 
     // Fetch user engagement (liked, saved) and watch progress if signed in
     const sessionRes = await supabase.auth.getSession().catch(() => null);
@@ -195,6 +275,10 @@ export async function getMedia(id) {
       error: null,
     };
   } catch (err) {
+    const fb = await fetchMediaFallback({ action: 'get', id });
+    if (fb?.data) {
+      return { data: fb.data, error: null };
+    }
     return { data: null, error: err };
   }
 }
@@ -591,14 +675,14 @@ export async function trending({ kind, days = 7, limit = 12 } = {}) {
       p_limit: limit,
     });
 
-    if (error) {
-      // Fallback to top views
+    if (error || !data || data.length === 0 || !data[0]?.author) {
+      // Fallback to top views with full author/church/series joins
       return listMedia({ kind, sort: 'views', limit });
     }
 
     return { data: data || [], error: null };
   } catch (err) {
-    return { data: [], error: err };
+    return listMedia({ kind, sort: 'views', limit });
   }
 }
 
@@ -616,7 +700,13 @@ export async function relatedMedia(itemId, { limit = 6 } = {}) {
       .eq('id', itemId)
       .maybeSingle();
 
-    if (!current) return { data: [], error: null };
+    if (!current) {
+      const fb = await fetchMediaFallback({ action: 'list', kind: 'video', limit: limit + 1 });
+      if (fb?.data) {
+        return { data: fb.data.filter((i) => i.id !== itemId).slice(0, limit), error: null };
+      }
+      return { data: [], error: null };
+    }
 
     let q = supabase
       .from('media_items')
@@ -644,6 +734,12 @@ export async function relatedMedia(itemId, { limit = 6 } = {}) {
     }
 
     const { data, error } = await q;
+    if (error) {
+      const fb = await fetchMediaFallback({ action: 'list', kind: current.kind, limit: limit + 1 });
+      if (fb?.data) {
+        return { data: fb.data.filter((i) => i.id !== itemId).slice(0, limit), error: null };
+      }
+    }
     return { data: data || [], error };
   } catch (err) {
     return { data: [], error: err };
@@ -693,7 +789,7 @@ export async function listContinueWatching({ kind = 'video', limit = 10 } = {}) 
       .order('updated_at', { ascending: false })
       .limit(limit);
 
-    if (error) return { data: [], error };
+    if (error) return { data: [], error: null };
 
     const items = (data || [])
       .filter((row) => row.media && (!kind || row.media.kind === kind))
@@ -709,7 +805,7 @@ export async function listContinueWatching({ kind = 'video', limit = 10 } = {}) 
 
     return { data: items, error: null };
   } catch (err) {
-    return { data: [], error: err };
+    return { data: [], error: null };
   }
 }
 
@@ -743,9 +839,20 @@ export async function listSeries({ kind = 'video', limit = 12 } = {}) {
     }
 
     const { data, error } = await q;
+    if (error || !data || data.length === 0) {
+      const fb = await fetchMediaFallback({ action: 'series', kind, limit });
+      if (fb && Array.isArray(fb.data) && (fb.data.length > 0 || error)) {
+        return { data: fb.data, error: null };
+      }
+    }
     return { data: data || [], error };
   } catch (err) {
+    const fb = await fetchMediaFallback({ action: 'series', kind, limit });
+    if (fb && Array.isArray(fb.data)) {
+      return { data: fb.data, error: null };
+    }
     return { data: [], error: err };
   }
 }
+
 

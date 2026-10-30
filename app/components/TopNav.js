@@ -17,7 +17,6 @@ import {
   Compass,
   ChevronDown,
   Check,
-  Film,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 import PopupSheet from './PopupSheet';
@@ -33,15 +32,6 @@ export const TOP_NAV_SECTIONS = [
 ];
 
 export const MORE_DROPDOWN_ITEMS = [
-  {
-    id: 'reels',
-    label: 'Faith Reels',
-    navLabel: 'Reels',
-    desc: 'Vertical testimonies & worship clips',
-    icon: Film,
-    isSection: true,
-    color: '#ec4899', // Radiant Reels Pink
-  },
   {
     id: 'rss',
     label: 'RSS Feeds',
