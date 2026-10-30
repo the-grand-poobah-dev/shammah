@@ -1,634 +1,691 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   Video as VideoIcon,
   Play,
-  Pause,
-  Volume2,
-  VolumeX,
-  Maximize,
   Sparkles,
   Clock,
   Download,
   Share2,
-  MessageCircle,
-  Repeat,
-  Heart,
   Bookmark,
   Check,
-  Disc,
+  Search,
+  Plus,
+  ArrowRight,
+  Trash2,
+  Edit,
+  Eye,
+  Film,
+  FolderPlus,
+  Compass,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
-import ReactionBar from './ReactionBar';
-import CommentThread from './CommentThread';
-import RepostModal from './RepostModal';
 import ReelViewerModal from './ReelViewerModal';
-import { ScrollAffordanceWrapper } from './ScrollAffordance';
-import { isPostReposted, getPostRepostCount, toggleRepost } from '../lib/postInteractions';
-import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
+import MediaUploadModal from './MediaUploadModal';
+import VideoWatchView from './VideoWatchView';
+import {
+  ContentLayout,
+  AccentCard,
+  SectionBlock,
+  LayoutSwitcher,
+  FilterChips,
+  SortMenu,
+  ProgressBar,
+  SkeletonLayout,
+  EmptyState,
+  ErrorState,
+  InfiniteSentinel,
+  accentFor,
+} from './layoutkit';
+import {
+  listMedia,
+  trending,
+  listContinueWatching,
+  listSeries,
+  toggleSave,
+  deleteMedia,
+} from '../lib/data/mediaApi';
+import { listReels } from '../lib/data/reelsApi';
+import { saveForOffline, isItemSavedOffline, removeOfflineItem } from '../lib/offlineSyncManager';
+import { formatPostDate, useRelativeTimeTick } from '../lib/postDisplay';
+import { playSound } from '../lib/soundEffects';
 
-// Sample church longform and shortform video content
-const SAMPLE_VIDEOS = [
+// Compatibility export in case external components import SAMPLE_VIDEOS
+export const SAMPLE_VIDEOS = [
   {
-    id: 'vid-reel-1',
+    id: 'vid-seed-1',
     media_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    media_type: 'video',
-    is_reel: true,
-    duration_seconds: 48,
-    duration_label: '0:48',
-    category_id: 'prayer',
-    text_content: 'Never cease praying! When the enemy whispers you are defeated, declare: "No weapon formed against me shall prosper!" 🔥🙌 #PrayerWarrior #Faith',
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-    likes_count: 68,
-    comments_count: 14,
-    reposts_count: 22,
-    profiles: {
-      name: 'Pastor David Mwangi',
-      display_name: 'Pastor David Mwangi',
-      avatar_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-      badge: 'pastor',
-      badge_verified: true,
-      role: 'church_admin',
-    },
-  },
-  {
-    id: 'vid-long-1',
-    media_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    media_type: 'video',
-    is_reel: false,
-    duration_seconds: 596,
-    duration_label: '9:56',
-    category_id: 'lessons',
     title: 'The Covenant of Grace: Walking in Supernatural Favor',
-    text_content: 'Full Sunday sermon teaching from Romans 8. Discover how God has already qualified you through Christ Jesus and how walking by the Spirit releases kingdom breakthrough into every sphere of life.',
-    created_at: new Date(Date.now() - 3600000 * 6).toISOString(),
-    likes_count: 142,
-    comments_count: 36,
-    reposts_count: 48,
-    profiles: {
-      name: 'Bishop Sarah Ndung\'u',
+    description: 'Sunday teaching on Romans 8 and Kingdom breakthrough in daily life.',
+    duration_seconds: 596,
+    category: 'Sermons',
+    accent: '#06b6d4',
+    view_count: 342,
+    like_count: 68,
+    save_count: 22,
+    published_at: new Date(Date.now() - 3600000 * 6).toISOString(),
+    author: {
       display_name: 'Bishop Sarah Ndung\'u',
       avatar_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
       badge: 'bishop',
       badge_verified: true,
-      role: 'church_admin',
-    },
-  },
-  {
-    id: 'vid-reel-2',
-    media_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    media_type: 'video',
-    is_reel: true,
-    duration_seconds: 58,
-    duration_label: '0:58',
-    category_id: 'worship',
-    text_content: 'Live acoustic praise from morning fellowship: "You are the God who does wonders!" Drop an Amen if your soul is blessed today. 🎶🙏',
-    created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
-    likes_count: 94,
-    comments_count: 26,
-    reposts_count: 38,
-    profiles: {
-      name: 'Sister Mary Grace',
-      display_name: 'Sister Mary Grace',
-      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      badge: 'worship',
-      badge_verified: true,
-      role: 'member',
-    },
-  },
-  {
-    id: 'vid-long-2',
-    media_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-    media_type: 'video',
-    is_reel: false,
-    duration_seconds: 654,
-    duration_label: '10:54',
-    category_id: 'lessons',
-    title: 'Kingdom Leadership: Serving with Humility and Power',
-    text_content: 'Leadership seminar series for church workers, elders, and youth leaders. How to model Christ-like servant leadership and cultivate spiritual unity.',
-    created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-    likes_count: 110,
-    comments_count: 28,
-    reposts_count: 31,
-    profiles: {
-      name: 'Elder James Ochieng',
-      display_name: 'Elder James Ochieng',
-      avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      badge: 'elder',
-      badge_verified: true,
-      role: 'member',
     },
   },
 ];
 
-const VIDEO_PLAYLISTS = [
-  {
-    id: 'pl-sermons-2026',
-    title: 'Grace & Favor: Sunday Sermon Series',
-    videoCount: 8,
-    totalDuration: '1h 45m',
-    coverImage: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=500',
-    curator: 'Grace Assembly Media Team',
-  },
-  {
-    id: 'pl-worship-sessions',
-    title: 'Acoustic Praise & Adoration Nights',
-    videoCount: 12,
-    totalDuration: '2h 10m',
-    coverImage: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500',
-    curator: 'Shammah Worship Ministry',
-  },
+const VIDEO_CATEGORIES = [
+  { id: 'All', label: 'All Videos' },
+  { id: 'Sermons', label: 'Sermons' },
+  { id: 'Worship', label: 'Worship' },
+  { id: 'Testimonies', label: 'Testimonies' },
+  { id: 'Teaching', label: 'Teaching' },
+  { id: 'Kids & Family', label: 'Kids & Family' },
+  { id: 'Youth & Gen-Z', label: 'Youth & Gen-Z' },
+  { id: 'Live Replays', label: 'Live Replays' },
 ];
 
-function VideoCard({ video, session, currentUser, openAuth, onOpenReelViewer }) {
+const SORT_OPTIONS = [
+  { id: 'trending', label: 'Trending' },
+  { id: 'recent', label: 'Newest' },
+  { id: 'views', label: 'Most Viewed' },
+  { id: 'duration', label: 'Duration' },
+];
+
+export default function VideosView({ session, currentUser, openAuth }) {
   const now = useRelativeTimeTick();
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [speed, setSpeed] = useState(1);
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [commentCount, setCommentCount] = useState(video.comments_count || 0);
-  const [showRepostModal, setShowRepostModal] = useState(false);
-  const [reposted, setReposted] = useState(false);
-  const [repostCount, setRepostCount] = useState(video.reposts_count || 0);
-  const [isSaved, setIsSaved] = useState(false);
-  const [shareMsg, setShareMsg] = useState('');
 
-  const videoRef = useRef(null);
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [activeSort, setActiveSort] = useState('trending');
+  const [activeLayout, setActiveLayout] = useState('list-rich');
 
+  // Multi-block data state
+  const [continueWatching, setContinueWatching] = useState([]);
+  const [spotlightVideo, setSpotlightVideo] = useState(null);
+  const [trendingVideos, setTrendingVideos] = useState([]);
+  const [churchVideos, setChurchVideos] = useState([]);
+  const [seriesList, setSeriesList] = useState([]);
+  const [reelsList, setReelsList] = useState([]);
+  const [allVideos, setAllVideos] = useState([]);
+
+  // Pagination & Loading
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [pageOffset, setPageOffset] = useState(0);
+  const [fetchError, setFetchError] = useState(null);
+
+  // Modals & Overlays
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [activeReelIndex, setActiveReelIndex] = useState(null);
+  const [activeWatchVideoId, setActiveWatchVideoId] = useState(null);
+  const [savedIds, setSavedIds] = useState(new Set());
+  const [toastMessage, setToastMessage] = useState('');
+
+  const isMountedRef = useRef(true);
+
+  const showToast = useCallback((msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 2500);
+  }, []);
+
+  // Debounce search query 300ms
   useEffect(() => {
-    let cancelled = false;
-    isPostReposted(video.id, session?.user?.id).then((isRep) => {
-      if (!cancelled) setReposted(isRep);
-    });
-    getPostRepostCount(video.id, video.reposts_count || 0).then((cnt) => {
-      if (!cancelled) setRepostCount(cnt);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [video.id, session?.user?.id, video.reposts_count]);
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-  function togglePlay() {
-    if (!videoRef.current) return;
-    if (isPlaying) {
-      videoRef.current.pause();
-      setIsPlaying(false);
+  // Load curated blocks on mount or when category changes
+  const loadCuratedBlocks = useCallback(async () => {
+    setFetchError(null);
+    try {
+      const [contRes, trendRes, seriesRes, reelsRes] = await Promise.all([
+        session?.user?.id ? listContinueWatching({ kind: 'video', limit: 8 }) : Promise.resolve({ data: [] }),
+        trending({ kind: 'video', limit: 8 }),
+        listSeries({ kind: 'video', limit: 6 }),
+        listReels({ limit: 12 }),
+      ]);
+
+      if (contRes.data) setContinueWatching(contRes.data);
+      if (seriesRes.data) setSeriesList(seriesRes.data);
+      if (reelsRes.data) setReelsList(reelsRes.data);
+
+      if (trendRes.data && trendRes.data.length > 0) {
+        setSpotlightVideo(trendRes.data[0]);
+        setTrendingVideos(trendRes.data.slice(1, 5));
+      }
+
+      // Fetch church/fellowship videos
+      const churchRes = await listMedia({
+        kind: 'video',
+        sort: 'recent',
+        limit: 6,
+        category: activeCategory !== 'All' ? activeCategory : undefined,
+      });
+
+      if (churchRes.data) {
+        setChurchVideos(churchRes.data.slice(0, 4));
+      }
+    } catch (err) {
+      console.warn('[VideosView] Curated blocks load notice:', err.message);
+    }
+  }, [session?.user?.id, activeCategory]);
+
+  // Load primary catalog (All Videos)
+  const loadPrimaryCatalog = useCallback(async (isReset = false) => {
+    if (isReset) {
+      setLoadingInitial(true);
+      setPageOffset(0);
     } else {
-      videoRef.current.play().catch(() => {});
-      setIsPlaying(true);
+      setLoadingMore(true);
     }
-  }
 
-  function toggleMute() {
-    if (!videoRef.current) return;
-    videoRef.current.muted = !isMuted;
-    setIsMuted(!isMuted);
-  }
+    const currentOffset = isReset ? 0 : pageOffset;
 
-  function handleSpeedCycle() {
-    if (!videoRef.current) return;
-    const next = speed === 1 ? 1.25 : speed === 1.25 ? 1.5 : 1;
-    videoRef.current.playbackRate = next;
-    setSpeed(next);
-  }
+    try {
+      const { data, count, error } = await listMedia({
+        kind: 'video',
+        category: activeCategory !== 'All' ? activeCategory : undefined,
+        query: debouncedQuery || undefined,
+        sort: activeSort,
+        limit: 12,
+        offset: currentOffset,
+      });
 
-  function handleFullscreen() {
-    if (!videoRef.current) return;
-    if (videoRef.current.requestFullscreen) {
-      videoRef.current.requestFullscreen();
+      if (error && (!data || data.length === 0)) {
+        if (isReset) setFetchError(error.message || 'Failed to load videos.');
+      } else {
+        const nextItems = data || [];
+        setAllVideos((prev) => (isReset ? nextItems : [...prev, ...nextItems]));
+        setHasMore(nextItems.length === 12);
+        setPageOffset(currentOffset + nextItems.length);
+      }
+    } catch (err) {
+      if (isReset) setFetchError(err.message || 'Network error loading videos.');
+    } finally {
+      setLoadingInitial(false);
+      setLoadingMore(false);
     }
+  }, [activeCategory, debouncedQuery, activeSort, pageOffset]);
+
+  // Initial load
+  useEffect(() => {
+    loadCuratedBlocks();
+    loadPrimaryCatalog(true);
+  }, [loadCuratedBlocks, activeCategory, debouncedQuery, activeSort]);
+
+  // Handle Save / Bookmark toggle
+  async function handleToggleSaveVideo(video, e) {
+    if (e) e.stopPropagation();
+    if (!session?.user?.id) {
+      if (openAuth) openAuth('signin');
+      return;
+    }
+
+    const id = video.id;
+    const isSaved = savedIds.has(id);
+    const nextSaved = new Set(savedIds);
+    if (isSaved) nextSaved.delete(id);
+    else nextSaved.add(id);
+    setSavedIds(nextSaved);
+
+    playSound('reaction');
+    showToast(isSaved ? 'Removed from Watch Later' : 'Saved to Watch Later');
+    await toggleSave(id);
   }
 
-  function handleSaveDownload() {
-    setIsSaved((s) => !s);
-    setShareMsg(!isSaved ? 'Saved to downloads for offline!' : 'Removed from downloads');
-    setTimeout(() => setShareMsg(''), 2500);
-  }
-
-  async function handleShare() {
+  // Handle Share video link
+  async function handleShareVideo(video, e) {
+    if (e) e.stopPropagation();
+    const url = typeof window !== 'undefined' ? `${window.location.origin}/watch/${video.id}` : '';
     if (navigator.share) {
       try {
         await navigator.share({
-          title: video.title || video.text_content || 'Faith Video',
-          url: typeof window !== 'undefined' ? window.location.href : '',
+          title: video.title,
+          url,
         });
       } catch {}
       return;
     }
-    navigator.clipboard?.writeText(typeof window !== 'undefined' ? window.location.href : '');
-    setShareMsg('Link copied to clipboard!');
-    setTimeout(() => setShareMsg(''), 2000);
+    navigator.clipboard?.writeText(url);
+    showToast('Video link copied!');
   }
 
-  const authorName = video.profiles?.name || video.profiles?.display_name || 'Member';
+  // Handle Delete video (Creator action)
+  async function handleDeleteVideo(video, e) {
+    if (e) e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this video?')) return;
 
-  // If this is a reel, clicking opens the fullscreen portrait viewer
-  if (video.is_reel) {
-    return (
-      <article className="post-card video-card reel-grid-card">
-        <div className="reel-thumbnail-wrap" onClick={() => onOpenReelViewer(video)}>
-          <video src={video.media_url} muted preload="metadata" />
-          <div className="reel-card-overlay">
-            <span className="reel-badge">
-              <Sparkles size={12} /> Reel ({video.duration_label})
-            </span>
-            <button type="button" className="reel-center-play-fab" title="Open Fullscreen Reel">
-              <Play size={20} fill="#ffffff" />
-            </button>
-          </div>
-        </div>
-
-        <div className="video-card-content">
-          <div className="post-header">
-            <Avatar name={authorName} src={video.profiles?.avatar_url} className="avatar-sm" />
-            <div className="post-header-text">
-              <div className="video-author-row">
-                <span className="video-author-name">{authorName}</span>
-                {video.profiles?.badge && <MemberBadge badgeId={video.profiles.badge} size="sm" />}
-                {video.profiles?.badge_verified && (
-                  <VerifiedBadge badge={video.profiles.badge} size={14} />
-                )}
-              </div>
-              <span
-                className="video-pub-time"
-                title={getPostDateTitle(video.created_at)}
-                suppressHydrationWarning
-              >
-                {video.created_at ? `${formatPostDate(video.created_at, now)} · ` : ''}
-                {video.duration_label} · Short-form Reel
-              </span>
-            </div>
-          </div>
-
-          <p className="video-caption-text">{video.text_content}</p>
-
-          <div className="post-actions">
-            <ReactionBar
-              targetType="post"
-              targetId={video.id}
-              session={session}
-              onRequireSignIn={() => openAuth('signin')}
-            />
-
-            <button
-              type="button"
-              className="action-btn"
-              onClick={() => onOpenReelViewer(video)}
-              title="Watch reel & join comments"
-            >
-              <MessageCircle size={15} />
-              <span>{commentCount > 0 ? commentCount : 'Comments'}</span>
-            </button>
-
-            <button
-              type="button"
-              className={`action-btn repost-btn${reposted ? ' is-reposted' : ''}`}
-              onClick={() => {
-                if (!session) return openAuth('signin');
-                setShowRepostModal(true);
-              }}
-              title="Repost reel"
-            >
-              <Repeat size={15} />
-              <span>Repost</span>
-              {repostCount > 0 && <span className="repost-count-badge">{repostCount}</span>}
-            </button>
-
-            <button type="button" className="action-btn" onClick={handleShare} title="Share reel">
-              <Share2 size={15} />
-              <span>Share</span>
-            </button>
-          </div>
-        </div>
-
-        {showRepostModal && (
-          <RepostModal
-            post={video}
-            currentUser={currentUser}
-            onClose={() => setShowRepostModal(false)}
-            onConfirm={async (quote) => {
-              const res = await toggleRepost(video.id, video, currentUser, quote);
-              setReposted(res.reposted);
-              setRepostCount(res.count);
-            }}
-          />
-        )}
-      </article>
-    );
+    const { error } = await deleteMedia(video.id);
+    if (error) {
+      showToast('Error deleting video: ' + error.message);
+    } else {
+      setAllVideos((prev) => prev.filter((v) => v.id !== video.id));
+      showToast('Video deleted');
+      playSound('reaction');
+    }
   }
 
-  // Long-form video card
-  return (
-    <article className="post-card video-card video-card-longform">
-      {/* Video Player & Tools Container */}
-      <div className="video-player-container">
-        <video
-          ref={videoRef}
-          src={video.media_url}
-          className="video-element-long"
-          playsInline
-          onEnded={() => setIsPlaying(false)}
-        />
+  // Open Watch overlay (preserves user scroll position)
+  function handleOpenWatch(video) {
+    setActiveWatchVideoId(video.id);
+    if (typeof window !== 'undefined' && window.history) {
+      window.history.pushState({ videoId: video.id }, video.title, `/watch/${video.id}`);
+    }
+  }
 
-        {/* Floating Custom Video Tools Toolbar */}
-        <div className="video-controls-overlay">
-          <div className="video-tools-bar">
-            <button
-              type="button"
-              className="v-tool-btn"
-              onClick={togglePlay}
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-              title={isPlaying ? 'Pause' : 'Play'}
-            >
-              {isPlaying ? <Pause size={17} /> : <Play size={17} />}
-            </button>
+  function handleCloseWatch() {
+    setActiveWatchVideoId(null);
+    if (typeof window !== 'undefined' && window.history) {
+      window.history.pushState({}, '', '/');
+    }
+  }
 
-            <button
-              type="button"
-              className="v-tool-btn"
-              onClick={toggleMute}
-              aria-label={isMuted ? 'Unmute' : 'Mute'}
-              title={isMuted ? 'Unmute' : 'Mute'}
-            >
-              {isMuted ? <VolumeX size={17} /> : <Volume2 size={17} />}
-            </button>
+  // Listen to browser popstate to handle back button for overlay
+  useEffect(() => {
+    function handlePopState() {
+      if (activeWatchVideoId) {
+        setActiveWatchVideoId(null);
+      }
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activeWatchVideoId]);
 
-            <span className="v-tool-duration">
-              <Clock size={12} /> {video.duration_label}
-            </span>
-
-            <div className="v-tool-spacer" />
-
-            <button
-              type="button"
-              className="v-tool-btn speed-btn"
-              onClick={handleSpeedCycle}
-              title="Playback speed"
-            >
-              {speed}x
-            </button>
-
-            <button
-              type="button"
-              className={`v-tool-btn${isSaved ? ' active' : ''}`}
-              onClick={handleSaveDownload}
-              title={isSaved ? 'Saved offline' : 'Save for offline'}
-              aria-label="Download"
-            >
-              <Download size={16} />
-            </button>
-
-            <button
-              type="button"
-              className="v-tool-btn"
-              onClick={handleFullscreen}
-              title="Fullscreen"
-              aria-label="Fullscreen"
-            >
-              <Maximize size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="video-card-content">
-        <div className="post-header">
-          <Avatar name={authorName} src={video.profiles?.avatar_url} className="avatar-sm" />
-          <div className="post-header-text">
-            <div className="video-author-row">
-              <span className="video-author-name">{authorName}</span>
-              {video.profiles?.badge && <MemberBadge badgeId={video.profiles.badge} size="sm" />}
-              {video.profiles?.badge_verified && (
-                <VerifiedBadge badge={video.profiles.badge} size={14} />
-              )}
-            </div>
-            <span
-              className="video-pub-time"
-              title={getPostDateTitle(video.created_at)}
-              suppressHydrationWarning
-            >
-              {video.created_at ? `${formatPostDate(video.created_at, now)} · ` : ''}
-              {video.duration_label} · Sermon &amp; Teaching
-            </span>
-          </div>
-        </div>
-
-        {video.title && <h3 className="video-title-heading">{video.title}</h3>}
-        <p className="video-caption-text">{video.text_content}</p>
-
-        {shareMsg && <div className="video-toast-pill">{shareMsg}</div>}
-
-        <div className="post-actions">
-          <ReactionBar
-            targetType="post"
-            targetId={video.id}
-            session={session}
-            onRequireSignIn={() => openAuth('signin')}
-          />
-
-          <button
-            type="button"
-            className="action-btn"
-            onClick={() => setCommentsOpen((v) => !v)}
-            title="Comments"
-          >
-            <MessageCircle size={15} />
-            <span>{commentCount > 0 ? commentCount : 'Comment'}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`action-btn repost-btn${reposted ? ' is-reposted' : ''}`}
-            onClick={() => {
-              if (!session) return openAuth('signin');
-              setShowRepostModal(true);
-            }}
-            title="Repost teaching"
-          >
-            <Repeat size={15} />
-            <span>Repost</span>
-            {repostCount > 0 && <span className="repost-count-badge">{repostCount}</span>}
-          </button>
-
-          <button type="button" className="action-btn" onClick={handleShare} title="Share video">
-            <Share2 size={15} />
-            <span>Share</span>
-          </button>
-        </div>
-
-        {commentsOpen && (
-          <CommentThread
-            postId={video.id}
-            session={session}
-            onRequireSignIn={() => openAuth('signin')}
-            onCountChange={setCommentCount}
-          />
-        )}
-      </div>
-
-      {showRepostModal && (
-        <RepostModal
-          post={video}
-          currentUser={currentUser}
-          onClose={() => setShowRepostModal(false)}
-          onConfirm={async (quote) => {
-            const res = await toggleRepost(video.id, video, currentUser, quote);
-            setReposted(res.reposted);
-            setRepostCount(res.count);
-          }}
-        />
-      )}
-    </article>
-  );
-}
-
-export default function VideosView({ feedPosts = [], session, currentUser, openAuth }) {
-  const [subTab, setSubTab] = useState('all'); // all | reels | longform | playlists | saved
-  const [activeReelIndex, setActiveReelIndex] = useState(null);
-  const [savedIds, setSavedIds] = useState([]);
-
-  // Extract all video posts from community feed
-  const postVideos = feedPosts.filter((p) => p.media_url && (p.media_type === 'video' || p.media_type === 'reel'));
-
-  const combinedVideos = [
-    ...SAMPLE_VIDEOS,
-    ...postVideos.map((p) => ({
-      ...p,
-      is_reel: !p.text_content?.includes('sermon') && (p.media_duration_seconds ? p.media_duration_seconds < 120 : true),
-      duration_label: p.media_duration_seconds ? `${Math.floor(p.media_duration_seconds / 60)}:${(p.media_duration_seconds % 60).toString().padStart(2, '0')}` : '1:24',
-    })),
-  ];
-
-  const reels = combinedVideos.filter((v) => v.is_reel);
-  const longform = combinedVideos.filter((v) => !v.is_reel);
-
-  const displayedVideos =
-    subTab === 'reels'
-      ? reels
-      : subTab === 'longform'
-        ? longform
-        : subTab === 'saved'
-          ? combinedVideos.filter((v) => savedIds.includes(v.id))
-          : combinedVideos;
-
-  function openReelViewer(reel) {
-    const idx = reels.findIndex((r) => r.id === reel.id);
-    setActiveReelIndex(idx !== -1 ? idx : 0);
+  // Format seconds to mm:ss
+  function formatDuration(sec) {
+    if (!sec || isNaN(sec)) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
   }
 
   return (
     <div className="section-feed-view videos-view-container">
-      {/* Sub-navigation bar inside Videos segment */}
-      <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll video tabs left" rightLabel="Scroll video tabs right">
-        <div className="video-subnav-bar no-scrollbar" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={subTab === 'all'}
-          className={`video-subnav-pill${subTab === 'all' ? ' active' : ''}`}
-          onClick={() => setSubTab('all')}
-        >
-          <span>All Videos ({combinedVideos.length})</span>
-        </button>
+      {/* 1. Header Toolbar: Search, Filters, Sort, Layout Switcher & Creator Upload */}
+      <div className="video-hub-top-toolbar">
+        <div className="video-hub-search-row">
+          <div className="video-search-input-wrap">
+            <Search size={16} className="video-search-icon" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search sermons, teachings, worship songs, speakers..."
+              className="video-search-field"
+              aria-label="Search videos"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="video-search-clear-btn"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+              >
+                &times;
+              </button>
+            )}
+          </div>
 
-        <button
-          type="button"
-          role="tab"
-          aria-selected={subTab === 'reels'}
-          className={`video-subnav-pill${subTab === 'reels' ? ' active' : ''}`}
-          onClick={() => setSubTab('reels')}
-        >
-          <Sparkles size={13} />
-          <span>Reels &lt; 2 min ({reels.length})</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={subTab === 'longform'}
-          className={`video-subnav-pill${subTab === 'longform' ? ' active' : ''}`}
-          onClick={() => setSubTab('longform')}
-        >
-          <Clock size={13} />
-          <span>Sermons &gt; 2 min ({longform.length})</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={subTab === 'playlists'}
-          className={`video-subnav-pill${subTab === 'playlists' ? ' active' : ''}`}
-          onClick={() => setSubTab('playlists')}
-        >
-          <Disc size={13} />
-          <span>Playlists ({VIDEO_PLAYLISTS.length})</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={subTab === 'saved'}
-          className={`video-subnav-pill${subTab === 'saved' ? ' active' : ''}`}
-          onClick={() => setSubTab('saved')}
-        >
-          <Bookmark size={13} />
-          <span>Saved &amp; Downloads</span>
-        </button>
+          <button
+            type="button"
+            className="video-upload-cta-btn"
+            onClick={() => {
+              if (!session?.user?.id && openAuth) {
+                openAuth('signin');
+                return;
+              }
+              setShowUploadModal(true);
+            }}
+            aria-label="Upload video"
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">Upload Video</span>
+          </button>
         </div>
-      </ScrollAffordanceWrapper>
 
-      {/* Playlists view */}
-      {subTab === 'playlists' && (
-        <div className="video-playlists-grid">
-          {VIDEO_PLAYLISTS.map((pl) => (
-            <div key={pl.id} className="video-playlist-card post-card">
-              <div className="pl-cover-wrap" style={{ backgroundImage: `url(${pl.coverImage})` }}>
-                <span className="pl-video-count-badge">
-                  <VideoIcon size={12} /> {pl.videoCount} Videos
-                </span>
-                <button type="button" className="pl-play-btn" title="Play series" aria-label="Play">
-                  <Play size={20} fill="#ffffff" />
-                </button>
-              </div>
-              <div className="pl-info-wrap">
-                <h4 className="pl-title">{pl.title}</h4>
-                <span className="pl-meta">{pl.curator} · {pl.totalDuration}</span>
-              </div>
-            </div>
-          ))}
+        {/* Categories Strip, Sort Menu & Layout Switcher */}
+        <div className="video-filter-controls-strip">
+          <div className="video-categories-scroll-wrap no-scrollbar">
+            <FilterChips
+              chips={VIDEO_CATEGORIES}
+              activeId={activeCategory}
+              onSelect={setActiveCategory}
+            />
+          </div>
+
+          <div className="video-sort-layout-group">
+            <SortMenu
+              options={SORT_OPTIONS}
+              activeId={activeSort}
+              onSelect={setActiveSort}
+            />
+            <LayoutSwitcher
+              value={activeLayout}
+              onChange={setActiveLayout}
+              storageKey="shammah_videos_layout"
+            />
+          </div>
         </div>
-      )}
+      </div>
 
-      {/* Videos List / Grid */}
-      {subTab !== 'playlists' && (
-        <div className={`videos-list-container${subTab === 'reels' ? ' reels-grid-layout' : ''}`}>
-          {displayedVideos.length === 0 ? (
-            <div className="empty-state">
-              <VideoIcon size={36} className="empty-icon" />
-              <h3>No videos found under this filter</h3>
-              <p>Explore all videos or upload your own testimony.</p>
+      {/* 2. Stacked Content Blocks */}
+      <div className="video-blocks-stack">
+        {/* Block A: Continue Watching (Rail) */}
+        {continueWatching.length > 0 && !debouncedQuery && (
+          <SectionBlock
+            title="Continue Watching"
+            subtitle="Pick up where you left off"
+            count={continueWatching.length}
+            accent="#06b6d4"
+          >
+            <ContentLayout
+              layout="rail"
+              items={continueWatching}
+              renderItem={(item) => (
+                <AccentCard
+                  key={item.id}
+                  accent="#06b6d4"
+                  variant="wash"
+                  hoverGlow={true}
+                  className="continue-watching-card"
+                  onClick={() => handleOpenWatch(item)}
+                >
+                  <div className="cw-thumb-wrapper">
+                    <img
+                      src={item.thumb_url || '/assets/aistudio/pic_4e5732f2.png'}
+                      alt={item.title}
+                      className="cw-thumb-img"
+                      loading="lazy"
+                    />
+                    <div className="cw-play-badge">
+                      <Play size={16} fill="#ffffff" />
+                    </div>
+                    {/* Playback Progress Indicator */}
+                    <div className="cw-progress-bar-wrap">
+                      <div
+                        className="cw-progress-bar-fill"
+                        style={{ width: `${item.playback_percent || 0}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="cw-info-content">
+                    <h4 className="cw-card-title truncate-2">{item.title}</h4>
+                    <span className="cw-card-channel">
+                      {item.author?.display_name || 'Teacher'}
+                    </span>
+                    <span className="cw-card-remaining">
+                      {Math.max(1, Math.round(((item.playback_duration || item.duration_seconds || 0) - (item.playback_position || 0)) / 60))} min left
+                    </span>
+                  </div>
+                </AccentCard>
+              )}
+            />
+          </SectionBlock>
+        )}
+
+        {/* Block B: Spotlight / Featured Sermon */}
+        {spotlightVideo && !debouncedQuery && activeCategory === 'All' && (
+          <SectionBlock
+            title="Featured Message"
+            subtitle="Recommended community teaching"
+            accent="#8b5cf6"
+          >
+            <ContentLayout
+              layout="spotlight"
+              items={[spotlightVideo]}
+              renderItem={(item) => (
+                <AccentCard
+                  key={item.id}
+                  accent="#8b5cf6"
+                  variant="edge"
+                  hoverGlow={true}
+                  className="spotlight-featured-card"
+                  onClick={() => handleOpenWatch(item)}
+                >
+                  <div className="spotlight-hero-media">
+                    <img
+                      src={item.thumb_url || '/assets/aistudio/pic_4e5732f2.png'}
+                      alt={item.title}
+                      className="spotlight-hero-img"
+                    />
+                    <div className="spotlight-hero-scrim" />
+                    <div className="spotlight-hero-badge">
+                      <Sparkles size={13} className="text-amber-400" />
+                      <span>Spotlight</span>
+                    </div>
+                    <span className="spotlight-hero-duration">
+                      {formatDuration(item.duration_seconds)}
+                    </span>
+                    <div className="spotlight-hero-play-circle">
+                      <Play size={28} fill="#ffffff" />
+                    </div>
+                  </div>
+                  <div className="spotlight-hero-details">
+                    <span className="spotlight-category-chip">{item.category || 'Sermons'}</span>
+                    <h2 className="spotlight-hero-title">{item.title}</h2>
+                    <p className="spotlight-hero-desc truncate-2">{item.description}</p>
+                    <div className="spotlight-author-row">
+                      <Avatar
+                        name={item.author?.display_name || 'Channel'}
+                        src={item.author?.avatar_url}
+                        className="avatar-sm"
+                      />
+                      <span className="spotlight-author-name">{item.author?.display_name || 'Shammah Member'}</span>
+                      <span className="spotlight-meta-dot">·</span>
+                      <span className="spotlight-views-text">{item.view_count || 0} views</span>
+                    </div>
+                  </div>
+                </AccentCard>
+              )}
+            />
+          </SectionBlock>
+        )}
+
+        {/* Block C: Reels Strip (Horizontal rail of 9:16 portrait cards) */}
+        {reelsList.length > 0 && !debouncedQuery && (
+          <SectionBlock
+            title="Faith Reels"
+            subtitle="Quick vertical testimonies & worship moments"
+            count={reelsList.length}
+            accent="#ec4899"
+            actionLabel="See All"
+            onAction={() => {
+              if (typeof window !== 'undefined') window.location.href = '/reels';
+            }}
+          >
+            <div className="reels-strip-rail no-scrollbar">
+              {reelsList.map((reel, rIdx) => (
+                <div
+                  key={reel.id}
+                  className="reels-strip-card"
+                  onClick={() => setActiveReelIndex(rIdx)}
+                >
+                  <div className="reels-strip-thumb-wrap">
+                    <video
+                      src={reel.media_url}
+                      className="reels-strip-video-preview"
+                      preload="metadata"
+                      muted
+                      playsInline
+                    />
+                    <div className="reels-strip-gradient" />
+                    <div className="reels-strip-views-badge">
+                      <Eye size={11} /> {reel.view_count || 0}
+                    </div>
+                    <div className="reels-strip-play-badge">
+                      <Play size={14} fill="#ffffff" />
+                    </div>
+                    <div className="reels-strip-bottom-author">
+                      <Avatar
+                        name={reel.profiles?.display_name || 'Creator'}
+                        src={reel.profiles?.avatar_url}
+                        className="avatar-xs reels-strip-avatar"
+                      />
+                      <span className="reels-strip-name truncate">
+                        {reel.profiles?.display_name || 'Believer'}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="reels-strip-caption truncate-2">{reel.text_content}</p>
+                </div>
+              ))}
             </div>
+          </SectionBlock>
+        )}
+
+        {/* Block D: Trending Now (Magazine-flat) */}
+        {trendingVideos.length > 0 && !debouncedQuery && (
+          <SectionBlock
+            title="Trending Now"
+            subtitle="Most engaged faith broadcasts this week"
+            count={trendingVideos.length}
+            accent="#f59e0b"
+          >
+            <ContentLayout
+              layout="magazine-flat"
+              items={trendingVideos}
+              renderItem={(video) => (
+                <VideoCardItem
+                  key={video.id}
+                  video={video}
+                  session={session}
+                  currentUser={currentUser}
+                  onOpenWatch={handleOpenWatch}
+                  onToggleSave={handleToggleSaveVideo}
+                  onShare={handleShareVideo}
+                  onDelete={handleDeleteVideo}
+                  formatDuration={formatDuration}
+                  now={now}
+                />
+              )}
+            />
+          </SectionBlock>
+        )}
+
+        {/* Block E: Teaching & Sermon Series (Rail) */}
+        {seriesList.length > 0 && !debouncedQuery && (
+          <SectionBlock
+            title="Study & Sermon Series"
+            subtitle="Curated multi-part kingdom teachings"
+            count={seriesList.length}
+            accent="#10b981"
+          >
+            <ContentLayout
+              layout="rail"
+              items={seriesList}
+              renderItem={(series) => (
+                <AccentCard
+                  key={series.id}
+                  accent="#10b981"
+                  variant="wash"
+                  hoverGlow={true}
+                  className="series-rail-card"
+                  onClick={() => {
+                    setActiveCategory(series.title);
+                  }}
+                >
+                  <div className="series-cover-wrap">
+                    <img
+                      src={series.cover_url || '/assets/aistudio/pic_4e5732f2.png'}
+                      alt={series.title}
+                      className="series-cover-img"
+                      loading="lazy"
+                    />
+                    <div className="series-episodes-pill">
+                      <FolderPlus size={12} />
+                      <span>{series.episodes?.[0]?.count || 1} Parts</span>
+                    </div>
+                  </div>
+                  <div className="series-card-content">
+                    <h4 className="series-card-title truncate-2">{series.title}</h4>
+                    <span className="series-card-owner">{series.owner?.display_name || 'Ministry Series'}</span>
+                  </div>
+                </AccentCard>
+              )}
+            />
+          </SectionBlock>
+        )}
+
+        {/* Block F: Primary Catalog: All Videos (User layout switcher driven) */}
+        <SectionBlock
+          title={debouncedQuery ? `Search Results for "${debouncedQuery}"` : activeCategory !== 'All' ? `${activeCategory} Videos` : 'All Videos'}
+          subtitle={`${allVideos.length} video broadcasts`}
+          count={allVideos.length}
+          accent="#0ea5e9"
+        >
+          {loadingInitial ? (
+            <SkeletonLayout count={6} layout={activeLayout} />
+          ) : fetchError ? (
+            <ErrorState message={fetchError} onRetry={() => loadPrimaryCatalog(true)} />
+          ) : allVideos.length === 0 ? (
+            <EmptyState
+              title="No videos found"
+              description="Try adjusting your search terms or select another category."
+              icon={VideoIcon}
+              actionLabel="Reset Filters"
+              onAction={() => {
+                setSearchQuery('');
+                setActiveCategory('All');
+              }}
+            />
           ) : (
-            displayedVideos.map((video) => (
-              <VideoCard
-                key={video.id}
-                video={video}
-                session={session}
-                currentUser={currentUser}
-                openAuth={openAuth}
-                onOpenReelViewer={openReelViewer}
+            <>
+              <ContentLayout
+                layout={activeLayout}
+                items={allVideos}
+                renderItem={(video) => (
+                  <VideoCardItem
+                    key={video.id}
+                    video={video}
+                    session={session}
+                    currentUser={currentUser}
+                    onOpenWatch={handleOpenWatch}
+                    onToggleSave={handleToggleSaveVideo}
+                    onShare={handleShareVideo}
+                    onDelete={handleDeleteVideo}
+                    formatDuration={formatDuration}
+                    now={now}
+                  />
+                )}
               />
-            ))
+
+              {/* Infinite Scroll Sentinel */}
+              <InfiniteSentinel
+                hasMore={hasMore}
+                loading={loadingMore}
+                onLoadMore={() => loadPrimaryCatalog(false)}
+              />
+            </>
           )}
+        </SectionBlock>
+      </div>
+
+      {/* 3. In-Page YouTube-Style Watch Overlay (Preserves scroll) */}
+      {activeWatchVideoId && (
+        <div className="video-watch-overlay-modal" role="dialog" aria-modal="true">
+          <VideoWatchView
+            videoId={activeWatchVideoId}
+            session={session}
+            currentUser={currentUser}
+            isOverlay={true}
+            onClose={handleCloseWatch}
+            openAuth={openAuth}
+            onSelectVideo={(item) => setActiveWatchVideoId(item.id)}
+          />
         </div>
       )}
 
-      {/* Fullscreen Portrait Reels Viewer Modal */}
-      {activeReelIndex != null && (
+      {/* 4. Fullscreen TikTok-Style Reels Viewer Modal */}
+      {activeReelIndex !== null && (
         <ReelViewerModal
-          reels={reels}
+          reels={reelsList}
           initialIndex={activeReelIndex}
           currentUser={currentUser}
           session={session}
@@ -636,6 +693,136 @@ export default function VideosView({ feedPosts = [], session, currentUser, openA
           openAuth={openAuth}
         />
       )}
+
+      {/* 5. Creator Media Upload Modal */}
+      {showUploadModal && (
+        <MediaUploadModal
+          isOpen={showUploadModal}
+          onClose={() => setShowUploadModal(false)}
+          defaultKind="video"
+          onSuccess={(newVideo) => {
+            setAllVideos((prev) => [newVideo, ...prev]);
+            showToast('Video published successfully!');
+          }}
+        />
+      )}
+
+      {/* 6. Toast Notification */}
+      {toastMessage && (
+        <div className="video-toast-banner" role="status">
+          {toastMessage}
+        </div>
+      )}
     </div>
+  );
+}
+
+/**
+ * Standard 16:9 Video Card Component
+ */
+function VideoCardItem({
+  video,
+  session,
+  currentUser,
+  onOpenWatch,
+  onToggleSave,
+  onShare,
+  onDelete,
+  formatDuration,
+  now,
+}) {
+  const isOwner = session?.user?.id && session.user.id === video.author_id;
+  const accent = video.accent || accentFor(video.title || video.id);
+
+  return (
+    <AccentCard
+      accent={accent}
+      variant="wash"
+      hoverGlow={true}
+      className="video-standard-item-card"
+      onClick={() => onOpenWatch(video)}
+    >
+      {/* 16:9 Thumbnail Box */}
+      <div className="vcard-thumb-wrap">
+        <img
+          src={video.thumb_url || '/assets/aistudio/pic_4e5732f2.png'}
+          alt={video.title}
+          className="vcard-thumb-img"
+          loading="lazy"
+        />
+        <span className="vcard-duration-badge">
+          {formatDuration(video.duration_seconds)}
+        </span>
+        <div className="vcard-play-hover-overlay">
+          <Play size={24} fill="#ffffff" />
+        </div>
+      </div>
+
+      {/* Video Info Strip */}
+      <div className="vcard-body">
+        <div className="vcard-author-avatar-wrap">
+          <Avatar
+            name={video.author?.display_name || 'Channel'}
+            src={video.author?.avatar_url}
+            className="avatar-sm"
+          />
+        </div>
+
+        <div className="vcard-content-wrap">
+          <h4 className="vcard-title truncate-2">{video.title}</h4>
+
+          <div className="vcard-author-row">
+            <span className="vcard-author-name truncate">{video.author?.display_name || 'Faith Member'}</span>
+            {video.author?.badge && <MemberBadge badgeId={video.author.badge} size="xs" />}
+            {video.author?.badge_verified && <VerifiedBadge badge={video.author.badge} size={12} />}
+          </div>
+
+          <div className="vcard-meta-row">
+            <span>{video.view_count || 0} views</span>
+            <span className="vcard-meta-dot">·</span>
+            <span>{video.published_at ? formatPostDate(video.published_at, now) : 'Recently'}</span>
+            {video.category && (
+              <>
+                <span className="vcard-meta-dot">·</span>
+                <span className="vcard-category-tag">{video.category}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Action Buttons */}
+        <div className="vcard-actions-dock" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="vcard-action-btn"
+            onClick={(e) => onToggleSave(video, e)}
+            title="Save to Watch Later"
+            aria-label="Save video"
+          >
+            <Bookmark size={15} />
+          </button>
+          <button
+            type="button"
+            className="vcard-action-btn"
+            onClick={(e) => onShare(video, e)}
+            title="Share"
+            aria-label="Share video"
+          >
+            <Share2 size={15} />
+          </button>
+          {isOwner && (
+            <button
+              type="button"
+              className="vcard-action-btn danger"
+              onClick={(e) => onDelete(video, e)}
+              title="Delete video"
+              aria-label="Delete video"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+    </AccentCard>
   );
 }

@@ -39,6 +39,7 @@ import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceReco
 
 export default function CommentThread({
   postId,
+  mediaId,
   session,
   onRequireSignIn,
   onCountChange,
@@ -225,11 +226,18 @@ export default function CommentThread({
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const { data, error: loadErr } = await supabase
+      let query = supabase
         .from('comments')
         .select('id, parent_id, author_id, text_content, media_url, media_type, mentioned_user_ids, created_at, profiles(display_name, avatar_url, badge, badge_verified)')
-        .eq('post_id', postId)
         .order('created_at', { ascending: true });
+
+      if (mediaId) {
+        query = query.eq('media_id', mediaId);
+      } else if (postId) {
+        query = query.eq('post_id', postId);
+      }
+
+      const { data, error: loadErr } = await query;
       if (cancelled) return;
       if (loadErr) {
         setState('error');
@@ -391,17 +399,24 @@ export default function CommentThread({
       setMediaUploading(false);
     }
 
+    const insertRow = {
+      author_id: session.user.id,
+      parent_id: replyTo ? replyTo.id : null,
+      text_content: clean || null,
+      media_url: uploadedMediaUrl,
+      media_type: uploadedMediaType,
+      mentioned_user_ids: mentionedIds,
+    };
+    if (mediaId) {
+      insertRow.media_id = mediaId;
+    }
+    if (postId) {
+      insertRow.post_id = postId;
+    }
+
     const { data, error: insertErr } = await supabase
       .from('comments')
-      .insert({
-        post_id: postId,
-        author_id: session.user.id,
-        parent_id: replyTo ? replyTo.id : null,
-        text_content: clean || null,
-        media_url: uploadedMediaUrl,
-        media_type: uploadedMediaType,
-        mentioned_user_ids: mentionedIds,
-      })
+      .insert(insertRow)
       .select('id, parent_id, author_id, text_content, media_url, media_type, mentioned_user_ids, created_at')
       .single();
     setBusy(false);
