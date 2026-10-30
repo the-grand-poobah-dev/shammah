@@ -615,10 +615,10 @@ begin
       now() - interval '18 hours'
     ),
     (
-      'b1000000-0000-0000-0000-000000000004',
+      'd1000000-0000-0000-0000-000000000004',
       v_author_id,
-      v_church_id::text,
-      'youth',
+      v_church_id,
+      'teen',
       'Gen-Z Campus fellowship worshipping in one accord at University of Nairobi! Revival is here. ⚡🔥 #YouthRevival #GenZFaith',
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
       'reel',

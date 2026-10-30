@@ -89,6 +89,9 @@ export function getOfflineItems() {
   return purgeExpiredItems();
 }
 
+// Compatibility alias for components that import saveForOffline
+export const saveForOffline = (item, type) => saveOfflineItem(item, type);
+
 /**
  * Saves an item (post, audio, video, course, poll, sermon) for up to 30 days
  */

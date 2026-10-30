@@ -80,12 +80,32 @@ export default function AppClientInit() {
     window.addEventListener('shammah:open-search', handleOpenSearch);
     window.addEventListener('shammah:sw-feed-cache-updated', handleSwCacheUpdate);
 
+    // 6. Global Exclusive Media Playback: Audio and Video never play simultaneously
+    function handleGlobalMediaPlay(e) {
+      if (e.target && e.target.tagName === 'VIDEO') {
+        window.dispatchEvent(new CustomEvent('shammah:video-play'));
+      }
+    }
+
+    function handleAudioPlayEvent() {
+      document.querySelectorAll('video').forEach((v) => {
+        try {
+          if (!v.paused) v.pause();
+        } catch {}
+      });
+    }
+
+    document.addEventListener('play', handleGlobalMediaPlay, true);
+    window.addEventListener('shammah:audio-play', handleAudioPlayEvent);
+
     return () => {
       cleanupDrag?.();
       cleanupAffordances?.();
       cleanupEdgeSwipe?.();
       unsubPush?.();
       unsubAuth?.();
+      document.removeEventListener('play', handleGlobalMediaPlay, true);
+      window.removeEventListener('shammah:audio-play', handleAudioPlayEvent);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('shammah:open-search', handleOpenSearch);
       window.removeEventListener('shammah:sw-feed-cache-updated', handleSwCacheUpdate);

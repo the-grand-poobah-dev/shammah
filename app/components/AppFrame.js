@@ -2,6 +2,8 @@
 import { useEffect } from 'react';
 import { LayoutModeProvider, useLayoutMode } from '../lib/useLayoutMode';
 import { SidePanelProvider, useSidePanel } from '../lib/useSidePanel';
+import { AudioPlayerProvider } from '../lib/audioPlayer';
+import GlobalAudioPlayer from './GlobalAudioPlayer';
 import LeftRail from './LeftRail';
 import RightPanel from './RightPanel';
 
@@ -84,7 +86,10 @@ export default function AppFrame({ children }) {
   return (
     <LayoutModeProvider>
       <SidePanelProvider>
-        <AppFrameLayout>{children}</AppFrameLayout>
+        <AudioPlayerProvider>
+          <AppFrameLayout>{children}</AppFrameLayout>
+          <GlobalAudioPlayer />
+        </AudioPlayerProvider>
       </SidePanelProvider>
     </LayoutModeProvider>
   );
