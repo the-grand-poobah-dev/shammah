@@ -1,355 +1,374 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
-  BarChart3,
   Sparkles,
-  HelpCircle,
   Plus,
   Check,
-  ShieldCheck,
-  Lock,
-  MessageSquare,
   Users,
-  TrendingUp,
+  EyeOff,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  Send,
 } from 'lucide-react';
+import PopupSheet from './PopupSheet';
 import {
-  getIcebreakerPolls,
-  getPollsForInstitution,
-  getUserVotes,
-  voteOnIcebreakerPoll,
+  DEFAULT_ICEBREAKER_POLLS,
+  fetchIcebreakerPollsFromDb,
+  voteInIcebreakerPoll,
   createIcebreakerPoll,
+  deleteIcebreakerPoll,
 } from '../lib/icebreakerPolls';
 import { playSound } from '../lib/soundEffects';
-import PollAnalyticsModal from './PollAnalyticsModal';
+import { awardPoints } from '../lib/badges';
 
-export default function IcebreakerPollsCard({
-  churchId = null,
-  churchName = '',
-  canCreate = false,
-  isStarterOrAbove = true,
-  onOpenUpgrade = null,
-}) {
-  const [polls, setPolls] = useState([]);
-  const [userVotes, setUserVotes] = useState({});
-  const [creating, setCreating] = useState(false);
-  const [selectedAnalyticsPoll, setSelectedAnalyticsPoll] = useState(null);
+export default function IcebreakerPollsCard({ session, profile, openAuth }) {
+  const [polls, setPolls] = useState(DEFAULT_ICEBREAKER_POLLS);
+  const [votes, setVotes] = useState({});
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Create form state
   const [question, setQuestion] = useState('');
-  const [category, setCategory] = useState('Sunday Sermon Icebreaker');
-  const [targetGroup, setTargetGroup] = useState('All Congregation');
-  const [options, setOptions] = useState(['', '', '', '']);
+  const [category, setCategory] = useState('Icebreaker');
+  const [options, setOptions] = useState(['', '', '']);
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  function reload() {
-    if (churchId) {
-      setPolls(getPollsForInstitution(churchId));
-    } else {
-      setPolls(getIcebreakerPolls());
+  const loadFromServer = useCallback(async () => {
+    const list = await fetchIcebreakerPollsFromDb(session?.user?.id || null);
+    if (Array.isArray(list) && list.length > 0) {
+      setPolls(list);
+      const myMap = {};
+      list.forEach((p) => {
+        if (p.myVote) myMap[p.id] = p.myVote;
+      });
+      setVotes(myMap);
     }
-    setUserVotes(getUserVotes());
-  }
+  }, [session?.user?.id]);
 
   useEffect(() => {
-    reload();
+    loadFromServer();
+  }, [loadFromServer]);
 
-    function onPollsUpdate() {
-      reload();
+  if (!polls.length) return null;
+
+  const currentPoll = polls[activeIndex] || polls[0];
+  const myOptionId = votes[currentPoll.id] || currentPoll.myVote;
+  const totalVotes = currentPoll.options.reduce((sum, o) => sum + (o.votes || 0), 0);
+
+  async function handleVote(optionId) {
+    if (!session?.user?.id) {
+      if (openAuth) openAuth('signin');
+      return;
     }
-    window.addEventListener('shammah:icebreaker-polls-updated', onPollsUpdate);
-    return () => window.removeEventListener('shammah:icebreaker-polls-updated', onPollsUpdate);
-  }, [churchId]);
+    if (myOptionId) return; // Already voted
 
-  function handleVote(pollId, optionId) {
-    if (userVotes[pollId]) return;
-    voteOnIcebreakerPoll(pollId, optionId);
-    reload();
+    // Optimistic update
+    const prevPolls = polls;
+    const prevVotes = votes;
+    setVotes((prev) => ({ ...prev, [currentPoll.id]: optionId }));
+    setPolls((prev) =>
+      prev.map((p) =>
+        p.id === currentPoll.id
+          ? {
+              ...p,
+              options: p.options.map((o) =>
+                o.id === optionId ? { ...o, votes: (o.votes || 0) + 1 } : o
+              ),
+            }
+          : p
+      )
+    );
+    playSound('reaction');
+
+    try {
+      const res = await voteInIcebreakerPoll(currentPoll.id, optionId, session.user.id);
+      if (res?.polls) setPolls(res.polls);
+      if (res?.votes) setVotes((prev) => ({ ...prev, ...res.votes }));
+      awardPoints('VOTE_POLL');
+    } catch {
+      setPolls(prevPolls);
+      setVotes(prevVotes);
+    }
   }
 
-  function handleCreateSubmit(e) {
+  function handleOptionChange(idx, val) {
+    setOptions((prev) => prev.map((o, i) => (i === idx ? val : o)));
+  }
+
+  function addOptionSlot() {
+    if (options.length < 4) setOptions((prev) => [...prev, '']);
+  }
+
+  function removeOptionSlot(idx) {
+    if (options.length > 2) setOptions((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  async function handleCreateSubmit(e) {
     e.preventDefault();
-    if (!question.trim()) return;
-    const validOptions = options.filter((o) => o.trim());
-    if (validOptions.length < 2) return;
+    if (!session?.user?.id) {
+      if (openAuth) openAuth('signin');
+      return;
+    }
+    const cleanOpts = options.map((o) => o.trim()).filter(Boolean);
+    if (!question.trim() || cleanOpts.length < 2) return;
 
-    createIcebreakerPoll({
-      churchId: churchId || 'inst-general',
-      churchName: churchName || 'Christian Fellowship',
-      category,
-      question: question.trim(),
-      targetGroup,
-      options: validOptions,
-    });
+    setSubmitting(true);
+    try {
+      const authorName = profile?.display_name || session?.user?.email?.split('@')[0] || 'Believer';
+      const created = await createIcebreakerPoll({
+        question,
+        category,
+        options: cleanOpts,
+        authorName,
+        isAnonymous,
+        userId: session.user.id,
+      });
 
-    setCreating(false);
-    setQuestion('');
-    setOptions(['', '', '', '']);
-    reload();
+      if (created) {
+        await loadFromServer();
+        setActiveIndex(0);
+        setShowCreateModal(false);
+        setQuestion('');
+        setOptions(['', '', '']);
+        setIsAnonymous(false);
+        playSound('postPublished');
+        awardPoints('CREATE_POLL');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteCurrent() {
+    if (!session?.user?.id) return;
+    const updated = await deleteIcebreakerPoll(currentPoll.id, session.user.id);
+    setPolls(updated);
+    setActiveIndex(0);
   }
 
   return (
     <div className="icebreaker-polls-card">
-      <div className="icebreaker-head-row">
-        <div>
-          <div className="icebreaker-badge">
-            <Sparkles size={13} />
-            <span>Anonymous Sermon &amp; Fellowship Surveys</span>
+      <div className="icebreaker-header">
+        <div className="icebreaker-title-row">
+          <span className="icebreaker-badge-icon">
+            <Sparkles size={15} />
+          </span>
+          <div>
+            <div className="icebreaker-title-wrap">
+              <h4>Daily Fellowship Icebreakers</h4>
+              <span className="icebreaker-pill">{currentPoll.category}</span>
+            </div>
+            <p>Quick community check-ins, faith reflections &amp; warm fellowship</p>
           </div>
-          <h3 className="icebreaker-title">Live Icebreakers &amp; Reflections</h3>
-          <p className="icebreaker-desc">
-            Vote with names hidden from other members during sermons, Bible studies, and youth fellowships.
-          </p>
         </div>
 
-        {canCreate && (
-          <div>
-            {isStarterOrAbove ? (
-              <button
-                type="button"
-                className="icebreaker-create-trigger-btn"
-                onClick={() => setCreating((v) => !v)}
-              >
-                <Plus size={15} />
-                <span>{creating ? 'Close Form' : 'New Icebreaker Poll'}</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="icebreaker-locked-btn"
-                onClick={onOpenUpgrade}
-                title="Unlocked on Starter Plan (Kes 500/mo)"
-              >
-                <Lock size={14} />
-                <span>Starter Plan Feature</span>
-              </button>
-            )}
+        <div className="icebreaker-header-actions">
+          <div className="icebreaker-Step-nav">
+            <button
+              type="button"
+              className="icebreaker-nav-btn"
+              onClick={() => setActiveIndex((prev) => (prev - 1 + polls.length) % polls.length)}
+              title="Previous icebreaker"
+              aria-label="Previous icebreaker"
+            >
+              <ChevronLeft size={15} />
+            </button>
+            <span className="icebreaker-step-indicator">
+              {activeIndex + 1} / {polls.length}
+            </span>
+            <button
+              type="button"
+              className="icebreaker-nav-btn"
+              onClick={() => setActiveIndex((prev) => (prev + 1) % polls.length)}
+              title="Next icebreaker"
+              aria-label="Next icebreaker"
+            >
+              <ChevronRight size={15} />
+            </button>
           </div>
-        )}
+
+          <button
+            type="button"
+            className="icebreaker-ask-btn"
+            onClick={() => {
+              if (!session) {
+                openAuth?.('signin');
+                return;
+              }
+              setShowCreateModal(true);
+            }}
+          >
+            <Plus size={14} />
+            <span>Ask One</span>
+          </button>
+        </div>
       </div>
 
-      {/* Creation Modal / Inline Drawer for Admins */}
-      {creating && (
-        <form className="icebreaker-creator-box" onSubmit={handleCreateSubmit}>
-          <h4>Launch Anonymous Icebreaker Poll</h4>
-          <p className="creator-sub">
-            Ask your congregation or youth group an icebreaker or discussion reflection.
-          </p>
+      {/* Active Icebreaker Poll Body */}
+      <div className="icebreaker-body">
+        <div className="icebreaker-question-row">
+          <span className="icebreaker-emoji">{currentPoll.emoji || '🕊️'}</span>
+          <div className="icebreaker-question-text">
+            <h5>{currentPoll.question}</h5>
+            <span className="icebreaker-author-tag">
+              {currentPoll.isAnonymous ? (
+                <>
+                  <EyeOff size={11} /> Anonymous Member
+                </>
+              ) : (
+                <>Asked by {currentPoll.authorName}</>
+              )}
+              {' · '}
+              <Users size={11} /> {totalVotes} {totalVotes === 1 ? 'response' : 'responses'}
+            </span>
+          </div>
+        </div>
 
-          <label className="icebreaker-field">
-            <span>Context / Category:</span>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="icebreaker-input"
+        <div className="icebreaker-options-grid">
+          {currentPoll.options.map((opt) => {
+            const isSelected = myOptionId === opt.id;
+            const pct = totalVotes > 0 ? Math.round(((opt.votes || 0) / totalVotes) * 100) : 0;
+
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                className={`icebreaker-opt-btn${isSelected ? ' selected' : ''}${myOptionId ? ' voted' : ''}`}
+                onClick={() => handleVote(opt.id)}
+              >
+                {myOptionId && (
+                  <span
+                    className="icebreaker-opt-bar"
+                    style={{ width: `${pct}%` }}
+                  />
+                )}
+                <span className="icebreaker-opt-label">
+                  {isSelected && <Check size={14} className="icebreaker-check" />}
+                  <span>{opt.label}</span>
+                </span>
+                {myOptionId && (
+                  <span className="icebreaker-opt-pct">{pct}%</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="icebreaker-footer">
+          <span className="icebreaker-footer-hint">
+            {myOptionId
+              ? '✨ Thank you for sharing with the church family!'
+              : 'Tap any option to share your response'}
+          </span>
+          {String(currentPoll.id).startsWith('poll-') && (
+            <button
+              type="button"
+              className="icebreaker-delete-btn"
+              onClick={handleDeleteCurrent}
+              title="Remove custom icebreaker"
             >
-              <option>Sunday Sermon Icebreaker</option>
-              <option>Youth &amp; Campus Fellowship</option>
-              <option>Bible Class Discussion</option>
-              <option>Kids &amp; Teens Sunday School</option>
-              <option>Prayer &amp; Fasting Check-in</option>
-            </select>
-          </label>
+              <Trash2 size={12} /> Remove
+            </button>
+          )}
+        </div>
+      </div>
 
-          <label className="icebreaker-field">
-            <span>Question / Icebreaker Prompt:</span>
-            <textarea
-              className="icebreaker-input"
-              rows={2}
+      {/* Create New Icebreaker Modal via PopupSheet */}
+      <PopupSheet
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Sparkles size={18} className="text-amber-400" />
+            <span>Ask a Fellowship Icebreaker</span>
+          </div>
+        }
+        size="md"
+      >
+        <form className="icebreaker-create-form" onSubmit={handleCreateSubmit}>
+          <label className="icebreaker-field-label">
+            Your Icebreaker Question
+            <input
+              type="text"
+              placeholder="e.g., What song has been on repeat in your spirit this week?"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="e.g. During this season of prayer, what is your deepest spiritual request?"
+              maxLength={140}
               required
             />
           </label>
 
-          <div className="icebreaker-options-editor">
-            <span>Response Options (2 to 4 options):</span>
-            {options.map((opt, i) => (
-              <input
-                key={i}
-                type="text"
-                className="icebreaker-input opt-input"
-                placeholder={`Option ${i + 1}`}
-                value={opt}
-                onChange={(e) => {
-                  const copy = [...options];
-                  copy[i] = e.target.value;
-                  setOptions(copy);
-                }}
-              />
+          <div className="icebreaker-category-pills">
+            {['Icebreaker', 'Morning Devotion', 'Sunday Fellowship', 'Youth Check-In', 'Gratitude'].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                className={`icebreaker-cat-chip${category === cat ? ' active' : ''}`}
+                onClick={() => setCategory(cat)}
+              >
+                {cat}
+              </button>
             ))}
           </div>
 
-          {/* Dynamic Real-time Icebreaker Poll Preview */}
-          <div className="icebreaker-preview-box">
-            <div className="poll-preview-top-bar">
-              <div className="poll-preview-indicator">
-                <span className="poll-preview-live-dot" />
-                <span className="poll-preview-title">Dynamic Poll Preview</span>
-                <span className="poll-preview-badge">Live Look</span>
+          <div className="icebreaker-options-inputs">
+            <span className="icebreaker-field-title">Poll Options (2 to 4 choices)</span>
+            {options.map((opt, idx) => (
+              <div key={idx} className="icebreaker-opt-input-row">
+                <input
+                  type="text"
+                  placeholder={`Option ${idx + 1}`}
+                  value={opt}
+                  onChange={(e) => handleOptionChange(idx, e.target.value)}
+                  maxLength={70}
+                  required={idx < 2}
+                />
+                {options.length > 2 && (
+                  <button
+                    type="button"
+                    className="icebreaker-remove-opt"
+                    onClick={() => removeOptionSlot(idx)}
+                    aria-label="Remove option"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </div>
-            </div>
-            <div className="icebreaker-poll-item preview-mode">
-              <div className="poll-item-header">
-                <div className="poll-item-tags">
-                  <span className="poll-category-chip">{category}</span>
-                  <span className="poll-church-chip">{churchName || 'Christian Fellowship'}</span>
-                  <span className="poll-target-chip">{targetGroup}</span>
-                </div>
-                <span className="poll-status-live">
-                  <span className="live-dot" /> Live Preview
-                </span>
-              </div>
-
-              <h4 className="poll-question-text">
-                {question.trim() ? question : 'Your question will appear here as you type…'}
-              </h4>
-
-              <div className="poll-options-stack">
-                {options.map((opt, i) => (
-                  <div key={i} className="poll-option-row">
-                    <div className="poll-option-content">
-                      <span className="poll-option-label">
-                        <span>{opt.trim() ? opt : `Option ${i + 1} (typing…)`}</span>
-                      </span>
-                      <span className="poll-option-stats">
-                        <small>Tap to vote</small>
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="poll-item-footer">
-                <span className="poll-total-votes">
-                  <Users size={12} />
-                  <span>0 anonymous responses</span>
-                </span>
-                <span className="poll-hint">Responses hide voter names from other members</span>
-              </div>
-            </div>
+            ))}
+            {options.length < 4 && (
+              <button type="button" className="icebreaker-add-opt-btn" onClick={addOptionSlot}>
+                <Plus size={13} /> Add Choice
+              </button>
+            )}
           </div>
 
-          <div className="creator-actions">
+          <label className="icebreaker-anon-toggle">
+            <input
+              type="checkbox"
+              checked={isAnonymous}
+              onChange={(e) => setIsAnonymous(e.target.checked)}
+            />
+            <EyeOff size={14} />
+            <span>Post this icebreaker anonymously</span>
+          </label>
+
+          <div className="icebreaker-modal-actions">
             <button
               type="button"
-              className="cx-btn cx-btn-ghost small"
-              onClick={() => setCreating(false)}
+              className="report-cancel-btn"
+              onClick={() => setShowCreateModal(false)}
             >
               Cancel
             </button>
-            <button type="submit" className="cx-btn cx-btn-primary small">
-              Launch Poll
+            <button type="submit" className="signin-btn" disabled={submitting}>
+              <Send size={14} />
+              <span>{submitting ? 'Publishing…' : 'Publish Icebreaker'}</span>
             </button>
           </div>
         </form>
-      )}
-
-      {/* Polls Listing */}
-      <div className="icebreaker-list">
-        {polls.length === 0 ? (
-          <div className="icebreaker-empty">
-            <HelpCircle size={32} className="text-gray-400 mb-2" />
-            <p>No active icebreaker polls yet.</p>
-          </div>
-        ) : (
-          polls.map((poll) => {
-            const myVote = userVotes[poll.id];
-            const hasVoted = Boolean(myVote);
-            const totalVotes = poll.options.reduce((sum, o) => sum + (o.votes || 0), 0);
-
-            return (
-              <div key={poll.id} className="icebreaker-poll-item">
-                <div className="poll-item-header">
-                  <div className="poll-item-tags">
-                    <span className="poll-category-chip">{poll.category}</span>
-                    <span className="poll-church-chip">{poll.churchName}</span>
-                  </div>
-                  <span className="poll-anon-badge" title="Voter name is hidden from other believers">
-                    <ShieldCheck size={12} />
-                    <span>Name Hidden</span>
-                  </span>
-                </div>
-
-                <h4 className="poll-question-text">{poll.question}</h4>
-                <span className="poll-context-text">{poll.context}</span>
-
-                <div className="poll-options-stack">
-                  {poll.options.map((opt) => {
-                    const isSelected = myVote === opt.id;
-                    const percent =
-                      totalVotes > 0 ? Math.round(((opt.votes || 0) / totalVotes) * 100) : 0;
-
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        className={`poll-option-row${isSelected ? ' selected' : ''}${hasVoted ? ' voted' : ''}`}
-                        onClick={() => handleVote(poll.id, opt.id)}
-                        disabled={hasVoted}
-                      >
-                        {/* Fill bar for results */}
-                        {hasVoted && (
-                          <div
-                            className="poll-option-fill"
-                            style={{ width: `${percent}%` }}
-                          />
-                        )}
-
-                        <div className="poll-option-content">
-                          <span className="poll-option-label">
-                            {isSelected && <Check size={14} className="opt-check-icon" />}
-                            <span>{opt.label}</span>
-                          </span>
-
-                          {hasVoted && (
-                            <span className="poll-option-stats">
-                              <b>{percent}%</b>
-                              <small>({opt.votes || 0})</small>
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="poll-item-footer">
-                  <span className="poll-total-votes">
-                    <Users size={12} />
-                    <span>{totalVotes.toLocaleString()} anonymous responses</span>
-                  </span>
-                  <button
-                    type="button"
-                    className="poll-analytics-btn"
-                    onClick={() => {
-                      playSound('reaction');
-                      setSelectedAnalyticsPoll(poll);
-                    }}
-                    title="View voting pattern progression over time"
-                  >
-                    <TrendingUp size={12} />
-                    <span>Poll Analytics</span>
-                  </button>
-                  {!hasVoted && (
-                    <span className="poll-hint">Tap any option above to cast your anonymous vote</span>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Poll Analytics Modal View */}
-      {selectedAnalyticsPoll && (
-        <PollAnalyticsModal
-          poll={selectedAnalyticsPoll}
-          pollOptions={selectedAnalyticsPoll.options}
-          pollCounts={selectedAnalyticsPoll.options?.reduce((acc, o) => {
-            acc[o.id] = o.votes || 0;
-            return acc;
-          }, {})}
-          onClose={() => setSelectedAnalyticsPoll(null)}
-        />
-      )}
+      </PopupSheet>
     </div>
   );
 }
