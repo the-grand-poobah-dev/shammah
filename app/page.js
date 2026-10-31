@@ -1640,7 +1640,7 @@ export default function Feed() {
 
         {/* Faith Arcade Games (Kids, Teens & Youth offline HTML5 games) */}
         {tab === 'home' && section === 'games' && (
-          <FaithArcadeGamesView />
+          <FaithArcadeGamesView session={session} profile={profile} />
         )}
 
         {/* Google Workspace (Calendar, Keep, Meet, Classroom, Tasks, Chat) & Firebase Cloud Hub */}
