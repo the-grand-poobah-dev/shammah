@@ -1,6 +1,7 @@
 // Client-side helper for in-browser microphone voice note recording
-// Works seamlessly with MediaRecorder API on desktop and mobile browsers,
+// Works seamlessly with MediaRecorder API on desktop and mobile browsers (iOS Safari, Android Chrome, desktop),
 // returning a standard File/Blob ready for uploadPostMedia.
+// Note: Microphone access requires a secure context (HTTPS) or localhost.
 
 export function isAudioRecordingSupported() {
   if (typeof window === 'undefined') return false;
@@ -15,10 +16,17 @@ export function isAudioRecordingSupported() {
  *
  * @param {Object} options
  * @param {Function} [options.onTimeTick] - Called every second with current seconds recorded
- * @param {number} [options.maxSeconds=60] - Max duration allowed before auto-stopping
- * @returns {Promise<{ stop: () => Promise<{ file: File, duration: number, previewUrl: string }>, cancel: () => void }>}
+ * @param {Function} [options.onLevel] - Called with live normalized audio level (0.0 to 1.0) for waveform
+ * @param {number} [options.maxSeconds=60] - Max duration allowed before auto-stopping (e.g. 60 for comments, 300 for posts)
+ * @returns {Promise<{
+ *   stop: () => Promise<{ file: File, duration: number, previewUrl: string }>,
+ *   cancel: () => void,
+ *   pause: () => void,
+ *   resume: () => void,
+ *   isPaused: () => boolean
+ * }>}
  */
-export async function startAudioRecording({ onTimeTick, maxSeconds = 60 } = {}) {
+export async function startAudioRecording({ onTimeTick, onLevel, maxSeconds = 60 } = {}) {
   if (!isAudioRecordingSupported()) {
     throw new Error('Microphone audio recording is not supported in this browser.');
   }
@@ -34,12 +42,56 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60 } = {}) 
     });
   } catch (err) {
     if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      throw new Error('Microphone permission was denied. Please allow microphone access to record voice notes.');
+      throw new Error('Microphone permission was denied. Please allow microphone access in your browser settings to record voice notes.');
+    }
+    if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      throw new Error('No microphone device found on your system.');
+    }
+    if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+      throw new Error('Microphone is in use by another application.');
     }
     throw new Error(err.message || 'Could not access your microphone.');
   }
 
+  // AudioContext & AnalyserNode for live input level callback
+  let audioCtx = null;
+  let analyser = null;
+  let animFrameId = null;
+  let sourceNode = null;
+
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass && onLevel) {
+      audioCtx = new AudioContextClass();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      analyser.smoothingTimeConstant = 0.5;
+      sourceNode = audioCtx.createMediaStreamSource(stream);
+      sourceNode.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const pollLevel = () => {
+        if (!analyser) return;
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const avg = sum / (dataArray.length || 1);
+        const normalized = Math.min(1, Math.max(0, avg / 128));
+        try {
+          onLevel(normalized);
+        } catch {}
+        animFrameId = requestAnimationFrame(pollLevel);
+      };
+      animFrameId = requestAnimationFrame(pollLevel);
+    }
+  } catch (audioCtxErr) {
+    console.warn('AudioContext level meter disabled:', audioCtxErr?.message);
+  }
+
   // Determine best supported MIME type
+  // MIME negotiation: audio/webm;codecs=opus -> audio/mp4 (Safari) -> fallbacks
   let mimeType = '';
   const candidates = [
     'audio/webm;codecs=opus',
@@ -51,7 +103,7 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60 } = {}) 
   ];
 
   for (const candidate of candidates) {
-    if (MediaRecorder.isTypeSupported(candidate)) {
+    if (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(candidate)) {
       mimeType = candidate;
       break;
     }
@@ -68,6 +120,7 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60 } = {}) 
   let seconds = 0;
   let timerId = null;
   let hasStopped = false;
+  let isPausedState = false;
 
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) {
@@ -75,31 +128,82 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60 } = {}) 
     }
   };
 
+  const cleanupAudioContextAndTracks = () => {
+    if (animFrameId) {
+      cancelAnimationFrame(animFrameId);
+      animFrameId = null;
+    }
+    if (sourceNode) {
+      try { sourceNode.disconnect(); } catch {}
+      sourceNode = null;
+    }
+    if (audioCtx && audioCtx.state !== 'closed') {
+      try { audioCtx.close(); } catch {}
+      audioCtx = null;
+    }
+    stream.getTracks().forEach((track) => {
+      try { track.stop(); } catch {}
+    });
+  };
+
   return new Promise((resolveStart, rejectStart) => {
     recorder.onstart = () => {
       timerId = setInterval(() => {
-        seconds += 1;
-        if (onTimeTick) {
-          try {
-            onTimeTick(seconds);
-          } catch {}
-        }
-        if (seconds >= maxSeconds) {
-          stopRecording();
+        if (!isPausedState) {
+          seconds += 1;
+          if (onTimeTick) {
+            try {
+              onTimeTick(seconds);
+            } catch {}
+          }
+          if (seconds >= maxSeconds) {
+            stopRecording();
+          }
         }
       }, 1000);
 
       resolveStart({
         stop: stopRecording,
         cancel: cancelRecording,
+        pause: pauseRecording,
+        resume: resumeRecording,
+        isPaused: () => isPausedState,
       });
     };
 
     recorder.onerror = (e) => {
       clearInterval(timerId);
-      stream.getTracks().forEach((track) => track.stop());
+      cleanupAudioContextAndTracks();
       rejectStart(e);
     };
+
+    function pauseRecording() {
+      if (recorder.state === 'recording') {
+        try {
+          recorder.pause();
+          isPausedState = true;
+          if (audioCtx && audioCtx.state === 'running') {
+            audioCtx.suspend().catch(() => {});
+          }
+        } catch (err) {
+          console.warn('Failed to pause recording:', err);
+        }
+      }
+    }
+
+    function resumeRecording() {
+      if (recorder.state === 'paused') {
+        try {
+          recorder.resume();
+          isPausedState = false;
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+          }
+        } catch (err) {
+          console.warn('Failed to resume recording:', err);
+        }
+      }
+    }
 
     function stopRecording() {
       return new Promise((resolveStop) => {
@@ -108,9 +212,9 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60 } = {}) 
         clearInterval(timerId);
 
         recorder.onstop = () => {
-          stream.getTracks().forEach((track) => track.stop());
+          cleanupAudioContextAndTracks();
 
-          const cleanMime = (recorder.mimeType || 'audio/webm').split(';')[0];
+          const cleanMime = (recorder.mimeType || mimeType || 'audio/webm').split(';')[0];
           const ext = cleanMime.includes('mp4') || cleanMime.includes('aac')
             ? 'm4a'
             : cleanMime.includes('ogg')
@@ -130,7 +234,13 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60 } = {}) 
         };
 
         if (recorder.state !== 'inactive') {
-          recorder.stop();
+          try {
+            recorder.stop();
+          } catch {
+            cleanupAudioContextAndTracks();
+          }
+        } else {
+          cleanupAudioContextAndTracks();
         }
       });
     }
@@ -139,7 +249,7 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60 } = {}) 
       if (hasStopped) return;
       hasStopped = true;
       clearInterval(timerId);
-      stream.getTracks().forEach((track) => track.stop());
+      cleanupAudioContextAndTracks();
       if (recorder.state !== 'inactive') {
         try {
           recorder.stop();
@@ -148,10 +258,10 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60 } = {}) 
     }
 
     try {
-      recorder.start(250); // Record in 250ms chunks
+      recorder.start(250); // 250ms time slice for streaming data chunks
     } catch (startErr) {
       clearInterval(timerId);
-      stream.getTracks().forEach((track) => track.stop());
+      cleanupAudioContextAndTracks();
       rejectStart(startErr);
     }
   });

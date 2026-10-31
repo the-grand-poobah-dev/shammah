@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabaseClient';
 
 export const MAX_BYTES = {
   image: 15 * 1024 * 1024,   // 15 MB
+  gif: 15 * 1024 * 1024,     // 15 MB
   video: 100 * 1024 * 1024,  // 100 MB
   audio: 50 * 1024 * 1024,   // 50 MB
 };
@@ -18,20 +19,100 @@ export const ALLOWED_MIME = {
 };
 
 /**
- * Returns 'image' | 'video' | 'audio' | null based on mime or extension
+ * Returns 'image' | 'gif' | 'video' | 'audio' | null based on mime or extension
  */
 export function detectMediaType(file) {
   if (!file) return null;
   const mime = (file.type || '').split(';')[0].trim().toLowerCase();
+  if (mime === 'image/gif') return 'gif';
+  const name = (file.name || '').toLowerCase();
+  if (name.endsWith('.gif')) return 'gif';
+
   if (ALLOWED_MIME.image.includes(mime) || mime.startsWith('image/')) return 'image';
   if (ALLOWED_MIME.video.includes(mime) || mime.startsWith('video/')) return 'video';
   if (ALLOWED_MIME.audio.includes(mime) || mime.startsWith('audio/')) return 'audio';
   
-  const name = (file.name || '').toLowerCase();
-  if (/\.(jpg|jpeg|png|webp|gif|avif)$/i.test(name)) return 'image';
+  if (/\.(jpg|jpeg|png|webp|avif)$/i.test(name)) return 'image';
   if (/\.(mp4|webm|mov|m4v)$/i.test(name)) return 'video';
   if (/\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i.test(name)) return 'audio';
   return null;
+}
+
+/**
+ * Extracts width, height, aspect ratio from image File/Blob or URL
+ */
+export async function getImageSize(fileOrUrl) {
+  if (typeof window === 'undefined' || !fileOrUrl) return { width: 0, height: 0, aspect: 1 };
+  return new Promise((resolve) => {
+    const img = new Image();
+    const isBlob = typeof fileOrUrl !== 'string';
+    const url = isBlob ? URL.createObjectURL(fileOrUrl) : fileOrUrl;
+
+    const cleanup = () => {
+      if (isBlob) URL.revokeObjectURL(url);
+    };
+
+    img.onload = () => {
+      const width = img.naturalWidth || img.width || 0;
+      const height = img.naturalHeight || img.height || 0;
+      const aspect = height > 0 ? Number((width / height).toFixed(3)) : 1;
+      cleanup();
+      resolve({ width, height, aspect });
+    };
+
+    img.onerror = () => {
+      cleanup();
+      resolve({ width: 0, height: 0, aspect: 1 });
+    };
+
+    img.src = url;
+  });
+}
+
+/**
+ * Extracts width, height, duration, aspect ratio from video File/Blob or URL
+ */
+export async function getVideoMeta(fileOrUrl) {
+  if (typeof window === 'undefined' || !fileOrUrl) return { width: 0, height: 0, duration: 0, aspect: 1 };
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    const isBlob = typeof fileOrUrl !== 'string';
+    const url = isBlob ? URL.createObjectURL(fileOrUrl) : fileOrUrl;
+
+    const cleanup = () => {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      if (isBlob) URL.revokeObjectURL(url);
+    };
+
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve({ width: 0, height: 0, duration: 0, aspect: 1 });
+    }, 10000);
+
+    video.onloadedmetadata = () => {
+      clearTimeout(timer);
+      const width = video.videoWidth || 0;
+      const height = video.videoHeight || 0;
+      const duration = Math.round(video.duration) || 0;
+      const aspect = height > 0 ? Number((width / height).toFixed(3)) : 1;
+      cleanup();
+      resolve({ width, height, duration, aspect });
+    };
+
+    video.onerror = () => {
+      clearTimeout(timer);
+      cleanup();
+      resolve({ width: 0, height: 0, duration: 0, aspect: 1 });
+    };
+
+    video.src = url;
+  });
 }
 
 /**
@@ -46,7 +127,7 @@ export async function uploadPostMedia(file, userId) {
     throw new Error('Unsupported file type. Please use JPG, PNG, WebP, GIF, MP4, WebM, MP3 or WAV.');
   }
 
-  const max = MAX_BYTES[type];
+  const max = MAX_BYTES[type] || MAX_BYTES.image;
   if (file.size > max) {
     const mb = Math.round(max / (1024 * 1024));
     throw new Error(`That ${type} is too large. Maximum size is ${mb} MB.`);
@@ -57,7 +138,12 @@ export async function uploadPostMedia(file, userId) {
     .slice(0, 80);
 
   const path = `${userId}/${Date.now()}-${safeName}`;
-  const cleanContentType = (file.type || '').split(';')[0] || (type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'audio/webm');
+  const cleanContentType = (file.type || '').split(';')[0] || (
+    type === 'gif' ? 'image/gif' :
+    type === 'image' ? 'image/jpeg' :
+    type === 'video' ? 'video/mp4' :
+    'audio/webm'
+  );
 
   const { error } = await supabase.storage.from('post-media').upload(path, file, {
     cacheControl: '3600',
