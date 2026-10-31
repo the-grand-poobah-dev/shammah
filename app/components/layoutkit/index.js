@@ -17,6 +17,7 @@ export {
   SortMenu,
   StatStrip,
   SkeletonLayout,
+  SkeletonGrid,
   EmptyState,
   ErrorState,
   InfiniteSentinel,

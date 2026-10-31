@@ -442,6 +442,10 @@ export function SkeletonLayout({ layout = 'magazine-flat', count = 4, className 
   );
 }
 
+export function SkeletonGrid({ count = 4, layout = 'grid', className = '', ...props }) {
+  return <SkeletonLayout layout={layout} count={count} className={className} {...props} />;
+}
+
 // ---------------------------------------------------------------------------
 // 8. EmptyState
 // ---------------------------------------------------------------------------

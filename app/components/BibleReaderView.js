@@ -1062,7 +1062,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             </div>
 
             <blockquote className="text-lg sm:text-xl font-serif italic text-white leading-relaxed mb-4">
-              "{verseOfTheDay.text}"
+              &quot;{verseOfTheDay.text}&quot;
             </blockquote>
 
             <div className="flex items-center justify-between pt-3 border-t border-white/10 flex-wrap gap-2">
@@ -1229,7 +1229,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
                       </span>
                       <span className="text-[10px] text-slate-400">{bm.translation}</span>
                     </div>
-                    <p className="text-xs text-slate-200 line-clamp-2 italic">"{bm.text}"</p>
+                    <p className="text-xs text-slate-200 line-clamp-2 italic">&quot;{bm.text}&quot;</p>
                   </div>
                 ))}
               </div>
@@ -1644,7 +1644,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
                 {crossRefData.list.map((cr, idx) => (
                   <div key={idx} className="p-3 bg-white/5 rounded-xl border border-white/5">
                     <span className="text-xs font-bold text-teal-400 block mb-1">{cr.ref}</span>
-                    <p className="text-xs text-slate-200 italic">"{cr.text}"</p>
+                    <p className="text-xs text-slate-200 italic">&quot;{cr.text}&quot;</p>
                   </div>
                 ))}
               </div>

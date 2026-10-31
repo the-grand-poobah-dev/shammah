@@ -37,6 +37,7 @@ import InstitutionProfileModal from './InstitutionProfileModal';
 import AuthorOverviewModal from './AuthorOverviewModal';
 import MpesaPaymentModal, { COMMUNITY_PROJECTS } from './MpesaPaymentModal';
 import PopupSheet from './PopupSheet';
+import { ScrollAffordanceControls } from './ScrollAffordance';
 import { supabase } from '../lib/supabaseClient';
 import {
   getFollowedInstitutionIds,
@@ -337,7 +338,8 @@ export function ChurchesToFollowCard({ onFollowToggle, session: propSession, cur
   }
 
   return (
-    <div className="home-highlight-card churches-card">
+    <div className="home-highlight-card churches-card" style={{ position: 'relative' }}>
+      <ScrollAffordanceControls targetRef={ref} direction="horizontal" />
       <div className="home-highlight-header">
         <div className="hl-header-title">
           <Church size={17} className="hl-icon church-icon" />
@@ -533,7 +535,8 @@ export function PeopleToFollowCard({ onFollowToggle }) {
   }
 
   return (
-    <div className="home-highlight-card people-card">
+    <div className="home-highlight-card people-card" style={{ position: 'relative' }}>
+      <ScrollAffordanceControls targetRef={ref} direction="horizontal" />
       <div className="home-highlight-header">
         <div className="hl-header-title">
           <Users size={17} className="hl-icon people-icon" />
@@ -630,7 +633,8 @@ export function TrendingReelsCard({ onSelectSection }) {
   const { ref, onPointerDown, onPointerMove, onPointerUp, dragInfo } = useDragScroll();
 
   return (
-    <div className="home-highlight-card reels-shelf-card">
+    <div className="home-highlight-card reels-shelf-card" style={{ position: 'relative' }}>
+      <ScrollAffordanceControls targetRef={ref} direction="horizontal" />
       <div className="home-highlight-header">
         <div className="hl-header-title">
           <Video size={17} className="hl-icon video-icon" />
@@ -796,6 +800,7 @@ export function ExploreTabsBanner({ onSelectSection }) {
 export function CommunityProjectsGivingCard({ currentUser }) {
   const [selectedProjectId, setSelectedProjectId] = useState('community-food-drive');
   const [showModal, setShowModal] = useState(false);
+  const projScrollRef = useRef(null);
 
   const activeProj =
     COMMUNITY_PROJECTS.find((p) => p.id === selectedProjectId) || COMMUNITY_PROJECTS[0];
@@ -820,9 +825,10 @@ export function CommunityProjectsGivingCard({ currentUser }) {
         </button>
       </div>
 
-      <div className="giving-card-body">
+      <div className="giving-card-body" style={{ position: 'relative' }}>
+        <ScrollAffordanceControls targetRef={projScrollRef} direction="horizontal" />
         {/* Project Selector Pills */}
-        <div className="giving-project-selector-row no-scrollbar">
+        <div ref={projScrollRef} className="giving-project-selector-row no-scrollbar">
           {COMMUNITY_PROJECTS.map((proj) => {
             const isSelected = selectedProjectId === proj.id;
             return (

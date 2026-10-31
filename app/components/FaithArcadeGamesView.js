@@ -272,7 +272,7 @@ export default function FaithArcadeGamesView({ session = null, profile = null })
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white uppercase tracking-wider shadow-sm flex items-center gap-1">
                       <Flame className="w-3.5 h-3.5 fill-white" />
-                      <span>Today's Daily Challenge</span>
+                      <span>Today&apos;s Daily Challenge</span>
                     </span>
                     <span className="text-xs font-mono text-amber-300 font-semibold drop-shadow">
                       2.0x Multiplier
@@ -311,7 +311,7 @@ export default function FaithArcadeGamesView({ session = null, profile = null })
                     }}
                   >
                     <Play className="w-5 h-5 fill-white text-white" />
-                    <span>Play Today's Challenge</span>
+                    <span>Play Today&apos;s Challenge</span>
                   </button>
                 </div>
               </div>

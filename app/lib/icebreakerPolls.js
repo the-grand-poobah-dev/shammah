@@ -93,6 +93,10 @@ export function getIcebreakerVotes() {
   return {};
 }
 
+export function getUserVotes() {
+  return getIcebreakerVotes();
+}
+
 export async function voteInIcebreakerPoll(pollId, optionId, userId = null) {
   if (!userId) return { polls: DEFAULT_ICEBREAKER_POLLS, votes: {} };
   await castPollVote({ pollId, optionId, userId });
