@@ -21,6 +21,7 @@ import {
 import { playSound } from '../lib/soundEffects';
 import PopupSheet from './PopupSheet';
 import { ScrollAffordanceWrapper } from './ScrollAffordance';
+import { useContentCounters, markContentSeen } from '../lib/contentCounterManager';
 
 export const TOP_NAV_SECTIONS = [
   { id: 'all', label: 'All', icon: Flame },
@@ -96,6 +97,8 @@ export function handleSectionClick(secId, context = {}) {
     onSelectSection(secId);
   }
 
+  markContentSeen(secId);
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('shammah:set-tab', { detail: 'home' }));
     window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: secId }));
@@ -141,6 +144,7 @@ export function handleMoreItemClick(item, context = {}) {
 export default function TopNav({ activeSection = 'all', onSelectSection, isHome = false }) {
   const pathname = usePathname();
   const router = useRouter();
+  const counters = useContentCounters();
   const [currentSection, setCurrentSection] = useState(activeSection);
   const [moreOpen, setMoreOpen] = useState(false);
 

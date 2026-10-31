@@ -428,7 +428,7 @@ export async function idbGetBibleChapter(bookKey, chapterNum, translation = 'KJV
 export async function idbPutBibleChapter(chapterData) {
   try {
     const db = await openBibleIDB();
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const tx = db.transaction(IDB_STORE, 'readwrite');
       const store = tx.objectStore(IDB_STORE);
       const key = `${chapterData.translation.toUpperCase()}:${chapterData.bookId || chapterData.bookName}:${chapterData.chapterNum}`;

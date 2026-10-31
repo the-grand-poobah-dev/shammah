@@ -72,13 +72,86 @@ const BOOK_MAP = {
   REV: { name: 'Revelation', standard: 'Revelation' },
 };
 
+const BOOK_ALIASES = {
+  ps: 'PSA', psalm: 'PSA', psalms: 'PSA',
+  gen: 'GEN', genesis: 'GEN',
+  ex: 'EXO', exo: 'EXO', exod: 'EXO', exodus: 'EXO',
+  lev: 'LEV', leviticus: 'LEV',
+  num: 'NUM', numbers: 'NUM',
+  deut: 'DEU', deu: 'DEU', deuteronomy: 'DEU',
+  josh: 'JOS', jos: 'JOS', joshua: 'JOS',
+  judg: 'JDG', jdg: 'JDG', judges: 'JDG',
+  ruth: 'RUT', rut: 'RUT',
+  '1 sam': '1SA', '1sam': '1SA', '1sa': '1SA', '1 samuel': '1SA',
+  '2 sam': '2SA', '2sam': '2SA', '2sa': '2SA', '2 samuel': '2SA',
+  '1 kgs': '1KI', '1kgs': '1KI', '1ki': '1KI', '1 kings': '1KI',
+  '2 kgs': '2KI', '2kgs': '2KI', '2ki': '2KI', '2 kings': '2KI',
+  '1 chron': '1CH', '1chron': '1CH', '1ch': '1CH', '1 chronicles': '1CH',
+  '2 chron': '2CH', '2chron': '2CH', '2ch': '2CH', '2 chronicles': '2CH',
+  ezra: 'EZR', ezr: 'EZR',
+  neh: 'NEH', nehemiah: 'NEH',
+  esth: 'EST', est: 'EST', esther: 'EST',
+  job: 'JOB',
+  prov: 'PRO', pro: 'PRO', proverbs: 'PRO',
+  eccles: 'ECC', ecc: 'ECC', ecclesiastes: 'ECC',
+  song: 'SNG', sng: 'SNG', 'song of songs': 'SNG', 'song of solomon': 'SNG',
+  isa: 'ISA', isaiah: 'ISA',
+  jer: 'JER', jeremiah: 'JER',
+  lam: 'LAM', lamentations: 'LAM',
+  ezek: 'EZK', ezk: 'EZK', ezekiel: 'EZK',
+  dan: 'DAN', daniel: 'DAN',
+  hos: 'HOS', hosea: 'HOS',
+  joel: 'JOL', jol: 'JOL',
+  amos: 'AMO', amo: 'AMO',
+  obad: 'OBA', oba: 'OBA', obadiah: 'OBA',
+  jon: 'JON', jonah: 'JON',
+  mic: 'MIC', micah: 'MIC',
+  nah: 'NAH', nahum: 'NAH',
+  hab: 'HAB', habakkuk: 'HAB',
+  zeph: 'ZEP', zep: 'ZEP', zephaniah: 'ZEP',
+  hag: 'HAG', haggai: 'HAG',
+  zech: 'ZEC', zec: 'ZEC', zechariah: 'ZEC',
+  mal: 'MAL', malachi: 'MAL',
+  mat: 'MAT', matt: 'MAT', matthew: 'MAT',
+  mk: 'MRK', mrk: 'MRK', mark: 'MRK',
+  lk: 'LUK', luk: 'LUK', luke: 'LUK',
+  jn: 'JHN', jhn: 'JHN', john: 'JHN',
+  act: 'ACT', acts: 'ACT',
+  rom: 'ROM', romans: 'ROM',
+  '1 cor': '1CO', '1cor': '1CO', '1co': '1CO', '1 corinthians': '1CO',
+  '2 cor': '2CO', '2cor': '2CO', '2co': '2CO', '2 corinthians': '2CO',
+  gal: 'GAL', galatians: 'GAL',
+  eph: 'EPH', ephesians: 'EPH',
+  phil: 'PHP', php: 'PHP', philippians: 'PHP',
+  col: 'COL', colossians: 'COL',
+  '1 thess': '1TH', '1thess': '1TH', '1th': '1TH', '1 thessalonians': '1TH',
+  '2 thess': '2TH', '2thess': '2TH', '2th': '2TH', '2 thessalonians': '2TH',
+  '1 tim': '1TI', '1tim': '1TI', '1ti': '1TI', '1 timothy': '1TI',
+  '2 tim': '2TI', '2tim': '2TI', '2ti': '2TI', '2 timothy': '2TI',
+  tit: 'TIT', titus: 'TIT',
+  phm: 'PHM', philemon: 'PHM',
+  heb: 'HEB', hebrews: 'HEB',
+  jas: 'JAS', james: 'JAS',
+  '1 pet': '1PE', '1pet': '1PE', '1pe': '1PE', '1 peter': '1PE',
+  '2 pet': '2PE', '2pet': '2PE', '2pe': '2PE', '2 peter': '2PE',
+  '1 jn': '1JN', '1jn': '1JN', '1 john': '1JN',
+  '2 jn': '2JN', '2jn': '2JN', '2 john': '2JN',
+  '3 jn': '3JN', '3jn': '3JN', '3 john': '3JN',
+  jud: 'JUD', jude: 'JUD',
+  rev: 'REV', revelation: 'REV',
+};
+
 function resolveBook(query) {
   if (!query) return null;
   const raw = String(query).trim().toUpperCase();
   if (BOOK_MAP[raw]) {
     return { id: raw, name: BOOK_MAP[raw].name, standard: BOOK_MAP[raw].standard };
   }
-  const clean = query.trim().toLowerCase();
+  const clean = String(query).trim().toLowerCase();
+  const aliasId = BOOK_ALIASES[clean];
+  if (aliasId && BOOK_MAP[aliasId]) {
+    return { id: aliasId, name: BOOK_MAP[aliasId].name, standard: BOOK_MAP[aliasId].standard };
+  }
   for (const [id, data] of Object.entries(BOOK_MAP)) {
     if (data.name.toLowerCase() === clean || data.standard.toLowerCase() === clean) {
       return { id, name: data.name, standard: data.standard };
@@ -275,32 +348,30 @@ export async function GET(request) {
     memoryCache.set(cacheKey, result);
 
     if (supabase && verses.length > 0) {
-      (async () => {
-        try {
-          await supabase.from('bible_chapters').upsert({
-            translation,
-            book_id: resolved.id,
-            chapter: chapterNum,
-            verses,
-            source,
-            fetched_at: new Date().toISOString(),
-          });
+      try {
+        await supabase.from('bible_chapters').upsert({
+          translation,
+          book_id: resolved.id,
+          chapter: chapterNum,
+          verses,
+          source,
+          fetched_at: new Date().toISOString(),
+        });
 
-          const verseRows = verses.map((v) => ({
-            id: `${translation}_${resolved.id}_${chapterNum}_${v.num}`,
-            translation,
-            book_id: resolved.id,
-            chapter: chapterNum,
-            verse: v.num,
-            text: v.text,
-            heading: v.heading || null,
-          }));
+        const verseRows = verses.map((v) => ({
+          id: `${translation}_${resolved.id}_${chapterNum}_${v.num}`,
+          translation,
+          book_id: resolved.id,
+          chapter: chapterNum,
+          verse: v.num,
+          text: v.text,
+          heading: v.heading || null,
+        }));
 
-          await supabase.from('bible_verses').upsert(verseRows, { onConflict: 'id' });
-        } catch (saveErr) {
-          console.warn('Supabase chapter cache error:', saveErr?.message);
-        }
-      })();
+        await supabase.from('bible_verses').upsert(verseRows, { onConflict: 'id' });
+      } catch (saveErr) {
+        console.warn('Supabase chapter cache error:', saveErr?.message);
+      }
     }
 
     return NextResponse.json(result, {
