@@ -88,6 +88,69 @@ export async function POST(req) {
         );
     }
 
+    // Check if this callback corresponds to a fundraiser donation
+    const { data: donation } = await supabase
+      .from('fundraiser_donations')
+      .select('id, fundraiser_id, amount_kes, status')
+      .eq('checkout_request_id', checkoutId)
+      .maybeSingle();
+
+    if (donation && donation.status === 'pending') {
+      if (success) {
+        const donationAmount = amount != null ? Math.round(amount) : donation.amount_kes;
+        const { error: rpcErr } = await supabase.rpc('credit_donation', {
+          p_donation_id: donation.id,
+          p_mpesa_receipt: receipt || null,
+          p_amount_kes: donationAmount,
+        });
+
+        if (rpcErr) {
+          // Fallback service_role direct update
+          await supabase
+            .from('fundraiser_donations')
+            .update({
+              status: 'succeeded',
+              mpesa_transaction_id: receipt || undefined,
+            })
+            .eq('id', donation.id);
+
+          const { data: fr } = await supabase
+            .from('fundraisers')
+            .select('raised_kes, donors_count, goal_kes, status')
+            .eq('id', donation.fundraiser_id)
+            .single();
+
+          if (fr) {
+            const newRaised = (Number(fr.raised_kes) || 0) + donationAmount;
+            const newDonors = (Number(fr.donors_count) || 0) + 1;
+            const isCompleted = newRaised >= fr.goal_kes;
+
+            await supabase
+              .from('fundraisers')
+              .update({
+                raised_kes: newRaised,
+                donors_count: newDonors,
+                status: isCompleted && fr.status === 'active' ? 'completed' : fr.status,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', donation.fundraiser_id);
+
+            await supabase
+              .from('fundraiser_milestones')
+              .update({ reached_at: new Date().toISOString() })
+              .eq('fundraiser_id', donation.fundraiser_id)
+              .lte('amount_kes', newRaised)
+              .is('reached_at', null);
+          }
+        }
+      } else {
+        await supabase
+          .from('fundraiser_donations')
+          .update({ status: 'failed' })
+          .eq('id', donation.id);
+      }
+    }
+
     if (!sub) {
       return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
     }

@@ -124,6 +124,127 @@
     overflow-x: clip !important;
   }
 
+  /* ==========================================================================
+     Layout Design Tokens (Desktop & Tablet Scale)
+     ========================================================================== */
+  :root {
+    /* Radius Scale (10 / 14 / 18 / 22px / pill) */
+    --dl-radius-sm: 10px;
+    --dl-radius-md: 14px;
+    --dl-radius-card: 18px;
+    --dl-radius-lg: 22px;
+    --dl-radius-pill: 9999px;
+
+    /* Spacing Scale (4 / 8 / 12 / 16 / 24px) */
+    --dl-gap-xs: 4px;
+    --dl-gap-sm: 8px;
+    --dl-gap-md: 12px;
+    --dl-gap-lg: 16px;
+    --dl-gap-xl: 24px;
+
+    /* Type Scale & Weights */
+    --dl-font-xs: 11px;
+    --dl-font-sm: 12.5px;
+    --dl-font-md: 14px;
+    --dl-font-base: 15px;
+
+    /* Outlines, Glows & Transitions */
+    --dl-outline-w: 1.5px;
+    --dl-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --dl-transition: all 0.18s var(--dl-ease);
+    --dl-glow-dark: 0 0 14px color-mix(in srgb, var(--sec-color, var(--teal)) 35%, transparent);
+    --dl-glow-light: 0 0 10px color-mix(in srgb, var(--sec-color, var(--teal)) 18%, transparent);
+    --dl-tint-hover: color-mix(in srgb, var(--sec-color, var(--teal)) 10%, var(--surface));
+    --dl-tint-active: color-mix(in srgb, var(--sec-color, var(--teal)) 14%, var(--surface));
+  }
+
+  /* --------------------------------------------------------------------------
+     Unified Interactive Surface System (.dl-outline-interactive)
+     -------------------------------------------------------------------------- */
+  .dl-outline-interactive {
+    position: relative;
+    border: var(--dl-outline-w, 1.5px) solid transparent;
+    transition: var(--dl-transition);
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  @media (hover: hover) {
+    .dl-outline-interactive:hover {
+      border-color: var(--sec-color, var(--teal));
+      background: var(--dl-tint-hover);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--sec-color, var(--teal)) 28%, transparent);
+    }
+  }
+
+  .dl-outline-interactive:focus-visible {
+    border-color: var(--sec-color, var(--teal));
+    background: var(--dl-tint-hover);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--sec-color, var(--teal)) 45%, transparent);
+  }
+
+  .dl-outline-interactive.active,
+  .dl-outline-interactive[aria-selected='true'] {
+    border-color: var(--sec-color, var(--teal));
+    background: var(--dl-tint-active);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--sec-color, var(--teal)) 32%, transparent);
+  }
+
+  .dl-outline-interactive:active:not(:disabled):not(.disabled) {
+    transform: scale(0.98);
+    transition-duration: 0.08s;
+  }
+
+  .dl-outline-interactive:disabled,
+  .dl-outline-interactive.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  [data-theme='light'] .dl-outline-interactive:hover {
+    border-color: var(--sec-color, var(--teal));
+    background: color-mix(in srgb, var(--sec-color, var(--teal)) 8%, #ffffff);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--sec-color, var(--teal)) 18%, transparent);
+  }
+
+  [data-theme='light'] .dl-outline-interactive.active,
+  [data-theme='light'] .dl-outline-interactive[aria-selected='true'] {
+    border-color: var(--sec-color, var(--teal));
+    background: color-mix(in srgb, var(--sec-color, var(--teal)) 12%, #ffffff);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--sec-color, var(--teal)) 22%, transparent);
+  }
+
+  [data-theme='light'] .dl-outline-interactive:focus-visible {
+    border-color: var(--sec-color, var(--teal));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--sec-color, var(--teal)) 35%, transparent);
+  }
+
+  /* Soft Top/Bottom Scroll Fade Indicators (Scroll Shadows) */
+  .dl-scroll-shadow-host {
+    background-image:
+      linear-gradient(var(--surface) 30%, transparent),
+      linear-gradient(transparent, var(--surface) 70%) 0 100%,
+      radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.35), transparent),
+      radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.35), transparent) 0 100%;
+    background-repeat: no-repeat;
+    background-color: var(--surface);
+    background-size: 100% 28px, 100% 28px, 100% 12px, 100% 12px;
+    background-position: 0 0, 0 100%, 0 0, 0 100%;
+    background-attachment: local, local, scroll, scroll;
+  }
+
+  [data-theme='light'] .dl-scroll-shadow-host {
+    background-image:
+      linear-gradient(#ffffff 30%, transparent),
+      linear-gradient(transparent, #ffffff 70%) 0 100%,
+      radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.12), transparent),
+      radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.12), transparent) 0 100%;
+    background-color: #ffffff;
+  }
+
   /* Base grid frame for tablet & desktop */
   .app-layout[data-enabled='true'] {
     display: grid;
@@ -1762,10 +1883,11 @@
   }
 
   /* Collapsed Mini-Dock State */
+  /* Collapsed Mini-Dock State */
   .dl-panel-card.dl-panel-collapsed {
     width: 52px;
     margin-left: auto;
-    border-radius: 16px;
+    border-radius: var(--dl-radius-card, 18px);
     padding: 10px 6px;
     background: var(--surface);
   }
@@ -1774,14 +1896,14 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
+    gap: var(--dl-gap-md, 12px);
     width: 100%;
   }
 
   .dl-collapsed-toggle-btn {
     width: 36px;
     height: 36px;
-    border-radius: 10px;
+    border-radius: var(--dl-radius-sm, 10px);
     background: var(--bg);
     border: 1px solid var(--border);
     color: var(--ink);
@@ -1789,7 +1911,7 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.18s ease;
+    transition: var(--dl-transition);
   }
 
   .dl-collapsed-toggle-btn:hover {
@@ -1808,7 +1930,7 @@
   .dl-collapsed-icon-btn {
     width: 36px;
     height: 36px;
-    border-radius: 10px;
+    border-radius: var(--dl-radius-sm, 10px);
     background: transparent;
     border: 1px solid transparent;
     color: var(--ink-muted);
@@ -1817,7 +1939,7 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.18s ease;
+    transition: var(--dl-transition);
   }
 
   .dl-collapsed-icon-btn:hover {
@@ -1831,18 +1953,20 @@
     position: absolute;
     top: -4px;
     right: -4px;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 700;
-    height: 14px;
-    min-width: 14px;
-    padding: 0 3px;
-    border-radius: 7px;
-    background: #ef4444;
+    height: 17px;
+    min-width: 17px;
+    padding: 0 4px;
+    border-radius: var(--dl-radius-pill, 9999px);
+    background: #ec4899;
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
+    line-height: 17px;
+    box-shadow: 0 2px 6px rgba(236, 72, 153, 0.45);
+    font-variant-numeric: tabular-nums;
   }
 
   /* Panel Header (Pinned at Top) */
@@ -1857,11 +1981,11 @@
   .dl-panel-tabs {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 5px;
+    gap: 6px;
     padding: 4px;
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--dl-radius-md, 14px);
     margin-bottom: 8px;
   }
 
@@ -1871,13 +1995,13 @@
     justify-content: center;
     gap: 6px;
     padding: 6px 4px;
-    border-radius: 9px;
+    border-radius: var(--dl-radius-sm, 10px);
     font-size: 12px;
     font-weight: 600;
     color: var(--ink-muted);
     background: transparent;
     border: 1px solid transparent;
-    transition: all 0.18s ease;
+    transition: var(--dl-transition);
     cursor: pointer;
     text-decoration: none;
     position: relative;
@@ -1914,18 +2038,20 @@
     position: absolute;
     top: -7px;
     right: -10px;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 700;
-    height: 15px;
-    min-width: 15px;
-    padding: 0 3px;
-    border-radius: 7.5px;
-    background: #ef4444;
+    height: 17px;
+    min-width: 17px;
+    padding: 0 4px;
+    border-radius: var(--dl-radius-pill, 9999px);
+    background: #ec4899;
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
+    line-height: 17px;
+    box-shadow: 0 2px 6px rgba(236, 72, 153, 0.45);
+    font-variant-numeric: tabular-nums;
   }
 
   .dl-panel-tab-label {
@@ -1946,7 +2072,7 @@
 
   .dl-panel-view-title {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--dl-font-md, 14px);
     font-weight: 700;
     color: var(--ink);
     white-space: nowrap;
@@ -1965,16 +2091,16 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    height: 26px;
+    height: 28px;
     padding: 0 8px;
-    border-radius: 6px;
-    font-size: 11px;
+    border-radius: var(--dl-radius-sm, 10px);
+    font-size: var(--dl-font-xs, 11px);
     font-weight: 600;
     color: var(--ink-muted);
     background: var(--bg);
     border: 1px solid var(--border);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: var(--dl-transition);
   }
 
   .dl-panel-action-btn:hover {
@@ -1983,7 +2109,7 @@
   }
 
   .dl-panel-action-btn.icon-only {
-    width: 26px;
+    width: 28px;
     padding: 0;
     justify-content: center;
   }
