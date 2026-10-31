@@ -19,6 +19,8 @@ import {
 import { cleanDisplayName, formatPostDate, useRelativeTimeTick } from '../lib/postDisplay';
 import StatusViewerModal from './StatusViewerModal';
 import StatusCreatorModal from './StatusCreatorModal';
+import LiveViewerModal from './LiveViewerModal';
+import { fetchActiveLiveStreams } from '../lib/live/liveApi';
 
 export default function StatusTray({ currentUser }) {
   const now = useRelativeTimeTick();
@@ -32,7 +34,8 @@ export default function StatusTray({ currentUser }) {
   const [hiddenViewerIndex, setHiddenViewerIndex] = useState(0);
   const [toastMsg, setToastMsg] = useState('');
   const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [activeLiveStreams, setActiveLiveStreams] = useState([]);
+  const [selectedLiveStreamId, setSelectedLiveStreamId] = useState(null);
   const scrollRef = useRef(null);
   const dragRef = useRef({ active: false, startX: 0, startScroll: 0, moved: false });
 
@@ -41,6 +44,33 @@ export default function StatusTray({ currentUser }) {
   const loadStatuses = useCallback(() => {
     setStatuses(getActiveStatuses());
     setHiddenStatuses(getHiddenActiveStatuses());
+  }, []);
+
+  // Fetch active live broadcasts
+  useEffect(() => {
+    function loadLive() {
+      fetchActiveLiveStreams(5).then((data) => {
+        if (Array.isArray(data)) setActiveLiveStreams(data);
+      });
+    }
+    loadLive();
+    window.addEventListener('shammah:live-updated', loadLive);
+    const interval = setInterval(loadLive, 20000);
+    return () => {
+      window.removeEventListener('shammah:live-updated', loadLive);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Global listener to open live stream viewer
+  useEffect(() => {
+    function handleOpenLive(e) {
+      if (e.detail?.streamId) {
+        setSelectedLiveStreamId(e.detail.streamId);
+      }
+    }
+    window.addEventListener('shammah:open-live', handleOpenLive);
+    return () => window.removeEventListener('shammah:open-live', handleOpenLive);
   }, []);
 
   function checkScroll() {
@@ -391,8 +421,57 @@ export default function StatusTray({ currentUser }) {
           </div>
         )}
 
+        {/* Active Live Broadcast Cards */}
+        {activeLiveStreams.map((live) => (
+          <div
+            key={`live-${live.id}`}
+            role="listitem"
+            className="status-card-item status-card-story has-live-broadcast cursor-pointer"
+            onClick={() => {
+              if (dragRef.current.moved) {
+                dragRef.current.moved = false;
+                return;
+              }
+              setSelectedLiveStreamId(live.id);
+            }}
+            title={`🔴 LIVE NOW: ${live.title} by ${live.host?.display_name || 'Host'}`}
+          >
+            {/* Background Media or Gradient Scrim */}
+            <div className="status-card-media-wrap">
+              {live.thumb_url ? (
+                <img src={live.thumb_url} alt="" className="status-card-bg-media" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-red-950 via-rose-900 to-black" />
+              )}
+              <div className="status-card-media-scrim" />
+            </div>
+
+            <div className="status-card-header">
+              <div className="status-avatar-stack-wrap">
+                <Avatar
+                  name={live.host?.display_name || 'Host'}
+                  src={live.host?.avatar_url}
+                  isLive={true}
+                  className="status-user-avatar"
+                />
+              </div>
+              <span className="live-tray-badge">LIVE</span>
+            </div>
+
+            <div className="status-card-footer">
+              <div className="status-author-name-row">
+                <span className="status-card-author-name">{live.host?.display_name || 'Host'}</span>
+              </div>
+              <span className="status-card-time flex items-center gap-1 text-red-400 font-bold">
+                <Eye size={10} /> {live.viewer_count || 1} watching
+              </span>
+            </div>
+          </div>
+        ))}
+
         {/* Stacked User Status Cards: 1 card per other unique user, thumbnail is most recent status */}
         {otherUsers.map((group) => {
+          const isHostLive = activeLiveStreams.some((l) => l.host_id === group.userId);
           const latest = group.latestStatus;
           const cleanName = group.userName;
           const mediaType = inferMediaType(latest.mediaUrl, latest.mediaType);
@@ -440,6 +519,7 @@ export default function StatusTray({ currentUser }) {
                     name={cleanName}
                     src={group.userAvatar}
                     hasStatus={true}
+                    isLive={isHostLive}
                     className="status-user-avatar"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -754,6 +834,17 @@ export default function StatusTray({ currentUser }) {
             setActiveStoryIndex(0);
             setViewerOpen(true);
           }}
+        />
+      )}
+
+      {/* Live Stream Viewer Modal */}
+      {selectedLiveStreamId && (
+        <LiveViewerModal
+          streamId={selectedLiveStreamId}
+          isOpen={Boolean(selectedLiveStreamId)}
+          onClose={() => setSelectedLiveStreamId(null)}
+          session={currentUser}
+          profile={currentUser}
         />
       )}
     </section>

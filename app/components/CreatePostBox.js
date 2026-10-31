@@ -50,6 +50,9 @@ import CameraCaptureModal from './media/CameraCaptureModal';
 import VoiceRecorderBar from './media/VoiceRecorderBar';
 import GifPicker from './media/GifPicker';
 import ReelCreatorModal from './ReelCreatorModal';
+import LiveHostModal from './LiveHostModal';
+import LiveNotConfiguredSheet from './LiveNotConfiguredSheet';
+import { checkLiveConfig } from '../lib/live/liveApi';
 import { CATEGORY_STYLES, categoryStyle, initials } from '../lib/postDisplay';
 import { VISIBILITY_OPTIONS } from '../lib/postInteractions';
 import { playSound } from '../lib/soundEffects';
@@ -133,7 +136,26 @@ export default function CreatePostBox({
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [showGifModal, setShowGifModal] = useState(false);
   const [showReelModal, setShowReelModal] = useState(false);
-  const [showLiveModal, setShowLiveModal] = useState(false);
+  const [showLiveHostModal, setShowLiveHostModal] = useState(false);
+  const [showLiveUnconfiguredSheet, setShowLiveUnconfiguredSheet] = useState(false);
+
+  async function handleLiveButtonClick() {
+    if (!session?.user) {
+      if (openAuth) openAuth('signin');
+      else window.dispatchEvent(new CustomEvent('shammah:open-auth', { detail: 'signin' }));
+      return;
+    }
+    try {
+      const config = await checkLiveConfig();
+      if (!config.configured) {
+        setShowLiveUnconfiguredSheet(true);
+      } else {
+        setShowLiveHostModal(true);
+      }
+    } catch {
+      setShowLiveUnconfiguredSheet(true);
+    }
+  }
 
   async function loadEligibleMembers() {
     if (!session?.user?.id) return;
@@ -1084,7 +1106,7 @@ export default function CreatePostBox({
           onVoice={() => setShowVoiceModal(true)}
           onGif={() => setShowGifModal(true)}
           onReel={() => setShowReelModal(true)}
-          onLive={() => setShowLiveModal(true)}
+          onLive={handleLiveButtonClick}
           disabled={posting || mediaUploading || pollUploading}
           extraActions={
             <>
@@ -1582,74 +1604,26 @@ export default function CreatePostBox({
         />
       )}
 
-      {/* Live Sanctuary Stream Setup Modal */}
-      <PopupSheet
-        open={showLiveModal}
-        onClose={() => setShowLiveModal(false)}
-        title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: '#ef4444',
-                boxShadow: '0 0 8px #ef4444',
-                display: 'inline-block',
-              }}
-            />
-            <span>Live Sanctuary Broadcast Setup</span>
-          </div>
-        }
-        size="md"
-      >
-        <div style={{ padding: '4px 0 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.5 }}>
-            Host live prayer vigils, Bible study rooms, or connect an RTMP sanctuary feed for your congregation.
-          </p>
+      {/* Live Host Broadcast Modal */}
+      {showLiveHostModal && (
+        <LiveHostModal
+          isOpen={showLiveHostModal}
+          onClose={() => setShowLiveHostModal(false)}
+          session={session}
+          profile={profile}
+          onStreamCreated={(stream) => {
+            setShowLiveHostModal(false);
+          }}
+        />
+      )}
 
-          <div
-            style={{
-              padding: 14,
-              borderRadius: 12,
-              background: 'var(--surface-sunken)',
-              border: '1px solid var(--border)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
-            <strong style={{ fontSize: 13, color: 'var(--ink)' }}>Google Meet Prayer Room &amp; RTMP Feed</strong>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-muted)' }}>
-              Churches can broadcast direct from sanctuary software (OBS, vMix) or start an instant prayer room for up to 500 members.
-            </p>
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <button
-                type="button"
-                className="st-btn st-btn-primary"
-                style={{ fontSize: 12, padding: '6px 14px' }}
-                onClick={() => {
-                  setComposeText((prev) => `${prev ? prev + '\n\n' : ''}🔴 LIVE: Joining together in prayer now! Join our prayer room on Shammah.`);
-                  setShowLiveModal(false);
-                }}
-              >
-                Insert Live Prayer Invite
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-            <button
-              type="button"
-              className="st-btn st-btn-ghost"
-              style={{ fontSize: 13, padding: '6px 18px' }}
-              onClick={() => setShowLiveModal(false)}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </PopupSheet>
+      {/* Friendly Unconfigured Live Sheet */}
+      {showLiveUnconfiguredSheet && (
+        <LiveNotConfiguredSheet
+          isOpen={showLiveUnconfiguredSheet}
+          onClose={() => setShowLiveUnconfiguredSheet(false)}
+        />
+      )}
     </form>
   );
 }

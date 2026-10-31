@@ -62,6 +62,7 @@ import {
   FaithChallengesShelfWidget,
   ArcadeGamesShelfWidget,
 } from './components/FeedShelves';
+import LivePinnedBanner from './components/LivePinnedBanner';
 import { getHomefeedPostsWithRss } from './lib/rssManager';
 import { playSound, isSoundEnabled, setSoundEnabled } from './lib/soundEffects';
 import { rankPostsWithAlgorithm } from './lib/feedAlgorithm';
@@ -1853,6 +1854,11 @@ export default function Feed() {
             onSubmit={handleCreatePost}
             openAuth={openAuth}
           />
+        )}
+
+        {/* Live Broadcast Pinned Card on Home Feed */}
+        {tab === 'home' && section === 'all' && (
+          <LivePinnedBanner />
         )}
 
         {/* Dynamic Homefeed Widgets: Churches to follow & Channels Explore */}

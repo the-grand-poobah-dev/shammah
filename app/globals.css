@@ -2789,6 +2789,81 @@ button:focus-visible, a:focus-visible {
   }
 }
 
+.avatar.has-live-status::before {
+  content: '';
+  position: absolute;
+  inset: -3.5px;
+  border-radius: 50%;
+  padding: 2.5px;
+  background: conic-gradient(from var(--neon-angle, 0deg), #ef4444, #f43f5e, #dc2626, #ef4444);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  z-index: 1;
+  filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.9)) drop-shadow(0 0 10px rgba(244, 63, 94, 0.7));
+  animation: red-live-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes red-live-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.8)) drop-shadow(0 0 8px rgba(244, 63, 94, 0.6));
+  }
+  50% {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 7px rgba(239, 68, 68, 1)) drop-shadow(0 0 14px rgba(244, 63, 94, 0.9));
+  }
+}
+
+.avatar-live-badge-pill {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  border: 1.5px solid var(--surface, #121212);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+  z-index: 2;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.has-live-broadcast {
+  border: 1.5px solid #ef4444 !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.45);
+  animation: live-card-border-glow 2s ease-in-out infinite;
+}
+
+@keyframes live-card-border-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(239, 68, 68, 0.7);
+  }
+}
+
+.live-tray-badge {
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+  line-height: 1.2;
+}
+
 .category-chip {
   align-self: flex-start;
   font-size: 12px;
@@ -24072,28 +24147,6 @@ html, body, *, *::before, *::after {
 /* ==========================================================================
    Home Feed Scrollable Shelves & Tab Counter Badges
    ========================================================================== */
-
-.top-nav-badge-num {
-  position: absolute;
-  top: -6px;
-  right: -8px;
-  background: #ef4444;
-  color: #ffffff;
-  font-size: 9px;
-  font-weight: 800;
-  padding: 0 4px;
-  border-radius: 999px;
-  min-width: 15px;
-  height: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  border: 1.5px solid var(--surface);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
-  z-index: 5;
-  pointer-events: none;
-}
 
 .top-nav-badge-inline {
   font-size: 10px;
