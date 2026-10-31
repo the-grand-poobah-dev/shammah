@@ -1,5 +1,6 @@
 'use client';
 import { useRef, useEffect } from 'react';
+export { initGlobalScrollAffordances, useScrollAffordances } from './useScrollAffordances';
 
 // Reusable hook that gives any horizontally overflowing container smooth mouse/touch drag scrolling
 export function useDragScroll() {
@@ -9,7 +10,7 @@ export function useDragScroll() {
   function onPointerDown(e) {
     if (!ref.current) return;
     // Don't hijack input elements or buttons that were just clicked
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.closest?.('.scroll-affordance-btn, .status-tray-scroll-btn')) return;
     dragInfo.current = {
       isDown: true,
       startX: e.pageX - ref.current.offsetLeft,
@@ -66,8 +67,14 @@ export function initGlobalHorizontalDrag() {
   }
 
   function handlePointerDown(e) {
-    // Ignore input fields, textareas, and sliders
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    // Ignore input fields, textareas, sliders, and scroll affordance buttons
+    if (
+      e.target.tagName === 'INPUT' ||
+      e.target.tagName === 'TEXTAREA' ||
+      e.target.tagName === 'SELECT' ||
+      e.target.closest?.('.scroll-affordance-btn, .status-tray-scroll-btn')
+    )
+      return;
 
     const scrollContainer = findScrollContainer(e.target);
     if (!scrollContainer) return;

@@ -19,7 +19,6 @@ const fraunces = Fraunces({
 
 const workSans = Work_Sans({
   subsets: ['latin'],
-  weight: ['400', '500', '600'],
   variable: '--font-work-sans',
   display: 'swap',
 });

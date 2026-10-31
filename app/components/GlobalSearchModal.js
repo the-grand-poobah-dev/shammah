@@ -20,6 +20,7 @@ import {
 import { supabase } from '../../lib/supabaseClient';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
+import ScrollAffordanceWrapper from './ScrollAffordanceWrapper';
 import { playSound } from '../lib/soundEffects';
 import { timeAgo, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 import { formatPollTimeRemaining } from '../lib/useNow';
@@ -562,39 +563,41 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
         </div>
 
         {/* Tab Filters */}
-        <div className="global-search-tabs-row no-scrollbar">
-          <button
-            type="button"
-            className={`global-search-tab${activeTab === 'all' ? ' active' : ''}`}
-            onClick={() => setActiveTab('all')}
-          >
-            <span>All Results</span>
-          </button>
-          <button
-            type="button"
-            className={`global-search-tab${activeTab === 'posts' ? ' active' : ''}`}
-            onClick={() => setActiveTab('posts')}
-          >
-            <FileText size={14} />
-            <span>Posts ({filteredPosts.length})</span>
-          </button>
-          <button
-            type="button"
-            className={`global-search-tab${activeTab === 'churches' ? ' active' : ''}`}
-            onClick={() => setActiveTab('churches')}
-          >
-            <Church size={14} />
-            <span>Churches ({filteredChurches.length})</span>
-          </button>
-          <button
-            type="button"
-            className={`global-search-tab${activeTab === 'members' ? ' active' : ''}`}
-            onClick={() => setActiveTab('members')}
-          >
-            <Users size={14} />
-            <span>Members ({filteredMembers.length})</span>
-          </button>
-        </div>
+        <ScrollAffordanceWrapper direction="horizontal" leftLabel="Scroll search tabs back" rightLabel="Scroll search tabs forward">
+          <div className="global-search-tabs-row no-scrollbar">
+            <button
+              type="button"
+              className={`global-search-tab${activeTab === 'all' ? ' active' : ''}`}
+              onClick={() => setActiveTab('all')}
+            >
+              <span>All Results</span>
+            </button>
+            <button
+              type="button"
+              className={`global-search-tab${activeTab === 'posts' ? ' active' : ''}`}
+              onClick={() => setActiveTab('posts')}
+            >
+              <FileText size={14} />
+              <span>Posts ({filteredPosts.length})</span>
+            </button>
+            <button
+              type="button"
+              className={`global-search-tab${activeTab === 'churches' ? ' active' : ''}`}
+              onClick={() => setActiveTab('churches')}
+            >
+              <Church size={14} />
+              <span>Churches ({filteredChurches.length})</span>
+            </button>
+            <button
+              type="button"
+              className={`global-search-tab${activeTab === 'members' ? ' active' : ''}`}
+              onClick={() => setActiveTab('members')}
+            >
+              <Users size={14} />
+              <span>Members ({filteredMembers.length})</span>
+            </button>
+          </div>
+        </ScrollAffordanceWrapper>
 
         {/* Search Body Results / Suggestions */}
         <div className="global-search-body no-scrollbar">
@@ -646,18 +649,20 @@ export default function GlobalSearchModal({ isOpen, onClose, initialQuery = '' }
                 <TrendingUp size={13} className="text-amber-400" />
                 <span>Popular Faith Topics &amp; Tags</span>
               </div>
-              <div className="search-tags-shelf no-scrollbar">
-                {TRENDING_TAGS.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    className="search-tag-chip"
-                    onClick={() => handleTagClick(tag)}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
+              <ScrollAffordanceWrapper direction="horizontal" leftLabel="Scroll tags back" rightLabel="Scroll tags forward">
+                <div className="search-tags-shelf no-scrollbar">
+                  {TRENDING_TAGS.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className="search-tag-chip"
+                      onClick={() => handleTagClick(tag)}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </ScrollAffordanceWrapper>
 
               {/* Featured Churches */}
               <div className="search-section-label search-mt-16">

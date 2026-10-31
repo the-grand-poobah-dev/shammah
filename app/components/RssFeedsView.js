@@ -29,6 +29,7 @@ import MemberBadge from './MemberBadge';
 import ReactionBar from './ReactionBar';
 import CommentThread from './CommentThread';
 import RepostModal from './RepostModal';
+import ScrollAffordanceWrapper from './ScrollAffordanceWrapper';
 import {
   getSubscribedFeeds,
   saveSubscribedFeeds,
@@ -406,50 +407,52 @@ export default function RssFeedsView({ session, currentUser, openAuth }) {
       )}
 
       {/* Media Type filter pills */}
-      <div className="video-subnav-bar no-scrollbar" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTabFilter === 'all'}
-          className={`video-subnav-pill${activeTabFilter === 'all' ? ' active' : ''}`}
-          onClick={() => setActiveTabFilter('all')}
-        >
-          <span>All RSS Content ({allSubscribedItems.length})</span>
-        </button>
+      <ScrollAffordanceWrapper direction="horizontal" leftLabel="Scroll feed filters back" rightLabel="Scroll feed filters forward">
+        <div className="video-subnav-bar no-scrollbar" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTabFilter === 'all'}
+            className={`video-subnav-pill${activeTabFilter === 'all' ? ' active' : ''}`}
+            onClick={() => setActiveTabFilter('all')}
+          >
+            <span>All RSS Content ({allSubscribedItems.length})</span>
+          </button>
 
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTabFilter === 'articles'}
-          className={`video-subnav-pill${activeTabFilter === 'articles' ? ' active' : ''}`}
-          onClick={() => setActiveTabFilter('articles')}
-        >
-          <BookOpen size={13} />
-          <span>Articles</span>
-        </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTabFilter === 'articles'}
+            className={`video-subnav-pill${activeTabFilter === 'articles' ? ' active' : ''}`}
+            onClick={() => setActiveTabFilter('articles')}
+          >
+            <BookOpen size={13} />
+            <span>Articles</span>
+          </button>
 
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTabFilter === 'audio'}
-          className={`video-subnav-pill${activeTabFilter === 'audio' ? ' active' : ''}`}
-          onClick={() => setActiveTabFilter('audio')}
-        >
-          <Headphones size={13} />
-          <span>Audio Podcasts</span>
-        </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTabFilter === 'audio'}
+            className={`video-subnav-pill${activeTabFilter === 'audio' ? ' active' : ''}`}
+            onClick={() => setActiveTabFilter('audio')}
+          >
+            <Headphones size={13} />
+            <span>Audio Podcasts</span>
+          </button>
 
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTabFilter === 'video'}
-          className={`video-subnav-pill${activeTabFilter === 'video' ? ' active' : ''}`}
-          onClick={() => setActiveTabFilter('video')}
-        >
-          <VideoIcon size={13} />
-          <span>Video Streams</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTabFilter === 'video'}
+            className={`video-subnav-pill${activeTabFilter === 'video' ? ' active' : ''}`}
+            onClick={() => setActiveTabFilter('video')}
+          >
+            <VideoIcon size={13} />
+            <span>Video Streams</span>
+          </button>
+        </div>
+      </ScrollAffordanceWrapper>
 
       {/* Mixed Assortment Card UI for RSS Articles */}
       <div className="rss-items-list-wrapper">

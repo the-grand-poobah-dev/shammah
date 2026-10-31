@@ -33,6 +33,7 @@ BEGIN
   END LOOP;
 END $$;
 
+ALTER TABLE public.posts DROP CONSTRAINT IF EXISTS posts_media_type_check;
 ALTER TABLE public.posts
   ADD CONSTRAINT posts_media_type_check
   CHECK (
@@ -40,7 +41,18 @@ ALTER TABLE public.posts
     OR media_type IN ('image', 'video', 'audio', 'reel', 'podcast', 'gif', 'live')
   );
 
--- 2. LIVE STREAMS TABLE
+-- 2. ENSURE CHURCH MEMBERS TABLE EXISTS (Used for church-visibility checks)
+CREATE TABLE IF NOT EXISTS public.church_members (
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  church_id text NOT NULL,
+  status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending', 'inactive')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, church_id)
+);
+ALTER TABLE public.church_members ENABLE ROW LEVEL SECURITY;
+
+-- 3. LIVE STREAMS TABLE
 CREATE TABLE IF NOT EXISTS public.live_streams (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   host_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -57,17 +69,34 @@ CREATE TABLE IF NOT EXISTS public.live_streams (
   viewer_count integer NOT NULL DEFAULT 0,
   peak_viewers integer NOT NULL DEFAULT 0,
   like_count integer NOT NULL DEFAULT 0,
-  replay_media_id uuid REFERENCES public.media_items(id) ON DELETE SET NULL,
+  replay_media_id uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Ensure all columns exist if table was previously created with partial fields
+ALTER TABLE public.live_streams
+  ADD COLUMN IF NOT EXISTS church_id uuid REFERENCES public.churches(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS description text,
+  ADD COLUMN IF NOT EXISTS thumb_url text,
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'live',
+  ADD COLUMN IF NOT EXISTS room_name text,
+  ADD COLUMN IF NOT EXISTS visibility text NOT NULL DEFAULT 'public',
+  ADD COLUMN IF NOT EXISTS started_at timestamptz DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS ended_at timestamptz,
+  ADD COLUMN IF NOT EXISTS scheduled_for timestamptz,
+  ADD COLUMN IF NOT EXISTS viewer_count integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS peak_viewers integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS like_count integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS replay_media_id uuid,
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS idx_live_streams_status ON public.live_streams (status, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_live_streams_host ON public.live_streams (host_id);
 CREATE INDEX IF NOT EXISTS idx_live_streams_church ON public.live_streams (church_id);
 CREATE INDEX IF NOT EXISTS idx_live_streams_room ON public.live_streams (room_name);
 
--- 3. LIVE CHAT MESSAGES TABLE
+-- 4. LIVE CHAT MESSAGES TABLE
 CREATE TABLE IF NOT EXISTS public.live_chat_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   stream_id uuid NOT NULL REFERENCES public.live_streams(id) ON DELETE CASCADE,
@@ -81,7 +110,7 @@ CREATE TABLE IF NOT EXISTS public.live_chat_messages (
 CREATE INDEX IF NOT EXISTS idx_live_chat_stream_created ON public.live_chat_messages (stream_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_live_chat_user ON public.live_chat_messages (user_id);
 
--- 4. LIVE MODERATORS TABLE
+-- 5. LIVE MODERATORS TABLE
 CREATE TABLE IF NOT EXISTS public.live_moderators (
   stream_id uuid NOT NULL REFERENCES public.live_streams(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -89,7 +118,7 @@ CREATE TABLE IF NOT EXISTS public.live_moderators (
   PRIMARY KEY (stream_id, user_id)
 );
 
--- 5. LIVE BANS TABLE
+-- 6. LIVE BANS TABLE
 CREATE TABLE IF NOT EXISTS public.live_bans (
   stream_id uuid NOT NULL REFERENCES public.live_streams(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -124,9 +153,15 @@ CREATE POLICY "Public live streams are readable by everyone"
     OR (
       visibility = 'church'
       AND church_id IS NOT NULL
-      AND EXISTS (
-        SELECT 1 FROM public.church_members
-        WHERE church_id = live_streams.church_id AND user_id = auth.uid()
+      AND (
+        EXISTS (
+          SELECT 1 FROM public.profiles
+          WHERE id = auth.uid() AND church_id = live_streams.church_id
+        )
+        OR EXISTS (
+          SELECT 1 FROM public.church_members
+          WHERE user_id = auth.uid() AND church_id::text = live_streams.church_id::text
+        )
       )
     )
   );
@@ -257,6 +292,27 @@ CREATE POLICY "Hosts and moderators can manage bans"
   );
 
 -- ==============================================================================
+-- GRANTS & PERMISSIONS
+-- ==============================================================================
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT SELECT ON public.live_streams TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON public.live_streams TO authenticated;
+GRANT ALL ON public.live_streams TO service_role;
+
+GRANT SELECT ON public.live_chat_messages TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON public.live_chat_messages TO authenticated;
+GRANT ALL ON public.live_chat_messages TO service_role;
+
+GRANT SELECT ON public.live_moderators TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON public.live_moderators TO authenticated;
+GRANT ALL ON public.live_moderators TO service_role;
+
+GRANT SELECT ON public.live_bans TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON public.live_bans TO authenticated;
+GRANT ALL ON public.live_bans TO service_role;
+
+-- ==============================================================================
 -- RPCs: Stale Stream Sweeper & Stream Reactions
 -- ==============================================================================
 
@@ -264,6 +320,7 @@ CREATE OR REPLACE FUNCTION public.sweep_stale_live_streams()
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_count integer;
@@ -284,6 +341,7 @@ CREATE OR REPLACE FUNCTION public.increment_stream_like(p_stream_id uuid)
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_likes integer;
@@ -297,3 +355,8 @@ BEGIN
   RETURN coalesce(v_likes, 0);
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION public.sweep_stale_live_streams() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.increment_stream_like(uuid) TO anon, authenticated, service_role;
+
+NOTIFY pgrst, 'reload schema';

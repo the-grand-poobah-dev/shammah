@@ -19,6 +19,7 @@ export default function Avatar({
   institutionId = null,
   badge = null,
   role = null,
+  isLive = false,
 }) {
   const [activeStatus, setActiveStatus] = useState(hasStatus ?? false);
 
@@ -75,25 +76,32 @@ export default function Avatar({
     }
   }
 
-  const statusClass = activeStatus ? 'has-status' : 'no-status';
-  const isClickable = Boolean(onClick || activeStatus || userId || name || institutionId);
+  const statusClass = isLive ? 'has-live-status' : activeStatus ? 'has-status' : 'no-status';
+  const isClickable = Boolean(onClick || isLive || activeStatus || userId || name || institutionId);
 
   return (
     <span
-      className={`avatar ${statusClass} ${isClickable ? 'cursor-pointer' : ''} ${className}`.trim()}
+      className={`avatar ${statusClass} ${isLive ? 'is-live' : ''} ${isClickable ? 'cursor-pointer' : ''} ${className}`.trim()}
       onClick={handleClick}
       role={isClickable ? 'button' : undefined}
       tabIndex={isClickable ? 0 : undefined}
       title={
-        activeStatus
-          ? `${name || 'Member'} has a 24-hour status (Tap to view)`
-          : `View profile for ${name || 'Member'}`
+        isLive
+          ? `🔴 ${name || 'Host'} is LIVE now (Tap to watch)`
+          : activeStatus
+            ? `${name || 'Member'} has a 24-hour status (Tap to view)`
+            : `View profile for ${name || 'Member'}`
       }
     >
       <span className="avatar-inner">
         {src ? <img src={src} alt="" className="avatar-img" /> : initials(name)}
       </span>
-      {activityStatus && (
+      {isLive && (
+        <span className="avatar-live-badge-pill" aria-label="Live">
+          LIVE
+        </span>
+      )}
+      {activityStatus && !isLive && (
         <i
           className={`status-dot status-${activityStatus}`}
           aria-hidden="true"

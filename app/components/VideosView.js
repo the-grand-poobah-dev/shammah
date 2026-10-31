@@ -21,11 +21,13 @@ import {
   MoreVertical,
   Flag,
   Link2,
+  Radio,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
 import ReelViewerModal from './ReelViewerModal';
+import LiveViewerModal from './LiveViewerModal';
 import MediaUploadModal from './MediaUploadModal';
 import VideoWatchView from './VideoWatchView';
 import {
@@ -51,6 +53,7 @@ import {
   deleteMedia,
 } from '../lib/data/mediaApi';
 import { listReels } from '../lib/data/reelsApi';
+import { fetchActiveLiveStreams } from '../lib/live/liveApi';
 import { saveForOffline, isItemSavedOffline, removeOfflineItem } from '../lib/offlineSyncManager';
 import { formatPostDate, useRelativeTimeTick } from '../lib/postDisplay';
 import { playSound } from '../lib/soundEffects';
@@ -126,6 +129,8 @@ export default function VideosView({ session, currentUser, openAuth }) {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [activeReelIndex, setActiveReelIndex] = useState(null);
   const [activeWatchVideoId, setActiveWatchVideoId] = useState(null);
+  const [activeLiveStreams, setActiveLiveStreams] = useState([]);
+  const [selectedLiveStreamId, setSelectedLiveStreamId] = useState(null);
   const [savedIds, setSavedIds] = useState(new Set());
   const [toastMessage, setToastMessage] = useState('');
 
@@ -134,6 +139,28 @@ export default function VideosView({ session, currentUser, openAuth }) {
   const showToast = useCallback((msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 2500);
+  }, []);
+
+  // Listen for live broadcast updates and open-live events
+  useEffect(() => {
+    function handleLiveUpdate() {
+      fetchActiveLiveStreams(4)
+        .then((data) => {
+          if (Array.isArray(data)) setActiveLiveStreams(data);
+        })
+        .catch(() => {});
+    }
+    function handleOpenLive(e) {
+      if (e.detail?.streamId) {
+        setSelectedLiveStreamId(e.detail.streamId);
+      }
+    }
+    window.addEventListener('shammah:live-updated', handleLiveUpdate);
+    window.addEventListener('shammah:open-live', handleOpenLive);
+    return () => {
+      window.removeEventListener('shammah:live-updated', handleLiveUpdate);
+      window.removeEventListener('shammah:open-live', handleOpenLive);
+    };
   }, []);
 
   // Debounce search query 300ms
@@ -148,13 +175,15 @@ export default function VideosView({ session, currentUser, openAuth }) {
   const loadCuratedBlocks = useCallback(async () => {
     setFetchError(null);
     try {
-      const [contRes, trendRes, seriesRes, reelsRes] = await Promise.all([
+      const [contRes, trendRes, seriesRes, reelsRes, liveStreams] = await Promise.all([
         session?.user?.id ? listContinueWatching({ kind: 'video', limit: 8 }) : Promise.resolve({ data: [] }),
         trending({ kind: 'video', limit: 8 }),
         listSeries({ kind: 'video', limit: 6 }),
         listReels({ limit: 12 }),
+        fetchActiveLiveStreams(4).catch(() => []),
       ]);
 
+      if (Array.isArray(liveStreams)) setActiveLiveStreams(liveStreams);
       if (contRes.data) setContinueWatching(contRes.data);
       if (seriesRes.data) setSeriesList(seriesRes.data);
       if (reelsRes.data) setReelsList(reelsRes.data);
@@ -380,6 +409,61 @@ export default function VideosView({ session, currentUser, openAuth }) {
 
       {/* 2. Stacked Content Blocks */}
       <div className="video-blocks-stack">
+        {/* Block: Live Now Broadcasts */}
+        {activeLiveStreams.length > 0 && !debouncedQuery && (
+          <SectionBlock
+            title="Live Now"
+            subtitle="Active sanctuary broadcasts and prayer rooms"
+            count={activeLiveStreams.length}
+            accent="#ef4444"
+          >
+            <div className="reels-strip-rail no-scrollbar">
+              {activeLiveStreams.map((live) => (
+                <div
+                  key={live.id}
+                  className="reels-strip-card cursor-pointer border border-red-500/40 shadow-sm"
+                  onClick={() => {
+                    playSound('reaction');
+                    setSelectedLiveStreamId(live.id);
+                  }}
+                  title={`Watch Live: ${live.title}`}
+                >
+                  <div className="reels-strip-thumb-wrap">
+                    {live.thumb_url ? (
+                      <img
+                        src={live.thumb_url}
+                        alt={live.title}
+                        className="reels-strip-video-preview object-cover w-full h-full"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-red-950 via-rose-900 to-black" />
+                    )}
+                    <div className="reels-strip-gradient" />
+                    <div className="reels-strip-views-badge bg-red-600/95 text-white font-bold flex items-center gap-1 shadow-sm">
+                      <Radio size={11} className="animate-pulse" /> LIVE
+                    </div>
+                    <div className="reels-strip-views-badge right-2 left-auto bg-black/60 text-white font-medium flex items-center gap-1">
+                      <Eye size={11} /> {live.viewer_count || 1}
+                    </div>
+                    <div className="reels-strip-bottom-author">
+                      <Avatar
+                        name={live.host?.display_name || 'Host'}
+                        src={live.host?.avatar_url}
+                        isLive={true}
+                        className="avatar-xs reels-strip-avatar"
+                      />
+                      <span className="reels-strip-name truncate">
+                        {live.host?.display_name || 'Host'}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="reels-strip-caption truncate-2 font-semibold text-[var(--ink)]">{live.title}</p>
+                </div>
+              ))}
+            </div>
+          </SectionBlock>
+        )}
+
         {/* Block A: Continue Watching (Rail) */}
         {continueWatching.length > 0 && !debouncedQuery && (
           <SectionBlock
@@ -726,6 +810,17 @@ export default function VideosView({ session, currentUser, openAuth }) {
           session={session}
           onClose={() => setActiveReelIndex(null)}
           openAuth={openAuth}
+        />
+      )}
+
+      {/* 4b. Live Stream Viewer Modal */}
+      {selectedLiveStreamId && (
+        <LiveViewerModal
+          streamId={selectedLiveStreamId}
+          isOpen={Boolean(selectedLiveStreamId)}
+          onClose={() => setSelectedLiveStreamId(null)}
+          session={session}
+          profile={currentUser}
         />
       )}
 
