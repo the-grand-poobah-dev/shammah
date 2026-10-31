@@ -44,6 +44,12 @@ import Avatar from './Avatar';
 import MemberName from './MemberName';
 import LocationPicker from './LocationPicker';
 import PollBuilderFields, { MAX_POLL_OPTIONS } from './PollBuilderFields';
+import MediaToolbar from './media/MediaToolbar';
+import MediaPreviewFrame from './media/MediaPreviewFrame';
+import CameraCaptureModal from './media/CameraCaptureModal';
+import VoiceRecorderBar from './media/VoiceRecorderBar';
+import GifPicker from './media/GifPicker';
+import ReelCreatorModal from './ReelCreatorModal';
 import { CATEGORY_STYLES, categoryStyle, initials } from '../lib/postDisplay';
 import { VISIBILITY_OPTIONS } from '../lib/postInteractions';
 import { playSound } from '../lib/soundEffects';
@@ -121,6 +127,13 @@ export default function CreatePostBox({
   const [eligibleMembers, setEligibleMembers] = useState([]);
   const [loadingEligible, setLoadingEligible] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
+
+  // Universal Media Toolbar modal states
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [showGifModal, setShowGifModal] = useState(false);
+  const [showReelModal, setShowReelModal] = useState(false);
+  const [showLiveModal, setShowLiveModal] = useState(false);
 
   async function loadEligibleMembers() {
     if (!session?.user?.id) return;
@@ -221,18 +234,30 @@ export default function CreatePostBox({
   function handleFileSelected(file) {
     if (!file) return;
     setMediaFile(file);
+    if (mediaPreview?.url?.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(mediaPreview.url);
+      } catch (_) {}
+    }
     const url = URL.createObjectURL(file);
+    const mime = file.type || '';
+    const name = file.name || '';
+    const isVid = mime.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(name);
+    const isAud = mime.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac)$/i.test(name);
     setMediaPreview({
       url,
-      type: file.type.startsWith('video/')
-        ? 'video'
-        : file.type.startsWith('audio/')
-          ? 'audio'
-          : 'image',
+      type: isVid ? 'video' : isAud ? 'audio' : 'image',
+      file,
+      name: file.name,
     });
   }
 
   function handleRemoveMedia() {
+    if (mediaPreview?.url?.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(mediaPreview.url);
+      } catch (_) {}
+    }
     setMediaFile(null);
     setMediaPreview(null);
     if (photoInputRef.current) photoInputRef.current.value = '';
@@ -872,57 +897,13 @@ export default function CreatePostBox({
         )}
       </div>
 
-      {/* Media Preview (Photo / Video / Audio) */}
+      {/* Media Preview Frame with Contain & Blurred Letterbox */}
       {mediaPreview && (
-        <div className="compose-media-preview-container">
-          {mediaPreview.type === 'image' && (
-            <div className="media-preview-box">
-              <img src={mediaPreview.url} alt="Upload preview" className="media-preview-img" />
-              <button
-                type="button"
-                className="media-preview-remove"
-                onClick={handleRemoveMedia}
-                title="Remove photo"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
-
-          {mediaPreview.type === 'video' && (
-            <div className="media-preview-box">
-              <video src={mediaPreview.url} controls className="media-preview-video" />
-              <button
-                type="button"
-                className="media-preview-remove"
-                onClick={handleRemoveMedia}
-                title="Remove video"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
-
-          {mediaPreview.type === 'audio' && (
-            <div className="media-preview-audio-box">
-              <div className="audio-preview-icon">
-                <MicIcon size={20} />
-              </div>
-              <div className="audio-preview-details">
-                <span className="audio-preview-title">{mediaFile?.name || 'Audio Recording'}</span>
-                <audio src={mediaPreview.url} controls className="audio-preview-player" />
-              </div>
-              <button
-                type="button"
-                className="media-preview-remove"
-                onClick={handleRemoveMedia}
-                title="Remove audio"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
-        </div>
+        <MediaPreviewFrame
+          mode="composer"
+          media={mediaPreview}
+          onRemove={handleRemoveMedia}
+        />
       )}
 
       {/* Poll Creation Builder (shared single source of truth) */}
@@ -1094,165 +1075,122 @@ export default function CreatePostBox({
         </div>
       )}
 
-      {/* Bottom Action Bar */}
+      {/* Bottom Action Bar with Universal MediaToolbar */}
       <div className="compose-bottom-toolbar">
-        <div className="compose-tools-group" role="group" aria-label="Attachments and options">
-          {/* Live Capture Tools */}
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => cameraPhotoInputRef.current?.click()}
-            title="Take a photo with camera"
-            aria-label="Take photo"
-          >
-            <Camera size={18} className="tool-icon text-emerald-400" />
-            <span className="tool-label">Camera</span>
-          </button>
+        <MediaToolbar
+          context="post"
+          onPickFile={handleFileSelected}
+          onCamera={() => setShowCameraModal(true)}
+          onVoice={() => setShowVoiceModal(true)}
+          onGif={() => setShowGifModal(true)}
+          onReel={() => setShowReelModal(true)}
+          onLive={() => setShowLiveModal(true)}
+          disabled={posting || mediaUploading || pollUploading}
+          extraActions={
+            <>
+              {/* Poll Builder Button */}
+              <button
+                type="button"
+                className={`media-tool-btn tool-poll${isPoll ? ' active' : ''}`}
+                onClick={() => setIsPoll((v) => !v)}
+                title="Create a community poll"
+                aria-label="Toggle poll"
+                aria-pressed={isPoll}
+              >
+                <span className="media-tool-icon-wrap icon-accent-amber">
+                  <BarChart3 size={19} strokeWidth={2.2} />
+                </span>
+                <span className="media-tool-label">Poll</span>
+              </button>
 
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => cameraVideoInputRef.current?.click()}
-            title="Record video with camera"
-            aria-label="Record video"
-          >
-            <VideoIcon size={18} className="tool-icon text-amber-400" />
-            <span className="tool-label">Record</span>
-          </button>
+              {/* AI Scripture & Polish Tool Button */}
+              <button
+                type="button"
+                className={`media-tool-btn ai-tool-btn${aiEnhancing ? ' enhancing' : ''}${!composeText.trim() ? ' opacity-50 cursor-not-allowed' : ''}`}
+                onClick={handleAiEnhance}
+                disabled={aiEnhancing || !composeText.trim()}
+                title={
+                  !composeText.trim()
+                    ? 'Type your message above to polish with Shammah AI'
+                    : 'Polish spelling, grammar & sentence flow with Shammah AI'
+                }
+                aria-label="AI Polish"
+              >
+                <span className="media-tool-icon-wrap icon-accent-cyan">
+                  {aiEnhancing ? (
+                    <RefreshCw size={19} className="animate-spin" />
+                  ) : (
+                    <Bot size={19} strokeWidth={2.2} />
+                  )}
+                </span>
+                <span className="media-tool-label">{aiEnhancing ? 'Refining…' : 'AI Polish'}</span>
+              </button>
 
-          <button
-            type="button"
-            className={`tool-btn${isRecordingVoice ? ' active' : ''}`}
-            onClick={isRecordingVoice ? handleStopVoiceNote : handleStartVoiceNote}
-            title={isRecordingVoice ? 'Stop recording voice note' : 'Record voice note or prayer'}
-            aria-label="Record voice note"
-          >
-            <MicIcon size={18} className="tool-icon text-cyan-400" />
-            <span className="tool-label">{isRecordingVoice ? 'Recording…' : 'Voice Note'}</span>
-          </button>
+              {/* Location Picker */}
+              <button
+                type="button"
+                className={`media-tool-btn${location ? ' active' : ''}`}
+                onClick={() => setShowLocationModal(true)}
+                title={location ? `Location: ${location.label}` : 'Add church or city location'}
+                aria-label="Add location"
+              >
+                <span className="media-tool-icon-wrap icon-accent-rose">
+                  <MapPin size={19} strokeWidth={2.2} />
+                </span>
+                <span className="media-tool-label">{location ? 'Located' : 'Location'}</span>
+              </button>
 
-          {/* Storage File Pickers */}
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => photoInputRef.current?.click()}
-            title="Attach a photo from device"
-            aria-label="Attach photo"
-          >
-            <ImageIcon size={18} className="tool-icon tool-photo" />
-            <span className="tool-label">Photo</span>
-          </button>
+              {/* Feeling / Mood */}
+              <button
+                type="button"
+                className={`media-tool-btn${feeling ? ' active' : ''}`}
+                onClick={() => setShowFeelingModal(true)}
+                title={feeling ? `Feeling: ${formatFeelingString(feeling)}` : 'Add feeling or devotion mood'}
+                aria-label="Add feeling"
+              >
+                <span className="media-tool-icon-wrap icon-accent-amber">
+                  <Smile size={19} strokeWidth={2.2} />
+                </span>
+                <span className="media-tool-label">Feeling</span>
+              </button>
 
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => videoInputRef.current?.click()}
-            title="Attach a video from device"
-            aria-label="Attach video"
-          >
-            <Film size={18} className="tool-icon tool-video" />
-            <span className="tool-label">Video</span>
-          </button>
+              {/* Tag People */}
+              <button
+                type="button"
+                className={`media-tool-btn${taggedUsers.length > 0 ? ' active' : ''}`}
+                onClick={() => {
+                  setShowTagModal(true);
+                  loadEligibleMembers();
+                }}
+                title={taggedUsers.length > 0 ? `${taggedUsers.length} members tagged` : 'Tag fellow members'}
+                aria-label="Tag members"
+              >
+                <span className="media-tool-icon-wrap icon-accent-emerald">
+                  <Tag size={19} strokeWidth={2.2} />
+                </span>
+                <span className="media-tool-label">{taggedUsers.length > 0 ? `${taggedUsers.length} Tagged` : 'Tag'}</span>
+              </button>
 
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => audioInputRef.current?.click()}
-            title="Attach an audio file from device"
-            aria-label="Attach audio"
-          >
-            <FileAudio size={18} className="tool-icon tool-audio" />
-            <span className="tool-label">Audio</span>
-          </button>
-
-          <button
-            type="button"
-            className={`tool-btn${isPoll ? ' active' : ''}`}
-            onClick={() => setIsPoll((v) => !v)}
-            title="Create a community poll"
-            aria-label="Toggle poll"
-            aria-pressed={isPoll}
-          >
-            <BarChart3 size={18} className="tool-icon tool-poll" />
-            <span className="tool-label">Poll</span>
-          </button>
-
-          {/* AI Scripture & Polish Tool Button */}
-          <button
-            type="button"
-            className={`tool-btn ai-tool-btn${aiEnhancing ? ' enhancing' : ''}${!composeText.trim() ? ' opacity-50 cursor-not-allowed' : ''}`}
-            onClick={handleAiEnhance}
-            disabled={aiEnhancing || !composeText.trim()}
-            title={
-              !composeText.trim()
-                ? 'Type your message above to polish with Shammah AI'
-                : 'Polish spelling, grammar & sentence flow with Shammah AI'
-            }
-            aria-label="AI Polish"
-          >
-            {aiEnhancing ? (
-              <RefreshCw size={18} className="tool-icon tool-ai animate-spin" />
-            ) : (
-              <Bot size={18} className="tool-icon tool-ai" />
-            )}
-            <span className="tool-label">{aiEnhancing ? 'Refining…' : 'AI Polish'}</span>
-          </button>
-
-          {/* Location Picker Tool Button */}
-          <button
-            type="button"
-            className={`tool-btn${location ? ' active' : ''}`}
-            onClick={() => setShowLocationModal(true)}
-            title={location ? `Location: ${location.label}` : 'Add church or city location'}
-            aria-label="Add location"
-          >
-            <MapPin size={18} className="tool-icon text-rose-400" />
-            <span className="tool-label">{location ? 'Located' : 'Location'}</span>
-          </button>
-
-          {/* Feeling / Mood Tool Button */}
-          <button
-            type="button"
-            className={`tool-btn${feeling ? ' active' : ''}`}
-            onClick={() => setShowFeelingModal(true)}
-            title={feeling ? `Feeling: ${formatFeelingString(feeling)}` : 'Add feeling or devotion mood'}
-            aria-label="Add feeling"
-          >
-            <Smile size={18} className="tool-icon text-amber-400" />
-            <span className="tool-label">{feeling ? 'Feeling' : 'Feeling'}</span>
-          </button>
-
-          {/* Tag People Tool Button */}
-          <button
-            type="button"
-            className={`tool-btn${taggedUsers.length > 0 ? ' active' : ''}`}
-            onClick={() => {
-              setShowTagModal(true);
-              loadEligibleMembers();
-            }}
-            title={taggedUsers.length > 0 ? `${taggedUsers.length} members tagged` : 'Tag fellow members you follow or who follow you'}
-            aria-label="Tag members"
-          >
-            <Tag size={18} className="tool-icon text-teal-400" />
-            <span className="tool-label">{taggedUsers.length > 0 ? `${taggedUsers.length} Tagged` : 'Tag'}</span>
-          </button>
-
-          {/* 30-Day Offline Download Option for Author */}
-          <button
-            type="button"
-            className={`tool-btn${allowOfflineDownload ? ' active' : ''}`}
-            onClick={() => {
-              setAllowOfflineDownload((v) => !v);
-              playSound('reaction');
-            }}
-            title={allowOfflineDownload ? '30-Day Offline Enabled (Tap to disable)' : 'Allow 30-Day Offline Download'}
-            aria-label="30-day offline download"
-            aria-pressed={allowOfflineDownload}
-          >
-            <DownloadCloud size={18} className="tool-icon tool-offline" />
-            <span className="tool-label">Offline</span>
-          </button>
-        </div>
+              {/* 30-Day Offline Download Option for Author */}
+              <button
+                type="button"
+                className={`media-tool-btn${allowOfflineDownload ? ' active' : ''}`}
+                onClick={() => {
+                  setAllowOfflineDownload((v) => !v);
+                  playSound('reaction');
+                }}
+                title={allowOfflineDownload ? '30-Day Offline Enabled (Tap to disable)' : 'Allow 30-Day Offline Download'}
+                aria-label="30-day offline download"
+                aria-pressed={allowOfflineDownload}
+              >
+                <span className="media-tool-icon-wrap icon-accent-indigo">
+                  <DownloadCloud size={19} strokeWidth={2.2} />
+                </span>
+                <span className="media-tool-label">Offline</span>
+              </button>
+            </>
+          }
+        />
 
         {/* Post CTA */}
         <div className="compose-cta-group">
@@ -1573,6 +1511,141 @@ export default function CreatePostBox({
               onClick={() => setShowTagModal(false)}
             >
               Done
+            </button>
+          </div>
+        </div>
+      </PopupSheet>
+
+      {/* Camera Capture Modal */}
+      {showCameraModal && (
+        <CameraCaptureModal
+          mode="both"
+          onCapture={(file) => {
+            handleFileSelected(file);
+            setShowCameraModal(false);
+          }}
+          onClose={() => setShowCameraModal(false)}
+        />
+      )}
+
+      {/* Voice Recorder Bar Modal */}
+      <PopupSheet
+        open={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
+        title="Record Voice Note or Prayer"
+        size="sm"
+      >
+        <div style={{ padding: '8px 0 16px' }}>
+          <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--ink-muted)' }}>
+            Speak from your heart. Spoken prayers and voice testimonies can be up to 5 minutes long.
+          </p>
+          <VoiceRecorderBar
+            maxSeconds={300}
+            autoStart={true}
+            onDone={({ file, duration, previewUrl }) => {
+              handleFileSelected(file);
+              setShowVoiceModal(false);
+            }}
+            onCancel={() => setShowVoiceModal(false)}
+          />
+        </div>
+      </PopupSheet>
+
+      {/* Animated GIF Picker Modal */}
+      {showGifModal && (
+        <GifPicker
+          onSelect={(gif) => {
+            setMediaFile(null);
+            setMediaPreview({
+              url: gif.url,
+              type: 'gif',
+              meta: gif.media_meta,
+              name: gif.media_meta?.title || 'Christian GIF',
+            });
+            setShowGifModal(false);
+          }}
+          onClose={() => setShowGifModal(false)}
+          userId={session?.user?.id}
+        />
+      )}
+
+      {/* Gospel Reel Creator Modal */}
+      {showReelModal && (
+        <ReelCreatorModal
+          isOpen={showReelModal}
+          onClose={() => setShowReelModal(false)}
+          session={session}
+          profile={profile}
+          onCreated={() => {
+            setShowReelModal(false);
+          }}
+        />
+      )}
+
+      {/* Live Sanctuary Stream Setup Modal */}
+      <PopupSheet
+        open={showLiveModal}
+        onClose={() => setShowLiveModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: '#ef4444',
+                boxShadow: '0 0 8px #ef4444',
+                display: 'inline-block',
+              }}
+            />
+            <span>Live Sanctuary Broadcast Setup</span>
+          </div>
+        }
+        size="md"
+      >
+        <div style={{ padding: '4px 0 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.5 }}>
+            Host live prayer vigils, Bible study rooms, or connect an RTMP sanctuary feed for your congregation.
+          </p>
+
+          <div
+            style={{
+              padding: 14,
+              borderRadius: 12,
+              background: 'var(--surface-sunken)',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
+          >
+            <strong style={{ fontSize: 13, color: 'var(--ink)' }}>Google Meet Prayer Room &amp; RTMP Feed</strong>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-muted)' }}>
+              Churches can broadcast direct from sanctuary software (OBS, vMix) or start an instant prayer room for up to 500 members.
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button
+                type="button"
+                className="st-btn st-btn-primary"
+                style={{ fontSize: 12, padding: '6px 14px' }}
+                onClick={() => {
+                  setComposeText((prev) => `${prev ? prev + '\n\n' : ''}🔴 LIVE: Joining together in prayer now! Join our prayer room on Shammah.`);
+                  setShowLiveModal(false);
+                }}
+              >
+                Insert Live Prayer Invite
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+            <button
+              type="button"
+              className="st-btn st-btn-ghost"
+              style={{ fontSize: 13, padding: '6px 18px' }}
+              onClick={() => setShowLiveModal(false)}
+            >
+              Close
             </button>
           </div>
         </div>

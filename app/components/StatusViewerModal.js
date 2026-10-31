@@ -633,9 +633,14 @@ export default function StatusViewerModal({
       aria-label="24-Hour Fullscreen Status Story"
     >
       <div className={`status-viewer-stage status-bg-${currentStatus.bgStyle || 'emerald'} ${slideAnim}`}>
-        {/* Full-frame image background with readable overlay scrim */}
-        {resolvedMediaType === 'image' && currentStatus.mediaUrl && (
+        {/* Full-frame image background with uncropped contain fitting & blurred backdrop */}
+        {(resolvedMediaType === 'image' || resolvedMediaType === 'gif') && currentStatus.mediaUrl && (
           <div className="status-viewer-image-wrap">
+            <div
+              className="status-viewer-backdrop-blur"
+              style={{ backgroundImage: `url(${currentStatus.mediaUrl})` }}
+              aria-hidden="true"
+            />
             <img
               src={currentStatus.mediaUrl}
               alt=""

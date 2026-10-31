@@ -34,6 +34,11 @@ import {
   Loader2,
 } from 'lucide-react';
 import PopupSheet from './PopupSheet';
+import MediaToolbar from './media/MediaToolbar';
+import MediaPreviewFrame from './media/MediaPreviewFrame';
+import CameraCaptureModal from './media/CameraCaptureModal';
+import VoiceRecorderBar from './media/VoiceRecorderBar';
+import GifPicker from './media/GifPicker';
 import { uploadPostMedia } from '../lib/mediaUpload';
 import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
 
@@ -113,6 +118,11 @@ export default function CommentThread({
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [voiceSeconds, setVoiceSeconds] = useState(0);
 
+  // Comment media modals
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [showGifModal, setShowGifModal] = useState(false);
+
   const photoInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const audioInputRef = useRef(null);
@@ -123,14 +133,20 @@ export default function CommentThread({
 
   function handleCommentFileSelected(file) {
     if (!file) return;
+    if (commentMediaPreview?.url && commentMediaPreview.url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(commentMediaPreview.url);
+      } catch (_) {}
+    }
     setCommentMediaFile(file);
     const url = URL.createObjectURL(file);
-    const type = file.type?.startsWith('video/')
-      ? 'video'
-      : file.type?.startsWith('audio/')
-      ? 'audio'
-      : 'image';
-    setCommentMediaPreview({ url, type, name: file.name });
+    const mime = file.type || '';
+    const name = file.name || '';
+    const isVid = mime.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(name);
+    const isAud = mime.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac)$/i.test(name);
+    const isGf = mime === 'image/gif' || name.toLowerCase().endsWith('.gif');
+    const type = isVid ? 'video' : isAud ? 'audio' : isGf ? 'gif' : 'image';
+    setCommentMediaPreview({ url, type, name: file.name, file });
   }
 
   function handleRemoveCommentMedia() {
@@ -377,7 +393,7 @@ export default function CommentThread({
     e.preventDefault();
     if (!session) return onRequireSignIn();
     const clean = text.trim();
-    if (!clean && !commentMediaFile) return;
+    if (!clean && !commentMediaFile && !commentMediaPreview?.url) return;
     setBusy(true);
     setError('');
 
@@ -397,6 +413,9 @@ export default function CommentThread({
         return;
       }
       setMediaUploading(false);
+    } else if (commentMediaPreview?.url) {
+      uploadedMediaUrl = commentMediaPreview.url;
+      uploadedMediaType = commentMediaPreview.type || 'gif';
     }
 
     const insertRow = {
@@ -1040,77 +1059,13 @@ export default function CommentThread({
             </div>
           )}
 
-          {/* Comment Media Attachment Preview */}
+          {/* Media Preview Frame with Contain & Blurred Letterbox */}
           {commentMediaPreview && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '6px 10px',
-                borderRadius: 10,
-                background: 'var(--surface-sunken)',
-                border: '1px solid var(--border)',
-                marginBottom: 8,
-              }}
-            >
-              {commentMediaPreview.type === 'image' && (
-                <img
-                  src={commentMediaPreview.url}
-                  alt="Preview"
-                  style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover' }}
-                />
-              )}
-              {commentMediaPreview.type === 'video' && (
-                <video
-                  src={commentMediaPreview.url}
-                  style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover', background: '#000' }}
-                />
-              )}
-              {commentMediaPreview.type === 'audio' && (
-                <div
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 8,
-                    background: 'var(--teal-soft)',
-                    color: 'var(--teal)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Music size={20} />
-                </div>
-              )}
-              <div style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
-                <strong style={{ display: 'block', color: 'var(--ink)' }} className="truncate">
-                  {commentMediaPreview.name || (commentMediaPreview.type === 'audio' ? 'Voice Note' : 'Attached Media')}
-                </strong>
-                <span style={{ color: 'var(--ink-muted)', fontSize: 11 }}>
-                  {commentMediaPreview.type === 'image' ? 'Photo' : commentMediaPreview.type === 'video' ? 'Video' : 'Audio Note'} ready to send
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleRemoveCommentMedia}
-                style={{
-                  background: 'rgba(0,0,0,0.3)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: 22,
-                  height: 22,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                }}
-                title="Remove attachment"
-              >
-                <X size={12} />
-              </button>
-            </div>
+            <MediaPreviewFrame
+              mode="comment"
+              media={commentMediaPreview}
+              onRemove={handleRemoveCommentMedia}
+            />
           )}
 
           <div className="comment-input-wrap">
@@ -1145,77 +1100,17 @@ export default function CommentThread({
             )}
           </div>
 
-          {/* Compact Live Capture & Attachment Options for comments */}
+          {/* Compact Unified MediaToolbar for comments */}
           {session && (
-            <div
-              className="comment-media-toolbar"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '4px 0 6px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <button
-                type="button"
-                className="tool-btn"
-                style={{ padding: '4px 8px', fontSize: 11.5, minHeight: 28 }}
-                onClick={() => cameraPhotoInputRef.current?.click()}
-                title="Take photo with camera"
-                aria-label="Take photo"
-              >
-                <Camera size={14} className="text-emerald-400" />
-                <span className="tool-label">Photo</span>
-              </button>
-
-              <button
-                type="button"
-                className="tool-btn"
-                style={{ padding: '4px 8px', fontSize: 11.5, minHeight: 28 }}
-                onClick={() => cameraVideoInputRef.current?.click()}
-                title="Record video with camera"
-                aria-label="Record video"
-              >
-                <Video size={14} className="text-amber-400" />
-                <span className="tool-label">Video</span>
-              </button>
-
-              <button
-                type="button"
-                className={`tool-btn${isRecordingVoice ? ' active' : ''}`}
-                style={{ padding: '4px 8px', fontSize: 11.5, minHeight: 28 }}
-                onClick={isRecordingVoice ? handleStopCommentVoiceNote : handleStartCommentVoiceNote}
-                title={isRecordingVoice ? 'Stop voice recording' : 'Record voice note or prayer'}
-                aria-label="Voice Note"
-              >
-                <Mic size={14} className="text-cyan-400" />
-                <span className="tool-label">{isRecordingVoice ? 'Recording…' : 'Voice'}</span>
-              </button>
-
-              <button
-                type="button"
-                className="tool-btn"
-                style={{ padding: '4px 8px', fontSize: 11.5, minHeight: 28 }}
-                onClick={() => photoInputRef.current?.click()}
-                title="Attach photo from device"
-                aria-label="Attach photo"
-              >
-                <ImageIcon size={14} className="text-emerald-400" />
-                <span className="tool-label">Upload</span>
-              </button>
-
-              <button
-                type="button"
-                className="tool-btn"
-                style={{ padding: '4px 8px', fontSize: 11.5, minHeight: 28 }}
-                onClick={() => audioInputRef.current?.click()}
-                title="Attach audio clip from device"
-                aria-label="Attach audio"
-              >
-                <FileAudio size={14} className="text-cyan-400" />
-                <span className="tool-label">Audio</span>
-              </button>
+            <div style={{ padding: '4px 0 6px', width: '100%' }}>
+              <MediaToolbar
+                context="comment"
+                onPickFile={handleCommentFileSelected}
+                onCamera={() => setShowCameraModal(true)}
+                onVoice={() => setShowVoiceModal(true)}
+                onGif={() => setShowGifModal(true)}
+                disabled={busy || mediaUploading}
+              />
             </div>
           )}
 
@@ -1339,6 +1234,59 @@ export default function CommentThread({
             </div>
           </div>
         </PopupSheet>
+      )}
+
+      {/* Camera Capture Modal */}
+      {showCameraModal && (
+        <CameraCaptureModal
+          mode="both"
+          onCapture={(file) => {
+            handleCommentFileSelected(file);
+            setShowCameraModal(false);
+          }}
+          onClose={() => setShowCameraModal(false)}
+        />
+      )}
+
+      {/* Voice Recorder Bar Modal */}
+      <PopupSheet
+        open={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
+        title="Record Voice Note"
+        size="sm"
+      >
+        <div style={{ padding: '8px 0 16px' }}>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--ink-muted)' }}>
+            Record an uplifting audio reply or prayer note (up to 60s).
+          </p>
+          <VoiceRecorderBar
+            maxSeconds={60}
+            autoStart={true}
+            onDone={({ file, duration, previewUrl }) => {
+              handleCommentFileSelected(file);
+              setShowVoiceModal(false);
+            }}
+            onCancel={() => setShowVoiceModal(false)}
+          />
+        </div>
+      </PopupSheet>
+
+      {/* Animated GIF Picker */}
+      {showGifModal && (
+        <GifPicker
+          onSelect={(gif) => {
+            setCommentMediaFile(null);
+            setCommentMediaPreview({
+              url: gif.url,
+              type: 'gif',
+              meta: gif.media_meta,
+              name: gif.media_meta?.title || 'GIF',
+            });
+            setShowGifModal(false);
+          }}
+          onClose={() => setShowGifModal(false)}
+          userId={session?.user?.id}
+        />
       )}
     </div>
   );

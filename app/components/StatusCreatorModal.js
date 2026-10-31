@@ -33,6 +33,11 @@ import { supabase } from '../../lib/supabaseClient';
 import { cleanDisplayName } from '../lib/postDisplay';
 import Avatar from './Avatar';
 import PopupSheet from './PopupSheet';
+import MediaToolbar from './media/MediaToolbar';
+import MediaPreviewFrame from './media/MediaPreviewFrame';
+import CameraCaptureModal from './media/CameraCaptureModal';
+import VoiceRecorderBar from './media/VoiceRecorderBar';
+import GifPicker from './media/GifPicker';
 
 const BG_THEMES = [
   { id: 'emerald', label: 'Emerald Praise', style: 'linear-gradient(135deg, #065f46, #047857, #10b981)' },
@@ -139,6 +144,11 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [voiceSeconds, setVoiceSeconds] = useState(0);
   const voiceRecorderRef = useRef(null);
+
+  // Status Media Modals
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [showGifModal, setShowGifModal] = useState(false);
 
   const displayName = cleanDisplayName(currentUser?.name || currentUser?.display_name || 'You', 'You');
 
@@ -512,31 +522,16 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
 
             {/* Media Presentation or Textarea */}
             {currentSlide.previewUrl ? (
-              <div className="status-preview-media-container">
-                {currentSlide.mediaType === 'video' ? (
-                  <video
-                    src={currentSlide.previewUrl}
-                    controls
-                    playsInline
-                    className="status-preview-media-video"
-                  />
-                ) : currentSlide.mediaType === 'audio' ? (
-                  <div className="status-preview-media-audio-card">
-                    <div className="status-audio-info-row">
-                      <Music size={16} className="text-emerald-400 shrink-0" />
-                      <span className="status-audio-filename truncate">
-                        {currentSlide.fileName || 'Audio clip'}
-                      </span>
-                    </div>
-                    <audio src={currentSlide.previewUrl} controls className="status-preview-audio-player w-full" />
-                  </div>
-                ) : (
-                  <img
-                    src={currentSlide.previewUrl}
-                    alt="Status media preview"
-                    className="status-preview-media-image"
-                  />
-                )}
+              <div className="status-preview-media-container" style={{ position: 'relative', width: '100%', minHeight: 220, borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+                <MediaPreviewFrame
+                  mode="status"
+                  media={{
+                    url: currentSlide.previewUrl,
+                    type: currentSlide.mediaType,
+                    name: currentSlide.fileName || 'Status media',
+                  }}
+                  onRemove={(e) => handleDeleteSlide(activeIdx, e)}
+                />
 
                 {/* WhatsApp-style floating caption input under the media */}
                 <div className="status-caption-bar">
@@ -718,177 +713,16 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
             style={{ display: 'none' }}
           />
 
-          {/* Media Capture & Import Options Group */}
-          <div className="status-media-options-group" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-            {/* Live Camera & Voice Note Capture Chips */}
-            <div
-              className="status-live-capture-row"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 8,
-              }}
-            >
-              <button
-                type="button"
-                className="status-capture-chip"
-                onClick={() => cameraPhotoInputRef.current?.click()}
-                title="Take a photo with your camera"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '10px 8px',
-                  borderRadius: 12,
-                  background: 'var(--surface-sunken)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--ink)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  minHeight: 40,
-                }}
-              >
-                <Camera size={16} className="text-emerald-400 shrink-0" />
-                <span>Take Photo</span>
-              </button>
-
-              <button
-                type="button"
-                className="status-capture-chip"
-                onClick={() => cameraVideoInputRef.current?.click()}
-                title="Record a video with your camera (up to 60s)"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '10px 8px',
-                  borderRadius: 12,
-                  background: 'var(--surface-sunken)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--ink)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  minHeight: 40,
-                }}
-              >
-                <Video size={16} className="text-amber-400 shrink-0" />
-                <span>Record Video</span>
-              </button>
-
-              <button
-                type="button"
-                className="status-capture-chip"
-                onClick={handleStartVoiceNote}
-                title="Record an audio voice note or prayer (up to 60s)"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '10px 8px',
-                  borderRadius: 12,
-                  background: isRecordingVoice ? 'rgba(239, 68, 68, 0.15)' : 'var(--surface-sunken)',
-                  border: isRecordingVoice ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border)',
-                  color: isRecordingVoice ? '#fca5a5' : 'var(--ink)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  minHeight: 40,
-                }}
-              >
-                <Mic size={16} className="text-cyan-400 shrink-0" />
-                <span>Voice Note</span>
-              </button>
-            </div>
-
-            {/* Active Live Voice Recording Status Bar */}
-            {isRecordingVoice && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  borderRadius: 12,
-                  background: 'rgba(239, 68, 68, 0.12)',
-                  border: '1px solid rgba(239, 68, 68, 0.35)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: '50%',
-                      background: '#ef4444',
-                      display: 'inline-block',
-                      animation: 'pulse 1s infinite',
-                    }}
-                  />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#fca5a5' }}>
-                    Recording Voice Note: {formatMediaTime(voiceSeconds)} / 1:00
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={handleCancelVoiceNote}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 8,
-                      background: 'rgba(255,255,255,0.1)',
-                      border: 'none',
-                      color: 'var(--ink)',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleStopVoiceNote}
-                    style={{
-                      padding: '4px 12px',
-                      borderRadius: 8,
-                      background: 'var(--teal, #14b8a6)',
-                      border: 'none',
-                      color: '#ffffff',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Done &amp; Attach
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Import Media Button (Bulk photos/videos/audio file picker) */}
-            <button
-              type="button"
-              className="status-media-picker-btn"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <div className="status-media-picker-icons">
-                <ImagePlus size={18} className="text-emerald-400" />
-                <Video size={18} className="text-amber-400" />
-                <FileAudio size={18} className="text-cyan-400" />
-              </div>
-              <div className="status-media-picker-text">
-                <span className="status-media-picker-title">
-                  {slides.some((s) => s.previewUrl) ? 'Upload more photos / videos / audio files' : 'Upload media from device files'}
-                </span>
-                <span className="status-media-picker-sub">
-                  Select existing photos, videos or audio clips from storage
-                </span>
-              </div>
-            </button>
+          {/* Unified Media Toolbar for Status Creator */}
+          <div className="status-media-options-group" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+            <MediaToolbar
+              context="status"
+              onPickFile={(file) => processFiles([file])}
+              onCamera={() => setShowCameraModal(true)}
+              onVoice={() => setShowVoiceModal(true)}
+              onGif={() => setShowGifModal(true)}
+              disabled={submitting}
+            />
           </div>
 
           {globalError && (
@@ -990,6 +824,72 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
           </div>
         </div>
       </PopupSheet>
+
+      {/* Camera Capture Modal */}
+      {showCameraModal && (
+        <CameraCaptureModal
+          mode="both"
+          maxVideoSeconds={60}
+          onCapture={(file) => {
+            if (file) processFiles([file]);
+            setShowCameraModal(false);
+          }}
+          onClose={() => setShowCameraModal(false)}
+        />
+      )}
+
+      {/* Voice Recorder Modal */}
+      <PopupSheet
+        open={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
+        title="Record 60s Status Audio Note"
+        size="sm"
+      >
+        <div style={{ padding: '8px 0 16px' }}>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--ink-muted)' }}>
+            Record an audio testimony, devotional reflection or prayer note (up to 60s).
+          </p>
+          <VoiceRecorderBar
+            maxSeconds={60}
+            autoStart={true}
+            onDone={({ file }) => {
+              if (file) processFiles([file]);
+              setShowVoiceModal(false);
+            }}
+            onCancel={() => setShowVoiceModal(false)}
+          />
+        </div>
+      </PopupSheet>
+
+      {/* Animated GIF Picker */}
+      {showGifModal && (
+        <GifPicker
+          onSelect={(gif) => {
+            if (!gif?.url) return;
+            const newSlide = {
+              id: `slide-gif-${Date.now()}`,
+              file: null,
+              previewUrl: gif.url,
+              mediaUrl: gif.url,
+              mediaType: 'gif',
+              fileName: gif.media_meta?.title || 'GIF',
+              caption: '',
+              scriptureTag: '',
+              bgStyle: 'midnight',
+              isUploading: false,
+              uploadError: '',
+            };
+            setSlides((prev) => {
+              const isEmptyFirst =
+                prev.length === 1 && !prev[0].file && !prev[0].previewUrl && !prev[0].caption.trim();
+              return isEmptyFirst ? [newSlide] : [...prev, newSlide];
+            });
+            setShowGifModal(false);
+          }}
+          onClose={() => setShowGifModal(false)}
+          userId={currentUser?.id}
+        />
+      )}
     </>
   );
 }

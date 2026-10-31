@@ -963,7 +963,7 @@ export default function Feed() {
       return;
     }
     const text = composeText.trim();
-    if ((!text && !mediaFile) || !session) return;
+    if ((!text && !mediaFile && !mediaPreview?.url) || !session) return;
     const cleanOptions = pollOptions.filter((o) => o.label.trim() || o.file);
     if (isPoll && cleanOptions.length < 2) {
       setPostError('A poll needs at least 2 options.');
@@ -1002,7 +1002,7 @@ export default function Feed() {
       setPollUploading(false);
     }
 
-    // Real media upload (image / video / audio)
+    // Real media upload (image / video / audio / GIF)
     let media_url = null;
     let media_type = null;
     if (mediaFile) {
@@ -1018,6 +1018,9 @@ export default function Feed() {
         return;
       }
       setMediaUploading(false);
+    } else if (mediaPreview?.url) {
+      media_url = mediaPreview.url;
+      media_type = mediaPreview.type || 'gif';
     }
 
     const isPinnedToSave = isAdmin ? isPinnedAnnouncement : false;

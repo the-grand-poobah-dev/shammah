@@ -892,7 +892,7 @@ export default function PostCard({
       )}
 
       {/* Various media shared with long text posts remain visible in the card */}
-      {post.media_url && post.media_type === 'image' && (
+      {post.media_url && (post.media_type === 'image' || post.media_type === 'gif') && (
         <img className="post-media" src={post.media_url} alt="" loading="lazy" />
       )}
       {post.media_url && (post.media_type === 'video' || post.media_type === 'reel') && (

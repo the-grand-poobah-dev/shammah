@@ -530,6 +530,9 @@ input[type="checkbox"] {
 
 .post-media {
   width: 100%;
+  max-height: min(55dvh, 520px);
+  object-fit: contain;
+  background: #090d16;
   border-radius: 10px;
   border: 1px solid var(--border);
   display: block;
@@ -10727,10 +10730,23 @@ a.dropdown-item {
 }
 
 .status-viewer-fill-image {
+  position: relative;
+  z-index: 2;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
+}
+
+.status-viewer-backdrop-blur {
+  position: absolute;
+  inset: -24px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(28px) brightness(0.5);
+  transform: scale(1.15);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .status-viewer-image-scrim {
