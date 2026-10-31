@@ -58,6 +58,7 @@ export async function POST(request) {
       intervalId,
       userId,
       donorName,
+      courseId,
     } = body || {};
 
     const cleanPhone = normalizeKenyanPhone(phone);
@@ -82,6 +83,8 @@ export async function POST(request) {
     // Record transaction in Supabase if credentials are configured
     const supabaseUrl = resolveSupabaseUrl();
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    const targetCourseId = courseId || (String(projectId || '').startsWith('course:') ? String(projectId).replace('course:', '') : null);
 
     if (supabaseUrl && supabaseKey && !supabaseKey.includes('your-anon-key')) {
       try {
@@ -113,15 +116,29 @@ export async function POST(request) {
           amount_kes: numAmount,
           receipt_code: receiptCode,
           checkout_request_id: checkoutRequestId,
-          project_id: projectId || null,
+          project_id: targetCourseId || projectId || null,
           project_name: projectName || tierLabel || null,
           institution_id: institutionId || null,
-          plan_id: planId || tier || null,
+          plan_id: planId || tier || (targetCourseId ? 'course_enrollment' : null),
           interval_id: intervalId || null,
           user_id: userId || null,
           donor_name: donorName || null,
           status: 'completed',
         });
+
+        if (targetCourseId && userId) {
+          await supabase.from('course_enrollments').upsert(
+            {
+              user_id: userId,
+              course_id: targetCourseId,
+              paid: true,
+              mpesa_receipt: receiptCode,
+              amount_paid_kes: numAmount,
+              enrolled_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,course_id' }
+          );
+        }
       } catch {
         // Ignore if optional transaction audit table is not yet created
       }

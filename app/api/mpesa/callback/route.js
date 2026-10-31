@@ -54,6 +54,40 @@ export async function POST(req) {
       .eq('checkout_request_id', checkoutId)
       .maybeSingle();
 
+    const success = resultCode === 0 || resultCode === '0';
+
+    // Also check if this callback corresponds to a paid course enrollment transaction
+    const { data: tx } = await supabase
+      .from('mpesa_transactions')
+      .select('id, project_id, user_id, plan_id, amount_kes')
+      .eq('checkout_request_id', checkoutId)
+      .maybeSingle();
+
+    if (tx && tx.project_id && tx.user_id && success) {
+      await supabase
+        .from('mpesa_transactions')
+        .update({
+          status: 'completed',
+          receipt_code: receipt || undefined,
+          amount_kes: amount != null ? Math.round(amount) : tx.amount_kes,
+        })
+        .eq('id', tx.id);
+
+      await supabase
+        .from('course_enrollments')
+        .upsert(
+          {
+            user_id: tx.user_id,
+            course_id: String(tx.project_id).replace(/^course:/, ''),
+            paid: true,
+            mpesa_receipt: receipt || null,
+            amount_paid_kes: amount != null ? Math.round(amount) : tx.amount_kes || 0,
+            enrolled_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,course_id' }
+        );
+    }
+
     if (!sub) {
       return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
     }
@@ -62,8 +96,6 @@ export async function POST(req) {
     if (sub.status === 'confirmed' || sub.status === 'failed') {
       return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
     }
-
-    const success = resultCode === 0 || resultCode === '0';
 
     if (!success) {
       await supabase

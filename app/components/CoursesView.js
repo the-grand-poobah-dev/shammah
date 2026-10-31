@@ -1,906 +1,889 @@
 'use client';
-import { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  GraduationCap,
   BookOpen,
-  CheckCircle,
   PlayCircle,
-  Clock,
   Award,
-  Sparkles,
-  ChevronRight,
-  X,
-  Share2,
-  Tv,
-  DownloadCloud,
-  Check,
+  Clock,
+  Star,
+  Users,
   Search,
-  Filter,
+  Sparkles,
+  Plus,
+  BarChart3,
+  CheckCircle2,
+  ExternalLink,
+  RefreshCw,
+  Compass,
   Flame,
-  Shield,
-  Coins,
-  Lock,
-  MessageCircle,
-  Repeat,
-  FileText,
+  ShieldCheck,
+  Lock
 } from 'lucide-react';
-import Avatar from './Avatar';
-import VerifiedBadge from './VerifiedBadge';
-import MemberBadge from './MemberBadge';
-import ReactionBar from './ReactionBar';
-import CommentThread from './CommentThread';
-import RepostModal from './RepostModal';
-import WatermarkShareModal from './WatermarkShareModal';
-import ProjectionModeModal from './ProjectionModeModal';
-import { saveOfflineItem, isItemSavedOffline, getRemainingDays } from '../lib/offlineSyncManager';
-import { playSound } from '../lib/soundEffects';
+import {
+  ContentLayout,
+  AccentCard,
+  SectionBlock,
+  LayoutSwitcher,
+  FilterChips,
+  SortMenu,
+  StatStrip,
+  ProgressBar,
+  SkeletonGrid
+} from './layoutkit';
+import CourseDetailView from './CourseDetailView';
+import CourseLearnPlayer from './CourseLearnPlayer';
+import CourseCertificateModal from './CourseCertificateModal';
+import CourseCreatorModal from './CourseCreatorModal';
+import {
+  COURSES_CATALOG,
+  listCourses,
+  migrateLegacyCourseProgress,
+  issueCourseCertificate,
+  formatDurationMinutes
+} from '../lib/data/coursesApi';
 
-const COURSE_CATEGORIES = [
-  { id: 'all', label: 'All Subjects' },
-  { id: 'discipleship', label: 'Foundations & Discipleship' },
-  { id: 'leadership', label: 'Pastoral & Kingdom Leadership' },
-  { id: 'prayer', label: 'Spiritual Warfare & Intercession' },
-  { id: 'marriage', label: 'Covenant Marriage & Family' },
-  { id: 'worship', label: 'Prophetic Worship & Arts' },
-  { id: 'youth', label: 'Youth & Next-Gen' },
-  { id: 'apologetics', label: 'Bible Mastery & Apologetics' },
+export { COURSES_CATALOG };
+
+const CATEGORY_TILES = [
+  { id: 'Theology', label: 'Theology & Doctrine', accent: '#f59e0b', desc: 'Grace, Scripture & Christology' },
+  { id: 'Spiritual Growth', label: 'Prayer & Spiritual Growth', accent: '#06b6d4', desc: 'Fasting, devotion & stillness' },
+  { id: 'Leadership', label: 'Servant Leadership', accent: '#8b5cf6', desc: 'Ministry teams & pastoral care' },
+  { id: 'Life & Family', label: 'Stewardship & Family', accent: '#10b981', desc: 'Kingdom finance & marriage' },
+  { id: 'Evangelism', label: 'Digital Evangelism', accent: '#ec4899', desc: 'Sharing Jesus online & offline' }
 ];
 
-export const COURSES_CATALOG = [
-  {
-    id: 'course-foundations',
-    category: 'discipleship',
-    title: 'Foundations of Faith: The Pillars of New Covenant Believers',
-    instructor: 'Pastor David Mwangi',
-    churchName: 'Nairobi Chapel & Fellowship',
-    role: 'church_admin',
-    badge: 'pastor',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-    cover: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=600',
-    level: 'Foundational',
-    duration: '4 Weeks · 5 Modules',
-    enrolledCount: 248,
-    isPremium: false,
-    priceKes: 0,
-    certificateTitle: 'Pillars of Faith Foundation Certificate',
-    badgeIcon: '🔥',
-    badgeName: 'Faith Foundation Pillar',
-    description: 'Master the core truths of salvation by grace, believer authority in Christ, water baptism, the Holy Spirit baptism, and continuous communion with God.',
-    modules: [
-      {
-        id: 'm-1',
-        title: 'Module 1: The Assurance of Eternal Salvation',
-        duration: '24 min',
-        completed: true,
-        scripture: 'Ephesians 2:8-10 · Romans 8:38-39',
-        notes: 'Salvation is a gift received by faith, not earned by works. God seals believers with the Holy Spirit of promise.',
-      },
-      {
-        id: 'm-2',
-        title: 'Module 2: The Authority of the Believer in Christ',
-        duration: '32 min',
-        completed: true,
-        scripture: 'Luke 10:19 · Ephesians 1:19-23',
-        notes: 'Understanding the delegated authority of the believer to speak God’s word and stand firm against demonic schemes.',
-      },
-      {
-        id: 'm-3',
-        title: 'Module 3: Walking in Communion & Daily Prayer',
-        duration: '28 min',
-        completed: true,
-        scripture: '1 Thessalonians 5:16-18 · John 15:5-7',
-        notes: 'Communion is living awareness of God’s presence throughout every minute of the day.',
-      },
-      {
-        id: 'm-4',
-        title: 'Module 4: The Baptism and Gifts of the Holy Spirit',
-        duration: '35 min',
-        completed: true,
-        scripture: 'Acts 1:8 · 1 Corinthians 12:4-11',
-        notes: 'Power for witness and divine enablement through spiritual gifts serving the body of Christ.',
-      },
-      {
-        id: 'm-5',
-        title: 'Module 5: Overcoming Temptation & Living Consecrated',
-        duration: '30 min',
-        completed: false,
-        scripture: '1 Corinthians 10:13 · Galatians 5:16-25',
-        notes: 'Walking by the Spirit so that you do not fulfill the desires of the flesh.',
-      },
-    ],
-  },
-  {
-    id: 'course-intercession',
-    category: 'prayer',
-    title: 'Spiritual Warfare & Intercession: Guarding the City Gates',
-    instructor: 'Sister Esther Wanjiku',
-    churchName: 'Mavuno City Church',
-    role: 'member',
-    badge: 'intercessor',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-    cover: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600',
-    level: 'Intermediate',
-    duration: '3 Weeks · 3 Modules',
-    enrolledCount: 182,
-    isPremium: false,
-    priceKes: 0,
-    certificateTitle: 'Watchman Intercession & Warfare Diploma',
-    badgeIcon: '🛡️',
-    badgeName: 'City Gate Watchman',
-    description: 'Learn biblical protocols of spiritual warfare, binding and loosing, prayer vigils, praying scripture, and cultivating acute sensitivity to the Holy Spirit.',
-    modules: [
-      {
-        id: 'm-w-1',
-        title: 'Module 1: The Armor of God in Ephesians 6',
-        duration: '26 min',
-        completed: true,
-        scripture: 'Ephesians 6:10-18',
-        notes: 'Stand firm in truth, righteousness, the gospel of peace, faith, salvation, and the sword of the Spirit.',
-      },
-      {
-        id: 'm-w-2',
-        title: 'Module 2: Strategic Prayer Watches & Dawn Prayers',
-        duration: '29 min',
-        completed: true,
-        scripture: 'Psalm 63:1 · Lamentations 2:19',
-        notes: 'The night watches and morning dew prayers that dismantle territorial oppression.',
-      },
-      {
-        id: 'm-w-3',
-        title: 'Module 3: Fasting as Spiritual Breakthrough Weapon',
-        duration: '33 min',
-        completed: true,
-        scripture: 'Isaiah 58:6-12 · Matthew 17:21',
-        notes: 'The true fast that loosens bands of wickedness and releases divine illumination.',
-      },
-    ],
-  },
-  {
-    id: 'course-leadership',
-    category: 'leadership',
-    title: 'Kingdom Leadership: Servant Heart & Pastoral Wisdom',
-    instructor: 'Bishop Sarah Ndung\'u',
-    churchName: 'Christ Is The Answer Ministries',
-    role: 'church_admin',
-    badge: 'bishop',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-    cover: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=600',
-    level: 'Advanced',
-    duration: '6 Weeks · 4 Modules',
-    enrolledCount: 134,
-    isPremium: true,
-    priceKes: 1500,
-    certificateTitle: 'Executive Kingdom Leadership Credential',
-    badgeIcon: '👑',
-    badgeName: 'Servant Shepherd Leader',
-    description: 'Essential leadership training for elders, deacons, cell group shepherds, and ministry coordinators. Conflict resolution, delegation, and mentoring emerging ministers.',
-    modules: [
-      {
-        id: 'm-l-1',
-        title: 'Module 1: The Heart of a Servant Shepherd',
-        duration: '40 min',
-        completed: false,
-        scripture: '1 Peter 5:1-4 · Mark 10:42-45',
-        notes: 'Leading by example, not lording over God’s heritage.',
-      },
-      {
-        id: 'm-l-2',
-        title: 'Module 2: Navigating Church Transitions & Unity',
-        duration: '38 min',
-        completed: false,
-        scripture: 'Ephesians 4:1-6 · 1 Corinthians 1:10',
-        notes: 'Guarding the unity of the Spirit in the bond of peace during growth phases.',
-      },
-      {
-        id: 'm-l-3',
-        title: 'Module 3: Preaching & Teaching with Spiritual Power',
-        duration: '45 min',
-        completed: false,
-        scripture: '2 Timothy 4:1-5 · 1 Corinthians 2:4',
-        notes: 'Not with persuasive words of human wisdom, but in demonstration of the Spirit and of power.',
-      },
-      {
-        id: 'm-l-4',
-        title: 'Module 4: Financial Integrity & Church Administration',
-        duration: '35 min',
-        completed: false,
-        scripture: '2 Corinthians 8:20-21 · 1 Timothy 3:1-7',
-        notes: 'Providing things honest not only in the sight of the Lord, but also in the sight of men.',
-      },
-    ],
-  },
-  {
-    id: 'course-marriage',
-    category: 'marriage',
-    title: 'Covenant Marriage: Building Christ-Centered Homes',
-    instructor: 'Rev. Timothy & Janet Kariuki',
-    churchName: 'All Saints Cathedral',
-    role: 'pastor',
-    badge: 'pastor',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    cover: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=600',
-    level: 'All Couples & Singles',
-    duration: '4 Weeks · 4 Modules',
-    enrolledCount: 310,
-    isPremium: false,
-    priceKes: 0,
-    certificateTitle: 'Kingdom Family & Covenant Marriage Award',
-    badgeIcon: '💍',
-    badgeName: 'Covenant Marriage Builder',
-    description: 'Biblical blueprints for lifelong marital intimacy, raising godly children, transparent communication, and overcoming financial and emotional hurdles.',
-    modules: [
-      {
-        id: 'm-m-1',
-        title: 'Module 1: The Covenant vs Contract in Christian Marriage',
-        duration: '30 min',
-        completed: false,
-        scripture: 'Genesis 2:24 · Ephesians 5:21-33',
-        notes: 'Marriage is a sacred covenant reflecting Christ and His bride, the Church.',
-      },
-      {
-        id: 'm-m-2',
-        title: 'Module 2: Communication, Healing & Quick Forgiveness',
-        duration: '34 min',
-        completed: false,
-        scripture: 'Colossians 3:12-14 · James 1:19',
-        notes: 'Be quick to hear, slow to speak, and slow to anger.',
-      },
-      {
-        id: 'm-m-3',
-        title: 'Module 3: Kingdom Finances for Married Couples',
-        duration: '28 min',
-        completed: false,
-        scripture: 'Proverbs 3:9-10 · Luke 16:10-12',
-        notes: 'Unified budgeting, debt freedom, and generative blessing.',
-      },
-    ],
-  },
-  {
-    id: 'course-worship',
-    category: 'worship',
-    title: 'Prophetic Worship & Atmosphere: Leading Congregational Praise',
-    instructor: 'Minister Mercy Masika & Worship Team',
-    churchName: 'Jubilee Christian Church',
-    role: 'member',
-    badge: 'worship',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    cover: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600',
-    level: 'Worship Ministers & Believers',
-    duration: '3 Weeks · 3 Modules',
-    enrolledCount: 220,
-    isPremium: true,
-    priceKes: 800,
-    certificateTitle: 'Prophetic Worship Leader Certificate',
-    badgeIcon: '🕊️',
-    badgeName: 'Prophetic Atmosphere Builder',
-    description: 'Flow in the Holy Spirit during corporate worship, sensitivity to the prophetic song, spiritual preparation, and songwriting for church revival.',
-    modules: [
-      {
-        id: 'm-w-1',
-        title: 'Module 1: Worship in Spirit and in Truth',
-        duration: '32 min',
-        completed: false,
-        scripture: 'John 4:23-24 · Psalm 100',
-        notes: 'The Father seeks true worshipers who worship beyond outward form.',
-      },
-      {
-        id: 'm-w-2',
-        title: 'Module 2: The New Song & Prophetic Spontaneous Praise',
-        duration: '36 min',
-        completed: false,
-        scripture: 'Psalm 40:3 · Revelation 5:9',
-        notes: 'Releasing spontaneous spiritual songs that shift spiritual atmospheres in services.',
-      },
-    ],
-  },
-];
+function ProgressRing({ percent = 0, size = 44, stroke = 4, color = '#f59e0b' }) {
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, Number(percent || 0)));
+  const offset = circumference - (clamped / 100) * circumference;
 
-export default function CoursesView({ session, currentUser, openAuth }) {
-  const [courses, setCourses] = useState(COURSES_CATALOG);
-  const [activeTab, setActiveTab] = useState('all'); // all | my-courses | explore | free | premium | completed
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  return (
+    <div className="course-progress-ring" style={{ width: size, height: size }}>
+      <svg width={size} height={size}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="transparent"
+          stroke="rgba(255,255,255,0.12)"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="transparent"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+      <span className="course-progress-ring-label">{clamped}%</span>
+    </div>
+  );
+}
+
+export default function CoursesView({ session = null, userProfile = null }) {
+  const userId = session?.user?.id || userProfile?.id || 'guest-scholar';
+  const userName =
+    userProfile?.full_name ||
+    userProfile?.name ||
+    session?.user?.user_metadata?.full_name ||
+    session?.user?.email?.split('@')[0] ||
+    'Shammah Scholar';
+
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Navigation sub-views: 'catalogue' | 'detail' | 'learn'
+  const [viewMode, setViewMode] = useState('catalogue');
   const [selectedCourse, setSelectedCourse] = useState(null);
+  const [initialLessonId, setInitialLessonId] = useState(null);
 
-  // Projection Mode state
-  const [projectingCourse, setProjectingCourse] = useState(null);
+  // Filters & Search
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [activePriceFilter, setActivePriceFilter] = useState('all'); // all | free | paid
+  const [activeLevel, setActiveLevel] = useState('all'); // all | Beginner | Intermediate | Advanced
+  const [activeDuration, setActiveDuration] = useState('all'); // all | short (<120m) | deep (>=120m)
+  const [activeLanguage, setActiveLanguage] = useState('all');
+  const [sortBy, setSortBy] = useState('popular'); // popular | newest | rating | price_asc
+  const [browseLayout, setBrowseLayout] = useState('magazine-x2');
 
-  // Watermark Share state
-  const [watermarkShareData, setWatermarkShareData] = useState(null);
+  // Modals
+  const [creatorOpen, setCreatorOpen] = useState(false);
+  const [creatorMode, setCreatorMode] = useState('builder');
+  const [editingCourse, setEditingCourse] = useState(null);
+  const [activeCertificate, setActiveCertificate] = useState(null);
+  const [certificateCourse, setCertificateCourse] = useState(null);
 
-  // Repost Modal state
-  const [repostModalCourse, setRepostModalCourse] = useState(null);
-
-  // Toast
-  const [toastMsg, setToastMsg] = useState('');
-
-  function showToast(msg) {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(''), 3000);
-  }
-
-  // Load completion states from localStorage if any
+  // Debounce search
   useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchInput.trim().toLowerCase()), 220);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const loadCatalogue = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      const stored = localStorage.getItem('shammah_completed_courses_v1');
-      if (stored) {
-        const completedIds = JSON.parse(stored);
+      await migrateLegacyCourseProgress(userId, userName);
+      const list = await listCourses(userId);
+      setCourses(list);
+    } catch (err) {
+      setError(err?.message || 'Unable to load courses right now.');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, userName]);
+
+  useEffect(() => {
+    loadCatalogue();
+  }, [loadCatalogue]);
+
+  const publishedCourses = useMemo(
+    () => courses.filter((c) => c.status !== 'archived' && (c.status === 'published' || c.author_id === userId)),
+    [courses, userId]
+  );
+
+  // Filtered & Sorted list
+  const filteredCourses = useMemo(() => {
+    let list = [...publishedCourses];
+
+    if (debouncedQuery) {
+      list = list.filter(
+        (c) =>
+          String(c.title || '').toLowerCase().includes(debouncedQuery) ||
+          String(c.subtitle || c.description || '').toLowerCase().includes(debouncedQuery) ||
+          String(c.instructor_name || '').toLowerCase().includes(debouncedQuery) ||
+          String(c.category || '').toLowerCase().includes(debouncedQuery)
+      );
+    }
+
+    if (activeCategory !== 'all') {
+      list = list.filter((c) => c.category === activeCategory);
+    }
+
+    if (activePriceFilter === 'free') {
+      list = list.filter((c) => Number(c.price_kes || 0) === 0);
+    } else if (activePriceFilter === 'paid') {
+      list = list.filter((c) => Number(c.price_kes || 0) > 0);
+    }
+
+    if (activeLevel !== 'all') {
+      list = list.filter((c) => c.level === activeLevel);
+    }
+
+    if (activeDuration === 'short') {
+      list = list.filter((c) => Number(c.duration_minutes || 90) < 120);
+    } else if (activeDuration === 'deep') {
+      list = list.filter((c) => Number(c.duration_minutes || 90) >= 120);
+    }
+
+    if (activeLanguage !== 'all') {
+      list = list.filter((c) =>
+        String(c.language || 'English').toLowerCase().includes(activeLanguage.toLowerCase())
+      );
+    }
+
+    if (sortBy === 'popular') {
+      list.sort((a, b) => Number(b.enrolled_count || 0) - Number(a.enrolled_count || 0));
+    } else if (sortBy === 'newest') {
+      list.sort(
+        (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+      );
+    } else if (sortBy === 'rating') {
+      list.sort((a, b) => Number(b.rating_avg || 0) - Number(a.rating_avg || 0));
+    } else if (sortBy === 'price_asc') {
+      list.sort((a, b) => Number(a.price_kes || 0) - Number(b.price_kes || 0));
+    }
+
+    return list;
+  }, [
+    publishedCourses,
+    debouncedQuery,
+    activeCategory,
+    activePriceFilter,
+    activeLevel,
+    activeDuration,
+    activeLanguage,
+    sortBy
+  ]);
+
+  // Curated block slices
+  const continueLearningCourses = useMemo(
+    () =>
+      publishedCourses.filter(
+        (c) => (c.enrolled || Number(c.progress_percent || 0) > 0) && Number(c.progress_percent || 0) < 100
+      ),
+    [publishedCourses]
+  );
+
+  const myEnrolledCourses = useMemo(
+    () => publishedCourses.filter((c) => c.enrolled || Number(c.progress_percent || 0) > 0),
+    [publishedCourses]
+  );
+
+  const completedCourses = useMemo(
+    () => publishedCourses.filter((c) => Number(c.progress_percent || 0) === 100 || c.completed_at),
+    [publishedCourses]
+  );
+
+  const featuredCourse = useMemo(
+    () => filteredCourses[0] || publishedCourses[0] || null,
+    [filteredCourses, publishedCourses]
+  );
+
+  const popularCourses = useMemo(
+    () =>
+      [...publishedCourses]
+        .sort((a, b) => Number(b.enrolled_count || 0) - Number(a.enrolled_count || 0))
+        .slice(0, 4),
+    [publishedCourses]
+  );
+
+  const newCourses = useMemo(
+    () =>
+      [...publishedCourses]
+        .sort(
+          (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        )
+        .slice(0, 4),
+    [publishedCourses]
+  );
+
+  const openCourseDetail = (course) => {
+    setSelectedCourse(course);
+    setViewMode('detail');
+  };
+
+  const openCoursePlayer = (course, lessonId = null) => {
+    setSelectedCourse(course);
+    setInitialLessonId(lessonId);
+    setViewMode('learn');
+  };
+
+  const handleOpenCertModal = async (course) => {
+    setCertificateCourse(course);
+    if (course.certificate) {
+      setActiveCertificate(course.certificate);
+      return;
+    }
+    try {
+      const cert = await issueCourseCertificate({
+        courseId: course.id,
+        userId,
+        recipientName: userName
+      });
+      if (cert) {
+        setActiveCertificate(cert);
         setCourses((prev) =>
-          prev.map((c) => {
-            if (completedIds.includes(c.id)) {
-              return {
-                ...c,
-                modules: c.modules.map((m) => ({ ...m, completed: true })),
-              };
-            }
-            return c;
-          })
+          prev.map((c) => (c.id === course.id ? { ...c, certificate: cert } : c))
         );
       }
     } catch {}
-  }, []);
+  };
 
-  function handleEnroll(course) {
-    if (!session) {
-      if (openAuth) openAuth('signin');
-      return;
-    }
-    setSelectedCourse(course);
-  }
+  const renderCourseCard = (course, compact = false) => {
+    const isFree = Number(course.price_kes || 0) === 0;
+    const progress = Number(course.progress_percent || 0);
+    const totalLessons =
+      course.total_lessons ||
+      (course.modules || []).reduce((a, m) => a + (m.lessons?.length || 0), 0) ||
+      4;
 
-  function handleToggleModuleComplete(courseId, modId) {
-    setCourses((prev) =>
-      prev.map((c) => {
-        if (c.id !== courseId) return c;
-        const nextMods = c.modules.map((m) =>
-          m.id === modId ? { ...m, completed: !m.completed } : m
-        );
-        const done = nextMods.filter((m) => m.completed).length;
-        const isAllDone = done === nextMods.length;
-        const updated = { ...c, modules: nextMods };
-
-        if (isAllDone) {
-          playSound('badge');
-          showToast(`🎉 Congratulations! You completed ${c.title} and earned the "${c.badgeName}" Badge!`);
-          try {
-            const stored = JSON.parse(localStorage.getItem('shammah_completed_courses_v1') || '[]');
-            if (!stored.includes(courseId)) {
-              stored.push(courseId);
-              localStorage.setItem('shammah_completed_courses_v1', JSON.stringify(stored));
+    return (
+      <AccentCard
+        key={course.id}
+        accent={course.accent || '#f59e0b'}
+        onClick={() => openCourseDetail(course)}
+        className="course-hub-card"
+      >
+        <div className="course-hub-card-media">
+          <img
+            src={
+              course.cover_url ||
+              course.image ||
+              'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?auto=format&fit=crop&w=800&q=80'
             }
-          } catch {}
-        } else {
-          playSound('reaction');
-        }
+            alt={course.title}
+            loading="lazy"
+            className="course-hub-card-img"
+          />
+          <div className="course-hub-card-badges">
+            <span className="course-hub-badge-cat">{course.category}</span>
+            <span className={`course-hub-badge-price ${isFree ? 'is-free' : 'is-paid'}`}>
+              {isFree ? 'FREE' : `KES ${course.price_kes}`}
+            </span>
+          </div>
+          {progress > 0 && (
+            <div className="course-hub-card-ring-wrap">
+              <ProgressRing
+                percent={progress}
+                size={40}
+                stroke={3.5}
+                color={course.accent || '#f59e0b'}
+              />
+            </div>
+          )}
+        </div>
 
-        if (selectedCourse?.id === courseId) {
+        <div className="course-hub-card-body">
+          <div className="course-hub-card-meta-top">
+            <span>{course.level || 'Beginner'}</span>
+            <span>•</span>
+            <span>{formatDurationMinutes(course.duration_minutes || 95)}</span>
+            <span>•</span>
+            <span>{totalLessons} lessons</span>
+          </div>
+
+          <h3 className="course-hub-card-title">{course.title}</h3>
+          {!compact && (
+            <p className="course-hub-card-desc">
+              {course.subtitle || course.description}
+            </p>
+          )}
+
+          <div className="course-hub-card-footer">
+            <div className="course-hub-card-instructor">
+              <span className="course-hub-avatar-mini">
+                {(course.instructor_name || course.instructor || 'P').charAt(0)}
+              </span>
+              <span>{course.instructor_name || course.instructor}</span>
+            </div>
+
+            <div className="course-hub-card-rating">
+              <Star size={13} fill="#fbbf24" color="#fbbf24" />
+              <strong>{course.rating_avg || 4.9}</strong>
+              <span>({Number(course.enrolled_count || 0).toLocaleString()})</span>
+            </div>
+          </div>
+        </div>
+      </AccentCard>
+    );
+  };
+
+  if (viewMode === 'detail' && selectedCourse) {
+    return (
+      <CourseDetailView
+        course={selectedCourse}
+        session={session}
+        userProfile={userProfile}
+        onBack={() => setViewMode('catalogue')}
+        onStartLearning={(courseObj, lessonId) => openCoursePlayer(courseObj, lessonId)}
+        onCourseUpdated={(updated) => {
           setSelectedCourse(updated);
-        }
-        return updated;
-      })
+          setCourses((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+        }}
+      />
     );
   }
 
-  function handleSaveOffline(course) {
-    playSound('reaction');
-    const res = saveOfflineItem(course, 'course');
-    if (res.success) {
-      showToast(`Saved "${course.title}" for 30-day offline access!`);
-    } else {
-      showToast(res.reason || 'Could not save course offline.');
-    }
+  if (viewMode === 'learn' && selectedCourse) {
+    return (
+      <CourseLearnPlayer
+        course={selectedCourse}
+        initialLessonId={initialLessonId}
+        session={session}
+        userProfile={userProfile}
+        onBack={() => setViewMode('detail')}
+        onCourseUpdated={(res) => {
+          setSelectedCourse((prev) => ({ ...prev, ...res }));
+          loadCatalogue();
+        }}
+      />
+    );
   }
-
-  function handleShareCourseWatermarked(course) {
-    playSound('reaction');
-    setWatermarkShareData({
-      title: course.title,
-      textContent: `${course.description}\n\nInstructor: ${course.instructor} (${course.churchName})\nLevel: ${course.level} · ${course.duration}`,
-      authorName: course.instructor,
-      churchName: course.churchName,
-      category: 'Discipleship Academy',
-      courseInfo: {
-        title: course.title,
-        badgeName: course.badgeName,
-      },
-    });
-  }
-
-  function handleProjectCourse(course) {
-    playSound('reaction');
-    setProjectingCourse(course);
-  }
-
-  // Filter courses
-  const filteredCourses = courses.filter((course) => {
-    const isEnrolled = course.modules.some((m) => m.completed);
-    const isCompleted = course.modules.every((m) => m.completed);
-
-    if (activeTab === 'my-courses' && !isEnrolled) return false;
-    if (activeTab === 'completed' && !isCompleted) return false;
-    if (activeTab === 'free' && course.isPremium) return false;
-    if (activeTab === 'premium' && !course.isPremium) return false;
-
-    if (selectedCategory !== 'all' && course.category !== selectedCategory) return false;
-
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      const matchTitle = course.title.toLowerCase().includes(q);
-      const matchInst = course.instructor.toLowerCase().includes(q);
-      const matchDesc = course.description.toLowerCase().includes(q);
-      return matchTitle || matchInst || matchDesc;
-    }
-    return true;
-  });
-
-  const enrolledCount = courses.filter((c) => c.modules.some((m) => m.completed)).length;
-  const completedCount = courses.filter((c) => c.modules.every((m) => m.completed)).length;
 
   return (
-    <div className="section-feed-view courses-view-container">
-      {/* Academy Banner with Projection & Action CTAs */}
-      <div className="courses-header-banner">
-        <div className="courses-header-content">
-          <div className="courses-badge-tag">
-            <GraduationCap size={16} />
-            <span>Kingdom Discipleship Academy</span>
-          </div>
-          <h2 className="courses-main-title">Biblical Courses, Discipleship &amp; Leadership</h2>
-          <p className="courses-subtext">
-            Grow deep in doctrine, spiritual warfare, family covenants, and leadership. Instructors and pastors can project any course directly onto sanctuary and classroom screens.
-          </p>
-
-          <div className="courses-quick-meta-row">
-            <span className="course-quick-stat">
-              <Award size={14} className="text-amber-400" />
-              <span>{completedCount} Completed Badges</span>
+    <div className="courses-hub-shell">
+      {/* Header Banner */}
+      <header className="courses-hub-header">
+        <div className="courses-hub-header-top">
+          <div>
+            <span className="courses-hub-eyebrow">
+              <Sparkles size={13} /> Shammah Faith Academy
             </span>
-            <span className="course-quick-stat">
-              <BookOpen size={14} className="text-cyan-400" />
-              <span>{enrolledCount} Active Studies</span>
-            </span>
-            <button
-              type="button"
-              className="course-project-hero-btn"
-              onClick={() => handleProjectCourse(courses[0])}
-              title="Project to sanctuary or classroom projector"
-            >
-              <Tv size={14} />
-              <span>Launch Sanctuary Screen Projection</span>
-            </button>
+            <h1 className="courses-hub-title">Discipleship &amp; Ministry Courses</h1>
+            <p className="courses-hub-subtitle">
+              Grow in Scripture, prayer, leadership, and Kingdom stewardship with interactive lessons and verifiable certificates.
+            </p>
           </div>
-        </div>
-      </div>
 
-      {/* Main Tab Navigation */}
-      <div className="courses-main-tabs no-scrollbar" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'all'}
-          className={`course-tab-pill${activeTab === 'all' ? ' active' : ''}`}
-          onClick={() => setActiveTab('all')}
-        >
-          <span>All Courses ({courses.length})</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'my-courses'}
-          className={`course-tab-pill${activeTab === 'my-courses' ? ' active' : ''}`}
-          onClick={() => setActiveTab('my-courses')}
-        >
-          <BookOpen size={14} />
-          <span>My Courses &amp; Progress ({enrolledCount})</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'completed'}
-          className={`course-tab-pill${activeTab === 'completed' ? ' active' : ''}`}
-          onClick={() => setActiveTab('completed')}
-        >
-          <Award size={14} className="text-amber-400" />
-          <span>Completed &amp; Badges ({completedCount})</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'free'}
-          className={`course-tab-pill${activeTab === 'free' ? ' active' : ''}`}
-          onClick={() => setActiveTab('free')}
-        >
-          <Sparkles size={14} className="text-teal-400" />
-          <span>Free Courses</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'premium'}
-          className={`course-tab-pill${activeTab === 'premium' ? ' active' : ''}`}
-          onClick={() => setActiveTab('premium')}
-        >
-          <Coins size={14} className="text-yellow-400" />
-          <span>Premium &amp; Certified Tracks</span>
-        </button>
-      </div>
-
-      {/* Search & Subject Category Filter Row */}
-      <div className="courses-filter-bar">
-        <div className="courses-search-wrap">
-          <Search size={15} className="courses-search-icon" />
-          <input
-            type="text"
-            className="courses-search-input"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search discipleship courses, pastors, subjects..."
-          />
-        </div>
-
-        <div className="courses-cat-pills no-scrollbar">
-          {COURSE_CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              className={`cat-filter-pill${selectedCategory === cat.id ? ' active' : ''}`}
-              onClick={() => setSelectedCategory(cat.id)}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Courses Cards Grid */}
-      <div className="courses-grid-list">
-        {filteredCourses.length === 0 ? (
-          <div className="empty-state">
-            <GraduationCap size={36} className="empty-icon" />
-            <h3>No courses match this filter</h3>
-            <p>Try switching categories or view all discipleship courses.</p>
+          <div className="courses-hub-header-actions">
             <button
               type="button"
-              className="signin-btn"
+              className="course-btn-secondary"
               onClick={() => {
-                setActiveTab('all');
-                setSelectedCategory('all');
-                setSearchTerm('');
+                setEditingCourse(null);
+                setCreatorMode('dashboard');
+                setCreatorOpen(true);
               }}
             >
-              Reset Filters
+              <BarChart3 size={15} />
+              <span>Instructor Studio</span>
+            </button>
+            <button
+              type="button"
+              className="course-btn-primary"
+              onClick={() => {
+                setEditingCourse(null);
+                setCreatorMode('builder');
+                setCreatorOpen(true);
+              }}
+            >
+              <Plus size={16} />
+              <span>Create Course</span>
             </button>
           </div>
-        ) : (
-          filteredCourses.map((course) => {
-            const completedMods = course.modules.filter((m) => m.completed).length;
-            const totalMods = course.modules.length;
-            const progressPercent = Math.round((completedMods / totalMods) * 100);
-            const isCompleted = progressPercent === 100;
-            const isSaved = isItemSavedOffline(course.id);
+        </div>
 
-            return (
-              <article key={course.id} className="post-card course-card">
-                {/* Cover Image & Chips */}
-                <div
-                  className="course-card-cover"
-                  style={{ backgroundImage: `url(${course.cover})` }}
-                >
-                  <span className="course-level-chip">{course.level}</span>
-                  <span className="course-duration-chip">
-                    <Clock size={11} /> {course.duration}
-                  </span>
-                  {course.isPremium ? (
-                    <span className="course-price-chip premium">
-                      <Coins size={11} /> Kes {course.priceKes.toLocaleString()} · Certified
-                    </span>
-                  ) : (
-                    <span className="course-price-chip free">
-                      <Sparkles size={11} /> Free Discipleship
-                    </span>
-                  )}
-                </div>
+        {/* Stat Strip */}
+        <StatStrip
+          stats={[
+            { label: 'Active Courses', value: publishedCourses.length, icon: <BookOpen size={14} /> },
+            {
+              label: 'Enrolled In',
+              value: myEnrolledCourses.length,
+              icon: <PlayCircle size={14} />
+            },
+            {
+              label: 'Certificates Earned',
+              value: completedCourses.length,
+              icon: <Award size={14} />
+            },
+            {
+              label: 'Community Scholars',
+              value: publishedCourses
+                .reduce((a, c) => a + Number(c.enrolled_count || 0), 0)
+                .toLocaleString(),
+              icon: <Users size={14} />
+            }
+          ]}
+        />
 
-                <div className="course-card-body">
-                  {/* Instructor row */}
-                  <div className="course-instructor-row">
-                    <Avatar name={course.instructor} src={course.avatar} className="avatar-xs" />
-                    <div className="course-instructor-meta">
-                      <span className="course-instructor-name">{course.instructor}</span>
-                      <MemberBadge badgeId={course.badge} size="sm" />
-                      <VerifiedBadge badge={course.badge} size={13} />
-                    </div>
-                  </div>
-
-                  <h3 className="course-card-title">{course.title}</h3>
-                  <p className="course-card-desc">{course.description}</p>
-
-                  {/* Progress section */}
-                  <div className="course-progress-section">
-                    <div className="course-progress-header">
-                      <span>
-                        {isCompleted
-                          ? '🎉 100% Completed · Badge Earned'
-                          : progressPercent > 0
-                            ? `${progressPercent}% Completed`
-                            : 'Not enrolled yet'}
-                      </span>
-                      <span>
-                        {completedMods} / {totalMods} modules
-                      </span>
-                    </div>
-                    <div className="course-progress-track">
-                      <div
-                        className="course-progress-fill"
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Completed Badge Showcase Chip if completed */}
-                  {isCompleted && (
-                    <div className="course-earned-badge-chip">
-                      <span className="badge-emoji">{course.badgeIcon}</span>
-                      <div className="badge-text">
-                        <strong>{course.badgeName}</strong>
-                        <small>{course.certificateTitle}</small>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Course Action Buttons */}
-                  <div className="course-actions-row">
-                    <button
-                      type="button"
-                      className="course-enroll-btn"
-                      onClick={() => handleEnroll(course)}
-                    >
-                      <BookOpen size={16} />
-                      <span>{progressPercent > 0 ? 'Continue Lesson' : 'Start Course'}</span>
-                      <ChevronRight size={16} />
-                    </button>
-
-                    {/* Sanctuary Projection Screen Button */}
-                    <button
-                      type="button"
-                      className="course-project-icon-btn"
-                      onClick={() => handleProjectCourse(course)}
-                      title="Project Course to Sanctuary / Classroom Screen"
-                      aria-label="Project Course"
-                    >
-                      <Tv size={16} />
-                    </button>
-
-                    {/* Offline Download Button (30-day storage) */}
-                    <button
-                      type="button"
-                      className={`course-offline-btn${isSaved ? ' saved' : ''}`}
-                      onClick={() => handleSaveOffline(course)}
-                      title={isSaved ? 'Saved offline for 30 days' : 'Download for 30-day offline access'}
-                      aria-label="Save offline"
-                    >
-                      {isSaved ? <Check size={16} /> : <DownloadCloud size={16} />}
-                    </button>
-
-                    {/* Watermark Share Button */}
-                    <button
-                      type="button"
-                      className="course-share-btn"
-                      onClick={() => handleShareCourseWatermarked(course)}
-                      title="Share with Official Watermark"
-                      aria-label="Share course"
-                    >
-                      <Share2 size={16} />
-                    </button>
-                  </div>
-
-                  {/* Reaction & Engagement Bar for Courses */}
-                  <div className="course-engagement-bar">
-                    <ReactionBar
-                      postId={course.id}
-                      session={session}
-                      onRequireSignIn={() => (openAuth ? openAuth('signin') : null)}
-                      size="sm"
-                    />
-
-                    <button
-                      type="button"
-                      className="action-btn"
-                      onClick={() => setRepostModalCourse(course)}
-                      title="Repost course to profile"
-                    >
-                      <Repeat size={14} className="repost-icon" />
-                      <span className="repost-label-text">Repost</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="action-btn"
-                      onClick={() => setSelectedCourse(course)}
-                      title="Course discussion & questions"
-                    >
-                      <MessageCircle size={14} />
-                      <span>Discussion</span>
-                    </button>
-                  </div>
-                </div>
-              </article>
-            );
-          })
-        )}
-      </div>
-
-      {/* Course Detail, Lesson Syllabus & Discussion Modal */}
-      {selectedCourse && (
-        <div
-          className="visibility-modal-backdrop"
-          onClick={() => setSelectedCourse(null)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="course-modal-card neon-glow-modal" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="course-modal-header">
-              <div className="course-modal-title">
-                <GraduationCap size={20} className="course-modal-icon" />
-                <h3>{selectedCourse.title}</h3>
-              </div>
-              <button
-                type="button"
-                className="course-modal-close"
-                onClick={() => setSelectedCourse(null)}
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
+        {/* Search & Filter Bar */}
+        <div className="courses-hub-Controls">
+          <div className="courses-hub-search-row">
+            <div className="courses-hub-search-box">
+              <Search size={16} />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search courses, pastors, topics, or scriptures..."
+                aria-label="Search courses"
+              />
             </div>
 
-            <div className="course-modal-body">
-              {/* Instructor info banner */}
-              <div className="course-modal-instructor-info">
-                <Avatar
-                  name={selectedCourse.instructor}
-                  src={selectedCourse.avatar}
-                  className="avatar-sm"
-                />
-                <div style={{ flex: 1 }}>
-                  <strong>Instructor: {selectedCourse.instructor}</strong>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                    <MemberBadge badgeId={selectedCourse.badge} size="sm" />
-                    <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
-                      {selectedCourse.churchName} · {selectedCourse.duration}
+            <SortMenu
+              value={sortBy}
+              onChange={setSortBy}
+              options={[
+                { value: 'popular', label: 'Most Enrolled' },
+                { value: 'rating', label: 'Highest Rated' },
+                { value: 'newest', label: 'Newest First' },
+                { value: 'price_asc', label: 'Free First' }
+              ]}
+            />
+
+            <LayoutSwitcher
+              value={browseLayout}
+              onChange={setBrowseLayout}
+              allowed={['magazine-x2', 'magazine-flat', 'tiles', 'list-rich', 'compact']}
+            />
+          </div>
+
+          <div className="courses-hub-filter-rows">
+            <FilterChips
+              value={activePriceFilter}
+              onChange={setActivePriceFilter}
+              options={[
+                { id: 'all', label: 'All Courses' },
+                { id: 'free', label: 'Free Courses' },
+                { id: 'paid', label: 'Paid (M-Pesa)' }
+              ]}
+            />
+
+            <FilterChips
+              value={activeLevel}
+              onChange={setActiveLevel}
+              options={[
+                { id: 'all', label: 'All Levels' },
+                { id: 'Beginner', label: 'Beginner' },
+                { id: 'Intermediate', label: 'Intermediate' },
+                { id: 'Advanced', label: 'Advanced' }
+              ]}
+            />
+
+            <FilterChips
+              value={activeDuration}
+              onChange={setActiveDuration}
+              options={[
+                { id: 'all', label: 'Any Length' },
+                { id: 'short', label: 'Under 2 Hours' },
+                { id: 'deep', label: 'Deep Dive (2h+)' }
+              ]}
+            />
+          </div>
+        </div>
+      </header>
+
+      {loading ? (
+        <div style={{ padding: '16px 0' }}>
+          <SkeletonGrid count={4} />
+        </div>
+      ) : error ? (
+        <div className="courses-hub-error-card">
+          <p>{error}</p>
+          <button type="button" className="course-btn-primary" onClick={loadCatalogue}>
+            <RefreshCw size={15} />
+            <span>Retry</span>
+          </button>
+        </div>
+      ) : (
+        <div className="courses-hub-sections">
+          {/* 1. Continue Learning Rail with Progress Rings */}
+          {continueLearningCourses.length > 0 && (
+            <SectionBlock
+              title="Continue Learning"
+              subtitle="Pick up right where you left off"
+              accent="#06b6d4"
+            >
+              <ContentLayout mode="rail" accent="#06b6d4">
+                {continueLearningCourses.map((c) => (
+                  <AccentCard
+                    key={c.id}
+                    accent={c.accent || '#06b6d4'}
+                    onClick={() => openCoursePlayer(c)}
+                    className="course-continue-rail-card"
+                  >
+                    <div className="course-continue-rail-row">
+                      <ProgressRing
+                        percent={c.progress_percent}
+                        size={48}
+                        stroke={4}
+                        color={c.accent || '#06b6d4'}
+                      />
+                      <div className="course-continue-rail-info">
+                        <span className="course-continue-rail-cat">{c.category}</span>
+                        <h4>{c.title}</h4>
+                        <span>
+                          {c.completed_lessons || 0} of {c.total_lessons || 4} lessons done
+                        </span>
+                      </div>
+                    </div>
+                  </AccentCard>
+                ))}
+              </ContentLayout>
+            </SectionBlock>
+          )}
+
+          {/* 2. Featured Course Spotlight */}
+          {featuredCourse && !debouncedQuery && activeCategory === 'all' && (
+            <SectionBlock
+              title="Featured Course Spotlight"
+              subtitle="Hand-picked biblical curriculum for this season"
+              accent={featuredCourse.accent || '#f59e0b'}
+            >
+              <ContentLayout mode="spotlight" accent={featuredCourse.accent || '#f59e0b'}>
+                <div
+                  className="course-featured-spotlight"
+                  style={{ '--sec-color': featuredCourse.accent || '#f59e0b' }}
+                  onClick={() => openCourseDetail(featuredCourse)}
+                >
+                  <div className="course-featured-media">
+                    <img
+                      src={featuredCourse.cover_url || featuredCourse.image}
+                      alt={featuredCourse.title}
+                    />
+                    <span className="course-featured-pill">
+                      <Flame size={13} /> Featured Academy Pick
                     </span>
                   </div>
+                  <div className="course-featured-body">
+                    <div className="course-hub-card-meta-top">
+                      <span>{featuredCourse.category}</span>
+                      <span>•</span>
+                      <span>{featuredCourse.level}</span>
+                      <span>•</span>
+                      <span>{formatDurationMinutes(featuredCourse.duration_minutes)}</span>
+                    </div>
+                    <h2>{featuredCourse.title}</h2>
+                    <p>{featuredCourse.subtitle || featuredCourse.description}</p>
+                    <div className="course-featured-cta-row">
+                      <button
+                        type="button"
+                        className="course-btn-primary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openCourseDetail(featuredCourse);
+                        }}
+                      >
+                        <PlayCircle size={16} />
+                        <span>
+                          {featuredCourse.enrolled
+                            ? 'Continue Course'
+                            : Number(featuredCourse.price_kes || 0) === 0
+                              ? 'Enroll Free'
+                              : `Enroll (KES ${featuredCourse.price_kes})`}
+                        </span>
+                      </button>
+                      <span className="course-featured-scholars">
+                        <Users size={14} />{' '}
+                        {Number(featuredCourse.enrolled_count || 0).toLocaleString()} scholars
+                      </span>
+                    </div>
+                  </div>
                 </div>
+              </ContentLayout>
+            </SectionBlock>
+          )}
 
-                {/* Direct Project to Sanctuary Screen Button */}
+          {/* 3. Categories Tiles */}
+          <SectionBlock
+            title="Explore by Ministry Track"
+            subtitle="Filter courses by spiritual focus"
+            accent="#8b5cf6"
+          >
+            <ContentLayout mode="tiles" accent="#8b5cf6">
+              {CATEGORY_TILES.map((cat) => {
+                const isSelected = activeCategory === cat.id;
+                const count = publishedCourses.filter((c) => c.category === cat.id).length;
+                return (
+                  <AccentCard
+                    key={cat.id}
+                    accent={cat.accent}
+                    onClick={() =>
+                      setActiveCategory((prev) => (prev === cat.id ? 'all' : cat.id))
+                    }
+                    className={`course-cat-tile ${isSelected ? 'is-selected' : ''}`}
+                  >
+                    <div className="course-cat-tile-body">
+                      <div className="course-cat-tile-top">
+                        <Compass size={18} style={{ color: cat.accent }} />
+                        <span>{count} courses</span>
+                      </div>
+                      <h4>{cat.label}</h4>
+                      <p>{cat.desc}</p>
+                    </div>
+                  </AccentCard>
+                );
+              })}
+            </ContentLayout>
+          </SectionBlock>
+
+          {/* 4. All / Filtered Catalogue with LayoutSwitcher */}
+          <SectionBlock
+            title={
+              activeCategory === 'all'
+                ? 'Course Catalogue'
+                : `${activeCategory} Courses`
+            }
+            subtitle={`${filteredCourses.length} courses available`}
+            accent="#f59e0b"
+          >
+            {filteredCourses.length === 0 ? (
+              <div className="courses-hub-empty">
+                <BookOpen size={32} />
+                <h3>No matching courses found</h3>
+                <p>Try clearing a filter or create a new course in the Instructor Studio.</p>
                 <button
                   type="button"
-                  className="projection-btn icon highlight"
+                  className="course-btn-secondary"
                   onClick={() => {
-                    handleProjectCourse(selectedCourse);
-                    setSelectedCourse(null);
+                    setSearchInput('');
+                    setActiveCategory('all');
+                    setActivePriceFilter('all');
+                    setActiveLevel('all');
+                    setActiveDuration('all');
                   }}
-                  title="Project Course to Sanctuary Screen"
                 >
-                  <Tv size={16} />
-                  <span>Project on Stage</span>
+                  Reset Filters
                 </button>
               </div>
+            ) : (
+              <ContentLayout mode={browseLayout} accent="#f59e0b">
+                {filteredCourses.map((c) =>
+                  renderCourseCard(c, browseLayout === 'compact')
+                )}
+              </ContentLayout>
+            )}
+          </SectionBlock>
 
-              {/* Modules & Lessons Checklist */}
-              <h4 style={{ margin: '18px 0 10px', fontSize: 15 }}>
-                Course Modules &amp; Study Notes:
-              </h4>
+          {/* 5. Popular Courses (magazine-flat) */}
+          {!debouncedQuery && activeCategory === 'all' && (
+            <SectionBlock
+              title="Most Popular Across Churches"
+              subtitle="Top-rated courses taken by small groups and ministry leaders"
+              accent="#10b981"
+            >
+              <ContentLayout mode="magazine-flat" accent="#10b981">
+                {popularCourses.map((c) => renderCourseCard(c, false))}
+              </ContentLayout>
+            </SectionBlock>
+          )}
 
-              <div className="course-modules-list">
-                {selectedCourse.modules.map((mod, idx) => (
-                  <div
-                    key={mod.id}
-                    className={`course-module-item${mod.completed ? ' completed' : ''}`}
-                    onClick={() => handleToggleModuleComplete(selectedCourse.id, mod.id)}
+          {/* 6. New Releases (magazine-x2) */}
+          {!debouncedQuery && activeCategory === 'all' && (
+            <SectionBlock
+              title="New & Updated Curricula"
+              subtitle="Fresh teachings added recently"
+              accent="#ec4899"
+            >
+              <ContentLayout mode="magazine-x2" accent="#ec4899">
+                {newCourses.map((c) => renderCourseCard(c, false))}
+              </ContentLayout>
+            </SectionBlock>
+          )}
+
+          {/* 7. My Courses (list-rich with progress) */}
+          {myEnrolledCourses.length > 0 && (
+            <SectionBlock
+              title="My Enrolled Courses"
+              subtitle="Your active learning journey synced across all devices"
+              accent="#06b6d4"
+            >
+              <ContentLayout mode="list-rich" accent="#06b6d4">
+                {myEnrolledCourses.map((c) => (
+                  <AccentCard
+                    key={c.id}
+                    accent={c.accent || '#06b6d4'}
+                    onClick={() => openCoursePlayer(c)}
+                    className="course-my-list-card"
                   >
-                    <div className="module-item-left">
-                      {mod.completed ? (
-                        <CheckCircle size={18} className="module-check-icon active" />
-                      ) : (
-                        <PlayCircle size={18} className="module-check-icon" />
-                      )}
-                      <div className="module-text-wrap">
-                        <span className="module-name">{mod.title}</span>
-                        <span className="module-duration">
-                          {mod.duration} · {mod.scripture || 'Scripture Notes Included'}
+                    <div className="course-my-list-inner">
+                      <img
+                        src={c.cover_url || c.image}
+                        alt={c.title}
+                        className="course-my-list-thumb"
+                      />
+                      <div className="course-my-list-content">
+                        <div className="course-my-list-top">
+                          <h4>{c.title}</h4>
+                          <span className="course-my-list-pct">{c.progress_percent || 0}%</span>
+                        </div>
+                        <p>{c.instructor_name || c.instructor}</p>
+                        <ProgressBar
+                          value={c.progress_percent || 0}
+                          max={100}
+                          accent={c.accent || '#06b6d4'}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="course-btn-primary course-btn-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openCoursePlayer(c);
+                        }}
+                      >
+                        <span>{c.progress_percent === 100 ? 'Review' : 'Resume'}</span>
+                      </button>
+                    </div>
+                  </AccentCard>
+                ))}
+              </ContentLayout>
+            </SectionBlock>
+          )}
+
+          {/* 8. Completed & Certificates (compact with certificate links) */}
+          <SectionBlock
+            title="Completed & Verifiable Certificates"
+            subtitle="Download your PDF certificates or verify credentials at /verify/[code]"
+            accent="#f59e0b"
+          >
+            {completedCourses.length === 0 ? (
+              <div className="course-completed-empty">
+                <Award size={22} />
+                <span>
+                  Complete all lessons in any course to unlock your verifiable Certificate of Completion.
+                </span>
+              </div>
+            ) : (
+              <ContentLayout mode="compact" accent="#f59e0b">
+                {completedCourses.map((c) => (
+                  <div
+                    key={c.id}
+                    className="course-completed-compact-row"
+                    style={{ '--sec-color': c.accent || '#f59e0b' }}
+                  >
+                    <div className="course-completed-compact-left">
+                      <CheckCircle2 size={18} className="text-emerald-400" />
+                      <div>
+                        <strong>{c.title}</strong>
+                        <span>
+                          {c.certificate?.code
+                            ? `Credential: ${c.certificate.code}`
+                            : '100% Completed • Ready to issue'}
                         </span>
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      className={`module-toggle-btn${mod.completed ? ' done' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleModuleComplete(selectedCourse.id, mod.id);
-                      }}
-                    >
-                      {mod.completed ? 'Completed ✓' : 'Mark Complete'}
-                    </button>
+                    <div className="course-completed-compact-actions">
+                      <button
+                        type="button"
+                        className="course-btn-certificate"
+                        onClick={() => handleOpenCertModal(c)}
+                      >
+                        <Award size={14} />
+                        <span>View Certificate</span>
+                      </button>
+                      {c.certificate?.code && (
+                        <a
+                          href={`/verify/${c.certificate.code}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="course-btn-secondary course-btn-sm"
+                        >
+                          <ShieldCheck size={13} />
+                          <span>Verify</span>
+                          <ExternalLink size={11} />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 ))}
-              </div>
-
-              {/* Course Discussion & Q&A Thread */}
-              <div className="course-discussion-section">
-                <h4 style={{ margin: '20px 0 10px', fontSize: 15 }}>
-                  Course Discussion &amp; Questions:
-                </h4>
-                <CommentThread
-                  postId={selectedCourse.id}
-                  session={session}
-                  onRequireSignIn={() => (openAuth ? openAuth('signin') : null)}
-                  onCountChange={() => {}}
-                />
-              </div>
-            </div>
-
-            <div className="course-modal-footer">
-              <button
-                type="button"
-                className="signin-btn"
-                onClick={() => setSelectedCourse(null)}
-                style={{ width: '100%', padding: '10px 0' }}
-              >
-                Close Course
-              </button>
-            </div>
-          </div>
+              </ContentLayout>
+            )}
+          </SectionBlock>
         </div>
       )}
 
-      {/* Projection Mode Modal */}
-      {projectingCourse && (
-        <ProjectionModeModal
-          type="course"
-          data={projectingCourse}
-          onClose={() => setProjectingCourse(null)}
-        />
-      )}
+      {/* Creator & Instructor Studio Modal */}
+      <CourseCreatorModal
+        isOpen={creatorOpen}
+        onClose={() => setCreatorOpen(false)}
+        initialCourse={editingCourse}
+        initialMode={creatorMode}
+        session={session}
+        userProfile={userProfile}
+        onCourseSaved={(savedCourse) => {
+          setCourses((prev) => {
+            const exists = prev.some((c) => c.id === savedCourse.id);
+            return exists
+              ? prev.map((c) => (c.id === savedCourse.id ? savedCourse : c))
+              : [savedCourse, ...prev];
+          });
+        }}
+        onOpenCourse={(courseObj) => openCourseDetail(courseObj)}
+      />
 
-      {/* Watermarked Share Modal */}
-      {watermarkShareData && (
-        <WatermarkShareModal
-          contentData={watermarkShareData}
-          onClose={() => setWatermarkShareData(null)}
-        />
-      )}
-
-      {/* Repost Modal */}
-      {repostModalCourse && (
-        <RepostModal
-          post={{
-            id: repostModalCourse.id,
-            text_content: repostModalCourse.title,
-            profiles: {
-              name: repostModalCourse.instructor,
-              display_name: repostModalCourse.instructor,
-              avatar_url: repostModalCourse.avatar,
-            },
-          }}
-          currentUser={currentUser}
-          onClose={() => setRepostModalCourse(null)}
-          onConfirm={(quote) => {
-            playSound('reposted');
-            showToast('Course reposted to your fellowship profile feed!');
-            setRepostModalCourse(null);
-          }}
-        />
-      )}
-
-      {/* Toast Notification */}
-      {toastMsg && <div className="video-toast-pill">{toastMsg}</div>}
+      {/* Certificate Modal */}
+      <CourseCertificateModal
+        isOpen={Boolean(activeCertificate)}
+        onClose={() => setActiveCertificate(null)}
+        certificate={activeCertificate}
+        course={certificateCourse}
+        recipientName={userName}
+      />
     </div>
   );
 }
