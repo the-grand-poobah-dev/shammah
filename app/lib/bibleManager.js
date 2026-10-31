@@ -73,161 +73,91 @@ export const BIBLE_BOOKS = [
   { id: 'REV', name: 'Revelation', testament: 'NT', genre: 'Prophecy', chapters: 22 },
 ];
 
-export const BIBLE_TRANSLATIONS = [
-  { id: 'NIV', name: 'New International Version', short: 'NIV', default: true },
-  { id: 'ESV', name: 'English Standard Version', short: 'ESV' },
-  { id: 'NKJV', name: 'New King James Version', short: 'NKJV' },
-  { id: 'KJV', name: 'King James Version', short: 'KJV' },
-];
-
-// Rich Passages Database in NIV text
-export const NIV_PASSAGES = {
-  'Genesis-1': [
-    { num: 1, text: 'In the beginning God created the heavens and the earth.' },
-    { num: 2, text: 'Now the earth was formless and empty, darkness was over the surface of the deep, and the Spirit of God was hovering over the waters.' },
-    { num: 3, text: 'And God said, "Let there be light," and there was light.' },
-    { num: 4, text: 'God saw that the light was good, and he separated the light from the darkness.' },
-    { num: 5, text: 'God called the light "day," and the darkness he called "night." And there was evening, and there was morning—the first day.' },
-    { num: 26, text: 'Then God said, "Let us make mankind in our image, in our likeness, so that they may rule over the fish in the sea and the birds in the sky, over the livestock and all the wild animals, and over all the creatures that move along the ground."' },
-    { num: 27, text: 'So God created mankind in his own image, in the image of God he created them; male and female he created them.' },
-    { num: 31, text: 'God saw all that he had made, and it was very good. And there was evening, and there was morning—the sixth day.' },
-  ],
-  'Exodus-14': [
-    { num: 13, text: 'Moses answered the people, "Do not be afraid. Stand firm and you will see the deliverance the Lord will bring you today. The Egyptians you see today you will never see again.' },
-    { num: 14, text: 'The Lord will fight for you; you need only to be still."' },
-    { num: 21, text: 'Then Moses stretched out his hand over the sea, and all that night the Lord drove the sea back with a strong east wind and turned it into dry land. The waters were divided,' },
-    { num: 22, text: 'and the Israelites went through the sea on dry ground, with a wall of water on their right and on their left.' },
-  ],
-  'Psalms-23': [
-    { num: 1, text: 'The Lord is my shepherd, I lack nothing.' },
-    { num: 2, text: 'He makes me lie down in green pastures, he leads me beside quiet waters,' },
-    { num: 3, text: 'he refreshes my soul. He guides me along the right paths for his name’s sake.' },
-    { num: 4, text: 'Even though I walk through the darkest valley, I will fear no evil, for you are with me; your rod and your staff, they comfort me.' },
-    { num: 5, text: 'You prepare a table before me in the presence of my enemies. You anoint my head with oil; my cup overflows.' },
-    { num: 6, text: 'Surely your goodness and love will follow me all the days of my life, and I will dwell in the house of the Lord forever.' },
-  ],
-  'Psalms-91': [
-    { num: 1, text: 'Whoever dwells in the shelter of the Most High will rest in the shadow of the Almighty.' },
-    { num: 2, text: 'I will say of the Lord, "He is my refuge and my fortress, my God, in whom I trust."' },
-    { num: 4, text: 'He will cover you with his feathers, and under his wings you will find refuge; his faithfulness will be your shield and rampart.' },
-    { num: 11, text: 'For he will command his angels concerning you to guard you in all your ways;' },
-    { num: 12, text: 'they will lift you up in their hands, so that you will not strike your foot against a stone.' },
-  ],
-  'Proverbs-3': [
-    { num: 5, text: 'Trust in the Lord with all your heart and lean not on your own understanding;' },
-    { num: 6, text: 'in all your ways submit to him, and he will make your paths straight.' },
-    { num: 7, text: 'Do not be wise in your own eyes; fear the Lord and shun evil.' },
-    { num: 8, text: 'This will bring health to your body and nourishment to your bones.' },
-  ],
-  'Isaiah-40': [
-    { num: 28, text: 'Do you not know? Have you not heard? The Lord is the everlasting God, the Creator of the ends of the earth. He will not grow tired or weary, and his understanding no one can fathom.' },
-    { num: 29, text: 'He gives strength to the weary and increases the power of the weak.' },
-    { num: 30, text: 'Even youths grow tired and weary, and young men stumble and fall;' },
-    { num: 31, text: 'but those who hope in the Lord will renew their strength. They will soar on wings like eagles; they will run and not grow weary, they will walk and not be faint.' },
-  ],
-  'Jeremiah-29': [
-    { num: 11, text: '"For I know the plans I have for you," declares the Lord, "plans to prosper you and not to harm you, plans to give you hope and a future.' },
-    { num: 12, text: 'Then you will call on me and come and pray to me, and I will listen to you.' },
-    { num: 13, text: 'You will seek me and find me when you seek me with all your heart."' },
-  ],
-  'Matthew-5': [
-    { num: 3, text: '"Blessed are the poor in spirit, for theirs is the kingdom of heaven.' },
-    { num: 4, text: 'Blessed are those who mourn, for they will be comforted.' },
-    { num: 5, text: 'Blessed are the meek, for they will inherit the earth.' },
-    { num: 6, text: 'Blessed are those who hunger and thirst for righteousness, for they will be filled.' },
-    { num: 7, text: 'Blessed are the merciful, for they will be shown mercy.' },
-    { num: 8, text: 'Blessed are the pure in heart, for they will see God.' },
-    { num: 9, text: 'Blessed are the peacemakers, for they will be called children of God.' },
-    { num: 14, text: '"You are the light of the world. A town built on a hill cannot be hidden.' },
-    { num: 16, text: 'In the same way, let your light shine before others, that they may see your good deeds and glorify your Father in heaven."' },
-  ],
-  'Matthew-6': [
-    { num: 9, text: '"This, then, is how you should pray: \'Our Father in heaven, hallowed be your name,' },
-    { num: 10, text: 'your kingdom come, your will be done, on earth as it is in heaven.' },
-    { num: 11, text: 'Give us today our daily bread.' },
-    { num: 12, text: 'And forgive us our debts, as we also have forgiven our debtors.' },
-    { num: 13, text: 'And lead us not into temptation, but deliver us from the evil one.\'' },
-    { num: 33, text: 'But seek first his kingdom and his righteousness, and all these things will be given to you as well.' },
-  ],
-  'John-1': [
-    { num: 1, text: 'In the beginning was the Word, and the Word was with God, and the Word was God.' },
-    { num: 2, text: 'He was with God in the beginning.' },
-    { num: 3, text: 'Through him all things were made; without him nothing was made that has been made.' },
-    { num: 4, text: 'In him was life, and that life was the light of all mankind.' },
-    { num: 5, text: 'The light shines in the darkness, and the darkness has not overcome it.' },
-    { num: 14, text: 'The Word became flesh and made his dwelling among us. We have seen his glory, the glory of the one and only Son, who came from the Father, full of grace and truth.' },
-  ],
-  'John-3': [
-    { num: 16, text: 'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.' },
-    { num: 17, text: 'For God did not send his Son into the world to condemn the world, but to save the world through him.' },
-    { num: 18, text: 'Whoever believes in him is not condemned, but whoever does not believe stands condemned already because they have not believed in the name of God’s one and only Son.' },
-  ],
-  'John-14': [
-    { num: 1, text: '"Do not let your hearts be troubled. You believe in God; believe also in me.' },
-    { num: 2, text: 'My Father’s house has many rooms; if that were not so, would I have told you that I am going there to prepare a place for you?' },
-    { num: 6, text: 'Jesus answered, "I am the way and the truth and the life. No one comes to the Father except through me.' },
-    { num: 27, text: 'Peace I leave with you; my peace I give you. I do not give to you as the world gives. Do not let your hearts be troubled and do not be afraid."' },
-  ],
-  'Romans-8': [
-    { num: 1, text: 'Therefore, there is now no condemnation for those who are in Christ Jesus,' },
-    { num: 28, text: 'And we know that in all things God works for the good of those who love him, who have been called according to his purpose.' },
-    { num: 31, text: 'What, then, shall we say in response to these things? If God is for us, who can be against us?' },
-    { num: 37, text: 'No, in all these things we are more than conquerors through him who loved us.' },
-    { num: 38, text: 'For I am convinced that neither death nor life, neither angels nor demons, neither the present nor the future, nor any powers,' },
-    { num: 39, text: 'neither height nor depth, nor anything else in all creation, will be able to separate us from the love of God that is in Christ Jesus our Lord.' },
-  ],
-  'Philippians-4': [
-    { num: 4, text: 'Rejoice in the Lord always. I will say it again: Rejoice!' },
-    { num: 6, text: 'Do not be anxious about anything, but in every situation, by prayer and petition, with thanksgiving, present your requests to God.' },
-    { num: 7, text: 'And the peace of God, which transcends all understanding, will guard your hearts and your minds in Christ Jesus.' },
-    { num: 13, text: 'I can do all this through him who gives me strength.' },
-    { num: 19, text: 'And my God will meet all your needs according to the riches of his glory in Christ Jesus.' },
-  ],
-  'Hebrews-11': [
-    { num: 1, text: 'Now faith is confidence in what we hope for and assurance about what we do not see.' },
-    { num: 2, text: 'This is what the ancients were commended for.' },
-    { num: 6, text: 'And without faith it is impossible to please God, because anyone who comes to him must believe that he exists and that he rewards those who earnestly seek him.' },
-  ],
-  'James-1': [
-    { num: 2, text: 'Consider it pure joy, my brothers and sisters, whenever you face trials of many kinds,' },
-    { num: 3, text: 'because you know that the testing of your faith produces perseverance.' },
-    { num: 5, text: 'If any of you lacks wisdom, you should ask God, who gives generously to all without finding fault, and it will be given to you.' },
-    { num: 22, text: 'Do not merely listen to the word, and so deceive yourselves. Do what it says.' },
-  ],
-  'Revelation-21': [
-    { num: 1, text: 'Then I saw "a new heaven and a new earth," for the first heaven and the first earth had passed away, and there was no longer any sea.' },
-    { num: 3, text: 'And I heard a loud voice from the throne saying, "Look! God’s dwelling place is now among the people, and he will dwell with them. They will be his people, and God himself will be with them and be their God.' },
-    { num: 4, text: '\'He will wipe every tear from their eyes. There will be no more death\' or mourning or crying or pain, for the old order of things has passed away."' },
-  ],
+export const GENRE_COLORS = {
+  Law: '#eab308',
+  History: '#06b6d4',
+  Poetry: '#10b981',
+  Prophecy: '#8b5cf6',
+  Gospel: '#ec4899',
+  Pauline: '#3b82f6',
+  General: '#f97316',
 };
 
-// Generates cohesive, canonical verses for any chapter when exact verses are loaded
-export function getChapterVerses(bookName, chapterNum, translation = 'NIV') {
-  const key = `${bookName}-${chapterNum}`;
-  if (NIV_PASSAGES[key]) {
-    return NIV_PASSAGES[key];
+// Public Domain Translations (Free & Complete)
+export const BIBLE_TRANSLATIONS = [
+  { id: 'KJV', name: 'King James Version', short: 'KJV', default: true },
+  { id: 'WEB', name: 'World English Bible', short: 'WEB' },
+];
+
+// Compatibility shim
+export const NIV_PASSAGES = {};
+
+const runtimeChapterCache = new Map();
+
+/**
+ * Primary asynchronous chapter loader
+ */
+export async function fetchChapterVerses(bookIdOrName, chapterNum, translation = 'KJV') {
+  const trans = (translation || 'KJV').toUpperCase();
+  const book = BIBLE_BOOKS.find((b) => b.id === bookIdOrName || b.name.toLowerCase() === String(bookIdOrName).toLowerCase()) || BIBLE_BOOKS[0];
+  const cacheKey = `${trans}:${book.id}:${chapterNum}`;
+
+  if (runtimeChapterCache.has(cacheKey)) {
+    return runtimeChapterCache.get(cacheKey);
   }
 
-  // Pre-seed canonical scripture content for chapters across books
-  const seeds = [
-    { num: 1, text: `The word of the Lord came concerning ${bookName}, bringing hope, righteousness and truth to all generations.` },
-    { num: 2, text: `Give ear to my teaching, O people of God; incline your ears to the words of His mouth and dwell in peace.` },
-    { num: 3, text: `The Lord reigns forever; He has established His throne for justice and will guide the humble in His truth.` },
-    { num: 4, text: `Trust in the Lord with all your heart; He is faithful in every season and His compassions never fail.` },
-    { num: 5, text: `Sing praises to the King of Glory, for His steadfast love endures forever through Christ Jesus our Redeemer.` },
-    { num: 6, text: `Commit your way unto the Almighty; walk in humility and holiness, and He will direct your footsteps.` },
-    { num: 7, text: `Be strong and courageous; do not be terrified or discouraged, for the Lord your God is with you wherever you go.` },
-    { num: 8, text: `Let every soul rejoice in the grace of God, for the peace of Christ transcends all human understanding.` },
-  ];
+  if (typeof window !== 'undefined') {
+    try {
+      const { idbGetBibleChapter } = await import('./offlineSyncManager');
+      const offline = await idbGetBibleChapter(book.id, chapterNum, trans);
+      if (offline && Array.isArray(offline.verses) && offline.verses.length > 0) {
+        runtimeChapterCache.set(cacheKey, offline.verses);
+        return offline.verses;
+      }
+    } catch {}
+  }
 
-  return seeds;
+  try {
+    const res = await fetch(`/api/bible/chapter?translation=${trans}&book=${encodeURIComponent(book.id)}&chapter=${chapterNum}`);
+    if (res.ok) {
+      const data = await res.json();
+      const verses = data.verses || [];
+      if (verses.length > 0) {
+        runtimeChapterCache.set(cacheKey, verses);
+        return verses;
+      }
+    }
+  } catch (err) {
+    console.warn('Network chapter fetch failed, checking offline fallback:', err);
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const { getOfflineBibleChapter } = await import('./offlineSyncManager');
+      const local = getOfflineBibleChapter(book.name, chapterNum, trans);
+      if (local && Array.isArray(local.verses) && local.verses.length > 0) {
+        return local.verses;
+      }
+    } catch {}
+  }
+
+  return [];
 }
 
-// -------------------------------------------------------------
-// Offline Sermon & Fellowship Note Taker Storage
-// -------------------------------------------------------------
+export function getChapterVerses(bookName, chapterNum, translation = 'KJV') {
+  const trans = (translation || 'KJV').toUpperCase();
+  const book = BIBLE_BOOKS.find((b) => b.name.toLowerCase() === String(bookName).toLowerCase() || b.id === bookName) || BIBLE_BOOKS[0];
+  const cacheKey = `${trans}:${book.id}:${chapterNum}`;
+  if (runtimeChapterCache.has(cacheKey)) {
+    return runtimeChapterCache.get(cacheKey);
+  }
+  return [];
+}
+
 const NOTES_KEY = 'shammah_sermon_notes_v1';
 const HIGHLIGHTS_KEY = 'shammah_bible_highlights_v1';
+const BOOKMARKS_KEY = 'shammah_bible_bookmarks_v1';
+const RECENT_READING_KEY = 'shammah_bible_recent_reading_v1';
 
 export function getSavedNotes() {
   if (typeof window === 'undefined') return [];
@@ -251,12 +181,12 @@ export function saveNote(note) {
     } else {
       const newNote = {
         id: note.id || `note-${Date.now()}`,
-        title: note.title || 'Untitled Sermon Note',
+        title: note.title || 'Untitled Scripture Note',
         speaker: note.speaker || '',
         church: note.church || '',
         scripture: note.scripture || '',
         content: note.content || '',
-        tags: note.tags || ['#Sermon'],
+        tags: note.tags || ['#Scripture'],
         color: note.color || '#0ea5e9',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -309,6 +239,139 @@ export function toggleVerseHighlight(verseKey, color = 'gold') {
   } catch {
     return {};
   }
+}
+
+export function getVerseBookmarks() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(BOOKMARKS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function toggleVerseBookmark(item) {
+  if (typeof window === 'undefined') return [];
+  try {
+    const list = getVerseBookmarks();
+    const key = `${item.bookName}-${item.chapter}-${item.verse}`;
+    const exists = list.some((b) => b.key === key);
+    let updated;
+    if (exists) {
+      updated = list.filter((b) => b.key !== key);
+    } else {
+      updated = [
+        {
+          key,
+          bookId: item.bookId,
+          bookName: item.bookName,
+          chapter: item.chapter,
+          verse: item.verse,
+          text: item.text,
+          translation: item.translation || 'KJV',
+          createdAt: new Date().toISOString(),
+        },
+        ...list,
+      ];
+    }
+    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('shammah:bookmarks-updated', { detail: updated }));
+    return updated;
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecentReading(bookId, bookName, chapter, translation = 'KJV') {
+  if (typeof window === 'undefined') return;
+  try {
+    const entry = {
+      bookId,
+      bookName,
+      chapter,
+      translation,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(RECENT_READING_KEY, JSON.stringify(entry));
+  } catch {}
+}
+
+export function getRecentReading() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(RECENT_READING_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+const VOTD_LIST = [
+  {
+    ref: 'John 3:16',
+    bookName: 'John',
+    chapter: 3,
+    verse: 16,
+    translation: 'KJV',
+    text: 'For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.',
+    image: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=1200',
+  },
+  {
+    ref: 'Philippians 4:13',
+    bookName: 'Philippians',
+    chapter: 4,
+    verse: 13,
+    translation: 'KJV',
+    text: 'I can do all things through Christ which strengtheneth me.',
+    image: 'https://images.unsplash.com/photo-1519491050282-cf00c82424b4?w=1200',
+  },
+  {
+    ref: 'Psalms 23:1',
+    bookName: 'Psalms',
+    chapter: 23,
+    verse: 1,
+    translation: 'KJV',
+    text: 'The LORD is my shepherd; I shall not want.',
+    image: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=1200',
+  },
+  {
+    ref: 'Jeremiah 29:11',
+    bookName: 'Jeremiah',
+    chapter: 29,
+    verse: 11,
+    translation: 'KJV',
+    text: 'For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil, to give you an expected end.',
+    image: 'https://images.unsplash.com/photo-1548625361-195fe57876a3?w=1200',
+  },
+];
+
+export function getVerseOfTheDay() {
+  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
+  return VOTD_LIST[dayOfYear % VOTD_LIST.length];
+}
+
+const CROSS_REFS = {
+  'John-3-16': [
+    { ref: 'Romans 5:8', text: 'God commendeth his love toward us, in that, while we were yet sinners, Christ died for us.' },
+    { ref: '1 John 4:9', text: 'In this was manifested the love of God toward us, because that God sent his only begotten Son into the world.' },
+    { ref: 'Romans 8:32', text: 'He that spared not his own Son, but delivered him up for us all, how shall he not with him also freely give us all things?' },
+  ],
+  'Psalms-23-1': [
+    { ref: 'John 10:11', text: 'I am the good shepherd: the good shepherd giveth his life for the sheep.' },
+    { ref: 'Philippians 4:19', text: 'My God shall supply all your need according to his riches in glory by Christ Jesus.' },
+    { ref: 'Isaiah 40:11', text: 'He shall feed his flock like a shepherd: he shall gather the lambs with his arm.' },
+  ],
+  'Genesis-1-1': [
+    { ref: 'John 1:1-3', text: 'In the beginning was the Word, and the Word was with God, and the Word was God.' },
+    { ref: 'Hebrews 11:3', text: 'Through faith we understand that the worlds were framed by the word of God.' },
+    { ref: 'Colossians 1:16', text: 'For by him were all things created, that are in heaven, and that are in earth.' },
+  ],
+};
+
+export function getCrossReferences(bookName, chapter, verse) {
+  const key = `${bookName}-${chapter}-${verse}`;
+  return CROSS_REFS[key] || [];
 }
 
 function getSampleNotes() {

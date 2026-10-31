@@ -357,18 +357,22 @@ export function saveOfflineBibleChapter(bookId, bookName, chapterNum, verses = [
   return { success: true, versesCount: verses.length };
 }
 
-export function getOfflineBibleChapter(bookName, chapterNum, translation = 'NIV') {
+export function getOfflineBibleChapter(bookName, chapterNum, translation = 'KJV') {
   const key = `${bookName}-${chapterNum}-${translation}`;
   const chapters = getOfflineBibleChapters();
   return chapters.find((c) => c.key === key) || null;
 }
 
-export function removeOfflineBibleChapter(bookName, chapterNum, translation = 'NIV') {
+export function removeOfflineBibleChapter(bookName, chapterNum, translation = 'KJV') {
   const key = `${bookName}-${chapterNum}-${translation}`;
   const chapters = safeGet(OFFLINE_BIBLE_CHAPTERS_KEY, []);
   const filtered = chapters.filter((c) => c.key !== key);
   safeSet(OFFLINE_BIBLE_CHAPTERS_KEY, filtered);
   removeOfflineItem(`bible-${key}`);
+
+  if (typeof window !== 'undefined' && window.indexedDB) {
+    idbDeleteBibleChapter(bookName, chapterNum, translation).catch(() => {});
+  }
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('shammah:offline-updated', {
@@ -377,7 +381,127 @@ export function removeOfflineBibleChapter(bookName, chapterNum, translation = 'N
   }
 }
 
-export function isBibleChapterSavedOffline(bookName, chapterNum, translation = 'NIV') {
+export function isBibleChapterSavedOffline(bookName, chapterNum, translation = 'KJV') {
   const chapter = getOfflineBibleChapter(bookName, chapterNum, translation);
   return Boolean(chapter);
+}
+
+// -------------------------------------------------------------
+// IndexedDB Large-Capacity Bible Offline Store
+// -------------------------------------------------------------
+const IDB_NAME = 'shammah_bible_store_v1';
+const IDB_STORE = 'bible_chapters';
+
+function openBibleIDB() {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      return reject(new Error('IndexedDB not supported'));
+    }
+    const request = window.indexedDB.open(IDB_NAME, 1);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: 'key' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function idbGetBibleChapter(bookKey, chapterNum, translation = 'KJV') {
+  try {
+    const db = await openBibleIDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const key = `${translation.toUpperCase()}:${bookKey}:${chapterNum}`;
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function idbPutBibleChapter(chapterData) {
+  try {
+    const db = await openBibleIDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      const key = `${chapterData.translation.toUpperCase()}:${chapterData.bookId || chapterData.bookName}:${chapterData.chapterNum}`;
+      store.put({ ...chapterData, key, updatedAt: Date.now() });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    return false;
+  }
+}
+
+export async function idbDeleteBibleChapter(bookKey, chapterNum, translation = 'KJV') {
+  try {
+    const db = await openBibleIDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      const key = `${translation.toUpperCase()}:${bookKey}:${chapterNum}`;
+      store.delete(key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch {
+    return false;
+  }
+}
+
+export async function getStorageEstimate() {
+  if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
+    try {
+      const { quota, usage } = await navigator.storage.estimate();
+      const quotaMB = Math.round((quota || 0) / (1024 * 1024));
+      const usageMB = Math.round((usage || 0) / (1024 * 1024));
+      const pct = quota ? Math.min(100, Math.round((usage / quota) * 100)) : 0;
+      return {
+        quotaMB,
+        usageMB,
+        availableMB: Math.max(0, quotaMB - usageMB),
+        pct,
+      };
+    } catch {
+      return { quotaMB: 1000, usageMB: 10, availableMB: 990, pct: 1 };
+    }
+  }
+  return { quotaMB: 500, usageMB: 5, availableMB: 495, pct: 1 };
+}
+
+export async function downloadBibleBook(book, translation = 'KJV', onProgress = () => {}) {
+  const total = book.chapters;
+  let downloaded = 0;
+
+  for (let ch = 1; ch <= total; ch++) {
+    try {
+      const res = await fetch(`/api/bible/chapter?translation=${translation}&book=${encodeURIComponent(book.id)}&chapter=${ch}`);
+      if (res.ok) {
+        const data = await res.json();
+        const verses = data.verses || [];
+        await idbPutBibleChapter({
+          bookId: book.id,
+          bookName: book.name,
+          chapterNum: ch,
+          translation,
+          verses,
+        });
+        saveOfflineBibleChapter(book.id, book.name, ch, verses, translation);
+      }
+    } catch (err) {
+      console.warn(`Failed chapter ${ch} download:`, err);
+    }
+    downloaded++;
+    onProgress(downloaded, total);
+  }
+
+  return { success: true, count: downloaded };
 }

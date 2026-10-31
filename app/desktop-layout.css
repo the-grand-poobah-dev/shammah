@@ -1723,6 +1723,10 @@
     line-height: 1.75;
   }
 
+  .app-layout[data-enabled='true'] .dl-center .bible-verses-flow.grid-cols-1.md\:grid-cols-2 {
+    max-width: 100%;
+  }
+
   /* 5. GoogleWorkspaceHubView inside 680px Centre */
   .app-layout[data-enabled='true'] .dl-center .gws-hub {
     display: flex;

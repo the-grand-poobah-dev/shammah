@@ -16863,6 +16863,10 @@ html, body, *, *::before, *::after {
   background: #ec4899;
 }
 
+.hl-color-dot.hl-purple {
+  background: #a855f7;
+}
+
 .hl-color-dot.selected {
   transform: scale(1.15);
   border-color: var(--ink);
@@ -16921,6 +16925,17 @@ html, body, *, *::before, *::after {
 .bible-verse-row.is-highlighted.hl-rose {
   background: rgba(236, 72, 153, 0.16);
   border-left: 3px solid #ec4899;
+}
+
+.bible-verse-row.is-highlighted.hl-purple {
+  background: rgba(168, 85, 247, 0.16);
+  border-left: 3px solid #a855f7;
+}
+
+.bible-verse-row.speaking {
+  background: rgba(14, 165, 233, 0.22);
+  border-left: 3px solid #0ea5e9;
+  box-shadow: 0 0 12px rgba(14, 165, 233, 0.25);
 }
 
 .verse-number-btn {
