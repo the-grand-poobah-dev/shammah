@@ -1,245 +1,75 @@
 'use client';
-
-import React, { useState } from 'react';
-import {
-  Award,
-  CheckCircle2,
-  Printer,
-  Share2,
-  Copy,
-  Check,
-  ExternalLink,
-  ShieldCheck,
-  Sparkles,
-  BookOpen,
-  Calendar
-} from 'lucide-react';
+import React from 'react';
 import PopupSheet from './PopupSheet';
-import WatermarkShareModal from './WatermarkShareModal';
-
-export function CertificateCardContent({
-  certificate,
-  course,
-  recipientName,
-  onPrint,
-  onShareImage,
-  onCopyVerifyLink,
-  copiedVerify
-}) {
-  const code = certificate?.code || 'SHM-FAITH-2026';
-  const issuedDate = certificate?.issued_at
-    ? new Date(certificate.issued_at).toLocaleDateString('en-KE', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      })
-    : new Date().toLocaleDateString('en-KE', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-  const accent = course?.accent || '#f59e0b';
-  const finalRecipient =
-    recipientName ||
-    certificate?.recipient_name ||
-    'Faithful Shammah Scholar';
-  const courseTitle = course?.title || certificate?.course?.title || 'Foundations of Faith';
-  const instructorName =
-    course?.instructor_name ||
-    course?.instructor ||
-    certificate?.course?.instructor_name ||
-    'Pastor David M.';
-  const instructorRole =
-    course?.instructor_role ||
-    course?.role ||
-    certificate?.course?.instructor_role ||
-    'Senior Teaching Pastor';
-  const verifyPath = `/verify/${code}`;
-
-  return (
-    <div className="course-cert-wrapper">
-      <div
-        className="course-cert-sheet"
-        style={{ '--sec-color': accent }}
-        id="shammah-printable-certificate"
-      >
-        <div className="course-cert-ornament-top" />
-        <div className="course-cert-header">
-          <div className="course-cert-seal">
-            <Award size={28} />
-          </div>
-          <div>
-            <span className="course-cert-academy">SHAMMAH FAITH ACADEMY</span>
-            <h3 className="course-cert-heading">Certificate of Completion</h3>
-          </div>
-          <div className="course-cert-verified-pill">
-            <ShieldCheck size={14} />
-            <span>Verified Credential</span>
-          </div>
-        </div>
-
-        <div className="course-cert-body">
-          <p className="course-cert-presented-label">THIS IS PROUDLY PRESENTED TO</p>
-          <h2 className="course-cert-recipient">{finalRecipient}</h2>
-          <p className="course-cert-reason">
-            for faithfully completing all modules, lessons, and mastery assessments in the course
-          </p>
-          <h4 className="course-cert-course-title">{courseTitle}</h4>
-
-          <div className="course-cert-meta-row">
-            <span className="course-cert-meta-chip">
-              <BookOpen size={13} />
-              {course?.category || certificate?.course?.category || 'Biblical Studies'}
-            </span>
-            <span className="course-cert-meta-chip">
-              <Sparkles size={13} />
-              {course?.level || certificate?.course?.level || 'All Levels'}
-            </span>
-            <span className="course-cert-meta-chip">
-              <Calendar size={13} />
-              {issuedDate}
-            </span>
-          </div>
-        </div>
-
-        <div className="course-cert-footer">
-          <div className="course-cert-sig-block">
-            <div className="course-cert-sig-script">{instructorName}</div>
-            <div className="course-cert-sig-line" />
-            <span className="course-cert-sig-role">{instructorRole}</span>
-          </div>
-
-          <div className="course-cert-code-box">
-            <span className="course-cert-code-label">VERIFICATION CODE</span>
-            <strong className="course-cert-code-value">{code}</strong>
-            <a
-              href={verifyPath}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="course-cert-verify-url"
-            >
-              Verify at {verifyPath} <ExternalLink size={11} />
-            </a>
-          </div>
-        </div>
-      </div>
-
-      <div className="course-cert-actions no-print">
-        {onPrint && (
-          <button
-            type="button"
-            className="course-btn-primary"
-            onClick={onPrint}
-            aria-label="Print or Save Certificate as PDF"
-          >
-            <Printer size={16} />
-            <span>Print / Save PDF</span>
-          </button>
-        )}
-        {onShareImage && (
-          <button
-            type="button"
-            className="course-btn-secondary"
-            onClick={onShareImage}
-            aria-label="Share Certificate as Watermarked Image"
-          >
-            <Share2 size={16} />
-            <span>Share Image Card</span>
-          </button>
-        )}
-        {onCopyVerifyLink && (
-          <button
-            type="button"
-            className="course-btn-secondary"
-            onClick={onCopyVerifyLink}
-            aria-label="Copy Verification URL"
-          >
-            {copiedVerify ? <Check size={16} /> : <Copy size={16} />}
-            <span>{copiedVerify ? 'Verification Link Copied' : 'Copy Verify Link'}</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
+import { Award, Download, Share2, CheckCircle2, Sparkles } from 'lucide-react';
+import { playSound } from '../lib/soundEffects';
 
 export default function CourseCertificateModal({
   isOpen,
   onClose,
   certificate,
   course,
-  recipientName
+  recipientName = 'Kingdom Believer',
 }) {
-  const [copiedVerify, setCopiedVerify] = useState(false);
-  const [showWatermarkShare, setShowWatermarkShare] = useState(false);
-
-  if (!isOpen || !certificate) return null;
-
-  const code = certificate.code || 'SHM-FAITH-2026';
-  const finalRecipient =
-    recipientName ||
-    certificate.recipient_name ||
-    'Faithful Shammah Scholar';
-  const courseTitle = course?.title || certificate?.course?.title || 'Foundations of Faith';
-
-  const handlePrint = () => {
-    if (typeof window !== 'undefined') {
-      window.print();
+  const handleShare = () => {
+    playSound('button');
+    if (navigator.share) {
+      navigator.share({
+        title: `Certificate of Completion: ${course?.title}`,
+        text: `I just completed "${course?.title}" on Shammah Faith Academy!`,
+        url: window.location.href,
+      });
     }
   };
 
-  const handleCopyVerify = async () => {
-    if (typeof window === 'undefined') return;
-    const url = `${window.location.origin}/verify/${code}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedVerify(true);
-      setTimeout(() => setCopiedVerify(false), 2400);
-    } catch {}
-  };
-
-  const sharePostPayload = {
-    id: `cert-${code}`,
-    author_name: finalRecipient,
-    author_handle: 'Shammah Academy',
-    content: `🎓 Praise God! I just earned my verified Certificate of Completion in "${courseTitle}" on Shammah Faith Academy.\n\nCredential Code: ${code}\nVerify at: /verify/${code}`,
-    created_at: certificate.issued_at || new Date().toISOString()
-  };
-
   return (
-    <>
-      <PopupSheet
-        isOpen={isOpen}
-        onClose={onClose}
-        title="Course Certificate"
-        maxWidth="680px"
-      >
-        <div className="course-cert-modal-body">
-          <div className="course-cert-congrats-banner">
-            <CheckCircle2 size={18} />
-            <span>
-              Congratulations! Your credential is permanently recorded and publicly verifiable.
-            </span>
+    <PopupSheet
+      open={isOpen}
+      onClose={onClose}
+      title="Certificate of Achievement"
+      size="md"
+    >
+      <div className="p-4 sm:p-6 space-y-5 text-center">
+        {/* Certificate Frame */}
+        <div className="border-4 border-double border-[var(--gold)] rounded-2xl p-6 bg-gradient-to-b from-[var(--surface)] to-[var(--surface-sunken)] shadow-lg space-y-3">
+          <div className="w-14 h-14 mx-auto rounded-full bg-[var(--gold)]/20 text-[var(--gold)] flex items-center justify-center">
+            <Award size={32} />
           </div>
 
-          <CertificateCardContent
-            certificate={certificate}
-            course={course}
-            recipientName={finalRecipient}
-            onPrint={handlePrint}
-            onShareImage={() => setShowWatermarkShare(true)}
-            onCopyVerifyLink={handleCopyVerify}
-            copiedVerify={copiedVerify}
-          />
-        </div>
-      </PopupSheet>
+          <p className="text-xs uppercase tracking-widest font-bold text-[var(--ink-muted)]">
+            Shammah Faith Academy
+          </p>
 
-      {showWatermarkShare && (
-        <WatermarkShareModal
-          post={sharePostPayload}
-          onClose={() => setShowWatermarkShare(false)}
-        />
-      )}
-    </>
+          <p className="text-sm text-[var(--ink-muted)]">This certifies that</p>
+
+          <h3 className="text-xl font-bold text-[var(--ink)] font-serif">
+            {recipientName}
+          </h3>
+
+          <p className="text-xs text-[var(--ink-muted)]">has successfully completed</p>
+
+          <h4 className="text-base font-bold text-[var(--teal)]">
+            {course?.title || 'Foundations of Spiritual Growth'}
+          </h4>
+
+          <div className="pt-3 border-t border-[var(--border)] flex justify-between items-center text-[10px] text-[var(--ink-muted)]">
+            <span>Verified: SHAMMAH-CERT-{certificate?.id || '2026-OK'}</span>
+            <span>Issued: {new Date().toLocaleDateString()}</span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={handleShare}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[var(--teal)] text-white font-medium text-sm hover:opacity-90 transition-opacity min-h-[44px]"
+          >
+            <Share2 size={16} />
+            <span>Share Certificate</span>
+          </button>
+        </div>
+      </div>
+    </PopupSheet>
   );
 }

@@ -1,96 +1,54 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { Radio, Eye, ChevronRight, Sparkles, Volume2 } from 'lucide-react';
-import Avatar from './Avatar';
-import MemberName from './MemberName';
-import { fetchActiveLiveStreams } from '../lib/live/liveApi';
+import React, { useState, useEffect } from 'react';
+import { Tv, Radio, ChevronRight, X } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 
-export default function LivePinnedBanner() {
-  const [liveStreams, setLiveStreams] = useState([]);
+export default function LivePinnedBanner({ activeStreams = [] }) {
+  const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    function loadLive() {
-      fetchActiveLiveStreams(3).then((data) => {
-        if (Array.isArray(data)) setLiveStreams(data);
-      });
-    }
-    loadLive();
-    window.addEventListener('shammah:live-updated', loadLive);
-    const interval = setInterval(loadLive, 25000);
-    return () => {
-      window.removeEventListener('shammah:live-updated', loadLive);
-      clearInterval(interval);
-    };
-  }, []);
-
-  if (!liveStreams || liveStreams.length === 0) return null;
-
-  const primaryLive = liveStreams[0];
-
-  function handleWatchClick(streamId) {
-    playSound('reaction');
-    window.dispatchEvent(
-      new CustomEvent('shammah:open-live', {
-        detail: { streamId },
-      })
-    );
+  if (dismissed || !activeStreams || activeStreams.length === 0) {
+    return null;
   }
 
+  const activeStream = activeStreams[0];
+
   return (
-    <div className="w-full my-3 overflow-hidden rounded-2xl bg-gradient-to-r from-red-950/80 via-neutral-900 to-red-950/80 border border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.25)] p-3 sm:p-4 text-white">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        {/* Left: Red Pulsing LIVE Indicator & Host Info */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="relative shrink-0">
-            <Avatar
-              name={primaryLive.host?.display_name || 'Host'}
-              src={primaryLive.host?.avatar_url}
-              size={42}
-              isLive={true}
-              onClick={() => handleWatchClick(primaryLive.id)}
-            />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2 py-0.5 rounded-full bg-red-600 text-white font-black text-[9px] uppercase tracking-wider shadow-sm flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                LIVE SANCTUARY
-              </span>
-              <span className="text-xs text-white/70 font-semibold truncate">
-                by {primaryLive.host?.display_name || 'Host'}
-              </span>
-            </div>
-
-            <h4 className="text-xs sm:text-sm font-bold text-white truncate mt-0.5 max-w-full">
-              {primaryLive.title}
-            </h4>
-
-            <div className="flex items-center gap-2 text-[11px] text-red-300 mt-0.5">
-              <span className="flex items-center gap-1 font-semibold">
-                <Eye size={12} /> {primaryLive.viewer_count || 1} disciples watching
-              </span>
-              {primaryLive.church?.name && (
-                <span className="text-white/50 truncate">• {primaryLive.church.name}</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Join Live Button */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            className="px-4 py-2 rounded-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 flex items-center gap-1.5 active:scale-95 transition-all"
-            onClick={() => handleWatchClick(primaryLive.id)}
-          >
-            <Radio size={14} className="animate-pulse" />
-            <span>Watch Live</span>
-            <ChevronRight size={14} />
-          </button>
+    <aside className="live-pinned-banner" role="region" aria-label="Active Live Stream">
+      <div className="live-pinned-content">
+        <span className="live-pulse-dot" aria-hidden="true" />
+        <div className="live-pinned-text">
+          <strong className="live-pinned-title">
+            LIVE: {activeStream.title || 'Sanctuary Worship & Teaching Broadcast'}
+          </strong>
+          <span className="live-pinned-subtitle">
+            {activeStream.church_name || 'Church Service Live Now'} · Tap to watch
+          </span>
         </div>
       </div>
-    </div>
+      <div className="live-pinned-actions">
+        <button
+          type="button"
+          className="live-watch-btn"
+          onClick={() => {
+            playSound('reaction');
+            window.dispatchEvent(
+              new CustomEvent('shammah:open-live', { detail: { streamId: activeStream.id } })
+            );
+          }}
+          aria-label="Join live service broadcast"
+        >
+          <span>Join Live</span>
+          <ChevronRight size={14} />
+        </button>
+        <button
+          type="button"
+          className="live-dismiss-btn"
+          onClick={() => setDismissed(true)}
+          aria-label="Dismiss banner"
+        >
+          <X size={15} />
+        </button>
+      </div>
+    </aside>
   );
 }

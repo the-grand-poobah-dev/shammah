@@ -1,212 +1,88 @@
 'use client';
-
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  RotateCcw,
-  Sparkles,
-  Trophy,
-  Check,
-  Ship,
-} from 'lucide-react';
+import React, { useState } from 'react';
+import PopupSheet from '../PopupSheet';
+import { Ship, Trophy, RotateCcw, Check, Sparkles } from 'lucide-react';
 import { playSound } from '../../lib/soundEffects';
-import { submitArcadeScore, NOAH_ANIMALS } from '../../lib/data/arcadeApi';
-import ArcadeGameShell from './ArcadeGameShell';
+import { NOAH_ANIMALS } from '../../lib/data/arcadeApi';
 
 export default function NoahArkGame({ isOpen, onClose, currentUser, bestScore = 0 }) {
-  const [cards, setCards] = useState([]);
-  const [flippedCards, setFlippedCards] = useState([]);
-  const [matchedPairs, setMatchedPairs] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(45);
-  const [score, setScore] = useState(0);
-  const [isGameOver, setIsGameOver] = useState(false);
-  const [isWon, setIsWon] = useState(false);
-  const [gameOverDetails, setGameOverDetails] = useState(null);
+  const [boardAnimals, setBoardAnimals] = useState([]);
+  const [available, setAvailable] = useState(() => NOAH_ANIMALS || [
+    { id: 'lion', name: 'Lion', pairCount: 0 },
+    { id: 'dove', name: 'Dove', pairCount: 0 },
+    { id: 'sheep', name: 'Sheep', pairCount: 0 },
+    { id: 'deer', name: 'Deer', pairCount: 0 },
+  ]);
 
-  const startTimeRef = useRef(Date.now());
-  const timerRef = useRef(null);
-
-  const initDeck = useCallback(() => {
-    const deck = [...NOAH_ANIMALS, ...NOAH_ANIMALS]
-      .map((item, index) => ({
-        uniqueId: `${item.id}-${index}`,
-        animalId: item.id,
-        emoji: item.emoji,
-        name: item.name,
-      }))
-      .sort(() => Math.random() - 0.5);
-
-    setCards(deck);
-    setFlippedCards([]);
-    setMatchedPairs([]);
-    setTimeLeft(45);
-    setScore(0);
-    setIsGameOver(false);
-    setIsWon(false);
-    setGameOverDetails(null);
-    startTimeRef.current = Date.now();
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) {
-      initDeck();
-    }
-  }, [isOpen, initDeck]);
-
-  const handleGameFinishRef = useRef(handleGameFinish);
-  handleGameFinishRef.current = handleGameFinish;
-
-  // Ark Timer countdown
-  useEffect(() => {
-    if (!isOpen || isGameOver || isWon) return;
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          handleGameFinishRef.current(false);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timerRef.current);
-  }, [isOpen, isGameOver, isWon]);
-
-  async function handleGameFinish(won) {
-    setIsGameOver(true);
-    setIsWon(won);
-    playSound(won ? 'bell' : 'reaction');
-    const durationMs = Date.now() - startTimeRef.current;
-
-    const finalScore = won
-      ? Math.round(500 + timeLeft * 25)
-      : Math.round(matchedPairs.length * 60);
-
-    setScore(finalScore);
-
-    try {
-      const res = await submitArcadeScore({
-        gameSlug: 'ark',
-        score: finalScore,
-        durationMs,
-        meta: { pairs_rescued: matchedPairs.length + (won ? 1 : 0), won },
-      });
-
-      setGameOverDetails({
-        title: won ? 'All Animals on the Ark!' : 'The Flood Started!',
-        message: won
-          ? `God remembered Noah and every creature on the ark! (Genesis 8:1) You finished with ${timeLeft}s remaining!`
-          : `You loaded ${matchedPairs.length} of 6 pairs before time expired.`,
-        unlockedAchievements: res.unlockedAchievements,
-      });
-    } catch {
-      setGameOverDetails({
-        title: won ? 'Victory!' : 'Time Expired',
-        message: `Final Score: ${finalScore} points!`,
-      });
-    }
-  }
-
-  function handleCardClick(card) {
-    if (flippedCards.length >= 2 || flippedCards.some((c) => c.uniqueId === card.uniqueId)) return;
-    if (matchedPairs.includes(card.animalId)) return;
-
-    playSound('click');
-    const newFlipped = [...flippedCards, card];
-    setFlippedCards(newFlipped);
-
-    if (newFlipped.length === 2) {
-      if (newFlipped[0].animalId === newFlipped[1].animalId) {
-        playSound('reaction');
-        setMatchedPairs((prev) => {
-          const next = [...prev, newFlipped[0].animalId];
-          if (next.length === NOAH_ANIMALS.length) {
-            setTimeout(() => handleGameFinish(true), 400);
+  const handleBoardAnimal = (animal) => {
+    playSound('button');
+    setAvailable((prev) =>
+      prev.map((a) => {
+        if (a.id === animal.id && a.pairCount < 2) {
+          const nextCount = a.pairCount + 1;
+          if (nextCount === 2) {
+            playSound('reaction');
           }
-          return next;
-        });
-        setTimeout(() => setFlippedCards([]), 400);
-      } else {
-        setTimeout(() => setFlippedCards([]), 850);
-      }
-    }
-  }
+          return { ...a, pairCount: nextCount };
+        }
+        return a;
+      })
+    );
+  };
+
+  const allPaired = available.every((a) => a.pairCount === 2);
+
+  const handleReset = () => {
+    setAvailable((NOAH_ANIMALS || []).map((a) => ({ ...a, pairCount: 0 })));
+  };
 
   return (
-    <ArcadeGameShell
-      isOpen={isOpen}
-      onClose={onClose}
-      game={{
-        slug: 'ark',
-        title: 'Noah’s Ark Pair Rescue',
-        icon: '🚢',
-        accent: '#10b981',
-      }}
-      score={score || matchedPairs.length * 100}
-      bestScore={bestScore}
-      streak={matchedPairs.length}
-      hudStats={[
-        { label: 'Rain Timer', value: `${timeLeft}s`, icon: '🌧️' },
-        { label: 'Ark Pairs', value: `${matchedPairs.length}/6`, icon: '🚢' },
-      ]}
-      isGameOver={isGameOver}
-      isWon={isWon}
-      gameOverDetails={gameOverDetails}
-      onRestart={initDeck}
-    >
-      <div className="w-full max-w-xl py-2 flex flex-col items-center gap-3">
-        <p className="text-xs text-slate-300 text-center">
-          Find and board animal pairs two-by-two before the rain floods the land!
+    <PopupSheet open={isOpen} onClose={onClose} title="Noah's Ark: Two by Two" size="md">
+      <div className="p-4 sm:p-5 space-y-4 text-center">
+        <p className="text-xs text-[var(--ink-muted)]">
+          Board pairs of each living creature two by two into the Ark of Salvation!
         </p>
 
-        {/* 3x4 Animals Grid */}
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 sm:gap-3.5 w-full p-1">
-          {cards.map((card) => {
-            const isFlipped =
-              flippedCards.some((c) => c.uniqueId === card.uniqueId) ||
-              matchedPairs.includes(card.animalId);
-            const isMatched = matchedPairs.includes(card.animalId);
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {available.map((animal) => (
+            <button
+              key={animal.id}
+              type="button"
+              disabled={animal.pairCount >= 2}
+              onClick={() => handleBoardAnimal(animal)}
+              className={`p-3.5 rounded-2xl border text-center transition-all min-h-[44px] ${
+                animal.pairCount === 2
+                  ? 'bg-emerald-500/15 border-emerald-500 text-emerald-500'
+                  : 'bg-[var(--surface-sunken)] border-[var(--border)] text-[var(--ink)] hover:border-[var(--sec-color)]'
+              }`}
+            >
+              <div className="text-xl mb-1">{animal.emoji || '🐾'}</div>
+              <div className="text-xs font-bold">{animal.name}</div>
+              <div className="text-[10px] text-[var(--ink-muted)] mt-1">
+                {animal.pairCount === 2 ? 'Paired (2/2) ✓' : `${animal.pairCount}/2 Boarded`}
+              </div>
+            </button>
+          ))}
+        </div>
 
-            return (
-              <button
-                key={card.uniqueId}
-                type="button"
-                onClick={() => handleCardClick(card)}
-                className={`relative aspect-square rounded-2xl p-2 flex flex-col items-center justify-center text-center transition-all duration-300 transform select-none ${
-                  isFlipped
-                    ? isMatched
-                      ? 'bg-emerald-950/80 border-2 border-emerald-400 scale-95 shadow-lg'
-                      : 'bg-slate-800 border-2 border-amber-400 scale-100 shadow-md'
-                    : 'bg-slate-900 border border-white/10 hover:border-emerald-500/50 hover:scale-[1.02]'
-                }`}
-              >
-                {isFlipped ? (
-                  <>
-                    <span className="text-3xl sm:text-4xl animate-bounce">{card.emoji}</span>
-                    <span className="text-[10px] font-bold text-slate-200 mt-1 font-mono">
-                      {card.name}
-                    </span>
-                    {isMatched && (
-                      <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-0.5">
-                        <Check className="w-2.5 h-2.5 stroke-[3]" />
-                        On Ark!
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center gap-1 text-slate-500">
-                    <span className="text-2xl opacity-40">🌊</span>
-                    <span className="text-[10px] font-mono tracking-widest uppercase opacity-40">
-                      Ark
-                    </span>
-                  </div>
-                )}
-              </button>
-            );
-          })}
+        {allPaired && (
+          <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500 text-xs font-bold flex items-center justify-center gap-2">
+            <Check size={16} />
+            <span>The Ark is safely loaded! The Covenant rainbow shines!</span>
+          </div>
+        )}
+
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={handleReset}
+            className="flex items-center gap-1.5 px-6 py-2.5 rounded-full border border-[var(--border)] text-xs font-medium text-[var(--ink)] min-h-[44px]"
+          >
+            <RotateCcw size={14} />
+            <span>Reset Animals</span>
+          </button>
         </div>
       </div>
-    </ArcadeGameShell>
+    </PopupSheet>
   );
 }

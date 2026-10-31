@@ -1,60 +1,65 @@
 'use client';
-import { createContext, useContext, useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-const LayoutModeContext = createContext('mobile');
+/**
+ * useLayoutMode
+ * Manages responsive layout switching across section pages.
+ * Supports: 'list-rich', 'magazine-x2', 'magazine-flat', 'tiles', 'compact', 'rail', 'spotlight'
+ *
+ * Persists the user's choice to localStorage under `shammah_layout_${sectionKey}`
+ * and defaults smartly based on container/viewport width:
+ * - Phone (< 640px): 'list-rich' (or 'compact')
+ * - Tablet/Desktop (>= 640px): 'magazine-x2' (or 'tiles')
+ */
+export function useLayoutMode(sectionKey = 'feed', fallbackMode = 'list-rich') {
+  const storageKey = `shammah_layout_${sectionKey}`;
 
-function getViewportLayoutMode() {
-  if (typeof window === 'undefined') return 'mobile';
-  const width = window.innerWidth;
-  if (width >= 1100) return 'desktop';
-  if (width >= 768) return 'tablet';
-  return 'mobile';
-}
-
-export function LayoutModeProvider({ children }) {
-  // SSR and initial client hydration value is strictly 'mobile' to eliminate hydration mismatches
-  const [layoutMode, setLayoutMode] = useState('mobile');
+  const [layoutMode, setLayoutModeState] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) return saved;
+        // Default based on screen width
+        if (window.innerWidth >= 768 && fallbackMode === 'list-rich') {
+          return 'magazine-x2';
+        }
+      } catch (_) {}
+    }
+    return fallbackMode;
+  });
 
   useEffect(() => {
-    // Resolve real layout mode immediately after mount
-    setLayoutMode(getViewportLayoutMode());
-
-    const mqlDesktop = window.matchMedia('(min-width: 1100px)');
-    const mqlTablet = window.matchMedia('(min-width: 768px) and (max-width: 1099px)');
-
-    function handleMediaChange() {
-      setLayoutMode(getViewportLayoutMode());
-    }
-
-    if (mqlDesktop.addEventListener) {
-      mqlDesktop.addEventListener('change', handleMediaChange);
-      mqlTablet.addEventListener('change', handleMediaChange);
-    } else {
-      mqlDesktop.addListener(handleMediaChange);
-      mqlTablet.addListener(handleMediaChange);
-    }
-
-    window.addEventListener('resize', handleMediaChange, { passive: true });
-
-    return () => {
-      if (mqlDesktop.removeEventListener) {
-        mqlDesktop.removeEventListener('change', handleMediaChange);
-        mqlTablet.removeEventListener('change', handleMediaChange);
-      } else {
-        mqlDesktop.removeListener(handleMediaChange);
-        mqlTablet.removeListener(handleMediaChange);
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved && saved !== layoutMode) {
+        setLayoutModeState(saved);
+      } else if (!saved) {
+        // Apply responsive default
+        const responsiveDefault = window.innerWidth >= 768 && fallbackMode === 'list-rich' ? 'magazine-x2' : fallbackMode;
+        setLayoutModeState(responsiveDefault);
       }
-      window.removeEventListener('resize', handleMediaChange);
-    };
-  }, []);
+    } catch (_) {}
+  }, [storageKey, fallbackMode]);
 
-  return (
-    <LayoutModeContext.Provider value={layoutMode}>
-      {children}
-    </LayoutModeContext.Provider>
+  const setLayoutMode = useCallback(
+    (newMode) => {
+      setLayoutModeState(newMode);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(storageKey, newMode);
+          window.dispatchEvent(
+            new CustomEvent('shammah:layout-changed', {
+              detail: { section: sectionKey, mode: newMode },
+            })
+          );
+        } catch (_) {}
+      }
+    },
+    [storageKey, sectionKey]
   );
+
+  return [layoutMode, setLayoutMode];
 }
 
-export function useLayoutMode() {
-  return useContext(LayoutModeContext);
-}
+export default useLayoutMode;

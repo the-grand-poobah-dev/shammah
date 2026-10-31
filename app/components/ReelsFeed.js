@@ -1,804 +1,367 @@
 'use client';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Heart,
   MessageCircle,
   Share2,
-  Bookmark,
-  MoreVertical,
   Volume2,
   VolumeX,
   Play,
-  Plus,
-  Check,
-  Disc,
-  Music,
-  Camera,
-  ChevronUp,
-  ChevronDown,
-  X,
+  Pause,
   Sparkles,
-  Link2,
-  Flag,
-  EyeOff,
+  Music,
+  Plus,
+  Bookmark,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import Avatar from './Avatar';
+import MemberName from './MemberName';
 import VerifiedBadge from './VerifiedBadge';
-import MemberBadge from './MemberBadge';
-import CommentThread from './CommentThread';
-import ReelCreatorModal from './ReelCreatorModal';
-import { listReels, toggleReelLike, recordReelView, toggleFollowAuthor, checkIsFollowing } from '../lib/data/reelsApi';
 import { playSound } from '../lib/soundEffects';
+import { ContentLayout, LayoutSwitcher, AccentCard, EmptyState } from './layoutkit';
+import { useLayoutMode } from '../lib/useLayoutMode';
+import ReelCreatorModal from './ReelCreatorModal';
+import CommentThread from './CommentThread';
+import WatermarkShareModal from './WatermarkShareModal';
+import { supabase } from '../lib/supabaseClient';
 
-export default function ReelsFeed({
-  initialReels = [],
-  initialIndex = 0,
-  currentUser,
-  session,
-  isModal = false,
-  onClose,
-  openAuth,
-}) {
-  const [feedTab, setFeedTab] = useState('foryou'); // 'foryou' | 'following'
-  const [reels, setReels] = useState(initialReels);
-  const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [loading, setLoading] = useState(initialReels.length === 0);
-  const [isMuted, setIsMuted] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('shammah_reels_muted') === 'true';
-    }
-    return false;
-  });
-  const [showCreator, setShowCreator] = useState(false);
-  const [activeCommentsReelId, setActiveCommentsReelId] = useState(null);
-  const [activeMoreMenuReelId, setActiveMoreMenuReelId] = useState(null);
-  const [toastMessage, setToastMessage] = useState('');
-  const [doubleTapHearts, setDoubleTapHearts] = useState([]); // [{ id, x, y }]
+export const SAMPLE_REELS = [
+  {
+    id: 'reel-1',
+    video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    title: 'When God opens a door that no man can shut ✨',
+    scripture: 'Revelation 3:8',
+    audio_title: 'Original Sound · Grace & Praise Nairobi',
+    likes_count: 248,
+    comments_count: 36,
+    accent: '#ec4899',
+    creator: {
+      id: 'cr-1',
+      display_name: 'Pastor David Karanja',
+      username: 'pastordavid',
+      avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      badge: 'pastor',
+      badge_verified: true,
+    },
+  },
+  {
+    id: 'reel-2',
+    video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
+    title: 'Morning prayer over Kenya & East Africa 🙏',
+    scripture: 'Psalm 121:1-2',
+    audio_title: 'Worship Spontaneous in D Minor',
+    likes_count: 512,
+    comments_count: 84,
+    accent: '#8b5cf6',
+    creator: {
+      id: 'cr-2',
+      display_name: 'Joy Wambui',
+      username: 'joywambui',
+      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      badge: 'worship_leader',
+      badge_verified: true,
+    },
+  },
+  {
+    id: 'reel-3',
+    video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4',
+    title: 'Youth Choir rehearsal vibes before Sunday blast 🔥',
+    scripture: 'Colossians 3:16',
+    audio_title: 'Live Sanctuary Drums & Harmonies',
+    likes_count: 389,
+    comments_count: 42,
+    accent: '#06b6d4',
+    creator: {
+      id: 'cr-3',
+      display_name: 'Nairobi Worship Center',
+      username: 'nwc_church',
+      avatar_url: 'https://images.unsplash.com/photo-1548625361-195fe57876a3?w=150',
+      badge: 'church_official',
+      badge_verified: true,
+    },
+  },
+];
 
-  const containerRef = useRef(null);
-  const reelRefs = useRef({});
-  const lastTapRef = useRef({ time: 0, x: 0, y: 0 });
-
-  // Update localStorage when mute status toggles
-  const handleToggleMute = useCallback(() => {
-    setIsMuted((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('shammah_reels_muted', String(next));
-      }
-      return next;
-    });
-  }, []);
-
-  const showToast = useCallback((msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 2500);
-  }, []);
-
-  // Fetch reels from Supabase
-  const loadFeed = useCallback(async (tab) => {
-    setLoading(true);
-    const { data } = await listReels({ feed: tab, limit: 20 });
-    if (data && data.length > 0) {
-      setReels(data);
-    } else if (initialReels.length > 0 && tab === 'foryou') {
-      setReels(initialReels);
-    } else {
-      setReels([]);
-    }
-    setLoading(false);
-  }, [initialReels]);
+export default function ReelsFeed({ currentUser, session, isModal = false, openAuth, initialReelId }) {
+  const [layoutMode, setLayoutMode] = useLayoutMode('reels', 'list-rich');
+  const [reels, setReels] = useState(SAMPLE_REELS);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isMuted, setIsMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [likedMap, setLikedMap] = useState({});
+  const [showCreatorModal, setShowCreatorModal] = useState(false);
+  const [activeCommentsReel, setActiveCommentsReel] = useState(null);
+  const [activeShareReel, setActiveShareReel] = useState(null);
+  const videoRefs = useRef({});
 
   useEffect(() => {
-    if (initialReels.length === 0) {
-      loadFeed(feedTab);
-    }
-  }, [feedTab, initialReels.length, loadFeed]);
+    async function loadReelsFromDb() {
+      try {
+        const { data, error } = await supabase
+          .from('posts')
+          .select('*')
+          .eq('media_type', 'reel')
+          .order('created_at', { ascending: false })
+          .limit(20);
 
-  // Keyboard navigation on desktop (Up, Down, Space, M, Esc)
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (activeCommentsReelId) return; // Allow typing in comments
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        scrollDelta(1);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        scrollDelta(-1);
-      } else if (e.key === 'Escape') {
-        if (activeMoreMenuReelId) {
-          setActiveMoreMenuReelId(null);
-        } else if (activeCommentsReelId) {
-          setActiveCommentsReelId(null);
-        } else if (isModal && onClose) {
-          onClose();
+        if (!error && data && data.length > 0) {
+          const mapped = data.map((p) => ({
+            id: p.id,
+            video_url: p.media_url || p.video_url,
+            title: p.text_content || p.title,
+            scripture: p.scripture_tag || 'Philippians 4:13',
+            audio_title: p.audio_title || 'Original Faith Sound',
+            likes_count: p.reaction_count || p.likes_count || 12,
+            comments_count: p.comment_count || 0,
+            accent: p.accent_color || '#ec4899',
+            creator: {
+              id: p.user_id,
+              display_name: p.user_display_name || 'Believer',
+              username: p.user_username || 'believer',
+              avatar_url: p.user_avatar_url,
+              badge: p.author_badge || 'member',
+              badge_verified: Boolean(p.author_badge_verified),
+            },
+          }));
+          setReels(mapped);
         }
-      } else if (e.key === 'm' || e.key === 'M') {
-        handleToggleMute();
-      }
+      } catch (_) {}
     }
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, reels.length, activeCommentsReelId, activeMoreMenuReelId, isModal, onClose, handleToggleMute]);
-
-  // Pause playback when tab is hidden
-  useEffect(() => {
-    function handleVisibilityChange() {
-      if (document.hidden) {
-        Object.values(reelRefs.current).forEach((video) => {
-          if (video && !video.paused) video.pause();
-        });
-      }
-    }
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    loadReelsFromDb();
   }, []);
 
-  function scrollDelta(delta) {
-    const nextIdx = Math.max(0, Math.min(reels.length - 1, currentIndex + delta));
-    if (nextIdx !== currentIndex) {
-      scrollToIndex(nextIdx);
-    }
-  }
+  const handleToggleLike = (reelId) => {
+    playSound('reaction');
+    setLikedMap((prev) => ({ ...prev, [reelId]: !prev[reelId] }));
+  };
 
-  function scrollToIndex(idx) {
-    setCurrentIndex(idx);
-    const container = containerRef.current;
-    if (container) {
-      const child = container.children[idx];
-      if (child) {
-        child.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+  const handleTogglePlay = (idx) => {
+    const vid = videoRefs.current[idx];
+    if (!vid) return;
+    if (vid.paused) {
+      vid.play().catch(() => {});
+      setIsPlaying(true);
+    } else {
+      vid.pause();
+      setIsPlaying(false);
     }
-  }
-
-  // Handle scroll snap events to update currentIndex
-  function handleContainerScroll() {
-    const container = containerRef.current;
-    if (!container) return;
-    const height = container.clientHeight;
-    if (height <= 0) return;
-    const index = Math.round(container.scrollTop / height);
-    if (index !== currentIndex && index >= 0 && index < reels.length) {
-      setCurrentIndex(index);
-    }
-  }
+  };
 
   return (
-    <div className={`reels-hub-shell${isModal ? ' is-modal-mode' : ''}`}>
-      {/* Top Header Overlay */}
-      <header className="reels-top-nav">
-        {isModal ? (
-          <button
-            type="button"
-            className="reels-header-btn close"
-            onClick={onClose}
-            aria-label="Close reels viewer"
-          >
-            <X size={20} />
-          </button>
-        ) : (
-          <div className="reels-brand-pill">
-            <Sparkles size={14} className="text-amber-400" />
-            <span>Reels</span>
+    <div className={`section-feed-view reels-section-container ${isModal ? 'is-modal-view' : ''}`}>
+      {/* Top Bar with Layout Controls & Create Reel Action */}
+      {!isModal && (
+        <div className="section-toolbar-row">
+          <div className="section-header-meta">
+            <h2 className="section-main-heading">Faith Reels</h2>
+            <p className="section-main-subheading">Short inspiring testimonies, verses, and gospel highlights</p>
           </div>
-        )}
-
-        <div className="reels-feed-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={feedTab === 'following'}
-            className={`reels-tab-btn${feedTab === 'following' ? ' active' : ''}`}
-            onClick={() => {
-              setFeedTab('following');
-              setCurrentIndex(0);
-            }}
-          >
-            Following
-          </button>
-          <div className="reels-tab-divider" />
-          <button
-            type="button"
-            role="tab"
-            aria-selected={feedTab === 'foryou'}
-            className={`reels-tab-btn${feedTab === 'foryou' ? ' active' : ''}`}
-            onClick={() => {
-              setFeedTab('foryou');
-              setCurrentIndex(0);
-            }}
-          >
-            For You
-          </button>
-        </div>
-
-        <div className="reels-header-actions">
-          <button
-            type="button"
-            className="reels-header-btn"
-            onClick={handleToggleMute}
-            aria-label={isMuted ? 'Unmute reels audio' : 'Mute reels audio'}
-          >
-            {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-          </button>
-          <button
-            type="button"
-            className="reels-header-btn camera"
-            onClick={() => {
-              if (!session?.user?.id && openAuth) {
-                openAuth('signin');
-                return;
-              }
-              setShowCreator(true);
-            }}
-            aria-label="Create reel"
-          >
-            <Camera size={18} />
-          </button>
-        </div>
-      </header>
-
-      {/* Main Snap-Scroll Container */}
-      <div
-        ref={containerRef}
-        className="reels-scroll-snap-feed no-scrollbar"
-        onScroll={handleContainerScroll}
-      >
-        {loading ? (
-          <div className="reels-loading-screen">
-            <div className="reels-spinner" />
-            <p>Loading faith reels...</p>
-          </div>
-        ) : reels.length === 0 ? (
-          <div className="reels-empty-screen">
-            <Sparkles size={48} className="text-purple-400 mb-3" />
-            <h3>No reels yet in this feed</h3>
-            <p>Be the first to share a vertical testimony or worship moment.</p>
+          <div className="section-toolbar-actions">
             <button
               type="button"
-              className="reels-create-cta-btn"
-              onClick={() => setShowCreator(true)}
+              className="section-action-cta-btn"
+              onClick={() => {
+                playSound('pop');
+                if (!session) {
+                  openAuth?.();
+                  return;
+                }
+                setShowCreatorModal(true);
+              }}
+              style={{ background: 'var(--teal, #06b6d4)' }}
             >
-              <Camera size={16} /> Post a Reel
+              <Plus size={16} />
+              <span>Create Reel</span>
             </button>
-          </div>
-        ) : (
-          reels.map((reel, idx) => {
-            const isMounted = Math.abs(idx - currentIndex) <= 2; // Keep max 3-5 around current
-            const isCurrent = idx === currentIndex;
-
-            return (
-              <ReelItem
-                key={reel.id}
-                reel={reel}
-                isActive={isCurrent}
-                isMounted={isMounted}
-                isMuted={isMuted}
-                session={session}
-                currentUser={currentUser}
-                openAuth={openAuth}
-                showToast={showToast}
-                videoRef={(el) => {
-                  if (el) reelRefs.current[reel.id] = el;
-                  else delete reelRefs.current[reel.id];
-                }}
-                onOpenComments={() => setActiveCommentsReelId(reel.id)}
-                onOpenMore={() => setActiveMoreMenuReelId(reel.id)}
-                lastTapRef={lastTapRef}
-                onDoubleTapHeart={(x, y) => {
-                  const id = Math.random().toString(36).substring(2, 9);
-                  setDoubleTapHearts((prev) => [...prev, { id, x, y }]);
-                  setTimeout(() => {
-                    setDoubleTapHearts((prev) => prev.filter((h) => h.id !== id));
-                  }, 900);
-                }}
-              />
-            );
-          })
-        )}
-      </div>
-
-      {/* Desktop Navigation Chevrons */}
-      <div className="reels-desktop-controls">
-        <button
-          type="button"
-          className="reels-desktop-chevron"
-          disabled={currentIndex <= 0}
-          onClick={() => scrollDelta(-1)}
-          aria-label="Previous reel"
-        >
-          <ChevronUp size={22} />
-        </button>
-        <button
-          type="button"
-          className="reels-desktop-chevron"
-          disabled={currentIndex >= reels.length - 1}
-          onClick={() => scrollDelta(1)}
-          aria-label="Next reel"
-        >
-          <ChevronDown size={22} />
-        </button>
-      </div>
-
-      {/* Floating Double Tap Hearts */}
-      {doubleTapHearts.map((heart) => (
-        <div
-          key={heart.id}
-          className="reel-double-tap-heart"
-          style={{ left: heart.x, top: heart.y }}
-        >
-          <Heart size={80} fill="#ef4444" color="#ef4444" />
-        </div>
-      ))}
-
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="reels-toast-banner" role="status">
-          {toastMessage}
-        </div>
-      )}
-
-      {/* Comments Drawer (Bottom Sheet on mobile, docked panel on desktop) */}
-      {activeCommentsReelId && (
-        <div
-          className="reels-comments-overlay"
-          onClick={() => setActiveCommentsReelId(null)}
-        >
-          <div
-            className="reels-comments-drawer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="reels-comments-head">
-              <h3>Comments</h3>
-              <button
-                type="button"
-                className="reels-comments-close-btn"
-                onClick={() => setActiveCommentsReelId(null)}
-                aria-label="Close comments drawer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="reels-comments-body">
-              <CommentThread
-                postId={activeCommentsReelId}
-                session={session}
-                profile={currentUser}
-                onRequireSignIn={() => openAuth && openAuth('signin')}
-              />
-            </div>
+            <LayoutSwitcher
+              value={layoutMode}
+              onChange={setLayoutMode}
+              storageKey="shammah_layout_reels"
+              options={[
+                { id: 'list-rich', label: 'Immersive Feed', icon: ChevronDown },
+                { id: 'magazine-x2', label: 'Grid', icon: LayoutSwitcher },
+              ]}
+            />
           </div>
         </div>
       )}
 
-      {/* More Options Sheet */}
-      {activeMoreMenuReelId && (
-        <div
-          className="reels-more-overlay"
-          onClick={() => setActiveMoreMenuReelId(null)}
-        >
-          <div
-            className="reels-more-sheet"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="reels-more-action-item"
-              onClick={() => {
-                const url = typeof window !== 'undefined' ? `${window.location.origin}/reels?id=${activeMoreMenuReelId}` : '';
-                navigator.clipboard?.writeText(url);
-                showToast('Reel link copied to clipboard!');
-                setActiveMoreMenuReelId(null);
-              }}
+      {/* Render Reels Feed */}
+      <ContentLayout
+        layout={layoutMode}
+        accent="#ec4899"
+        items={reels}
+        emptyState={
+          <EmptyState
+            icon={Sparkles}
+            title="No faith reels yet"
+            description="Be the first to share an inspiring praise testimony or short gospel clip."
+            actionLabel="Create a Reel"
+            onAction={() => setShowCreatorModal(true)}
+            accent="#ec4899"
+          />
+        }
+        renderItem={(reel, idx) => {
+          const isLiked = Boolean(likedMap[reel.id]);
+          const reelLikes = reel.likes_count + (isLiked ? 1 : 0);
+
+          return (
+            <AccentCard
+              key={reel.id}
+              accent={reel.accent || '#ec4899'}
+              variant="wash"
+              className={`reel-feed-card ${layoutMode === 'list-rich' ? 'immersive-card' : 'grid-card'}`}
             >
-              <Link2 size={18} /> Copy Link
-            </button>
-            <button
-              type="button"
-              className="reels-more-action-item"
-              onClick={() => {
-                showToast('Content preferences updated.');
-                setActiveMoreMenuReelId(null);
-              }}
-            >
-              <EyeOff size={18} /> Not Interested
-            </button>
-            <button
-              type="button"
-              className="reels-more-action-item danger"
-              onClick={() => {
-                showToast('Thank you. Reel reported for community review.');
-                setActiveMoreMenuReelId(null);
-              }}
-            >
-              <Flag size={18} /> Report Content
-            </button>
-            <button
-              type="button"
-              className="reels-more-cancel-btn"
-              onClick={() => setActiveMoreMenuReelId(null)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+              <div className="reel-video-container aspect-9-16">
+                <video
+                  ref={(el) => {
+                    if (el) videoRefs.current[idx] = el;
+                  }}
+                  src={reel.video_url}
+                  className="reel-video-element"
+                  loop
+                  muted={isMuted}
+                  playsInline
+                  onClick={() => handleTogglePlay(idx)}
+                />
+
+                {/* Overlays */}
+                <div className="reel-top-overlay">
+                  <span className="reel-scripture-chip">{reel.scripture}</span>
+                  <button
+                    type="button"
+                    className="reel-audio-mute-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsMuted((v) => !v);
+                    }}
+                    aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+                  >
+                    {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                  </button>
+                </div>
+
+                <div className="reel-bottom-info">
+                  <div className="reel-creator-line">
+                    <Avatar
+                      src={reel.creator.avatar_url}
+                      name={reel.creator.display_name}
+                      size="sm"
+                    />
+                    <MemberName
+                      name={reel.creator.display_name}
+                      badge={reel.creator.badge}
+                      verified={reel.creator.badge_verified}
+                    />
+                  </div>
+                  <p className="reel-caption-text">{reel.title}</p>
+                  <div className="reel-audio-track-tag">
+                    <Music size={13} className="spin-slow" />
+                    <span>{reel.audio_title}</span>
+                  </div>
+                </div>
+
+                {/* Vertical Side Action Controls */}
+                <div className="reel-side-actions">
+                  <button
+                    type="button"
+                    className={`reel-action-btn${isLiked ? ' is-liked' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleLike(reel.id);
+                    }}
+                    aria-label={`Like reel (${reelLikes})`}
+                  >
+                    <Heart size={22} fill={isLiked ? '#ec4899' : 'none'} color={isLiked ? '#ec4899' : '#ffffff'} />
+                    <span className="reel-action-count">{reelLikes}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="reel-action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playSound('reaction');
+                      setActiveCommentsReel(reel);
+                    }}
+                    aria-label={`Comments (${reel.comments_count})`}
+                  >
+                    <MessageCircle size={22} color="#ffffff" />
+                    <span className="reel-action-count">{reel.comments_count}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="reel-action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playSound('pop');
+                      setActiveShareReel(reel);
+                    }}
+                    aria-label="Share reel"
+                  >
+                    <Share2 size={22} color="#ffffff" />
+                    <span className="reel-action-label">Share</span>
+                  </button>
+                </div>
+              </div>
+            </AccentCard>
+          );
+        }}
+      />
 
       {/* Reel Creator Modal */}
-      {showCreator && (
+      {showCreatorModal && (
         <ReelCreatorModal
-          isOpen={showCreator}
-          onClose={() => setShowCreator(false)}
+          currentUser={currentUser}
           session={session}
-          profile={currentUser}
-          onCreated={(newReel) => {
+          onClose={() => setShowCreatorModal(false)}
+          onPublished={(newReel) => {
             setReels((prev) => [newReel, ...prev]);
-            setCurrentIndex(0);
-            showToast('Reel published to community feed!');
+            setShowCreatorModal(false);
           }}
         />
       )}
-    </div>
-  );
-}
 
-/**
- * Single Full-Height Reel Item
- */
-function ReelItem({
-  reel,
-  isActive,
-  isMounted,
-  isMuted,
-  session,
-  currentUser,
-  openAuth,
-  showToast,
-  videoRef,
-  onOpenComments,
-  onOpenMore,
-  lastTapRef,
-  onDoubleTapHeart,
-}) {
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(reel.like_count || 18);
-  const [commentCount, setCommentCount] = useState(reel.comment_count || 4);
-  const [following, setFollowing] = useState(Boolean(reel.is_following));
-  const [saved, setSaved] = useState(false);
-  const [showPlayFlash, setShowPlayFlash] = useState(false);
-  const [captionExpanded, setCaptionExpanded] = useState(false);
-  const [progressPercent, setProgressPercent] = useState(0);
-
-  const localVideoRef = useRef(null);
-  const hasViewCounted = useRef(false);
-
-  // Synchronize external ref
-  const setCombinedRef = useCallback(
-    (el) => {
-      localVideoRef.current = el;
-      videoRef(el);
-    },
-    [videoRef]
-  );
-
-  // Autoplay/pause based on active state
-  useEffect(() => {
-    const video = localVideoRef.current;
-    if (!video) return;
-
-    if (isActive) {
-      setIsPlaying(true);
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // Fallback if browser requires user interaction
-          setIsPlaying(false);
-        });
-      }
-
-      // Record view after 4 seconds of active viewing
-      if (!hasViewCounted.current) {
-        const timer = setTimeout(() => {
-          hasViewCounted.current = true;
-          recordReelView(reel.id);
-        }, 4000);
-        return () => clearTimeout(timer);
-      }
-    } else {
-      setIsPlaying(false);
-      video.pause();
-    }
-  }, [isActive, reel.id]);
-
-  // Check following status for session
-  useEffect(() => {
-    if (session?.user?.id && reel.author_id && reel.author_id !== session.user.id) {
-      checkIsFollowing(reel.author_id).then((isFol) => setFollowing(isFol));
-    }
-  }, [session?.user?.id, reel.author_id]);
-
-  function handleVideoClick(e) {
-    const now = Date.now();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const diff = now - lastTapRef.current.time;
-    const dist = Math.hypot(x - lastTapRef.current.x, y - lastTapRef.current.y);
-
-    if (diff < 300 && dist < 40) {
-      // Double tap detected! Like and trigger heart burst
-      handleLike();
-      onDoubleTapHeart(e.clientX, e.clientY);
-      lastTapRef.current = { time: 0, x: 0, y: 0 };
-    } else {
-      // Single tap -> toggle play/pause
-      lastTapRef.current = { time: now, x, y };
-      setTimeout(() => {
-        if (Date.now() - lastTapRef.current.time >= 280 && lastTapRef.current.time !== 0) {
-          togglePlayPause();
-        }
-      }, 300);
-    }
-  }
-
-  function togglePlayPause() {
-    const video = localVideoRef.current;
-    if (!video) return;
-
-    if (video.paused) {
-      video.play().catch(() => {});
-      setIsPlaying(true);
-    } else {
-      video.pause();
-      setIsPlaying(false);
-    }
-    setShowPlayFlash(true);
-    setTimeout(() => setShowPlayFlash(false), 500);
-  }
-
-  async function handleLike() {
-    if (!session?.user?.id) {
-      if (openAuth) openAuth('signin');
-      return;
-    }
-
-    setLiked((prev) => {
-      const next = !prev;
-      setLikeCount((c) => (next ? c + 1 : Math.max(0, c - 1)));
-      return next;
-    });
-    playSound('reaction');
-    await toggleReelLike(reel.id);
-  }
-
-  async function handleFollow(e) {
-    e.stopPropagation();
-    if (!session?.user?.id) {
-      if (openAuth) openAuth('signin');
-      return;
-    }
-    const res = await toggleFollowAuthor(reel.author_id);
-    setFollowing(res.following);
-    playSound('reaction');
-    showToast(res.following ? 'Following creator' : 'Unfollowed creator');
-  }
-
-  async function handleShare(e) {
-    e.stopPropagation();
-    const url = typeof window !== 'undefined' ? `${window.location.origin}/reels?id=${reel.id}` : '';
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: reel.text_content || 'Faith Reel on Shammah',
-          url,
-        });
-      } catch {}
-      return;
-    }
-    navigator.clipboard?.writeText(url);
-    showToast('Reel link copied!');
-  }
-
-  function handleSave(e) {
-    e.stopPropagation();
-    if (!session?.user?.id) {
-      if (openAuth) openAuth('signin');
-      return;
-    }
-    setSaved((s) => !s);
-    playSound('reaction');
-    showToast(!saved ? 'Saved to Bookmarks' : 'Removed from Bookmarks');
-  }
-
-  const authorName = reel.profiles?.display_name || 'Faith Member';
-  const soundName = reel.sound_title || 'Original Sound · Shammah Community';
-
-  return (
-    <div className="reels-card-viewport">
-      <div className="reels-card-frame" onClick={handleVideoClick}>
-        {/* Background Blurred Video / Backdrop to prevent black borders */}
-        {isMounted && (
-          <video
-            src={reel.media_url}
-            className="reels-video-blurred-backdrop"
-            muted
-            loop
-            playsInline
-            aria-hidden="true"
-          />
-        )}
-
-        {/* Foreground 9:16 Video */}
-        {isMounted ? (
-          <video
-            ref={setCombinedRef}
-            src={reel.media_url}
-            className="reels-video-element"
-            loop
-            playsInline
-            muted={isMuted}
-            preload={isActive ? 'auto' : 'metadata'}
-            onTimeUpdate={(e) => {
-              const cur = e.currentTarget.currentTime;
-              const dur = e.currentTarget.duration || 1;
-              setProgressPercent(Math.min(100, (cur / dur) * 100));
-            }}
-          />
-        ) : (
-          <div className="reels-video-placeholder" />
-        )}
-
-        {/* Dark Vignettes for Readable Text */}
-        <div className="reels-gradient-top" />
-        <div className="reels-gradient-bottom" />
-
-        {/* Play/Pause Center Flash */}
-        {showPlayFlash && (
-          <div className="reels-play-flash">
-            {isPlaying ? <Play size={44} fill="#ffffff" /> : <Play size={44} />}
-          </div>
-        )}
-
-        {/* Right Action Rail (TikTok/Snapchat Style) */}
-        <div className="reels-action-rail" onClick={(e) => e.stopPropagation()}>
-          {/* Creator Avatar with Follow (+) */}
-          <div className="reels-avatar-anchor">
-            <Avatar
-              name={authorName}
-              src={reel.profiles?.avatar_url}
-              className="reels-rail-avatar"
-            />
-            {session?.user?.id !== reel.author_id && (
+      {/* Reel Comment Thread Sheet */}
+      {activeCommentsReel && (
+        <div className="reel-comments-overlay" onClick={() => setActiveCommentsReel(null)}>
+          <div className="reel-comments-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="reel-comments-header">
+              <span className="comments-heading">Comments on Reel</span>
               <button
                 type="button"
-                className={`reels-follow-badge-btn${following ? ' is-following' : ''}`}
-                onClick={handleFollow}
-                aria-label={following ? 'Following creator' : 'Follow creator'}
+                className="popup-sheet-close-btn"
+                onClick={() => setActiveCommentsReel(null)}
+                aria-label="Close comments"
               >
-                {following ? <Check size={12} /> : <Plus size={12} />}
+                ✕
               </button>
-            )}
-          </div>
-
-          {/* Like Button */}
-          <button
-            type="button"
-            className={`reels-rail-btn${liked ? ' active' : ''}`}
-            onClick={handleLike}
-            aria-label="Like reel"
-          >
-            <div className="reels-rail-icon-circle">
-              <Heart size={24} fill={liked ? '#ef4444' : 'none'} color={liked ? '#ef4444' : '#ffffff'} />
             </div>
-            <span className="reels-rail-count">{likeCount}</span>
-          </button>
-
-          {/* Comments Button */}
-          <button
-            type="button"
-            className="reels-rail-btn"
-            onClick={onOpenComments}
-            aria-label="View comments"
-          >
-            <div className="reels-rail-icon-circle">
-              <MessageCircle size={24} color="#ffffff" />
+            <div className="reel-comments-body">
+              <CommentThread
+                postId={activeCommentsReel.id}
+                currentUser={currentUser}
+                session={session}
+                openAuth={openAuth}
+              />
             </div>
-            <span className="reels-rail-count">{commentCount}</span>
-          </button>
-
-          {/* Save / Bookmark Button */}
-          <button
-            type="button"
-            className={`reels-rail-btn${saved ? ' is-saved' : ''}`}
-            onClick={handleSave}
-            aria-label="Save reel to bookmarks"
-          >
-            <div className="reels-rail-icon-circle">
-              <Bookmark size={24} fill={saved ? '#f59e0b' : 'none'} color={saved ? '#f59e0b' : '#ffffff'} />
-            </div>
-            <span className="reels-rail-count">Save</span>
-          </button>
-
-          {/* Share Button */}
-          <button
-            type="button"
-            className="reels-rail-btn"
-            onClick={handleShare}
-            aria-label="Share reel"
-          >
-            <div className="reels-rail-icon-circle">
-              <Share2 size={24} color="#ffffff" />
-            </div>
-            <span className="reels-rail-count">Share</span>
-          </button>
-
-          {/* More Button */}
-          <button
-            type="button"
-            className="reels-rail-btn"
-            onClick={onOpenMore}
-            aria-label="More options"
-          >
-            <div className="reels-rail-icon-circle">
-              <MoreVertical size={22} color="#ffffff" />
-            </div>
-          </button>
-
-          {/* Spinning Audio Disc */}
-          <div className={`reels-spinning-disc${isPlaying ? ' spinning' : ''}`}>
-            <Disc size={36} className="text-zinc-300" />
-            <Music size={12} className="reels-disc-note" />
           </div>
         </div>
+      )}
 
-        {/* Bottom Left Info / Caption */}
-        <div className="reels-info-block" onClick={(e) => e.stopPropagation()}>
-          <div className="reels-creator-meta">
-            <span className="reels-creator-name">{authorName}</span>
-            {reel.profiles?.badge && (
-              <MemberBadge badgeId={reel.profiles.badge} size="sm" />
-            )}
-            {reel.profiles?.badge_verified && (
-              <VerifiedBadge badge={reel.profiles.badge} size={14} />
-            )}
-          </div>
-
-          {reel.text_content && (
-            <div className="reels-caption-wrap">
-              <p className={`reels-caption-text${captionExpanded ? ' expanded' : ''}`}>
-                {reel.text_content}
-              </p>
-              {reel.text_content.length > 75 && (
-                <button
-                  type="button"
-                  className="reels-caption-more-btn"
-                  onClick={() => setCaptionExpanded((e) => !e)}
-                >
-                  {captionExpanded ? 'Less' : 'More'}
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Sound / Music Track row */}
-          <div className="reels-sound-strip">
-            <Music size={13} className="shrink-0" />
-            <span className="reels-sound-marquee">{soundName}</span>
-          </div>
-        </div>
-
-        {/* Thin Video Scrubber Progress Bar */}
-        <div className="reels-bottom-progress-bar">
-          <div
-            className="reels-progress-fill"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-      </div>
+      {/* Watermark Share Modal */}
+      {activeShareReel && (
+        <WatermarkShareModal
+          post={{
+            id: activeShareReel.id,
+            text_content: activeShareReel.title,
+            author: activeShareReel.creator,
+          }}
+          onClose={() => setActiveShareReel(null)}
+        />
+      )}
     </div>
   );
 }
