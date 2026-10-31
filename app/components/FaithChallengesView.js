@@ -53,6 +53,7 @@ import ChallengeCheckinModal from './challenges/ChallengeCheckinModal';
 import ChallengeSubmitModal from './challenges/ChallengeSubmitModal';
 import ChallengeCreatorModal from './challenges/ChallengeCreatorModal';
 import ChallengeDetailModal from './challenges/ChallengeDetailModal';
+import { RelatedCoursesStrip } from './promos';
 
 export { INITIAL_CHALLENGES, INITIAL_SUBMISSIONS };
 
@@ -943,6 +944,11 @@ export default function FaithChallengesView({ session, profile }) {
             ))}
           </div>
         </SectionBlock>
+
+        {/* Cross-link: Deepen spiritual disciplines with Discipleship Academy courses */}
+        <div className="mt-8 mb-4">
+          <RelatedCoursesStrip challengeTitle="Faith Streaks & Spiritual Disciplines" />
+        </div>
       </ContentLayout>
 
       {/* MODALS */}

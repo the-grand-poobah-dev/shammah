@@ -30,6 +30,7 @@ import ReelViewerModal from './ReelViewerModal';
 import LiveViewerModal from './LiveViewerModal';
 import MediaUploadModal from './MediaUploadModal';
 import VideoWatchView from './VideoWatchView';
+import { ReelsRail } from './promos';
 import {
   ContentLayout,
   AccentCard,
@@ -575,59 +576,16 @@ export default function VideosView({ session, currentUser, openAuth }) {
           </SectionBlock>
         )}
 
-        {/* Block C: Reels Strip (Horizontal rail of 9:16 portrait cards) */}
-        {reelsList.length > 0 && !debouncedQuery && (
-          <SectionBlock
-            title="Faith Reels"
-            subtitle="Quick vertical testimonies & worship moments"
-            count={reelsList.length}
-            accent="#ec4899"
-            actionLabel="See All"
-            onAction={() => {
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'reels' }));
-                window.location.href = '/reels';
-              }
-            }}
-          >
-            <div className="reels-strip-rail no-scrollbar">
-              {reelsList.map((reel, rIdx) => (
-                <div
-                  key={reel.id}
-                  className="reels-strip-card"
-                  onClick={() => setActiveReelIndex(rIdx)}
-                >
-                  <div className="reels-strip-thumb-wrap">
-                    <video
-                      src={reel.media_url}
-                      className="reels-strip-video-preview"
-                      preload="metadata"
-                      muted
-                      playsInline
-                    />
-                    <div className="reels-strip-gradient" />
-                    <div className="reels-strip-views-badge">
-                      <Eye size={11} /> {reel.view_count || 0}
-                    </div>
-                    <div className="reels-strip-play-badge">
-                      <Play size={14} fill="#ffffff" />
-                    </div>
-                    <div className="reels-strip-bottom-author">
-                      <Avatar
-                        name={reel.profiles?.display_name || 'Creator'}
-                        src={reel.profiles?.avatar_url}
-                        className="avatar-xs reels-strip-avatar"
-                      />
-                      <span className="reels-strip-name truncate">
-                        {reel.profiles?.display_name || 'Believer'}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="reels-strip-caption truncate-2">{reel.text_content}</p>
-                </div>
-              ))}
-            </div>
-          </SectionBlock>
+        {/* Block C: Reels Rail (Horizontal rail of 9:16 portrait cards) */}
+        {!debouncedQuery && (
+          <div className="mb-6">
+            <ReelsRail
+              title="Faith Reels"
+              initialReels={reelsList.length > 0 ? reelsList : null}
+              session={session}
+              currentUser={currentUser}
+            />
+          </div>
         )}
 
         {/* Block D: Trending Now (Magazine-flat) */}

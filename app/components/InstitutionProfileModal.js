@@ -29,6 +29,7 @@ import {
 } from '../lib/institutionManager';
 import { getInstitutionBranch } from '../lib/churchConfig';
 import { playSound } from '../lib/soundEffects';
+import { ChurchFundraiserBanner } from './promos';
 
 export default function InstitutionProfileModal({
   institution,
@@ -224,7 +225,7 @@ export default function InstitutionProfileModal({
         {institution.about && <p className="inst-modal-bio">{institution.about}</p>}
 
         {/* Active Fundraising Banner if present */}
-        {institution.hasFundraising && institution.activeCampaign && (
+        {institution.hasFundraising && institution.activeCampaign ? (
           <div className="inst-campaign-box">
             <div className="campaign-top">
               <span className="campaign-icon-badge">
@@ -254,6 +255,8 @@ export default function InstitutionProfileModal({
               <span>Goal: KES {institution.activeCampaign.goalKes.toLocaleString()}</span>
             </div>
           </div>
+        ) : (
+          <ChurchFundraiserBanner churchName={institution.name || 'Local Church'} />
         )}
 
         {/* Key offerings / features row */}

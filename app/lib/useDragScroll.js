@@ -1,6 +1,6 @@
 'use client';
 import { useRef, useEffect } from 'react';
-export { initGlobalScrollAffordances, useScrollAffordances } from './useScrollAffordances';
+export { useScrollAffordances } from './useScrollAffordances';
 
 // Reusable hook that gives any horizontally overflowing container smooth mouse/touch drag scrolling
 export function useDragScroll() {
@@ -129,8 +129,6 @@ export function initGlobalHorizontalDrag() {
   return () => document.removeEventListener('pointerdown', handlePointerDown);
 }
 
-// Re-export hook for components
-export { useScrollAffordances } from './useScrollAffordances';
 
 const CHEVRON_SVG = {
   left: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',

@@ -63,6 +63,7 @@ import {
   ArcadeGamesShelfWidget,
 } from './components/FeedShelves';
 import LivePinnedBanner from './components/LivePinnedBanner';
+import { ReelsRail, PromoSlot } from './components/promos';
 import { getHomefeedPostsWithRss } from './lib/rssManager';
 import { playSound, isSoundEnabled, setSoundEnabled } from './lib/soundEffects';
 import { rankPostsWithAlgorithm } from './lib/feedAlgorithm';
@@ -1861,6 +1862,18 @@ export default function Feed() {
           <LivePinnedBanner />
         )}
 
+        {/* Reels Rail (9:16 portrait horizontal rail) */}
+        {tab === 'home' && section === 'all' && !searchTerm && (
+          <ReelsRail
+            session={session}
+            currentUser={profile}
+            onSeeAll={() => {
+              setSection('reels');
+              window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: 'reels' }));
+            }}
+          />
+        )}
+
         {/* Dynamic Homefeed Widgets: Churches to follow & Channels Explore */}
         {tab === 'home' && section === 'all' && !searchTerm && (
           <>
@@ -1922,41 +1935,16 @@ export default function Feed() {
             // i=36 (slot 9) -> Cycles through again seamlessly!
             let interleavedWidget = null;
             if (!searchTerm) {
-              if (i === 1) {
-                interleavedWidget = <TrendingReelsCard onSelectSection={(secId) => setSection(secId)} />;
-              } else if (i === 4) {
-                interleavedWidget = <PollsShelfWidget onSelectSection={(secId) => setSection(secId)} />;
-              } else if (i > 4 && (i - 4) % 4 === 0) {
-                const slotIndex = Math.floor((i - 4) / 4);
-                const shelfType = slotIndex % 8;
-                switch (shelfType) {
-                  case 1:
-                    interleavedWidget = <AudioShelfWidget onSelectSection={(secId) => setSection(secId)} />;
-                    break;
-                  case 2:
-                    interleavedWidget = <DailyVerseShelfWidget onSelectSection={(secId) => setSection(secId)} />;
-                    break;
-                  case 3:
-                    interleavedWidget = <CoursesShelfWidget onSelectSection={(secId) => setSection(secId)} />;
-                    break;
-                  case 4:
-                    interleavedWidget = <FundraisersShelfWidget onSelectSection={(secId) => setSection(secId)} currentUser={profile} />;
-                    break;
-                  case 5:
-                    interleavedWidget = <FaithChallengesShelfWidget onSelectSection={(secId) => setSection(secId)} />;
-                    break;
-                  case 6:
-                    interleavedWidget = <ArcadeGamesShelfWidget onSelectSection={(secId) => setSection(secId)} />;
-                    break;
-                  case 7:
-                    interleavedWidget = <PeopleToFollowCard />;
-                    break;
-                  case 0:
-                    interleavedWidget = <TrendingReelsCard onSelectSection={(secId) => setSection(secId)} />;
-                    break;
-                  default:
-                    interleavedWidget = null;
-                }
+              // Rotating promo widget inserted after every N=6 posts (never two in a row, max 5 per session, 7-day dismissible)
+              if ((i + 1) % 6 === 0) {
+                const slotIndex = Math.floor((i + 1) / 6);
+                interleavedWidget = (
+                  <PromoSlot
+                    key={`promo-slot-${slotIndex}`}
+                    position={slotIndex}
+                    userId={session?.user?.id}
+                  />
+                );
               }
             }
 

@@ -38,6 +38,7 @@ import { toggleFollowAuthor, checkIsFollowing } from '../lib/data/reelsApi';
 import { saveForOffline, isItemSavedOffline, removeOfflineItem } from '../lib/offlineSyncManager';
 import { formatPostDate, useRelativeTimeTick } from '../lib/postDisplay';
 import { playSound } from '../lib/soundEffects';
+import { BibleVerseStrip } from './promos';
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -930,6 +931,13 @@ export default function VideoWatchView({
                 </button>
               )}
             </div>
+
+            {/* Cross-link: Scripture foundation for message */}
+            <BibleVerseStrip
+              reference={video.scripture_reference || '2 Timothy 3:16-17'}
+              text={video.scripture_text || 'All Scripture is God-breathed and is useful for teaching, rebuking, correcting and training in righteousness.'}
+              theme="Message Scripture Foundation"
+            />
           </div>
 
           {/* Comments Section */}
