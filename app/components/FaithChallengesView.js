@@ -1,470 +1,998 @@
 'use client';
-import { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Flame,
   Sparkles,
   Trophy,
   Play,
   Pause,
-  Volume2,
-  VolumeX,
-  Share2,
   Heart,
   MessageCircle,
   Plus,
-  X,
   Check,
-  Video,
-  Music,
   Award,
   ChevronRight,
-  Send,
-  Church,
+  Search,
+  RefreshCw,
+  Clock,
+  Users,
+  ShieldCheck,
+  CheckCircle2,
+  Calendar,
+  Layers,
+  ArrowRight,
+  TrendingUp,
+  Share2,
+  Music,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
 import { playSound } from '../lib/soundEffects';
+import {
+  ContentLayout,
+  AccentCard,
+  SectionBlock,
+  LayoutSwitcher,
+  FilterChips,
+  SortMenu,
+  StatStrip,
+  ProgressBar,
+  SkeletonLayout,
+  EmptyState,
+  ErrorState,
+} from './layoutkit';
+import {
+  INITIAL_CHALLENGES,
+  INITIAL_SUBMISSIONS,
+  listChallenges,
+  voteChallengeSubmission,
+  joinChallenge,
+} from '../lib/data/challengesApi';
+import ChallengeCheckinModal from './challenges/ChallengeCheckinModal';
+import ChallengeSubmitModal from './challenges/ChallengeSubmitModal';
+import ChallengeCreatorModal from './challenges/ChallengeCreatorModal';
+import ChallengeDetailModal from './challenges/ChallengeDetailModal';
 
-const INITIAL_CHALLENGES = [
-  {
-    id: 'c-scripture-60',
-    title: '#ScriptureIn60s Challenge',
-    tag: '#ScriptureIn60s',
-    tagline: 'Recite or dramatize your favorite Bible verse with passion in under 60 seconds!',
-    icon: '⚡',
-    badge: 'Trending #1',
-    participantsCount: 1420,
-    cheersCount: 8930,
-    deadline: 'Active this week',
-  },
-  {
-    id: 'c-worship-cover',
-    title: '#AcousticWorship Challenge',
-    tag: '#AcousticWorship',
-    tagline: 'Record a raw acoustic, piano, or acapella worship chorus that lifts Jesus high.',
-    icon: '🎸',
-    badge: 'Popular',
-    participantsCount: 980,
-    cheersCount: 6540,
-    deadline: '4 days left',
-  },
-  {
-    id: 'c-sunday-fit',
-    title: '#SundayFitCheck & Scripture',
-    tag: '#SundayFitCheck',
-    tagline: 'Show your Sunday best church outfit paired with your posture of worship (Psalm 96:9).',
-    icon: '👗',
-    badge: 'Youth & Teens',
-    participantsCount: 1850,
-    cheersCount: 12400,
-    deadline: 'Active this Sunday',
-  },
-  {
-    id: 'c-daily-testimony',
-    title: '#1MinTestimony Miracle',
-    tag: '#1MinTestimony',
-    tagline: 'Share a 60-second testimony of God’s goodness, healing, or answered prayer.',
-    icon: '🕊️',
-    badge: 'Faith Builder',
-    participantsCount: 760,
-    cheersCount: 4890,
-    deadline: 'Ongoing daily',
-  },
+export { INITIAL_CHALLENGES, INITIAL_SUBMISSIONS };
+
+const CATEGORY_CHIPS = [
+  { id: 'All', label: 'All Challenges' },
+  { id: 'Prayer', label: 'Prayer', icon: '🙏' },
+  { id: 'Fasting', label: 'Fasting', icon: '🕊️' },
+  { id: 'Scripture memory', label: 'Scripture Memory', icon: '📖' },
+  { id: 'Service', label: 'Acts of Service', icon: '🤝' },
+  { id: 'Worship', label: 'Worship & Music', icon: '🎶' },
+  { id: 'Generosity', label: 'Generosity', icon: '🎁' },
 ];
 
-const INITIAL_SUBMISSIONS = [
-  {
-    id: 'sub-1',
-    challengeId: 'c-scripture-60',
-    challengeTag: '#ScriptureIn60s',
-    title: 'Romans 8:31-39 in one continuous breath! 🔥',
-    author: {
-      id: 'p-samuel',
-      name: 'Evangelist Samuel',
-      badge: 'youth',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-      branch: 'UoN Christian Union',
-    },
-    videoUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600',
-    audioTitle: 'Deep Worship Beat · Original Praise Sound',
-    cheers: 842,
-    commentsCount: 67,
-    scripture: 'Romans 8:37',
-    description: 'No matter what youth face on campus, in all these things we are MORE than conquerors! Tag someone who needs courage today! 🙏',
-  },
-  {
-    id: 'sub-2',
-    challengeId: 'c-worship-cover',
-    challengeTag: '#AcousticWorship',
-    title: 'Way Maker (Swahili & English Acoustic Mashup)',
-    author: {
-      id: 'p-mary',
-      name: 'Sister Mary Grace',
-      badge: 'worship',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      branch: 'CITAM Woodley Youth',
-    },
-    videoUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600',
-    audioTitle: 'Acoustic Guitar in E Major · Mary Grace',
-    cheers: 1240,
-    commentsCount: 114,
-    scripture: 'Psalm 100:1-2',
-    description: 'Bwana anafanya njia pasipo na njia. Recorded this during morning devotion before class. God is so good!',
-  },
-  {
-    id: 'sub-3',
-    challengeId: 'c-sunday-fit',
-    challengeTag: '#SundayFitCheck',
-    title: 'African Kitenge Sunday Fit & Psalm 96 🌟',
-    author: {
-      id: 'p-rebecca',
-      name: 'Deaconess Rebecca',
-      badge: 'deacon',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-      branch: 'Grace Community Fellowship',
-    },
-    videoUrl: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=600',
-    audioTitle: 'Sunday Morning Joy Chimes · Shammah Sound',
-    cheers: 630,
-    commentsCount: 42,
-    scripture: 'Psalm 96:9',
-    description: 'Worship the Lord in the splendor of his holiness; tremble before him, all the earth. Blessed Sunday church family!',
-  },
+const SORT_OPTIONS = [
+  { id: 'trending', label: 'Trending & Active' },
+  { id: 'most_participants', label: 'Most Participants' },
+  { id: 'newest', label: 'Newest First' },
+  { id: 'points_high', label: 'Highest Points' },
 ];
 
 export default function FaithChallengesView({ session, profile }) {
-  const [activeChallengeId, setActiveChallengeId] = useState('all');
-  const [submissions, setSubmissions] = useState(INITIAL_SUBMISSIONS);
-  const [cheeredSet, setCheeredSet] = useState(new Set());
-  const [toastMsg, setToastMsg] = useState('');
+  const currentUser = useMemo(() => {
+    if (profile?.id) {
+      return {
+        id: profile.id,
+        name: profile.display_name || profile.full_name || 'Believer',
+        avatar: profile.avatar_url,
+        badge: profile.badge,
+        church: profile.church_name,
+      };
+    }
+    if (session?.user?.id) {
+      return {
+        id: session.user.id,
+        name: session.user.user_metadata?.full_name || 'Believer',
+        avatar: session.user.user_metadata?.avatar_url,
+      };
+    }
+    return null;
+  }, [session, profile]);
 
-  // Submit Challenge Modal State
-  const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [submitForm, setSubmitForm] = useState({
-    challengeId: 'c-scripture-60',
-    title: '',
-    scripture: '',
-    description: '',
-    branch: profile?.branch || 'Campus CU / Youth Fellowship',
-  });
+  // Data states
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  function showToast(msg) {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(''), 2500);
-  }
+  const [challenges, setChallenges] = useState([]);
+  const [todayChallenge, setTodayChallenge] = useState(null);
+  const [myActive, setMyActive] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [badges, setBadges] = useState([]);
 
-  function handleCheer(subId) {
-    playSound('reaction');
-    setCheeredSet((prev) => {
-      const next = new Set(prev);
-      const isCheered = next.has(subId);
-      if (isCheered) {
-        next.delete(subId);
-        setSubmissions((list) =>
-          list.map((s) => (s.id === subId ? { ...s, cheers: Math.max(0, s.cheers - 1) } : s))
-        );
-      } else {
-        next.add(subId);
-        setSubmissions((list) =>
-          list.map((s) => (s.id === subId ? { ...s, cheers: s.cheers + 1 } : s))
-        );
-        showToast('Amen! Cheered with faith! ❤️🔥');
-      }
-      return next;
-    });
-  }
+  // Filtering & controls
+  const [category, setCategory] = useState('All');
+  const [sort, setSort] = useState('trending');
+  const [search, setSearch] = useState('');
+  const [layout, setLayout] = useState('magazine-flat');
 
-  async function handleShare(sub) {
-    const text = `Check out this testimony on Shammah: "${sub.title}" ${sub.challengeTag}`;
-    if (navigator.share) {
+  // Media playback
+  const [playingVideoId, setPlayingVideoId] = useState(null);
+
+  // Voting optimistic state
+  const [votedMap, setVotedMap] = useState({});
+
+  // Modals
+  const [checkinModalOpen, setCheckinModalOpen] = useState(false);
+  const [selectedCheckinChallenge, setSelectedCheckinChallenge] = useState(null);
+
+  const [submitModalOpen, setSubmitModalOpen] = useState(false);
+  const [selectedSubmitChallenge, setSelectedSubmitChallenge] = useState(null);
+
+  const [creatorModalOpen, setCreatorModalOpen] = useState(false);
+
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedDetailChallengeId, setSelectedDetailChallengeId] = useState(null);
+
+  // Load challenges data
+  const fetchData = useCallback(
+    async (isPullToRefresh = false) => {
       try {
-        await navigator.share({ text, title: 'Faith Challenge' });
-      } catch {}
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast('Challenge link copied to clipboard!');
-      playSound('reaction');
-    } catch {}
-  }
+        if (isPullToRefresh) setRefreshing(true);
+        else setLoading(true);
+        setError(null);
 
-  function handleSubmitChallengeEntry(e) {
-    e.preventDefault();
-    if (!submitForm.title.trim()) {
-      showToast('Please add a title for your challenge submission.');
-      return;
-    }
+        const data = await listChallenges({
+          category: category !== 'All' ? category : undefined,
+          sort,
+          search: search.trim() || undefined,
+          userId: currentUser?.id,
+        });
 
-    const ch = INITIAL_CHALLENGES.find((c) => c.id === submitForm.challengeId) || INITIAL_CHALLENGES[0];
+        setChallenges(data.challenges || []);
+        setTodayChallenge(data.today_challenge || (data.challenges && data.challenges[0]) || null);
+        setMyActive(data.my_active || []);
+        setSubmissions(data.submissions || []);
+        setLeaderboard(data.leaderboard || []);
+        setBadges(data.badges || []);
+      } catch (err) {
+        console.error('Failed to load challenges:', err);
+        setError(err.message || 'Unable to load faith challenges. Please try again.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [category, sort, search, currentUser?.id]
+  );
 
-    const newEntry = {
-      id: `sub-${Date.now()}`,
-      challengeId: ch.id,
-      challengeTag: ch.tag,
-      title: submitForm.title.trim(),
-      author: {
-        id: session?.user?.id || 'me-anon',
-        name: profile?.display_name || profile?.name || 'Youth Member',
-        badge: profile?.badge || 'youth',
-        avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-        branch: submitForm.branch || 'Shammah Christian Family',
-      },
-      videoUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600',
-      audioTitle: 'Original Audio · Original Sound',
-      cheers: 1,
-      commentsCount: 0,
-      scripture: submitForm.scripture.trim() || 'Matthew 5:14-16',
-      description: submitForm.description.trim(),
-    };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-    setSubmissions([newEntry, ...submissions]);
-    setShowSubmitModal(false);
-    showToast('🎉 Challenge submitted! You are a Faith Champion!');
+  // Handle Cheer / Like submission
+  async function handleVoteSubmission(subId) {
     playSound('reaction');
+    const isCurrentlyVoted = !!votedMap[subId];
+
+    // Optimistic toggle
+    setVotedMap((prev) => ({ ...prev, [subId]: !isCurrentlyVoted }));
+    setSubmissions((prev) =>
+      prev.map((s) => {
+        if (s.id === subId) {
+          const currentCheers = s.cheers || s.like_count || 0;
+          return {
+            ...s,
+            cheers: isCurrentlyVoted ? Math.max(0, currentCheers - 1) : currentCheers + 1,
+            like_count: isCurrentlyVoted ? Math.max(0, currentCheers - 1) : currentCheers + 1,
+          };
+        }
+        return s;
+      })
+    );
+
+    try {
+      await voteChallengeSubmission(subId);
+    } catch (err) {
+      console.error('Failed to vote:', err);
+      // Rollback
+      setVotedMap((prev) => ({ ...prev, [subId]: isCurrentlyVoted }));
+    }
   }
 
-  const visibleSubmissions =
-    activeChallengeId === 'all'
-      ? submissions
-      : submissions.filter((s) => s.challengeId === activeChallengeId);
+  // Handle Fast Join
+  async function handleFastJoin(ch) {
+    playSound('reaction');
+    try {
+      await joinChallenge(ch.id);
+      playSound('postPublished');
+      fetchData(true);
+    } catch (err) {
+      alert(err.message || 'Could not join challenge.');
+    }
+  }
+
+  // Media toggle (ensures only 1 plays at a time)
+  function togglePlayVideo(subId) {
+    if (playingVideoId === subId) {
+      setPlayingVideoId(null);
+    } else {
+      playSound('click');
+      setPlayingVideoId(subId);
+    }
+  }
+
+  // Modals open triggers
+  function triggerCheckin(ch) {
+    setSelectedCheckinChallenge(ch);
+    setCheckinModalOpen(true);
+  }
+
+  function triggerSubmit(ch) {
+    setSelectedSubmitChallenge(ch);
+    setSubmitModalOpen(true);
+  }
+
+  function triggerDetail(chId) {
+    setSelectedDetailChallengeId(chId);
+    setDetailModalOpen(true);
+  }
+
+  // Stats calculation
+  const totalParticipants = useMemo(() => {
+    return challenges.reduce((acc, c) => acc + (c.participants_count || c.participantsCount || 0), 0);
+  }, [challenges]);
+
+  const activeStreaksCount = useMemo(() => {
+    return myActive.reduce((max, a) => Math.max(max, a.streak_current || 0), 0);
+  }, [myActive]);
 
   return (
-    <div className="section-feed-view faith-challenges-view">
-      {/* Hero Header */}
-      <div className="challenges-hero-banner">
-        <div className="chal-badge-pill">
-          <Flame size={15} />
-          <span>Christian Youth & Teen Trends · Faith TikTok Challenges</span>
-        </div>
-
-        <h2 className="chal-hero-title">Shammah Faith Challenges</h2>
-        <p className="chal-hero-subtitle">
-          Inspiring short testimonies, worship covers, 60-second scriptures, and creative faith expressions from campus CUs and youth ministries.
-        </p>
-
-        <button
-          type="button"
-          className="join-challenge-cta-btn"
-          onClick={() => setShowSubmitModal(true)}
-        >
-          <Plus size={16} />
-          <span>Join a Challenge</span>
-        </button>
-      </div>
-
-      {toastMsg && <div className="video-toast-pill">{toastMsg}</div>}
-
-      {/* Challenge Categories Carousel */}
-      <div className="challenges-track-header">
-        <span className="chal-track-label">🔥 Trending Challenges:</span>
-        <div className="chal-pills-scroll no-scrollbar">
-          <button
-            type="button"
-            className={`chal-category-pill${activeChallengeId === 'all' ? ' active' : ''}`}
-            onClick={() => setActiveChallengeId('all')}
-          >
-            <span>All Challenges</span>
-          </button>
-          {INITIAL_CHALLENGES.map((c) => (
+    <div className="w-full min-h-screen pb-24 md:pb-16 text-inherit animate-fadeIn">
+      <ContentLayout
+        title="Faith Challenges"
+        badge="Habits & Devotion"
+        subtitle="Build daily prayer, scripture, and worship streaks with believers across Kenya and beyond."
+        icon={Flame}
+        accent="#f59e0b"
+        actions={
+          <div className="flex items-center gap-2">
             <button
-              key={c.id}
-              type="button"
-              className={`chal-category-pill${activeChallengeId === c.id ? ' active' : ''}`}
-              onClick={() => setActiveChallengeId(c.id)}
+              onClick={() => fetchData(true)}
+              aria-label="Refresh challenges"
+              className="p-2.5 rounded-xl border hover:opacity-80 transition-opacity"
+              style={{
+                borderColor: 'var(--border, rgba(255,255,255,0.15))',
+                background: 'var(--surface-hover, rgba(255,255,255,0.04))',
+              }}
             >
-              <span>{c.icon} {c.tag}</span>
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
-          ))}
-        </div>
-      </div>
+            <button
+              onClick={() => {
+                playSound('pop');
+                setCreatorModalOpen(true);
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-white shadow-lg flex items-center gap-1.5 transition-transform active:scale-95"
+              style={{
+                background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+              }}
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Create Challenge</span>
+            </button>
+          </div>
+        }
+      >
+        {/* Stat Strip */}
+        <StatStrip
+          stats={[
+            {
+              label: 'Active Challenges',
+              value: challenges.length || 6,
+              icon: Sparkles,
+              color: '#f59e0b',
+            },
+            {
+              label: 'Participants',
+              value: totalParticipants > 0 ? totalParticipants.toLocaleString() : '5,000+',
+              icon: Users,
+              color: '#10b981',
+            },
+            {
+              label: 'Your Best Streak',
+              value: activeStreaksCount > 0 ? `${activeStreaksCount} Days 🔥` : 'Start Today',
+              icon: Flame,
+              color: '#ef4444',
+            },
+            {
+              label: 'Kingdom Points',
+              value: myActive.reduce((acc, a) => acc + (a.points || 0), 0) || '0 pts',
+              icon: Trophy,
+              color: '#8b5cf6',
+            },
+          ]}
+        />
 
-      {/* Feed of Short Video / Challenge Submissions */}
-      <div className="challenges-feed-list">
-        {visibleSubmissions.map((sub) => {
-          const isCheered = cheeredSet.has(sub.id);
-          return (
-            <article key={sub.id} className="post-card challenge-video-card">
-              {/* Creator & Challenge Tag Header */}
-              <div className="chal-card-header">
-                <div className="chal-author-row">
-                  <Avatar
-                    name={sub.author.name}
-                    src={sub.author.avatar}
-                    userId={sub.author.id}
-                    className="avatar-sm"
+        {/* BLOCK 1: TODAY'S CHALLENGE SPOTLIGHT */}
+        {todayChallenge && (
+          <SectionBlock
+            title="Today's Challenge Spotlight"
+            icon={Flame}
+            badge="Daily Habit"
+            accent={todayChallenge.accent || '#f59e0b'}
+          >
+            <div
+              className="relative rounded-2xl overflow-hidden border p-5 sm:p-7 shadow-xl group transition-all"
+              style={{
+                background: `linear-gradient(135deg, var(--surface, #1e293b) 0%, ${todayChallenge.accent || '#f59e0b'}18 100%)`,
+                borderColor: `${todayChallenge.accent || '#f59e0b'}40`,
+              }}
+            >
+              {/* Background Cover Overlay */}
+              {todayChallenge.cover_url && (
+                <div className="absolute inset-0 opacity-15 mix-blend-luminosity pointer-events-none overflow-hidden">
+                  <img
+                    src={todayChallenge.cover_url}
+                    alt=""
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   />
-                  <div className="chal-author-meta">
-                    <MemberName
-                      name={sub.author.name}
-                      badge={sub.author.badge}
-                      verified={true}
-                      userId={sub.author.id}
-                    />
-                    <span className="chal-author-branch">{sub.author.branch}</span>
+                </div>
+              )}
+
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="space-y-3 max-w-xl">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className="px-2.5 py-0.5 rounded-full text-xs font-bold text-white uppercase tracking-wider shadow-sm"
+                      style={{ background: todayChallenge.accent || '#f59e0b' }}
+                    >
+                      {todayChallenge.category || 'Prayer'}
+                    </span>
+                    <span className="font-mono text-xs font-semibold text-amber-300 drop-shadow">
+                      {todayChallenge.tag || '#TodayInDevotion'}
+                    </span>
+                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      {todayChallenge.duration_days ? `${todayChallenge.duration_days} Days Streak` : 'Daily Habit'}
+                    </span>
+                  </div>
+
+                  <h3
+                    onClick={() => triggerDetail(todayChallenge.id)}
+                    className="text-xl sm:text-2xl font-black cursor-pointer hover:underline flex items-center gap-2"
+                  >
+                    <span>{todayChallenge.title}</span>
+                    <ChevronRight className="w-5 h-5 text-amber-400" />
+                  </h3>
+
+                  <p className="text-xs sm:text-sm text-slate-300 line-clamp-2 leading-relaxed">
+                    {todayChallenge.description || todayChallenge.tagline}
+                  </p>
+
+                  <div className="flex items-center gap-4 text-xs text-slate-400 pt-1">
+                    <span className="flex items-center gap-1 font-semibold text-white">
+                      <Users className="w-3.5 h-3.5 text-amber-400" />
+                      {todayChallenge.participants_count || 1420} taking part
+                    </span>
+                    <span>·</span>
+                    <span className="text-amber-300 font-bold">
+                      +{todayChallenge.points || 100} Devotion Points
+                    </span>
                   </div>
                 </div>
 
-                <span className="chal-tag-badge">{sub.challengeTag}</span>
-              </div>
+                {/* Right Action Stack */}
+                <div className="flex flex-col sm:flex-row md:flex-col items-stretch sm:items-center md:items-end gap-3 flex-shrink-0">
+                  <button
+                    onClick={() => triggerCheckin(todayChallenge)}
+                    className="px-6 py-3.5 rounded-xl font-black text-sm text-white shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-95 hover:brightness-110"
+                    style={{
+                      background: `linear-gradient(135deg, ${todayChallenge.accent || '#f59e0b'}, #ef4444)`,
+                    }}
+                  >
+                    <Flame className="w-5 h-5 fill-amber-200 text-amber-200 animate-pulse" />
+                    <span>Check In for Today</span>
+                  </button>
 
-              {/* Simulated Vertical Short Video Container */}
-              <div className="chal-video-viewport">
-                <img src={sub.videoUrl} alt={sub.title} className="chal-video-poster" />
-                <div className="chal-video-gradient" />
-
-                {/* Sound & Scripture Floating Chips */}
-                <div className="chal-sound-chip">
-                  <Music size={13} className="spin-slow" />
-                  <span>{sub.audioTitle}</span>
-                </div>
-
-                {sub.scripture && (
-                  <div className="chal-scripture-chip">
-                    <span>📖 {sub.scripture}</span>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={() => triggerSubmit(todayChallenge)}
+                      className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold border border-white/20 hover:bg-white/5 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Share Video / Verse
+                    </button>
+                    <button
+                      onClick={() => triggerDetail(todayChallenge.id)}
+                      className="px-3 py-2 rounded-xl text-xs font-bold border border-white/20 hover:bg-white/5 transition-all"
+                    >
+                      Details & Rules
+                    </button>
                   </div>
-                )}
-
-                {/* Floating Side Action Rail */}
-                <div className="chal-side-actions">
-                  <button
-                    type="button"
-                    className={`chal-action-bubble${isCheered ? ' active' : ''}`}
-                    onClick={() => handleCheer(sub.id)}
-                    title="Amen! Cheer with faith"
-                  >
-                    <Heart size={20} fill={isCheered ? '#ec4899' : 'none'} color={isCheered ? '#ec4899' : '#fff'} />
-                    <span className="chal-bubble-count">{sub.cheers}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="chal-action-bubble"
-                    onClick={() => showToast('Opening comments…')}
-                    title="View comments"
-                  >
-                    <MessageCircle size={20} color="#fff" />
-                    <span className="chal-bubble-count">{sub.commentsCount}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="chal-action-bubble"
-                    onClick={() => handleShare(sub)}
-                    title="Share this challenge"
-                  >
-                    <Share2 size={20} color="#fff" />
-                    <span className="chal-bubble-count">Share</span>
-                  </button>
-                </div>
-
-                {/* Bottom Overlay Text */}
-                <div className="chal-video-bottom">
-                  <h4 className="chal-submission-title">{sub.title}</h4>
-                  <p className="chal-submission-desc">{sub.description}</p>
                 </div>
               </div>
-            </article>
-          );
-        })}
-      </div>
+            </div>
+          </SectionBlock>
+        )}
 
-      {/* Submit Entry Modal */}
-      {showSubmitModal && (
-        <div className="vis-modal-backdrop" onClick={() => setShowSubmitModal(false)} role="dialog" aria-modal="true">
-          <div className="vis-modal-card neon-glow-modal submit-chal-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="submit-chal-header">
-              <div className="submit-chal-title-group">
-                <Flame size={18} className="chal-icon" />
-                <h3>Join a Faith Challenge</h3>
+        {/* BLOCK 2: MY ACTIVE CHALLENGES */}
+        {myActive.length > 0 && (
+          <SectionBlock
+            title="My Active Streaks"
+            icon={TrendingUp}
+            badge={`${myActive.length} In Progress`}
+            accent="#10b981"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {myActive.map((item) => {
+                const ch = item.challenge || item;
+                const streak = item.streak_current || 0;
+                const maxDays = ch.duration_days || 21;
+                const progressPct = Math.min(100, Math.round((streak / maxDays) * 100));
+
+                return (
+                  <div
+                    key={item.id || item.challenge_id || ch.id}
+                    className="p-4 rounded-xl border flex flex-col justify-between gap-3 group transition-all hover:border-emerald-500/50"
+                    style={{
+                      background: 'var(--surface, #1e293b)',
+                      borderColor: 'var(--border, rgba(255,255,255,0.1))',
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                          {ch.category || 'Habit'}
+                        </span>
+                        <h4
+                          onClick={() => triggerDetail(ch.id)}
+                          className="text-sm font-bold cursor-pointer hover:underline line-clamp-1"
+                        >
+                          {ch.title}
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 text-xs font-bold">
+                        <Flame className="w-3.5 h-3.5 fill-amber-400" />
+                        <span>{streak}d</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>Progress: {streak}/{maxDays} days</span>
+                        <span className="font-semibold text-white">{progressPct}%</span>
+                      </div>
+                      <ProgressBar value={progressPct} max={100} accent={ch.accent || '#10b981'} />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                      <span className="text-[10px] text-slate-400">
+                        {item.has_checked_in_today ? '✅ Checked in today' : '⏳ Needs check-in today'}
+                      </span>
+                      {item.has_checked_in_today ? (
+                        <button
+                          onClick={() => triggerDetail(ch.id)}
+                          className="text-xs text-slate-400 hover:text-white"
+                        >
+                          View rules
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => triggerCheckin(ch)}
+                          className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all"
+                        >
+                          Check In
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </SectionBlock>
+        )}
+
+        {/* BLOCK 3: TRENDING SUBMISSIONS (Reels / TikTok style vertical cards) */}
+        {submissions.length > 0 && (
+          <SectionBlock
+            title="Community Submissions"
+            icon={Play}
+            badge="Videos & Praise"
+            accent="#ec4899"
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {submissions.map((sub) => {
+                const isVoted = votedMap[sub.id];
+                const cheersCount = (sub.cheers || sub.like_count || 0) + (isVoted ? 1 : 0);
+                const isPlaying = playingVideoId === sub.id;
+
+                return (
+                  <div
+                    key={sub.id}
+                    className="group relative aspect-[9/15] rounded-2xl overflow-hidden border border-white/10 bg-black flex flex-col justify-between shadow-lg transition-all hover:scale-[1.01] hover:border-pink-500/40"
+                  >
+                    {/* Media Image / Video */}
+                    <div className="absolute inset-0">
+                      <img
+                        src={sub.thumb_url || sub.media_url || sub.videoUrl}
+                        alt={sub.caption || sub.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+                    </div>
+
+                    {/* Top Badges */}
+                    <div className="relative z-10 p-2.5 flex items-start justify-between">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-black/60 text-amber-300 border border-white/10 backdrop-blur-sm">
+                        {sub.scripture || sub.hashtag || sub.challengeTag || '#Faith'}
+                      </span>
+                      <button
+                        onClick={() => togglePlayVideo(sub.id)}
+                        aria-label={isPlaying ? 'Pause video' : 'Play video'}
+                        className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white border border-white/20 flex items-center justify-center hover:bg-black/80 transition-all"
+                      >
+                        {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-white" />}
+                      </button>
+                    </div>
+
+                    {/* Bottom Info & Cheer Action */}
+                    <div className="relative z-10 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Avatar
+                          src={sub.author?.avatar || sub.user?.avatar_url}
+                          name={sub.author?.name || sub.user?.display_name || 'Believer'}
+                          size={24}
+                        />
+                        <div className="overflow-hidden">
+                          <p className="text-xs font-bold text-white drop-shadow truncate">
+                            {sub.author?.name || sub.user?.display_name || 'Believer'}
+                          </p>
+                          {(sub.author?.branch || sub.user?.church_name) && (
+                            <p className="text-[10px] text-slate-300 truncate drop-shadow">
+                              {sub.author?.branch || sub.user?.church_name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-white/95 drop-shadow line-clamp-2">
+                        {sub.caption || sub.title || sub.description}
+                      </p>
+
+                      {sub.audioTitle && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-amber-300/90 font-mono truncate">
+                          <Music className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{sub.audioTitle}</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-1 border-t border-white/15 text-white">
+                        <button
+                          onClick={() => handleVoteSubmission(sub.id)}
+                          className="flex items-center gap-1.5 text-xs font-bold hover:scale-110 active:scale-95 transition-transform"
+                        >
+                          <Heart
+                            className={`w-4 h-4 ${
+                              isVoted ? 'fill-red-500 text-red-500' : 'text-white'
+                            }`}
+                          />
+                          <span>{cheersCount}</span>
+                        </button>
+                        <div className="flex items-center gap-1 text-[11px] text-slate-300">
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>{sub.commentsCount || sub.comment_count || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </SectionBlock>
+        )}
+
+        {/* BLOCK 4: BROWSE ALL CHALLENGES */}
+        <SectionBlock
+          title="Browse Faith Challenges"
+          icon={Layers}
+          badge={`${challenges.length} Available`}
+          accent="#8b5cf6"
+        >
+          {/* Controls: Search, Filter Chips, Sort & Layout Switcher */}
+          <div className="space-y-3 mb-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search challenges by keyword, tag or scripture..."
+                  className="w-full pl-9 pr-3 py-2 rounded-xl border bg-black/20 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  style={{ borderColor: 'var(--border, rgba(255,255,255,0.12))' }}
+                />
               </div>
-              <button
-                type="button"
-                className="submit-chal-close"
-                onClick={() => setShowSubmitModal(false)}
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
+
+              {/* Sort & Layout Switcher */}
+              <div className="flex items-center gap-2 justify-end">
+                <SortMenu
+                  options={SORT_OPTIONS}
+                  value={sort}
+                  onChange={(val) => setSort(val)}
+                />
+                <LayoutSwitcher
+                  layouts={['magazine-flat', 'compact', 'tiles']}
+                  value={layout}
+                  onChange={(val) => setLayout(val)}
+                />
+              </div>
             </div>
 
-            <form onSubmit={handleSubmitChallengeEntry} className="submit-chal-form">
-              <label className="chal-form-field">
-                <span className="chal-form-label">Select Challenge *</span>
-                <select
-                  className="onb-input"
-                  value={submitForm.challengeId}
-                  onChange={(e) => setSubmitForm({ ...submitForm, challengeId: e.target.value })}
-                >
-                  {INITIAL_CHALLENGES.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.icon} {c.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="chal-form-field">
-                <span className="chal-form-label">Submission Title *</span>
-                <input
-                  type="text"
-                  className="onb-input"
-                  required
-                  placeholder="e.g. Way Maker acoustic chorus in our dorm room"
-                  value={submitForm.title}
-                  onChange={(e) => setSubmitForm({ ...submitForm, title: e.target.value })}
-                />
-              </label>
-
-              <label className="chal-form-field">
-                <span className="chal-form-label">Scripture Reference (optional)</span>
-                <input
-                  type="text"
-                  className="onb-input"
-                  placeholder="e.g. Romans 8:28 or Psalm 23"
-                  value={submitForm.scripture}
-                  onChange={(e) => setSubmitForm({ ...submitForm, scripture: e.target.value })}
-                />
-              </label>
-
-              <label className="chal-form-field">
-                <span className="chal-form-label">Your Campus CU or Youth Fellowship</span>
-                <input
-                  type="text"
-                  className="onb-input"
-                  placeholder="e.g. KU Christian Union or CITAM Youth"
-                  value={submitForm.branch}
-                  onChange={(e) => setSubmitForm({ ...submitForm, branch: e.target.value })}
-                />
-              </label>
-
-              <label className="chal-form-field">
-                <span className="chal-form-label">Caption & Testimony Details</span>
-                <textarea
-                  className="onb-input"
-                  rows={3}
-                  placeholder="Share a short word of encouragement with the youth and teens across Shammah…"
-                  value={submitForm.description}
-                  onChange={(e) => setSubmitForm({ ...submitForm, description: e.target.value })}
-                />
-              </label>
-
-              <div className="submit-chal-actions">
-                <button
-                  type="button"
-                  className="cx-btn cx-btn-ghost"
-                  onClick={() => setShowSubmitModal(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="cx-btn cx-btn-primary">
-                  Publish to Challenge Feed 🚀
-                </button>
-              </div>
-            </form>
+            {/* Category Chips */}
+            <FilterChips
+              chips={CATEGORY_CHIPS}
+              activeId={category}
+              onChange={(id) => setCategory(id)}
+              accent="#8b5cf6"
+            />
           </div>
-        </div>
-      )}
+
+          {/* List States */}
+          {loading ? (
+            <SkeletonLayout count={4} layout={layout} />
+          ) : error ? (
+            <ErrorState message={error} onRetry={() => fetchData(true)} />
+          ) : challenges.length === 0 ? (
+            <EmptyState
+              title="No challenges found"
+              description="Try selecting another category or clearing your search term."
+              actionLabel="Reset Filters"
+              onAction={() => {
+                setCategory('All');
+                setSearch('');
+              }}
+            />
+          ) : (
+            <div
+              className={
+                layout === 'compact'
+                  ? 'space-y-2'
+                  : layout === 'tiles'
+                  ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5'
+                  : 'grid grid-cols-1 sm:grid-cols-2 gap-4'
+              }
+            >
+              {challenges.map((ch) => {
+                const accent = ch.accent || '#8b5cf6';
+                const participantCount = ch.participants_count || ch.participantsCount || 0;
+
+                if (layout === 'compact') {
+                  return (
+                    <div
+                      key={ch.id}
+                      onClick={() => triggerDetail(ch.id)}
+                      className="p-3 rounded-xl border flex items-center justify-between gap-3 cursor-pointer hover:border-amber-400/40 transition-all group"
+                      style={{
+                        background: 'var(--surface, #1e293b)',
+                        borderColor: 'var(--border, rgba(255,255,255,0.08))',
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+                          style={{ background: `${accent}22`, color: accent }}
+                        >
+                          <Flame className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold line-clamp-1 group-hover:text-amber-400 transition-colors">
+                              {ch.title}
+                            </span>
+                            <span className="text-[10px] font-mono text-slate-400">
+                              {ch.tag}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 line-clamp-1">
+                            {ch.description || ch.tagline}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="text-xs text-slate-400 font-semibold">
+                          {participantCount} joined
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerCheckin(ch);
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow-sm"
+                          style={{ background: accent }}
+                        >
+                          Check In
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <AccentCard
+                    key={ch.id}
+                    accent={accent}
+                    className="cursor-pointer group flex flex-col justify-between"
+                    onClick={() => triggerDetail(ch.id)}
+                  >
+                    <div className="space-y-3">
+                      {/* Card Cover */}
+                      <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-900">
+                        <img
+                          src={ch.cover_url || 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=600'}
+                          alt={ch.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+                        <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white uppercase tracking-wider"
+                            style={{ background: accent }}
+                          >
+                            {ch.category || 'Habit'}
+                          </span>
+                          {ch.badge && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              {ch.badge}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-xs text-white drop-shadow">
+                          <span className="font-mono text-amber-300 font-semibold">{ch.tag}</span>
+                          <span className="flex items-center gap-1 text-[11px]">
+                            <Clock className="w-3 h-3" />
+                            {ch.duration_days ? `${ch.duration_days} Days` : 'Habit'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Title & Tagline */}
+                      <div>
+                        <h4 className="text-base font-bold line-clamp-1 group-hover:text-amber-400 transition-colors">
+                          {ch.title}
+                        </h4>
+                        <p className="text-xs text-slate-300 line-clamp-2 mt-1 leading-relaxed">
+                          {ch.description || ch.tagline}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Card Actions & Stats */}
+                    <div className="pt-3 mt-3 border-t border-white/10 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <Users className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{participantCount} participants</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerCheckin(ch);
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-md transition-transform active:scale-95"
+                          style={{ background: accent }}
+                        >
+                          Check In
+                        </button>
+                      </div>
+                    </div>
+                  </AccentCard>
+                );
+              })}
+            </div>
+          )}
+        </SectionBlock>
+
+        {/* BLOCK 5: COMMUNITY LEADERBOARD */}
+        <SectionBlock
+          title="Community Devotion Leaderboard"
+          icon={Trophy}
+          badge="Top Believers"
+          accent="#f59e0b"
+        >
+          <div
+            className="rounded-2xl border p-4 sm:p-5"
+            style={{
+              background: 'var(--surface, #1e293b)',
+              borderColor: 'var(--border, rgba(255,255,255,0.1))',
+            }}
+          >
+            {leaderboard.length === 0 ? (
+              <p className="text-center py-6 text-xs text-slate-400">
+                Join a challenge and check in daily to appear on the leaderboard!
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {leaderboard.map((item, index) => {
+                  const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : null;
+
+                  return (
+                    <div
+                      key={item.user_id || index}
+                      className="flex items-center justify-between p-3 rounded-xl border bg-black/10 border-white/5 hover:border-amber-400/30 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 text-center font-bold text-xs">
+                          {medal ? <span className="text-sm">{medal}</span> : `#${index + 1}`}
+                        </div>
+                        <Avatar
+                          src={item.user?.avatar_url || item.avatar}
+                          name={item.user?.display_name || item.name || 'Believer'}
+                          size={32}
+                        />
+                        <div>
+                          <p className="text-xs font-bold text-white">
+                            {item.user?.display_name || item.name || 'Believer'}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                            <span className="flex items-center gap-0.5 text-amber-300">
+                              <Flame className="w-3 h-3 fill-amber-300" />
+                              {item.streak_current || 0}d streak
+                            </span>
+                            <span>·</span>
+                            <span>{item.user?.church_name || 'Kenya Believers'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-xs font-black text-amber-400">
+                          {item.points || 0} pts
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </SectionBlock>
+
+        {/* BLOCK 6: COMPLETED & BADGES EARNED */}
+        <SectionBlock
+          title="Milestone Badges"
+          icon={Award}
+          badge="Streak Rewards"
+          accent="#10b981"
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              {
+                id: 'spark',
+                days: 3,
+                title: 'Spiritual Spark',
+                description: 'Complete 3 consecutive days of devotion.',
+                icon: '⚡',
+                unlocked: activeStreaksCount >= 3,
+                color: '#f59e0b',
+              },
+              {
+                id: 'steadfast',
+                days: 7,
+                title: 'Steadfast Believer',
+                description: 'Hold a 7-day uninterrupted streak.',
+                icon: '🛡️',
+                unlocked: activeStreaksCount >= 7,
+                color: '#0ea5e9',
+              },
+              {
+                id: 'overcomer',
+                days: 21,
+                title: 'Overcomer',
+                description: '21 days of unbroken faith habit formation.',
+                icon: '🦅',
+                unlocked: activeStreaksCount >= 21,
+                color: '#8b5cf6',
+              },
+              {
+                id: 'champion',
+                days: 40,
+                title: 'Kingdom Champion',
+                description: '40 days of prayer and fasting like Christ.',
+                icon: '👑',
+                unlocked: activeStreaksCount >= 40,
+                color: '#ec4899',
+              },
+            ].map((badge) => (
+              <div
+                key={badge.id}
+                className={`p-4 rounded-2xl border flex flex-col items-center text-center gap-2 transition-all ${
+                  badge.unlocked
+                    ? 'border-amber-400/40 bg-gradient-to-b from-amber-500/10 to-transparent shadow-md'
+                    : 'border-white/10 bg-white/[0.02] opacity-60'
+                }`}
+              >
+                <div
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-inner"
+                  style={{
+                    background: badge.unlocked ? `${badge.color}25` : 'rgba(255,255,255,0.05)',
+                  }}
+                >
+                  <span>{badge.icon}</span>
+                </div>
+                <div>
+                  <h5 className="text-xs font-bold text-white">{badge.title}</h5>
+                  <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                    {badge.description}
+                  </p>
+                </div>
+                <div className="mt-auto pt-1">
+                  {badge.unlocked ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 flex items-center gap-1">
+                      <Check className="w-3 h-3 stroke-[3]" />
+                      Unlocked!
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {activeStreaksCount}/{badge.days} days
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionBlock>
+      </ContentLayout>
+
+      {/* MODALS */}
+      {/* 1. Daily Checkin Sheet Modal */}
+      <ChallengeCheckinModal
+        isOpen={checkinModalOpen}
+        onClose={() => setCheckinModalOpen(false)}
+        challenge={selectedCheckinChallenge}
+        currentUser={currentUser}
+        onCheckinSuccess={() => {
+          fetchData(true);
+        }}
+      />
+
+      {/* 2. Video / Verse Submission Modal */}
+      <ChallengeSubmitModal
+        isOpen={submitModalOpen}
+        onClose={() => setSubmitModalOpen(false)}
+        challenge={selectedSubmitChallenge}
+        currentUser={currentUser}
+        onSubmitted={() => {
+          fetchData(true);
+        }}
+      />
+
+      {/* 3. Creation Wizard Modal */}
+      <ChallengeCreatorModal
+        isOpen={creatorModalOpen}
+        onClose={() => setCreatorModalOpen(false)}
+        currentUser={currentUser}
+        onCreated={() => {
+          fetchData(true);
+        }}
+      />
+
+      {/* 4. Full Challenge Detail & Calendar Modal */}
+      <ChallengeDetailModal
+        isOpen={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        challengeId={selectedDetailChallengeId}
+        currentUser={currentUser}
+        onOpenCheckin={(ch) => {
+          setDetailModalOpen(false);
+          triggerCheckin(ch);
+        }}
+        onOpenSubmit={(ch) => {
+          setDetailModalOpen(false);
+          triggerSubmit(ch);
+        }}
+      />
     </div>
   );
 }
