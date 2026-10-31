@@ -2,7 +2,7 @@
 -- Shammah Migration: 20261104_fundraisers.sql
 -- Purpose: Kingdom Fundraisers & Community Giving Hub with M-Pesa integration,
 --          milestones, updates, donor wall, withdrawals, and atomic credit RPC.
--- Safe to run multiple times (100% idempotent).
+-- 100% IDEMPOTENT & SAFE ON EXISTING TABLES.
 -- =============================================================================
 
 -- Ensure role grants on public schema
@@ -13,34 +13,67 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres, service_role;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO postgres, service_role;
 GRANT ALL PRIVILEGES ON ALL ROUTINES IN SCHEMA public TO postgres, service_role;
 
--- 1. FUNDRAISERS TABLE
+-- 1. BASE TABLE DEFINITIONS
 CREATE TABLE IF NOT EXISTS public.fundraisers (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  owner_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-  church_id uuid REFERENCES public.churches(id) ON DELETE SET NULL,
-  title text NOT NULL,
-  story_md text NOT NULL DEFAULT '',
-  cover_url text,
-  gallery jsonb NOT NULL DEFAULT '[]'::jsonb,
-  category text NOT NULL DEFAULT 'Community',
-  goal_kes bigint NOT NULL CHECK (goal_kes >= 100),
-  raised_kes bigint NOT NULL DEFAULT 0 CHECK (raised_kes >= 0),
-  donors_count integer NOT NULL DEFAULT 0 CHECK (donors_count >= 0),
-  deadline date,
-  status text NOT NULL DEFAULT 'active' CHECK (status IN ('draft', 'pending_review', 'active', 'paused', 'completed', 'rejected')),
-  beneficiary_name text,
-  verified boolean NOT NULL DEFAULT false,
-  accent text DEFAULT '#10b981',
-  location text,
-  verification_doc_url text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid()
 );
 
-ALTER TABLE IF EXISTS public.fundraisers
-  ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS church_id uuid REFERENCES public.churches(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS title text,
+CREATE TABLE IF NOT EXISTS public.fundraiser_donations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+);
+
+CREATE TABLE IF NOT EXISTS public.fundraiser_updates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+);
+
+CREATE TABLE IF NOT EXISTS public.fundraiser_milestones (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+);
+
+CREATE TABLE IF NOT EXISTS public.fundraiser_withdrawals (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+);
+
+CREATE TABLE IF NOT EXISTS public.fundraiser_reports (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+);
+
+-- 2. MIGRATE / ENSURE owner_id ON fundraisers (Handles cases where table existed with user_id/author_id/created_by)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'fundraisers' AND column_name = 'owner_id'
+  ) THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'fundraisers' AND column_name = 'user_id'
+    ) THEN
+      ALTER TABLE public.fundraisers ADD COLUMN owner_id uuid;
+      UPDATE public.fundraisers SET owner_id = user_id WHERE owner_id IS NULL;
+    ELSIF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'fundraisers' AND column_name = 'author_id'
+    ) THEN
+      ALTER TABLE public.fundraisers ADD COLUMN owner_id uuid;
+      UPDATE public.fundraisers SET owner_id = author_id WHERE owner_id IS NULL;
+    ELSIF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'fundraisers' AND column_name = 'created_by'
+    ) THEN
+      ALTER TABLE public.fundraisers ADD COLUMN owner_id uuid;
+      UPDATE public.fundraisers SET owner_id = created_by WHERE owner_id IS NULL;
+    ELSE
+      ALTER TABLE public.fundraisers ADD COLUMN owner_id uuid;
+    END IF;
+  END IF;
+END $$;
+
+-- 3. ENSURE ALL COLUMNS EXIST ON fundraisers
+ALTER TABLE public.fundraisers
+  ADD COLUMN IF NOT EXISTS owner_id uuid,
+  ADD COLUMN IF NOT EXISTS church_id uuid,
+  ADD COLUMN IF NOT EXISTS title text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS story_md text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS cover_url text,
   ADD COLUMN IF NOT EXISTS gallery jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -58,25 +91,10 @@ ALTER TABLE IF EXISTS public.fundraisers
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
   ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
--- 2. FUNDRAISER DONATIONS TABLE
-CREATE TABLE IF NOT EXISTS public.fundraiser_donations (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  fundraiser_id uuid NOT NULL REFERENCES public.fundraisers(id) ON DELETE CASCADE,
-  donor_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-  display_name text,
-  anonymous boolean NOT NULL DEFAULT false,
-  amount_kes bigint NOT NULL CHECK (amount_kes >= 10),
-  message text,
-  phone text,
-  mpesa_transaction_id text,
-  checkout_request_id text,
-  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'succeeded', 'failed')),
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE IF EXISTS public.fundraiser_donations
-  ADD COLUMN IF NOT EXISTS fundraiser_id uuid REFERENCES public.fundraisers(id) ON DELETE CASCADE,
-  ADD COLUMN IF NOT EXISTS donor_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+-- 4. ENSURE ALL COLUMNS EXIST ON fundraiser_donations
+ALTER TABLE public.fundraiser_donations
+  ADD COLUMN IF NOT EXISTS fundraiser_id uuid,
+  ADD COLUMN IF NOT EXISTS donor_id uuid,
   ADD COLUMN IF NOT EXISTS display_name text,
   ADD COLUMN IF NOT EXISTS anonymous boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS amount_kes bigint NOT NULL DEFAULT 10,
@@ -87,74 +105,42 @@ ALTER TABLE IF EXISTS public.fundraiser_donations
   ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pending',
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 
--- 3. FUNDRAISER UPDATES TABLE
-CREATE TABLE IF NOT EXISTS public.fundraiser_updates (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  fundraiser_id uuid NOT NULL REFERENCES public.fundraisers(id) ON DELETE CASCADE,
-  author_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-  body text NOT NULL,
-  media_url text,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE IF EXISTS public.fundraiser_updates
-  ADD COLUMN IF NOT EXISTS fundraiser_id uuid REFERENCES public.fundraisers(id) ON DELETE CASCADE,
-  ADD COLUMN IF NOT EXISTS author_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+-- 5. ENSURE ALL COLUMNS EXIST ON fundraiser_updates
+ALTER TABLE public.fundraiser_updates
+  ADD COLUMN IF NOT EXISTS fundraiser_id uuid,
+  ADD COLUMN IF NOT EXISTS author_id uuid,
   ADD COLUMN IF NOT EXISTS body text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS media_url text,
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 
--- 4. FUNDRAISER MILESTONES TABLE
-CREATE TABLE IF NOT EXISTS public.fundraiser_milestones (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  fundraiser_id uuid NOT NULL REFERENCES public.fundraisers(id) ON DELETE CASCADE,
-  amount_kes bigint NOT NULL CHECK (amount_kes > 0),
-  label text NOT NULL,
-  reached_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE IF EXISTS public.fundraiser_milestones
-  ADD COLUMN IF NOT EXISTS fundraiser_id uuid REFERENCES public.fundraisers(id) ON DELETE CASCADE,
+-- 6. ENSURE ALL COLUMNS EXIST ON fundraiser_milestones
+ALTER TABLE public.fundraiser_milestones
+  ADD COLUMN IF NOT EXISTS fundraiser_id uuid,
   ADD COLUMN IF NOT EXISTS amount_kes bigint NOT NULL DEFAULT 1000,
   ADD COLUMN IF NOT EXISTS label text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS reached_at timestamptz,
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 
--- 5. FUNDRAISER WITHDRAWALS TABLE
-CREATE TABLE IF NOT EXISTS public.fundraiser_withdrawals (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  fundraiser_id uuid NOT NULL REFERENCES public.fundraisers(id) ON DELETE CASCADE,
-  amount_kes bigint NOT NULL CHECK (amount_kes >= 100),
-  requested_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-  mpesa_payout_phone text NOT NULL,
-  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'disbursed')),
-  admin_note text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE IF EXISTS public.fundraiser_withdrawals
-  ADD COLUMN IF NOT EXISTS fundraiser_id uuid REFERENCES public.fundraisers(id) ON DELETE CASCADE,
+-- 7. ENSURE ALL COLUMNS EXIST ON fundraiser_withdrawals
+ALTER TABLE public.fundraiser_withdrawals
+  ADD COLUMN IF NOT EXISTS fundraiser_id uuid,
   ADD COLUMN IF NOT EXISTS amount_kes bigint NOT NULL DEFAULT 100,
-  ADD COLUMN IF NOT EXISTS requested_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS requested_by uuid,
   ADD COLUMN IF NOT EXISTS mpesa_payout_phone text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pending',
   ADD COLUMN IF NOT EXISTS admin_note text,
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
   ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
--- 6. FUNDRAISER REPORTS TABLE
-CREATE TABLE IF NOT EXISTS public.fundraiser_reports (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  fundraiser_id uuid NOT NULL REFERENCES public.fundraisers(id) ON DELETE CASCADE,
-  reporter_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-  reason text NOT NULL,
-  details text,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+-- 8. ENSURE ALL COLUMNS EXIST ON fundraiser_reports
+ALTER TABLE public.fundraiser_reports
+  ADD COLUMN IF NOT EXISTS fundraiser_id uuid,
+  ADD COLUMN IF NOT EXISTS reporter_id uuid,
+  ADD COLUMN IF NOT EXISTS reason text NOT NULL DEFAULT 'general',
+  ADD COLUMN IF NOT EXISTS details text,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 
--- 7. PERFORMANCE INDEXES
+-- 9. PERFORMANCE INDEXES
 CREATE INDEX IF NOT EXISTS idx_fundraisers_status_category ON public.fundraisers (status, category, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_fundraisers_owner_id ON public.fundraisers (owner_id);
 CREATE INDEX IF NOT EXISTS idx_fundraisers_church_id ON public.fundraisers (church_id);
@@ -164,8 +150,7 @@ CREATE INDEX IF NOT EXISTS idx_fundraiser_updates_fundraiser ON public.fundraise
 CREATE INDEX IF NOT EXISTS idx_fundraiser_milestones_fundraiser ON public.fundraiser_milestones (fundraiser_id, amount_kes ASC);
 CREATE INDEX IF NOT EXISTS idx_fundraiser_withdrawals_fundraiser ON public.fundraiser_withdrawals (fundraiser_id, status);
 
--- 8. ATOMIC DONATION CREDIT FUNCTION
--- Called exclusively when M-Pesa confirms a transaction.
+-- 10. ATOMIC DONATION CREDIT FUNCTION
 CREATE OR REPLACE FUNCTION public.credit_donation(
   p_donation_id uuid,
   p_mpesa_receipt text,
@@ -193,7 +178,6 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Donation record not found.');
   END IF;
 
-  -- If already succeeded, return idempotent success
   IF v_donation.status = 'succeeded' THEN
     RETURN jsonb_build_object('success', true, 'status', 'already_succeeded');
   END IF;
@@ -216,10 +200,10 @@ BEGIN
   WHERE id = p_donation_id;
 
   -- 4. Calculate new totals atomically
-  v_new_raised := v_fundraiser.raised_kes + p_amount_kes;
-  v_new_donors := v_fundraiser.donors_count + 1;
+  v_new_raised := COALESCE(v_fundraiser.raised_kes, 0) + p_amount_kes;
+  v_new_donors := COALESCE(v_fundraiser.donors_count, 0) + 1;
 
-  IF v_new_raised >= v_fundraiser.goal_kes AND v_fundraiser.status = 'active' THEN
+  IF v_fundraiser.goal_kes IS NOT NULL AND v_new_raised >= v_fundraiser.goal_kes AND v_fundraiser.status = 'active' THEN
     v_completed := true;
   END IF;
 
@@ -232,14 +216,14 @@ BEGIN
     updated_at = now()
   WHERE id = v_fundraiser.id;
 
-  -- 5. Check and activate milestones reached
+  -- 5. Activate milestones reached
   UPDATE public.fundraiser_milestones
   SET reached_at = now()
   WHERE fundraiser_id = v_fundraiser.id
     AND amount_kes <= v_new_raised
     AND reached_at IS NULL;
 
-  -- 6. Also insert into mpesa_transactions ledger if table exists
+  -- 6. Insert into mpesa_transactions ledger if table exists
   BEGIN
     INSERT INTO public.mpesa_transactions (
       user_id,
@@ -263,7 +247,7 @@ BEGIN
       'completed'
     );
   EXCEPTION WHEN OTHERS THEN
-    -- Ledger insert is auxiliary, do not abort transaction
+    -- Ledger insert is auxiliary
   END;
 
   RETURN jsonb_build_object(
@@ -277,7 +261,7 @@ BEGIN
 END;
 $$;
 
--- 9. ENABLE ROW LEVEL SECURITY
+-- 11. ENABLE ROW LEVEL SECURITY
 ALTER TABLE public.fundraisers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fundraiser_donations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fundraiser_updates ENABLE ROW LEVEL SECURITY;
@@ -285,10 +269,11 @@ ALTER TABLE public.fundraiser_milestones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fundraiser_withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fundraiser_reports ENABLE ROW LEVEL SECURITY;
 
--- 10. RLS POLICIES
+-- 12. RLS POLICIES (All referencing existing columns guaranteed)
 
 -- Fundraisers Policies
 DROP POLICY IF EXISTS "Public can view active or completed fundraisers" ON public.fundraisers;
+DROP POLICY IF EXISTS "Public can view active fundraisers" ON public.fundraisers;
 CREATE POLICY "Public can view active or completed fundraisers"
   ON public.fundraisers FOR SELECT
   USING (
@@ -386,7 +371,7 @@ CREATE POLICY "Owners and admins can insert milestones"
     )
   );
 
--- Withdrawals Policies: strictly private to owner and admins
+-- Withdrawals Policies
 DROP POLICY IF EXISTS "Only campaign owners and admins can view withdrawals" ON public.fundraiser_withdrawals;
 CREATE POLICY "Only campaign owners and admins can view withdrawals"
   ON public.fundraiser_withdrawals FOR SELECT
