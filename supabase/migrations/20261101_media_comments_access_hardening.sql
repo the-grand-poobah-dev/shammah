@@ -98,7 +98,12 @@ as $$
 declare
   v_item_id uuid;
 begin
-  v_item_id := coalesce(new.item_id, old.item_id);
+  if tg_op = 'DELETE' then
+    v_item_id := old.item_id;
+  else
+    v_item_id := new.item_id;
+  end if;
+
   update public.media_items
     set comment_count = (
       select count(*)::integer
