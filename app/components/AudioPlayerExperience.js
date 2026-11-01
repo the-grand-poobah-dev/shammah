@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Heart, Bookmark, Download, Share2,
-  ListMusic, X, ChevronDown, Repeat, Shuffle, Timer, Gauge, Volume2,
+  ListMusic, X, ChevronDown, Repeat, Shuffle, Timer, Gauge, Volume2, FileText,
   VolumeX, Trash2, ArrowUp, ArrowDown, Music2, ExternalLink, ListPlus,
 } from 'lucide-react';
 import { AudioPlayerProvider, useAudioPlayer } from '../lib/audioPlayer';
@@ -33,6 +33,10 @@ function PlayerInterface() {
   const [showQueue, setShowQueue] = useState(false);
   const [draggingQueueIndex, setDraggingQueueIndex] = useState(null);
   const [showTimer, setShowTimer] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [transcriptText, setTranscriptText] = useState('');
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
+  const [transcriptError, setTranscriptError] = useState('');
   const [copied, setCopied] = useState(false);
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
   const [ownedPlaylists, setOwnedPlaylists] = useState([]);
@@ -85,6 +89,34 @@ function PlayerInterface() {
     const id = window.setTimeout(() => setCopied(false), 1800);
     return () => window.clearTimeout(id);
   }, [copied]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!showTranscript || !currentTrack?.transcript_url) {
+      setTranscriptText('');
+      setTranscriptError('');
+      return () => { cancelled = true; };
+    }
+    setTranscriptLoading(true);
+    setTranscriptError('');
+    window.fetch(currentTrack.transcript_url)
+      .then((response) => {
+        if (!response.ok) throw new Error('Transcript could not be loaded.');
+        return response.text();
+      })
+      .then((raw) => {
+        if (cancelled) return;
+        const clean = raw.split('\n')
+          .filter((line) => !line.startsWith('WEBVTT') && !line.includes('-->') && !/^\d+$/.test(line.trim()))
+          .map((line) => line.replace(/<[^>]*>/g, '').trim())
+          .filter(Boolean)
+          .join('\n\n');
+        setTranscriptText(clean || raw.trim());
+      })
+      .catch((error) => { if (!cancelled) setTranscriptError(error.message || 'Transcript could not be loaded.'); })
+      .finally(() => { if (!cancelled) setTranscriptLoading(false); });
+    return () => { cancelled = true; };
+  }, [showTranscript, currentTrack?.id, currentTrack?.transcript_url]);
 
   const shareTrack = async () => {
     if (!currentTrack) return;
@@ -167,6 +199,7 @@ function PlayerInterface() {
                 <button type="button" onClick={toggleSaveTrack} className={isSaved ? 'is-active' : ''}><Bookmark size={18} />{isSaved ? 'Saved' : 'Save'}</button>
                 <button type="button" onClick={() => setShowPlaylistPicker((v) => !v)} className={showPlaylistPicker ? 'is-active' : ''}><ListPlus size={18} />Playlist</button>
                 <button type="button" onClick={toggleOfflineTrack} className={isOfflineTrack ? 'is-active' : ''}><Download size={18} />{isOfflineTrack ? 'Offline ready' : 'Download'}</button>
+                {currentTrack.transcript_url && <button type="button" onClick={() => setShowTranscript((v) => !v)} className={showTranscript ? 'is-active' : ''} aria-expanded={showTranscript}><FileText size={18} />Transcript</button>}
                 <button type="button" onClick={shareTrack}><Share2 size={18} />{copied ? 'Link copied' : 'Share'}</button>
                 <button type="button" onClick={() => setShowTimer((v) => !v)} className={sleepTimerMinutes ? 'is-active' : ''}><Timer size={18} />{sleepTimerSecondsLeft ? `${Math.ceil(sleepTimerSecondsLeft / 60)} min` : sleepTimerMinutes === 'end' ? 'End of track' : 'Sleep timer'}</button>
                 <label><Gauge size={18} /><span>Speed</span><select aria-label="Playback speed" value={playbackSpeed} onChange={(e) => setSpeed(Number(e.target.value))}>{[0.75, 1, 1.25, 1.5, 1.75, 2].map((speed) => <option key={speed} value={speed}>{speed}×</option>)}</select></label>
@@ -182,6 +215,16 @@ function PlayerInterface() {
                 <button type="button" onClick={() => { setSleepTimer('end'); setShowTimer(false); }}>End of track</button>
                 <button type="button" onClick={() => { setSleepTimer(null); setShowTimer(false); }}>Off</button>
               </div>}
+
+              {showTranscript && currentTrack.transcript_url && (
+                <section aria-label="Audio transcript" style={{ padding: '14px', border: '1px solid var(--border)', borderRadius: '14px', background: 'var(--surface-muted, rgba(255,255,255,.03))' }}>
+                  <h3 style={{ margin: '0 0 10px', fontSize: '14px' }}>Transcript</h3>
+                  {transcriptLoading ? <p role="status">Loading transcript…</p>
+                    : transcriptError ? <p role="alert">{transcriptError}</p>
+                    : <div style={{ maxHeight: '260px', overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.65, fontSize: '13px', color: 'var(--ink)' }}>{transcriptText || 'This transcript is empty.'}</div>}
+                  <a href={currentTrack.transcript_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: '10px', fontSize: '12px', color: 'var(--teal)' }}>Open transcript file</a>
+                </section>
+              )}
 
               <div className="shammah-audio-queue">
                 <button type="button" className="shammah-audio-queue-heading" onClick={() => setShowQueue((v) => !v)} aria-expanded={showQueue}>
