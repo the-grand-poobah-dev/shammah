@@ -419,26 +419,28 @@ export function AudioPlayerProvider({ children }) {
 
   const removeFromQueue = useCallback((index) => {
     setQueue((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      // Keep the currently playing item in the queue until playback changes.
+      if (index === queueIndex && prev[index]?.id === currentTrack?.id) return prev;
       const copy = [...prev];
       copy.splice(index, 1);
+      setQueueIndex((curr) => index < curr ? curr - 1 : curr);
       return copy;
     });
-    setQueueIndex((curr) => {
-      if (index === curr) {
-        return Math.max(0, curr - 1);
-      }
-      if (index < curr) {
-        return curr - 1;
-      }
-      return curr;
-    });
-  }, []);
+  }, [queueIndex, currentTrack]);
 
   const reorderQueue = useCallback((fromIndex, toIndex) => {
     setQueue((prev) => {
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= prev.length || toIndex >= prev.length || fromIndex === toIndex) return prev;
       const copy = [...prev];
       const [moved] = copy.splice(fromIndex, 1);
       copy.splice(toIndex, 0, moved);
+      setQueueIndex((curr) => {
+        if (curr === fromIndex) return toIndex;
+        if (fromIndex < curr && toIndex >= curr) return curr - 1;
+        if (fromIndex > curr && toIndex <= curr) return curr + 1;
+        return curr;
+      });
       return copy;
     });
   }, []);
