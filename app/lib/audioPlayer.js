@@ -67,7 +67,15 @@ export function AudioPlayerProvider({ children }) {
       return;
     }
 
-    setIsOfflineTrack(isItemSavedOffline(currentTrack.id));
+    const syncOfflineState = async () => {
+      if (!isItemSavedOffline(currentTrack.id)) {
+        setIsOfflineTrack(false);
+        return;
+      }
+      const cachedBlob = await getOfflineAudioBlob(currentTrack.id);
+      setIsOfflineTrack(Boolean(cachedBlob));
+    };
+    syncOfflineState();
     setIsLiked(Boolean(currentTrack.is_liked));
     setLikeCount(currentTrack.like_count || 0);
     setIsSaved(Boolean(currentTrack.is_saved));
@@ -75,7 +83,7 @@ export function AudioPlayerProvider({ children }) {
     // Listen for external offline updates
     function handleOfflineUpdated(e) {
       if (e.detail?.id === currentTrack.id) {
-        setIsOfflineTrack(isItemSavedOffline(currentTrack.id));
+        syncOfflineState();
       }
     }
 
