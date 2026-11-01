@@ -195,6 +195,8 @@ function RailLayout({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onPointerLeave={onPointerUp}
         tabIndex={0}
         role="region"
         aria-label="Horizontal content rail"
