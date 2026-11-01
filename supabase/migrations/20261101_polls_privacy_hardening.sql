@@ -17,8 +17,7 @@ drop policy if exists "poll options readable by signed-in users" on public.poll_
 
 -- No browser role needs direct table SELECT. The API uses the server-side key and
 -- returns only data allowed by poll visibility, anonymity, and quiz reveal settings.
-revoke select on table public.poll_options from anon, authenticated;
-revoke select on table public.poll_votes from anon, authenticated;
-revoke select on table public.quiz_scores from anon, authenticated;
+revoke all privileges on table public.poll_options, public.poll_votes, public.quiz_scores
+  from anon, authenticated;
 
 commit;
