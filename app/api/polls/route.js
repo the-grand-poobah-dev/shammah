@@ -75,8 +75,6 @@ async function canViewPoll(supa, poll, viewerId) {
   }
 
   if (visibility === 'church') {
-    const allowedChurchIds = new Set();
-    if (poll.church_id) allowedChurchIds.add(String(poll.church_id));
     const [{ data: profile }, { data: memberships }] = await Promise.all([
       supa.client.from('profiles').select('church_id').eq('id', viewerId).maybeSingle(),
       supa.client.from('church_members').select('church_id').eq('user_id', viewerId),
