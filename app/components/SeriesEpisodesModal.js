@@ -42,7 +42,7 @@ export default function SeriesEpisodesModal({ series, isOpen, onClose }) {
     if (!series?.id || !isOpen) return;
 
     setLoading(true);
-    listMedia({ kind: 'audio', seriesId: series.id, limit: 50 }).then((res) => {
+    listMedia({ kind: 'audio', seriesId: series.id, limit: 50 }).then(async (res) => {
       // Sort episodes by episode_no ascending
       const sorted = (res.data || []).sort((a, b) => (a.episode_no || 0) - (b.episode_no || 0));
       setEpisodes(sorted);
