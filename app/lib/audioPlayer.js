@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { saveProgress, getProgress, toggleLike as apiToggleLike, toggleSave as apiToggleSave } from './data/mediaApi';
+import { saveProgress, recordView, toggleLike as apiToggleLike, toggleSave as apiToggleSave } from './data/mediaApi';
 import { saveOfflineItem, removeOfflineItem, isItemSavedOffline } from './offlineSyncManager';
 
 const AudioPlayerContext = createContext(null);
@@ -232,6 +232,8 @@ export function AudioPlayerProvider({ children }) {
 
     setCurrentTrack(track);
     setIsLoading(true);
+    // Persist the play event through the existing visibility-aware media RPC.
+    recordView(track.id, 0).catch(() => {});
 
     if (audioRef.current) {
       const src = track.media_url || track.audio_url;
