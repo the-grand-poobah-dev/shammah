@@ -69,6 +69,18 @@ export async function enrollInCourse({ courseId, userId, userName, mpesaReceipt 
   return data;
 }
 
+export async function submitCourseQuiz({ lessonId, answers }) {
+  const headers = await getAuthHeaders();
+  const res = await fetch('/api/courses', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ action: 'submit_quiz', lessonId, answers })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Could not submit quiz.');
+  return data;
+}
+
 export async function completeCourseLesson({
   courseId,
   lessonId,
