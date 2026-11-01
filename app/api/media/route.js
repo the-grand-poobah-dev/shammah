@@ -50,6 +50,7 @@ export async function GET(request) {
     const sort = searchParams.get('sort') || 'recent';
     const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '20', 10) || 20, 1), 50);
     const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0);
+    const cursor = searchParams.get('cursor') || '';
     const itemId = searchParams.get('id') || undefined;
 
     const supabase = getSupabasePublicClient();
@@ -134,6 +135,7 @@ export async function GET(request) {
     if (cats?.length) q = q.in('category', cats);
 
     if (query) q = q.ilike('title', '%' + query.replace(/[%_\\]/g, '') + '%');
+    if (cursor && sort === 'recent') q = q.lt('published_at', cursor);
 
     if (action === 'trending' || sort === 'trending' || sort === 'views') {
       q = q.order('view_count', { ascending: false })
