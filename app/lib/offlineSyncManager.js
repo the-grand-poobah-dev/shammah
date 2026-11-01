@@ -92,6 +92,78 @@ export function getOfflineItems() {
 // Compatibility alias for components that import saveForOffline
 export const saveForOffline = (item, type) => saveOfflineItem(item, type);
 
+const OFFLINE_AUDIO_DB = 'shammah_offline_audio_v1';
+const OFFLINE_AUDIO_STORE = 'audio';
+
+function openOfflineAudioDb() {
+  if (typeof indexedDB === 'undefined') return Promise.reject(new Error('Offline storage is not supported by this browser.'));
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(OFFLINE_AUDIO_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(OFFLINE_AUDIO_STORE)) db.createObjectStore(OFFLINE_AUDIO_STORE, { keyPath: 'id' });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Could not open offline audio storage.'));
+  });
+}
+
+/** Download and persist the actual audio bytes in IndexedDB (not just a bookmark). */
+export async function cacheOfflineAudio(itemId, mediaUrl) {
+  if (!itemId || !mediaUrl) return { success: false, reason: 'Audio URL is missing.' };
+  try {
+    const response = await window.fetch(mediaUrl);
+    if (!response.ok) throw new Error('Audio download failed. Check your connection and try again.');
+    const declaredSize = Number(response.headers.get('content-length') || 0);
+    if (declaredSize > 50 * 1024 * 1024) throw new Error('This audio file is larger than the 50 MB offline limit.');
+    const blob = await response.blob();
+    if (blob.size > 50 * 1024 * 1024) throw new Error('This audio file is larger than the 50 MB offline limit.');
+    const db = await openOfflineAudioDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(OFFLINE_AUDIO_STORE, 'readwrite');
+      tx.objectStore(OFFLINE_AUDIO_STORE).put({ id: itemId, blob, type: blob.type || 'audio/mpeg', size: blob.size, cachedAt: Date.now() });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error || new Error('Could not save audio for offline playback.'));
+      tx.onabort = () => reject(tx.error || new Error('Offline audio save was interrupted.'));
+    });
+    db.close();
+    return { success: true, bytes: blob.size };
+  } catch (error) {
+    return { success: false, reason: error?.message || 'Could not download audio for offline playback.' };
+  }
+}
+
+export async function getOfflineAudioBlob(itemId) {
+  if (!itemId) return null;
+  try {
+    const db = await openOfflineAudioDb();
+    const record = await new Promise((resolve, reject) => {
+      const tx = db.transaction(OFFLINE_AUDIO_STORE, 'readonly');
+      const request = tx.objectStore(OFFLINE_AUDIO_STORE).get(itemId);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return record?.blob || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function removeOfflineAudio(itemId) {
+  if (!itemId) return;
+  try {
+    const db = await openOfflineAudioDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(OFFLINE_AUDIO_STORE, 'readwrite');
+      tx.objectStore(OFFLINE_AUDIO_STORE).delete(itemId);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {}
+}
+
 /**
  * Saves an item (post, audio, video, course, poll, sermon) for up to 30 days
  */
@@ -153,6 +225,7 @@ export function removeOfflineItem(id) {
   if (!id) return;
   const items = safeGet(OFFLINE_STORAGE_KEY, []);
   const filtered = items.filter((i) => i.id !== id);
+  removeOfflineAudio(id);
   safeSet(OFFLINE_STORAGE_KEY, filtered);
 
   if (typeof window !== 'undefined') {
