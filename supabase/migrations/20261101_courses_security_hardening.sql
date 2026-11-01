@@ -8,7 +8,7 @@ begin;
 alter table public.courses add column if not exists instructor_role text;
 
 -- Preserve unpublished state from the legacy courses schema when present.
-do $
+do $$
 begin
   if exists (
     select 1 from information_schema.columns
@@ -17,7 +17,7 @@ begin
     execute 'update public.courses set status = ''draft'' where is_published = false and status = ''published''';
   end if;
 end;
-$;
+$$;
 
 -- Keep RLS enabled on every course-related table, including legacy progress.
 alter table public.courses enable row level security;
@@ -320,7 +320,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_uid uuid := auth.uid();
   v_course record;
@@ -380,7 +380,7 @@ begin
 
   return jsonb_build_object('ok', true, 'course_id', p_course_id, 'paid', true, 'enrolled_at', now());
 end;
-$;
+$$;
 
 -- Do not let complete_lesson silently create an enrollment. The learner must already
 -- have an enrollment and paid access for any priced course.
@@ -389,7 +389,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_uid uuid := auth.uid();
   v_course_id uuid;
@@ -443,7 +443,7 @@ begin
     'certificate_result', v_cert
   );
 end;
-$;
+$$;
 
 -- Certificates cannot be minted by a learner who is not enrolled with valid access.
 create or replace function public.issue_certificate(p_course_id uuid)
@@ -451,7 +451,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_uid uuid := auth.uid();
   v_total_lessons integer := 0;
@@ -516,7 +516,7 @@ begin
 
   return jsonb_build_object('ok', true, 'certificate', row_to_json(v_existing));
 end;
-$;
+$$;
 
 revoke execute on function public.complete_lesson(uuid) from public, anon;
 grant execute on function public.complete_lesson(uuid) to authenticated;
