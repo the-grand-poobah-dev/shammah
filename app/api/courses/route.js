@@ -151,10 +151,10 @@ async function fetchCoursesFromDb(supabase, userId) {
 
     const courseIds = courses.map((c) => c.id);
     const [
-      { data: modules },
-      { data: lessons },
-      { data: questions },
-      { data: reviews },
+      modulesRes,
+      lessonsRes,
+      questionsRes,
+      reviewsRes,
       enrollRes,
       progressRes,
       certRes
@@ -165,14 +165,36 @@ async function fetchCoursesFromDb(supabase, userId) {
       supabase.from('course_reviews').select('*').in('course_id', courseIds).order('created_at', { ascending: false }),
       userId
         ? supabase.from('course_enrollments').select('*').eq('user_id', userId)
-        : Promise.resolve({ data: [] }),
+        : Promise.resolve({ data: [], error: null }),
       userId
         ? supabase.from('lesson_progress').select('*').eq('user_id', userId)
-        : Promise.resolve({ data: [] }),
+        : Promise.resolve({ data: [], error: null }),
       userId
         ? supabase.from('course_certificates').select('*').eq('user_id', userId)
-        : Promise.resolve({ data: [] })
+        : Promise.resolve({ data: [], error: null })
     ]);
+
+    // Fail the catalogue request rather than silently returning partial curriculum data.
+    // A failed child query previously looked like a valid course with zero modules/lessons.
+    const curriculumQueries = [
+      ['modules', modulesRes],
+      ['lessons', lessonsRes],
+      ['quiz questions', questionsRes],
+      ['reviews', reviewsRes],
+      ['enrollments', enrollRes],
+      ['lesson progress', progressRes],
+      ['certificates', certRes]
+    ];
+    for (const [label, result] of curriculumQueries) {
+      if (result?.error) {
+        throw new Error(`Failed to load course ${label}: ${result.error.message}`);
+      }
+    }
+
+    const modules = modulesRes.data || [];
+    const lessons = lessonsRes.data || [];
+    const questions = questionsRes.data || [];
+    const reviews = reviewsRes.data || [];
 
     const questionsByLesson = {};
     for (const q of questions || []) {
