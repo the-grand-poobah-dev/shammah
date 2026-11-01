@@ -4,12 +4,13 @@
  * Props:
  *  - value {string}: Active layout identifier (e.g. 'magazine-flat', 'list-rich').
  *  - onChange {Function}: (layoutId: string) => void.
- *  - options {Array<{ id: string, label: string, icon: LucideIcon }>}: Optional options list.
+ *  - options {Array<{ id: string, label: string, icon: LucideIcon }|string>}: Optional options list.
  *  - storageKey {string}: Page key (e.g. 'videos', 'courses'). When passed, persists
  *                         preference in localStorage['shammah:layout:<storageKey>']
  *                         and loads it after mount to prevent hydration mismatch.
  *  - className {string}: Additional classes.
  *  - size {'sm'|'md'}: Control size (default 'md').
+ *  - ariaLabel {string}: Custom accessible name for the radiogroup.
  */
 
 'use client';
@@ -21,7 +22,20 @@ import {
   Columns2,
   List,
   GalleryHorizontal,
+  Rows3,
+  Sparkles,
 } from 'lucide-react';
+
+const ICON_MAP = {
+  'magazine-flat': { label: 'Magazine Hero', icon: Rows },
+  'magazine-x2': { label: 'Two-Column Magazine', icon: Columns2 },
+  'list-rich': { label: 'Rich List', icon: List },
+  'rail': { label: 'Horizontal Rail', icon: GalleryHorizontal },
+  'tiles': { label: 'Tiles Grid', icon: LayoutGrid },
+  'grid': { label: 'Tiles Grid', icon: LayoutGrid },
+  'compact': { label: 'Compact List', icon: Rows3 },
+  'spotlight': { label: 'Spotlight Feature', icon: Sparkles },
+};
 
 const DEFAULT_OPTIONS = [
   { id: 'magazine-flat', label: 'Magazine Hero', icon: Rows },
@@ -38,21 +52,26 @@ export default function LayoutSwitcher({
   storageKey,
   className = '',
   size = 'md',
+  ariaLabel = 'Content layout view options',
   ...restProps
 }) {
   const [mounted, setMounted] = useState(false);
 
-  // Normalize options if passed as simple strings
+  // Normalize options if passed as simple strings or custom objects
   const normalizedOptions = options.map((opt) => {
     if (typeof opt === 'string') {
-      const match = DEFAULT_OPTIONS.find((d) => d.id === opt);
-      return (
-        match || {
-          id: opt,
-          label: opt.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-          icon: LayoutGrid,
-        }
-      );
+      const mapped = ICON_MAP[opt];
+      return {
+        id: opt,
+        label: mapped?.label || opt.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        icon: mapped?.icon || LayoutGrid,
+      };
+    }
+    if (opt && typeof opt === 'object' && !opt.icon && ICON_MAP[opt.id]) {
+      return {
+        ...opt,
+        icon: ICON_MAP[opt.id].icon,
+      };
     }
     return opt;
   });
@@ -63,7 +82,10 @@ export default function LayoutSwitcher({
     if (!storageKey || typeof window === 'undefined') return;
 
     try {
-      const saved = localStorage.getItem(`shammah:layout:${storageKey}`);
+      const saved =
+        localStorage.getItem(`shammah:layout:${storageKey}`) ||
+        localStorage.getItem(storageKey);
+
       if (saved && saved !== value) {
         const isValid = normalizedOptions.some((o) => o.id === saved);
         if (isValid && onChange) {
@@ -71,7 +93,7 @@ export default function LayoutSwitcher({
         }
       }
     } catch {
-      // Storage unavailable or disabled
+      // Storage unavailable (e.g. private mode)
     }
   }, [storageKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -80,6 +102,7 @@ export default function LayoutSwitcher({
     if (storageKey && typeof window !== 'undefined') {
       try {
         localStorage.setItem(`shammah:layout:${storageKey}`, id);
+        localStorage.setItem(storageKey, id);
       } catch {
         // Storage full/blocked
       }
@@ -88,9 +111,9 @@ export default function LayoutSwitcher({
 
   return (
     <div
-      className={`layout-switcher layout-switcher--${size} ${className}`}
+      className={`layout-switcher layout-switcher-bar layout-switcher--${size} ${className}`.trim()}
       role="radiogroup"
-      aria-label="Content layout view options"
+      aria-label={ariaLabel}
       {...restProps}
     >
       {normalizedOptions.map((opt) => {
@@ -101,17 +124,22 @@ export default function LayoutSwitcher({
           <button
             key={opt.id}
             type="button"
-            className={`layout-switcher__btn ${isSelected ? 'is-active' : ''}`}
+            className={`layout-switcher__btn layout-switch-pill ${
+              isSelected ? 'is-active active' : ''
+            }`}
             onClick={() => handleSelect(opt.id)}
             role="radio"
             aria-checked={isSelected}
             aria-label={opt.label}
             title={opt.label}
           >
-            {Icon && <Icon size={16} strokeWidth={2.2} />}
+            {Icon && <Icon size={16} strokeWidth={isSelected ? 2.4 : 1.9} />}
+            <span className="layout-switch-label">{opt.label}</span>
           </button>
         );
       })}
     </div>
   );
 }
+
+export { LayoutSwitcher };

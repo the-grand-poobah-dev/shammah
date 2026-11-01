@@ -3,9 +3,11 @@
  * Route: /layout-kit
  * 
  * Dev-only test harness allowing comprehensive inspection of:
+ *  - notFound() trigger in production
+ *  - All 9 accent colors from ACCENT_PALETTE (#06b6d4, #10b981, #ec4899, #f59e0b, #8b5cf6, #0ea5e9, #f97316, #0d9488, #be123c)
  *  - All 7 layouts (magazine-flat, magazine-x2, list-rich, rail, compact, tiles, spotlight)
- *  - AccentCard variants (wash, edge, neon, minimal)
- *  - LayoutSwitcher with real-time switching
+ *  - AccentCard variants (wash, edge, neon, tint, glow, minimal)
+ *  - LayoutSwitcher with real-time switching and localStorage persistence
  *  - Width simulator (320px, 420px, 680px, 900px, 1200px, 100%) for container-query reflow
  *  - Light and Dark theme toggle
  *  - Companions: MediaThumb, MetaChips, ProgressBar, FilterChips, SortMenu, StatStrip,
@@ -15,6 +17,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { notFound } from 'next/navigation';
 import {
   Video,
   Headphones,
@@ -36,6 +39,8 @@ import {
   Maximize2,
   Layers,
   Sparkles,
+  Palette,
+  Check,
 } from 'lucide-react';
 
 import {
@@ -53,6 +58,8 @@ import {
   EmptyState,
   ErrorState,
   InfiniteSentinel,
+  ACCENT_PALETTE,
+  accentFor,
 } from '../components/layoutkit';
 
 // Sample mock data for testing layout kit
@@ -174,9 +181,15 @@ const SAMPLE_LEADERBOARD = [
 ];
 
 export default function LayoutKitPage() {
+  // Production Safety Guard: Return 404 in production environment
+  if (process.env.NODE_ENV === 'production') {
+    notFound();
+  }
+
   const [containerWidth, setContainerWidth] = useState('100%');
   const [theme, setTheme] = useState('dark');
   const [dynamicLayout, setDynamicLayout] = useState('magazine-flat');
+  const [selectedAccent, setSelectedAccent] = useState('#06b6d4');
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('recent');
   const [showSkeletons, setShowSkeletons] = useState(false);
@@ -197,7 +210,7 @@ export default function LayoutKitPage() {
           background: 'var(--surface)',
           border: '1px solid var(--border)',
           borderRadius: '16px',
-          padding: '14px 18px',
+          padding: '16px 20px',
           marginBottom: '28px',
           display: 'flex',
           flexWrap: 'wrap',
@@ -230,7 +243,7 @@ export default function LayoutKitPage() {
             <button
               key={preset.label}
               type="button"
-              className={`filter-chip ${containerWidth === preset.value ? 'is-active' : ''}`}
+              className={`filter-chip ${containerWidth === preset.value ? 'is-active active' : ''}`}
               style={{ minHeight: '36px', padding: '4px 10px', fontSize: '12px' }}
               onClick={() => setContainerWidth(preset.value)}
             >
@@ -253,7 +266,7 @@ export default function LayoutKitPage() {
 
           <button
             type="button"
-            className="filter-chip is-active"
+            className="filter-chip is-active active"
             style={{ minHeight: '36px', padding: '4px 12px', fontSize: '12px' }}
             onClick={toggleTheme}
             aria-label="Toggle dark/light theme"
@@ -277,6 +290,103 @@ export default function LayoutKitPage() {
           gap: '36px',
         }}
       >
+        {/* Palette Showcase */}
+        <SectionBlock
+          title="Shammah 9-Accent Palette"
+          subtitle="Deterministic accent colors via accentFor(key) mapping to the 9 brand accents"
+          icon={Palette}
+          accent={selectedAccent}
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+              gap: '10px',
+            }}
+          >
+            {ACCENT_PALETTE.map((hex) => {
+              const isSelected = selectedAccent === hex;
+              return (
+                <button
+                  key={hex}
+                  type="button"
+                  onClick={() => setSelectedAccent(hex)}
+                  style={{
+                    background: 'var(--surface)',
+                    border: `1.5px solid ${isSelected ? hex : 'var(--border)'}`,
+                    borderRadius: '12px',
+                    padding: '10px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    boxShadow: isSelected ? `0 0 12px ${hex}44` : 'none',
+                    transition: 'all 0.16s ease',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: hex,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#ffffff',
+                    }}
+                  >
+                    {isSelected && <Check size={16} strokeWidth={3} />}
+                  </div>
+                  <span style={{ fontSize: '11px', fontFamily: 'monospace', color: 'var(--ink)' }}>
+                    {hex}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </SectionBlock>
+
+        {/* AccentCard Variants Showcase */}
+        <SectionBlock
+          title="AccentCard Variants & Signatures"
+          subtitle="Wash, 4px edge bar, rotating neon ring (@property --neon-angle), and hover outlines"
+          icon={Sparkles}
+          accent={selectedAccent}
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '12px',
+            }}
+          >
+            {[
+              { variant: 'wash', title: 'Wash Variant', desc: '12% color-mix background gradient wash' },
+              { variant: 'edge', title: 'Edge Variant', desc: '4px solid accent bar on leading edge' },
+              { variant: 'neon', title: 'Neon Variant', desc: 'Rotating conic neon accent ring' },
+              { variant: 'tint', title: 'Tint Variant', desc: 'Tinted border & subtle background glow' },
+              { variant: 'glow', title: 'Glow Variant', desc: 'Soft accent aura box shadow' },
+              { variant: 'minimal', title: 'Minimal Variant', desc: 'Clean background with accent on hover' },
+            ].map((v) => (
+              <AccentCard
+                key={v.variant}
+                accent={selectedAccent}
+                variant={v.variant}
+                onClick={() => {}}
+                style={{ padding: '16px' }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <MetaChips items={[{ label: v.variant, accent: selectedAccent }]} />
+                  <h4 style={{ margin: '4px 0 0', fontSize: '15px', color: 'var(--ink)' }}>{v.title}</h4>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-muted)' }}>{v.desc}</p>
+                </div>
+              </AccentCard>
+            ))}
+          </div>
+        </SectionBlock>
+
         {/* StatStrip Companion */}
         <StatStrip
           items={[
@@ -293,7 +403,7 @@ export default function LayoutKitPage() {
           subtitle="Toggle the icon buttons on the right to dynamically change layout modes"
           icon={Video}
           count={SAMPLE_SERMONS.length}
-          accent="#06b6d4"
+          accent={selectedAccent}
           action={
             <LayoutSwitcher
               value={dynamicLayout}
@@ -313,7 +423,7 @@ export default function LayoutKitPage() {
                   key={item.id}
                   accent={item.accent}
                   variant={isHero ? 'edge' : 'wash'}
-                  onClick={() => alert(`Clicked sermon: ${item.title}`)}
+                  onClick={() => {}}
                 >
                   {dynamicLayout === 'list-rich' ? (
                     <div className="list-rich-card">
@@ -352,10 +462,6 @@ export default function LayoutKitPage() {
                               type="button"
                               className="section-block__see-all-btn"
                               style={{ minHeight: '36px', minWidth: '36px', padding: '6px' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                alert('Share clicked');
-                              }}
                               aria-label="Share"
                             >
                               <Share2 size={16} />
@@ -364,10 +470,6 @@ export default function LayoutKitPage() {
                               type="button"
                               className="section-block__see-all-btn"
                               style={{ minHeight: '36px', minWidth: '36px', padding: '6px' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                alert('Saved');
-                              }}
                               aria-label="Save"
                             >
                               <Bookmark size={16} />
@@ -464,7 +566,6 @@ export default function LayoutKitPage() {
                       <button
                         type="button"
                         className="spotlight-card__cta"
-                        onClick={() => alert('Starting playback...')}
                       >
                         <Play size={16} fill="currentColor" />
                         <span>Watch Full Service ({item.duration})</span>
@@ -484,7 +585,7 @@ export default function LayoutKitPage() {
           icon={Headphones}
           count="5 episodes"
           accent="#8b5cf6"
-          onSeeAll={() => alert('See all episodes clicked')}
+          onSeeAll={() => {}}
         >
           <ContentLayout
             layout="rail"
@@ -495,7 +596,7 @@ export default function LayoutKitPage() {
                 key={item.id}
                 accent={item.accent}
                 variant="wash"
-                onClick={() => alert(`Play track: ${item.title}`)}
+                onClick={() => {}}
               >
                 <MediaThumb
                   src={item.thumb}
@@ -570,7 +671,7 @@ export default function LayoutKitPage() {
                       <ProgressBar
                         value={course.progress}
                         max={100}
-                        color={course.accent}
+                        accent={course.accent}
                         label="Course Progress"
                         showPercent={true}
                       />
@@ -600,7 +701,7 @@ export default function LayoutKitPage() {
                   key={cat.id}
                   accent={cat.accent}
                   variant="wash"
-                  onClick={() => alert(`Category: ${cat.title}`)}
+                  onClick={() => {}}
                 >
                   <div className="tile-card">
                     <div className="tile-card__icon">
@@ -692,7 +793,7 @@ export default function LayoutKitPage() {
             <ErrorState
               title="Connection interrupted"
               message="Could not load latest church announcements. Tap retry to reconnect."
-              onRetry={() => alert('Retrying connection...')}
+              onRetry={() => {}}
             />
 
             {/* EmptyState Demo */}
@@ -705,7 +806,6 @@ export default function LayoutKitPage() {
                   type="button"
                   className="spotlight-card__cta"
                   style={{ padding: '8px 16px', fontSize: '13px' }}
-                  onClick={() => alert('Browsing sermon library...')}
                 >
                   <span>Explore Sermon Library</span>
                 </button>
@@ -714,7 +814,7 @@ export default function LayoutKitPage() {
 
             {/* Infinite Sentinel Demo */}
             <InfiniteSentinel
-              onVisible={() => console.log('Sentinel triggered')}
+              onVisible={() => {}}
               hasMore={true}
               isLoading={true}
             />

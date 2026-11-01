@@ -3,15 +3,20 @@
  * 
  * Props:
  *  - accent {string}: Optional hex color (defaults to #06b6d4 or mapped via accentFor).
- *  - variant {'edge'|'wash'|'minimal'|'neon'}:
- *      - 'edge': 4px accent bar along top or left edge.
+ *  - variant {'edge'|'wash'|'minimal'|'neon'|'tint'|'glow'|'solid'}:
+ *      - 'edge': 4px accent bar along left or top edge.
  *      - 'wash': subtle 10-14% color-mix background gradient wash with surface.
  *      - 'minimal': clean surface with subtle accent border on hover.
  *      - 'neon': displays rotating neon accent ring (@property --neon-angle).
+ *      - 'tint': subtle tinted border and background wash.
+ *      - 'glow': soft accent drop-glow.
+ *  - hoverGlow {boolean}: Adds soft accent halo on hover (default true).
  *  - icon {React.ComponentType}: Optional Lucide icon to display in top accent chip.
- *  - onClick {Function}: Optional click handler (makes card interactive & focusable).
+ *  - iconLabel {string}: Optional accessible label for the icon chip.
+ *  - onClick {Function}: Optional click handler (makes card interactive & keyboard operable).
  *  - as {'div'|'article'|'button'|'section'}: HTML tag to render (default 'div').
  *  - className {string}: Additional custom classes.
+ *  - style {Object}: Additional inline styles.
  *  - children {React.ReactNode}: Card inner content.
  * 
  * CSS Tokens Used:
@@ -20,7 +25,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { accentFor, ACCENT_PALETTE } from './palette';
 
 export { accentFor, ACCENT_PALETTE };
@@ -28,6 +33,7 @@ export { accentFor, ACCENT_PALETTE };
 export default function AccentCard({
   accent,
   variant = 'wash',
+  hoverGlow = true,
   icon: Icon,
   iconLabel,
   onClick,
@@ -37,14 +43,16 @@ export default function AccentCard({
   children,
   role,
   tabIndex,
+  ariaLabel,
   ...restProps
 }) {
   const chosenAccent = accent || '#06b6d4';
-  const isInteractive = Boolean(onClick || restProps['aria-label'] || restProps.href);
+  const isInteractive = Boolean(onClick || restProps['aria-label'] || ariaLabel || restProps.href);
 
-  // Set CSS custom variable --sec-color and --accent on the card
+  // Set CSS custom variables --sec-color, --accent, and --card-accent on the card
   const inlineStyles = {
     '--accent': chosenAccent,
+    '--card-accent': chosenAccent,
     '--sec-color': chosenAccent,
     ...style,
   };
@@ -52,7 +60,7 @@ export default function AccentCard({
   const computedRole = role || (onClick ? 'button' : undefined);
   const computedTabIndex = tabIndex ?? (onClick ? 0 : undefined);
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = useCallback((e) => {
     if (onClick && (e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
       onClick(e);
@@ -60,16 +68,17 @@ export default function AccentCard({
     if (restProps.onKeyDown) {
       restProps.onKeyDown(e);
     }
-  };
+  }, [onClick, restProps]);
 
   return (
     <Component
-      className={`accent-card accent-card--${variant} ${isInteractive ? 'accent-card--interactive' : ''} ${className}`}
+      className={`accent-card variant-${variant} accent-card--${variant} ${hoverGlow ? 'has-hover-glow' : ''} ${isInteractive ? 'is-clickable accent-card--interactive' : ''} ${className}`.trim()}
       style={inlineStyles}
       onClick={onClick}
-      onKeyDown={handleKeyDown}
+      onKeyDown={isInteractive ? handleKeyDown : restProps.onKeyDown}
       role={computedRole}
       tabIndex={computedTabIndex}
+      aria-label={ariaLabel || restProps['aria-label']}
       {...restProps}
     >
       {/* 4px Accent Edge indicator when variant is 'edge' */}
@@ -96,3 +105,5 @@ export default function AccentCard({
     </Component>
   );
 }
+
+export { AccentCard };

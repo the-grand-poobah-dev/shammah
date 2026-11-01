@@ -327,7 +327,7 @@ export default function AdminReportsQueuePage() {
                   {report.details && (
                     <div className="p-2.5 rounded-xl bg-[var(--surface-sunken)] border border-[var(--border)] text-xs text-[var(--ink)]">
                       <span className="font-semibold text-[var(--ink-muted)]">Reporter note: </span>
-                      <span className="italic">"{report.details}"</span>
+                      <span className="italic">&quot;{report.details}&quot;</span>
                     </div>
                   )}
 

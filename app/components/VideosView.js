@@ -581,6 +581,7 @@ export default function VideosView({ session, currentUser, openAuth }) {
           <div className="mb-6">
             <ReelsRail
               title="Faith Reels"
+              reels={reelsList}
               initialReels={reelsList.length > 0 ? reelsList : null}
               session={session}
               currentUser={currentUser}

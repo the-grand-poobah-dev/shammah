@@ -11,6 +11,16 @@ export function isAudioRecordingSupported() {
   );
 }
 
+export async function checkMicrophonePermission() {
+  if (typeof window === 'undefined' || !navigator?.permissions?.query) return 'prompt';
+  try {
+    const res = await navigator.permissions.query({ name: 'microphone' });
+    return res.state; // 'granted' | 'denied' | 'prompt'
+  } catch (_) {
+    return 'prompt';
+  }
+}
+
 /**
  * Starts recording audio from the user's microphone.
  *
