@@ -72,31 +72,31 @@ export async function POST(req) {
     if (isCoursePayment && tx.status === 'pending') {
       const verifiedAmount = amount != null && Math.round(amount) === Number(tx.amount_kes);
       if (success && receipt && verifiedAmount) {
-        const { error: txUpdateError } = await supabase
-          .from('mpesa_transactions')
-          .update({
-            status: 'completed',
-            receipt_code: receipt,
-            amount_kes: Math.round(amount),
-          })
-          .eq('id', tx.id)
-          .eq('status', 'pending');
-        if (!txUpdateError) {
+        const { error: enrollmentError } = await supabase
+          .from('course_enrollments')
+          .upsert(
+            {
+              user_id: tx.user_id,
+              course_id: String(tx.project_id),
+              paid: true,
+              mpesa_receipt: receipt,
+              amount_paid_kes: Math.round(amount),
+              enrolled_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,course_id' }
+          );
+        if (!enrollmentError) {
           await supabase
-            .from('course_enrollments')
-            .upsert(
-              {
-                user_id: tx.user_id,
-                course_id: String(tx.project_id),
-                paid: true,
-                mpesa_receipt: receipt,
-                amount_paid_kes: Math.round(amount),
-                enrolled_at: new Date().toISOString(),
-              },
-              { onConflict: 'user_id,course_id' }
-            );
+            .from('mpesa_transactions')
+            .update({
+              status: 'completed',
+              receipt_code: receipt,
+              amount_kes: Math.round(amount),
+            })
+            .eq('id', tx.id)
+            .eq('status', 'pending');
         }
-      } else if (!success || !verifiedAmount) {
+      } else if (!success || !verifiedAmount || !receipt) {
         await supabase
           .from('mpesa_transactions')
           .update({ status: 'failed' })
