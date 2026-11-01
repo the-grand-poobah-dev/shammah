@@ -11,10 +11,18 @@ DECLARE
   v_author_id uuid;
   v_church_id uuid;
 BEGIN
+  -- Never assign demo course ownership to an arbitrary member.
+  -- Seed only after an instructor/admin profile has been explicitly provisioned.
   SELECT id, church_id INTO v_author_id, v_church_id
   FROM public.profiles
+  WHERE role::text IN ('instructor', 'admin')
   ORDER BY created_at ASC
   LIMIT 1;
+
+  IF v_author_id IS NULL THEN
+    RAISE EXCEPTION
+      'Course seed stopped safely: create or designate an instructor/admin profile before seeding demo courses.';
+  END IF;
 
   -- ===========================================================================
   -- 1. COURSES
