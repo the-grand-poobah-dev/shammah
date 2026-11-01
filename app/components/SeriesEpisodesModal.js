@@ -13,7 +13,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useAudioPlayer } from '../lib/audioPlayer';
-import { listMedia } from '../lib/data/mediaApi';
+import { listMedia, getProgress } from '../lib/data/mediaApi';
 
 function formatDuration(sec) {
   if (!sec) return '0 min';
@@ -30,6 +30,7 @@ export default function SeriesEpisodesModal({ series, isOpen, onClose }) {
   const [mounted, setMounted] = useState(false);
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [episodeProgress, setEpisodeProgress] = useState({});
 
   const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
 
@@ -45,6 +46,11 @@ export default function SeriesEpisodesModal({ series, isOpen, onClose }) {
       // Sort episodes by episode_no ascending
       const sorted = (res.data || []).sort((a, b) => (a.episode_no || 0) - (b.episode_no || 0));
       setEpisodes(sorted);
+      const progressRows = await Promise.all(sorted.map(async (episode) => {
+        const result = await getProgress(episode.id);
+        return [episode.id, result?.data || result || { position: 0, duration: 0, completed: false }];
+      }));
+      setEpisodeProgress(Object.fromEntries(progressRows));
       setLoading(false);
     });
   }, [series?.id, isOpen]);
@@ -317,6 +323,11 @@ export default function SeriesEpisodesModal({ series, isOpen, onClose }) {
                     </h4>
                     <span style={{ fontSize: '11px', color: 'var(--ink-muted, #94a3b8)' }}>
                       {formatDuration(ep.duration_seconds)}
+                      {episodeProgress[ep.id]?.completed || (episodeProgress[ep.id]?.duration > 0 && episodeProgress[ep.id]?.position / episodeProgress[ep.id]?.duration >= 0.95) ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '8px', color: '#10b981' }}><CheckCircle2 size={12} /> Played</span>
+                      ) : (
+                        <span style={{ marginLeft: '8px', color: 'var(--ink-muted, #94a3b8)' }}>· Unplayed</span>
+                      )}
                       {ep.category ? ` · ${ep.category}` : ''}
                     </span>
                   </div>
