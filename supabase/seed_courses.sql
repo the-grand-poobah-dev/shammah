@@ -15,7 +15,7 @@ BEGIN
   -- Seed only after an instructor/admin profile has been explicitly provisioned.
   SELECT id, church_id INTO v_author_id, v_church_id
   FROM public.profiles
-  WHERE role::text IN ('instructor', 'admin')
+  WHERE role::text IN ('platform_admin', 'church_admin', 'instructor', 'admin')
   ORDER BY created_at ASC
   LIMIT 1;
 
