@@ -45,9 +45,10 @@ export default function ReelsFeed({
   const [loading, setLoading] = useState(initialReels.length === 0);
   const [isMuted, setIsMuted] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('shammah_reels_muted') === 'true';
+      // Start muted by default to comply with browser autoplay policies.
+      return localStorage.getItem('shammah_reels_muted') !== 'false';
     }
-    return false;
+    return true;
   });
   const [showCreator, setShowCreator] = useState(false);
   const [activeCommentsReelId, setActiveCommentsReelId] = useState(null);
@@ -266,7 +267,7 @@ export default function ReelsFeed({
           </div>
         ) : (
           reels.map((reel, idx) => {
-            const isMounted = Math.abs(idx - currentIndex) <= 2; // Keep max 3-5 around current
+            const isMounted = Math.abs(idx - currentIndex) <= 1; // Keep only current reel plus one neighbour on each side
             const isCurrent = idx === currentIndex;
 
             return (
@@ -464,8 +465,8 @@ function ReelItem({
 }) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(reel.like_count || 18);
-  const [commentCount, setCommentCount] = useState(reel.comment_count || 4);
+  const [likeCount, setLikeCount] = useState(reel.like_count || 0);
+  const [commentCount, setCommentCount] = useState(reel.comment_count || 0);
   const [following, setFollowing] = useState(Boolean(reel.is_following));
   const [saved, setSaved] = useState(false);
   const [showPlayFlash, setShowPlayFlash] = useState(false);
