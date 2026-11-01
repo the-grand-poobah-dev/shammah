@@ -135,20 +135,24 @@ create policy "course_lessons_read_preview_or_enrolled"
       from public.course_modules cm
       join public.courses c on c.id = cm.course_id
       where cm.id = module_id
-        and c.status = 'published'
         and (
-          is_preview = true
+          (
+            c.status = 'published'
+            and (
+              is_preview = true
+              or exists (
+                select 1 from public.course_enrollments ce
+                where ce.course_id = c.id
+                  and ce.user_id = (select auth.uid())
+                  and (ce.paid = true or c.price_kes = 0)
+              )
+            )
+          )
           or c.author_id = (select auth.uid())
           or exists (
             select 1 from public.profiles p
             where p.id = (select auth.uid())
               and p.role in ('platform_admin', 'church_admin')
-          )
-          or exists (
-            select 1 from public.course_enrollments ce
-            where ce.course_id = c.id
-              and ce.user_id = (select auth.uid())
-              and (ce.paid = true or c.price_kes = 0)
           )
         )
     )
