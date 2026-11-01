@@ -185,6 +185,27 @@ export async function uploadMediaItem(file, userId, options = {}) {
 }
 
 /**
+ * Uploads a small WebVTT or plain-text transcript to the media library.
+ */
+export async function uploadTranscriptFile(file, userId) {
+  if (!file || !userId) throw new Error('Choose a transcript and sign in before uploading.');
+  const name = (file.name || '').toLowerCase();
+  if (!/\.(vtt|txt)$/.test(name)) throw new Error('Transcript files must use .vtt or .txt.');
+  if (file.size > 2 * 1024 * 1024) throw new Error('Transcript files must be 2 MB or smaller.');
+  const safeName = (file.name || 'transcript.txt').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+  const path = `${userId}/transcripts/${Date.now()}-${safeName}`;
+  const contentType = name.endsWith('.vtt') ? 'text/vtt' : 'text/plain';
+  const { error } = await supabase.storage.from('media-library').upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+    contentType,
+  });
+  if (error) throw new Error(error.message || 'Transcript upload failed.');
+  const { data } = supabase.storage.from('media-library').getPublicUrl(path);
+  return { url: data.publicUrl, path };
+}
+
+/**
  * Extracts a video frame into a JPEG Blob thumbnail using a hidden <video> + canvas.
  * 
  * @param {File|Blob} file 
