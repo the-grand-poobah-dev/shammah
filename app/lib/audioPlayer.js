@@ -266,7 +266,7 @@ export function AudioPlayerProvider({ children }) {
       };
 
       const knownPosition = track.playback_position ?? track.watch_progress?.position_seconds;
-      const knownPercent = track.playback_percent ?? track.watch_progress?.completed ? 100 : 0;
+      const knownPercent = track.playback_percent ?? (track.watch_progress?.completed ? 100 : 0);
       if (Number(knownPosition) > 5 && Number(knownPercent) < 92) {
         playAt(knownPosition);
       } else if (knownPosition !== undefined && knownPosition !== null) {
