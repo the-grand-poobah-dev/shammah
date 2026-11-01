@@ -13,7 +13,7 @@ function admin() {
 export async function GET(request) {
   try {
     const authHeader = request.headers.get('authorization') || '';
-    const token = authHeader.replace(/^Bearer\\s+/i, '').trim();
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const checkoutRequestId = new URL(request.url).searchParams.get('checkoutRequestId');
