@@ -236,6 +236,11 @@ async function fetchCoursesFromDb(supabase, userId) {
 
       return {
         ...c,
+        instructor_name: c.instructor_name || c.instructor || null,
+        instructor_role: c.instructor_role || c.instructor_title || c.instructor_badge || null,
+        cover_url: c.cover_url || c.cover_image_url || c.thumbnail_url || null,
+        duration_minutes: Number(c.duration_minutes || (Number(c.estimated_hours || 0) * 60) || 60),
+        level: c.level || c.difficulty || 'Foundational',
         modules: cModules,
         reviews: reviewsByCourse[c.id] || [],
         total_lessons: totalLessons,
@@ -635,6 +640,8 @@ export async function POST(request) {
         .upsert({
           user_id: userId,
           course_id: courseId,
+          reviewer_name: userName,
+          reviewer_avatar: sessionUser.user_metadata?.avatar_url || null,
           rating: cleanRating,
           body: cleanBody,
           updated_at: new Date().toISOString()
