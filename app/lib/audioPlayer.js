@@ -525,6 +525,14 @@ export function AudioPlayerProvider({ children }) {
     nextTrack();
   };
 
+  const expandPlayer = useCallback(() => setIsExpanded(true), []);
+  const collapsePlayer = useCallback(() => setIsExpanded(false), []);
+  const closePlayer = useCallback(() => {
+    pauseTrack();
+    setCurrentTrack(null);
+    setIsExpanded(false);
+  }, [pauseTrack]);
+
   const contextValue = {
     currentTrack,
     isPlaying,
@@ -563,16 +571,12 @@ export function AudioPlayerProvider({ children }) {
     removeFromQueue,
     reorderQueue,
     clearQueue,
-    expandPlayer: () => setIsExpanded(true),
-    collapsePlayer: () => setIsExpanded(false),
+    expandPlayer,
+    collapsePlayer,
     toggleLikeTrack,
     toggleSaveTrack,
     toggleOfflineTrack,
-    closePlayer: () => {
-      pauseTrack();
-      setCurrentTrack(null);
-      setIsExpanded(false);
-    },
+    closePlayer,
   };
 
   return (
