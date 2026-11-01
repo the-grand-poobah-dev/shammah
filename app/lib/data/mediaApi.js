@@ -542,7 +542,8 @@ export async function listPlaylists({ kind, ownerId } = {}) {
       .order('created_at', { ascending: false });
 
     if (ownerId) {
-      q = q.eq('owner_id', ownerId);
+      // Include public community playlists plus the current user's private playlists.
+      q = q.or(`owner_id.eq.${ownerId},is_public.eq.true`);
     } else {
       q = q.eq('is_public', true);
     }
