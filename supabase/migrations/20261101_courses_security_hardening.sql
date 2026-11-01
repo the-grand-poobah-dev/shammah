@@ -7,6 +7,18 @@ begin;
 -- Compatibility column used by the current creator UI and API.
 alter table public.courses add column if not exists instructor_role text;
 
+-- Preserve unpublished state from the legacy courses schema when present.
+do $
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'courses' and column_name = 'is_published'
+  ) then
+    execute 'update public.courses set status = ''draft'' where is_published = false and status = ''published''';
+  end if;
+end;
+$;
+
 -- Keep RLS enabled on every course-related table, including legacy progress.
 alter table public.courses enable row level security;
 alter table public.course_modules enable row level security;
