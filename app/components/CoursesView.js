@@ -29,7 +29,7 @@ import {
   SortMenu,
   StatStrip,
   ProgressBar,
-  SkeletonGrid
+  SkeletonLayout
 } from './layoutkit';
 import CourseDetailView from './CourseDetailView';
 import CourseLearnPlayer from './CourseLearnPlayer';
@@ -538,7 +538,7 @@ export default function CoursesView({ session = null, userProfile = null }) {
 
       {loading ? (
         <div style={{ padding: '16px 0' }}>
-          <SkeletonGrid count={4} />
+          <SkeletonLayout layout="tiles" count={4} />
         </div>
       ) : error ? (
         <div className="courses-hub-error-card">
