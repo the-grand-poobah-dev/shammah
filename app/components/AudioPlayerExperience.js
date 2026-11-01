@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Heart, Bookmark, Download, Share2,
   ListMusic, X, ChevronDown, Repeat, Shuffle, Timer, Gauge, Volume2,
@@ -23,10 +23,10 @@ function PlayerInterface() {
   const player = useAudioPlayer();
   const {
     currentTrack, isPlaying, currentTime, duration, playbackSpeed, volume, isMuted,
-    queue, queueIndex, isShuffle, repeatMode, isExpanded, isOfflineTrack, isLiked,
+    queue, isShuffle, repeatMode, isExpanded, isOfflineTrack, isLiked,
     isSaved, sleepTimerMinutes, sleepTimerSecondsLeft, togglePlay, seekTo, skip,
     nextTrack, prevTrack, setSpeed, setVolume, toggleMute, toggleShuffle, cycleRepeat,
-    setSleepTimer, addToQueue, removeFromQueue, reorderQueue, clearQueue,
+    setSleepTimer, removeFromQueue, reorderQueue, clearQueue,
     expandPlayer, collapsePlayer, toggleLikeTrack, toggleSaveTrack, toggleOfflineTrack,
     closePlayer,
   } = player;
@@ -172,7 +172,7 @@ function PlayerInterface() {
               </div>
 
               {showPlaylistPicker && <div className="shammah-audio-timer-options" aria-label="Add current audio to playlist">
-                {ownedPlaylists.length === 0 ? <span className="shammah-audio-muted">No public audio playlists are available yet. Create one in Audio Sanctuary.</span> : ownedPlaylists.map((playlist) => <button key={playlist.id} type="button" onClick={async () => { const result = await addPlaylistItem(playlist.id, currentTrack.id, playlist.items?.length || 0); setPlaylistFeedback(result.error ? 'Could not add to playlist' : `Added to ${playlist.title}`); if (!result.error) setShowPlaylistPicker(false); }}>{playlist.title}</button>)}
+                {ownedPlaylists.length === 0 ? <span className="shammah-audio-muted">No audio playlists are available yet. Create one in Audio Sanctuary.</span> : ownedPlaylists.map((playlist) => <button key={playlist.id} type="button" onClick={async () => { const result = await addPlaylistItem(playlist.id, currentTrack.id, playlist.items?.length || 0); setPlaylistFeedback(result.error ? 'Could not add to playlist' : `Added to ${playlist.title}`); if (!result.error) setShowPlaylistPicker(false); }}>{playlist.title}</button>)}
                 {playlistFeedback && <span role="status" className="shammah-audio-muted">{playlistFeedback}</span>}
               </div>}
 
