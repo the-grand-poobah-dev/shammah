@@ -259,28 +259,6 @@ export default function CourseDetailView({
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [showMpesaModal, paymentCheckoutId, paymentStatus, course, userId, userName, onCourseUpdated, onStartLearning]);
 
-  const handleMpesaSuccess = async (paymentData) => {
-    try {
-      await enrollInCourse({
-        courseId: course.id,
-        userId,
-        userName,
-        mpesaReceipt: paymentData?.receiptCode || 'MPESA-PAID',
-        amountPaidKes: course.price_kes
-      });
-      const updated = {
-        ...course,
-        enrolled: true,
-        paid: true,
-        enrolled_count: Number(course.enrolled_count || 0) + 1
-      };
-      setCourse(updated);
-      onCourseUpdated?.(updated);
-      setShowMpesaModal(false);
-      onStartLearning?.(updated, null);
-    } catch {}
-  };
-
   const handleSubmitReview = async (e) => {
     e.preventDefault();
     if (!reviewBody.trim() || submittingReview) return;
