@@ -443,6 +443,63 @@ export async function POST(request) {
       return NextResponse.json({ ok: true, enrolled: true, ...((data && typeof data === 'object') ? data : {}) });
     }
 
+    if (action === 'submit_quiz') {
+      const lessonId = String(body.lessonId || '');
+      const answers = body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers) ? body.answers : {};
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(lessonId)) {
+        return NextResponse.json({ error: 'A valid lesson ID is required.' }, { status: 400 });
+      }
+      if (Object.keys(answers).length > 100) {
+        return NextResponse.json({ error: 'Too many quiz answers were submitted.' }, { status: 400 });
+      }
+      const { data: lesson, error: lessonError } = await supabase
+        .from('course_lessons')
+        .select('id, course_id, kind')
+        .eq('id', lessonId)
+        .maybeSingle();
+      if (lessonError || !lesson || lesson.kind !== 'quiz' || !lesson.course_id) {
+        return NextResponse.json({ error: 'Quiz lesson not found.' }, { status: 404 });
+      }
+      const { data: course } = await supabase
+        .from('courses')
+        .select('id, price_kes')
+        .eq('id', lesson.course_id)
+        .maybeSingle();
+      const { data: enrollment } = await supabase
+        .from('course_enrollments')
+        .select('paid')
+        .eq('user_id', userId)
+        .eq('course_id', lesson.course_id)
+        .maybeSingle();
+      if (!course || !enrollment || (Number(course.price_kes || 0) > 0 && enrollment.paid !== true)) {
+        return NextResponse.json({ error: 'Enroll in this course and complete any required payment before submitting its quiz.' }, { status: 403 });
+      }
+      const { data: questions, error: questionsError } = await supabase
+        .from('course_quiz_questions')
+        .select('id, options, correct_index, explanation')
+        .eq('lesson_id', lessonId)
+        .order('position', { ascending: true });
+      if (questionsError) return NextResponse.json({ error: 'Could not load quiz questions.' }, { status: 500 });
+      if (!Array.isArray(questions) || questions.length === 0) {
+        return NextResponse.json({ error: 'This quiz has no questions yet.' }, { status: 400 });
+      }
+      let correct = 0;
+      const results = questions.map((question) => {
+        const selected = Number(answers[question.id]);
+        const selectedIndex = Number.isInteger(selected) ? selected : -1;
+        const isCorrect = selectedIndex === Number(question.correct_index);
+        if (isCorrect) correct += 1;
+        return {
+          id: question.id,
+          correct_index: Number(question.correct_index),
+          explanation: question.explanation || '',
+          selected_index: selectedIndex,
+          is_correct: isCorrect
+        };
+      });
+      return NextResponse.json({ ok: true, score: Math.round((correct / questions.length) * 100), results });
+    }
+
     if (action === 'complete_lesson') {
       const lessonId = String(body.lessonId || '');
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(lessonId)) {
