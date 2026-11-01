@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { AudioPlayerProvider, useAudioPlayer } from '../lib/audioPlayer';
 import { addPlaylistItem, listPlaylists } from '../lib/data/mediaApi';
+import { supabase } from '../../lib/supabaseClient';
 
 function clock(seconds) {
   const value = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -62,8 +63,12 @@ function PlayerInterface() {
   useEffect(() => {
     if (!isExpanded || !showPlaylistPicker) return undefined;
     let active = true;
-    listPlaylists({ kind: 'audio' }).then((result) => {
-      if (active) setOwnedPlaylists(result.data || []);
+    supabase.auth.getSession().then(({ data }) => {
+      const userId = data?.session?.user?.id;
+      if (!userId) return { data: [] };
+      return listPlaylists({ kind: 'audio', ownerId: userId });
+    }).then((result) => {
+      if (active) setOwnedPlaylists(result?.data || []);
     }).catch(() => { if (active) setOwnedPlaylists([]); });
     return () => { active = false; };
   }, [isExpanded, showPlaylistPicker]);
