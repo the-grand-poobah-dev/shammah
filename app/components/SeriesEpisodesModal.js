@@ -268,6 +268,7 @@ export default function SeriesEpisodesModal({ series, isOpen, onClose }) {
             <span style={{ fontSize: '12px', color: 'var(--ink-muted, #94a3b8)' }}>{series.owner?.display_name || 'Shammah Community'}</span>
           </div>
         </div>
+        {followMessage ? <p role="status" style={{ margin: '8px 20px 0', fontSize: '12px', color: 'var(--ink-muted)' }}>{followMessage}</p> : null}
 
         {/* Episodes List */}
         <div
