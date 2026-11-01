@@ -45,7 +45,7 @@ async function getAccessToken() {
 async function initiateCoursePayment(req, body) {
   const courseId = String(body?.courseId || '');
   const authHeader = req.headers.get('authorization') || '';
-  const token = authHeader.replace(/^Bearer\\s+/i, '').trim();
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!rawUrl || !anonKey || !token) {
