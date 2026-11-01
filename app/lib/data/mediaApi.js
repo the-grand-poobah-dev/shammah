@@ -381,7 +381,7 @@ export async function deleteMedia(id) {
  * Atomically toggles like status using the RPC toggle_media_like.
  */
 export async function toggleLike(itemId) {
-  if (!itemId) return { liked: false, likeCount: 0, error: new Error('Item ID required.') };
+  if (!itemId) return { data: null, liked: false, likeCount: 0, error: new Error('Item ID required.') };
 
   try {
     const { data, error } = await supabase.rpc('toggle_media_like', {
@@ -389,16 +389,17 @@ export async function toggleLike(itemId) {
     });
 
     if (error) {
-      return { liked: false, likeCount: 0, error };
+      return { data: null, liked: false, likeCount: 0, error };
     }
 
     return {
+      data: data || null,
       liked: Boolean(data?.liked),
       likeCount: data?.like_count || 0,
       error: null,
     };
   } catch (err) {
-    return { liked: false, likeCount: 0, error: err };
+    return { data: null, liked: false, likeCount: 0, error: err };
   }
 }
 
@@ -406,7 +407,7 @@ export async function toggleLike(itemId) {
  * Atomically toggles save/bookmark status using the RPC toggle_media_save.
  */
 export async function toggleSave(itemId) {
-  if (!itemId) return { saved: false, saveCount: 0, error: new Error('Item ID required.') };
+  if (!itemId) return { data: null, saved: false, saveCount: 0, error: new Error('Item ID required.') };
 
   try {
     const { data, error } = await supabase.rpc('toggle_media_save', {
@@ -414,16 +415,17 @@ export async function toggleSave(itemId) {
     });
 
     if (error) {
-      return { saved: false, saveCount: 0, error };
+      return { data: null, saved: false, saveCount: 0, error };
     }
 
     return {
+      data: data || null,
       saved: Boolean(data?.saved),
       saveCount: data?.save_count || 0,
       error: null,
     };
   } catch (err) {
-    return { saved: false, saveCount: 0, error: err };
+    return { data: null, saved: false, saveCount: 0, error: err };
   }
 }
 
@@ -496,12 +498,12 @@ export async function saveProgress(itemId, positionSeconds, durationSeconds) {
  * Fetches playback progress for an item.
  */
 export async function getProgress(itemId) {
-  if (!itemId) return { position: 0, completed: false, error: null };
+  if (!itemId) return { data: { position: 0, duration: 0, completed: false }, position: 0, duration: 0, completed: false, error: null };
 
   try {
     const sessionRes = await supabase.auth.getSession().catch(() => null);
     const userId = sessionRes?.data?.session?.user?.id;
-    if (!userId) return { position: 0, completed: false, error: null };
+    if (!userId) return { data: { position: 0, duration: 0, completed: false }, position: 0, duration: 0, completed: false, error: null };
 
     const { data, error } = await supabase
       .from('watch_progress')
