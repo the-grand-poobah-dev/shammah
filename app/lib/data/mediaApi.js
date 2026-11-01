@@ -87,6 +87,15 @@ export async function listMedia({
       if (error) {
         console.warn('[mediaApi] search_media RPC fallback:', error.message);
       } else if (data && data.length > 0) {
+        if (kind === 'audio') {
+          const { data: transcriptRows } = await supabase
+            .from('media_items')
+            .select('id, transcript_url')
+            .in('id', data.map((item) => item.id));
+          const transcriptById = new Map((transcriptRows || []).map((row) => [row.id, row.transcript_url]));
+          const enriched = data.map((item) => ({ ...item, transcript_url: transcriptById.get(item.id) || null }));
+          return { data: enriched, count: enriched.length, error: null };
+        }
         return { data, count: data.length, error: null };
       }
     }
