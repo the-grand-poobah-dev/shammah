@@ -1,0 +1,142 @@
+'use client';
+import Link from 'next/link';
+import Avatar from './Avatar';
+import MemberName from './MemberName';
+import { useSession } from '../../lib/useSession';
+import { useMainNav } from '../lib/useMainNav';
+import ExploreShammahWidget from './ExploreShammahWidget';
+
+export default function LeftRail() {
+  const { session, profile } = useSession();
+  const {
+    navItems,
+    activeTab,
+    activePanel,
+    getBadgeCount,
+    handleRailItemClick,
+  } = useMainNav();
+
+  const displayName = profile?.display_name || session?.user?.email?.split('@')[0] || 'Member';
+  const isSignedIn = Boolean(session?.user);
+
+  return (
+    <div className="dl-left-rail">
+      <nav className="dl-rail-nav" aria-label="Main Navigation">
+        {/* Profile / Auth Row */}
+        {isSignedIn ? (
+          <Link
+            href="/profile"
+            className="dl-profile-row dl-outline-interactive"
+            style={{ '--sec-color': 'var(--teal)' }}
+            title={`Signed in as ${displayName}. View profile.`}
+            data-nav-id="profile"
+          >
+            <Avatar
+              name={displayName}
+              src={profile?.avatar_url}
+              size={36}
+              className="dl-profile-avatar"
+            />
+            <div className="dl-profile-meta">
+              <MemberName
+                name={displayName}
+                role={profile?.role}
+                badge={profile?.badge}
+                badgeVerified={profile?.badge_verified}
+                className="dl-profile-name"
+              />
+              <span className="dl-profile-sub">View profile</span>
+            </div>
+          </Link>
+        ) : (
+          <div className="dl-auth-row">
+            <button
+              type="button"
+              className="dl-auth-btn dl-outline-interactive signin"
+              style={{ '--sec-color': 'var(--border-strong, #3b82f6)' }}
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent('shammah:open-auth', { detail: 'signin' })
+                )
+              }
+              title="Sign in to your account"
+              data-nav-id="signin"
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              className="dl-auth-btn dl-outline-interactive signup"
+              style={{ '--sec-color': 'var(--teal)' }}
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent('shammah:open-auth', { detail: 'signup' })
+                )
+              }
+              title="Join Shammah community"
+              data-nav-id="signup"
+            >
+              Sign Up
+            </button>
+          </div>
+        )}
+
+        {/* 5 Navigation Items */}
+        <div className="dl-nav-list" role="list">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              item.kind === 'panel'
+                ? activePanel === item.panel
+                : activeTab === item.id;
+            const ariaCurrent = isActive && item.kind === 'center' ? 'page' : undefined;
+            const badgeCount = getBadgeCount(item.id);
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`dl-nav-item dl-outline-interactive${isActive ? ' active' : ''}`}
+                style={{
+                  '--sec-color': item.color,
+                  '--sec-complement': item.complementColor || '#6366f1',
+                }}
+                onClick={() => handleRailItemClick(item)}
+                aria-label={item.label}
+                aria-current={ariaCurrent}
+                title={item.label}
+                role="listitem"
+                data-nav-id={item.id}
+              >
+                <span className="dl-icon-wrap" aria-hidden="true">
+                  <Icon
+                    size={20}
+                    strokeWidth={isActive ? 2.4 : 1.8}
+                    className="dl-nav-icon"
+                  />
+                </span>
+                <span className="dl-nav-label">{item.label}</span>
+                {badgeCount > 0 && (
+                  <span
+                    className="dl-badge"
+                    aria-label={`${badgeCount} unread`}
+                  >
+                    {badgeCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Slot for Explore Shammah widget */}
+      <div className="dl-rail-widget-slot">
+        <ExploreShammahWidget />
+      </div>
+
+      {/* Slot for Quick Actions footer portal */}
+      <div className="dl-rail-footer" id="dl-rail-footer" />
+    </div>
+  );
+}
