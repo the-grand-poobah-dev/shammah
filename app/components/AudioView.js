@@ -65,27 +65,15 @@ import {
 } from './layoutkit';
 
 // Compatibility export in case external components import SAMPLE_AUDIO_TRACKS
-export const SAMPLE_AUDIO_TRACKS = [
-  {
-    id: 'c1000000-0000-0000-0000-000000000001',
-    title: 'Finding Peace in the Secret Place (Psalm 23)',
-    speaker: 'Pastor David Mwangi',
-    church: 'Shammah Assembly of Saints',
-    type: 'podcast',
-    category_id: 'lessons',
-    duration_label: '15:00',
-    duration_seconds: 900,
-    audio_url: 'https://actions.google.com/sounds/v1/ambiences/morning_birds.ogg',
-    cover_image: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=500',
-    description: 'Morning devotion on Psalm 23. Starting your day conscious of the Shepherd who leads beside still waters.',
-  },
-];
+export const SAMPLE_AUDIO_TRACKS = []; // Compatibility shim; production content comes from Supabase.
 
 const AUDIO_CATEGORIES = [
   { id: 'All', label: 'All Audio' },
   { id: 'Sermon', label: 'Sermons' },
   { id: 'Worship', label: 'Worship & Praise' },
-  { id: 'Prayer', label: 'Prayer & Devotionals' },
+  { id: 'Prayer', label: 'Prayer' },
+  { id: 'Devotionals', label: 'Devotionals' },
+  { id: 'Kids & Family', label: 'Kids & Family' },
   { id: 'Youth', label: 'Youth & Young Adults' },
   { id: 'Theology', label: 'Bible Study & Theology' },
   { id: 'Leadership', label: 'Leadership & Marketplace' },
