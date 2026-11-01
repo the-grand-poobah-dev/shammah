@@ -257,7 +257,7 @@ create policy "course_reviews_insert_enrolled"
     user_id = (select auth.uid())
     and exists (
       select 1 from public.course_enrollments ce
-      where ce.course_id = course_id and ce.user_id = (select auth.uid())
+      where ce.course_id = course_reviews.course_id and ce.user_id = (select auth.uid())
         and (ce.paid = true or exists (
           select 1 from public.courses c where c.id = course_id and c.price_kes = 0
         ))
