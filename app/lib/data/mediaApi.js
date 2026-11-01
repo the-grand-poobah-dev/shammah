@@ -917,6 +917,63 @@ export async function createMediaSeries({ title, description = null, kind = 'vid
 }
 
 /**
+ * Checks whether the signed-in user follows an audio series.
+ */
+export async function checkSeriesFollow(seriesId) {
+  if (!seriesId) return { following: false, error: new Error('Series ID required.') };
+  try {
+    const sessionRes = await supabase.auth.getSession().catch(() => null);
+    const userId = sessionRes?.data?.session?.user?.id;
+    if (!userId) return { following: false, error: null };
+    const { data, error } = await supabase
+      .from('media_series_follows')
+      .select('series_id')
+      .eq('user_id', userId)
+      .eq('series_id', seriesId)
+      .maybeSingle();
+    return { following: Boolean(data), error: error || null };
+  } catch (error) {
+    return { following: false, error };
+  }
+}
+
+/**
+ * Follows or unfollows a series using the authenticated user's own row.
+ */
+export async function toggleSeriesFollow(seriesId) {
+  if (!seriesId) return { following: false, error: new Error('Series ID required.') };
+  try {
+    const sessionRes = await supabase.auth.getSession().catch(() => null);
+    const userId = sessionRes?.data?.session?.user?.id;
+    if (!userId) return { following: false, error: new Error('Sign in to follow this series.') };
+
+    const existing = await supabase
+      .from('media_series_follows')
+      .select('series_id')
+      .eq('user_id', userId)
+      .eq('series_id', seriesId)
+      .maybeSingle();
+    if (existing.error) return { following: false, error: existing.error };
+
+    if (existing.data) {
+      const { error } = await supabase
+        .from('media_series_follows')
+        .delete()
+        .eq('user_id', userId)
+        .eq('series_id', seriesId);
+      return { following: false, error: error || null };
+    }
+
+    const { error } = await supabase
+      .from('media_series_follows')
+      .insert({ user_id: userId, series_id: seriesId });
+    return { following: !error, error: error || null };
+  } catch (error) {
+    return { following: false, error };
+  }
+}
+
+/**
  * Lists published video/audio series.
  */
 export async function listSeries({ kind = 'video', limit = 12 } = {}) {
