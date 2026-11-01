@@ -3327,3 +3327,82 @@
   border-color: var(--teal, #0d766e);
 }
 
+
+
+/* --------------------------------------------------------------------------
+ * Layout Kit accessibility and motion safeguards (additive overrides)
+ * -------------------------------------------------------------------------- */
+.layout-switcher__btn,
+.layout-switcher--sm .layout-switcher__btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.layout-rail__arrow {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.sort-menu__option {
+  min-height: 44px;
+}
+
+.section-block__see-all-btn,
+.filter-chip,
+.sort-menu__trigger,
+.sort-menu__option,
+.shammah-error-state__retry-btn,
+.spotlight-card__cta,
+.layout-switcher__btn,
+.layout-rail__arrow,
+.accent-card--interactive {
+  outline-offset: 3px;
+}
+
+.section-block__see-all-btn:focus-visible,
+.filter-chip:focus-visible,
+.sort-menu__trigger:focus-visible,
+.sort-menu__option:focus-visible,
+.shammah-error-state__retry-btn:focus-visible,
+.spotlight-card__cta:focus-visible,
+.layout-switcher__btn:focus-visible,
+.layout-rail__arrow:focus-visible {
+  outline: 2px solid var(--sec-color, var(--teal, #0d9488));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sec-color, var(--teal, #0d9488)) 22%, transparent);
+}
+
+.layout-switcher__btn.is-active:focus-visible {
+  outline-color: var(--sec-color, #ffffff);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accent-card,
+  .accent-card--interactive,
+  .layout-switcher__btn,
+  .layout-rail,
+  .layout-rail__fade,
+  .layout-rail__arrow,
+  .section-block__see-all-btn,
+  .media-thumb__img,
+  .shammah-progress__fill,
+  .filter-chip,
+  .spotlight-card__cta,
+  .shimmer,
+  .accent-card__neon-ring,
+  .infinite-sentinel__spinner {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  .accent-card:hover,
+  .accent-card--interactive:active,
+  .layout-rail__arrow:hover,
+  .spotlight-card__cta:hover {
+    transform: none !important;
+  }
+}
