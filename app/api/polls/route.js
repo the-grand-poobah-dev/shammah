@@ -694,90 +694,56 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Poll creation is temporarily unavailable. Please try again later.' }, { status: 503 });
     }
 
-    {
-      try {
-        // Try inserting with full 20261030_polls_hub.sql columns first
-        const { data: fullInsert, error: fullErr } = await supa.client
-          .from('posts')
-          .insert({
-            author_id: userId,
-            church_id: body.church_id || null,
-            category_id: categoryId,
-            text_content: question,
-            visibility,
-            poll_type: pollType,
-            is_quiz: isQuiz,
-            quiz_explanation: quizExplanation,
-            poll_anonymous: pollAnonymous,
-            poll_multi_select: pollMultiSelect,
-            hide_results_until_vote: hideResultsUntilVote,
-            poll_starts_at: startsAt,
-            poll_expires_at: expiresAt,
-            poll_accent: pollAccent,
-            poll_category: pollCategory,
-            is_anonymous: pollAnonymous,
-          })
-          .select('id')
-          .single();
+    try {
+      const { data: insertedPost, error: postError } = await supa.client
+        .from('posts')
+        .insert({
+          author_id: userId,
+          church_id: body.church_id || null,
+          category_id: categoryId,
+          text_content: question,
+          visibility,
+          poll_type: pollType,
+          is_quiz: isQuiz,
+          quiz_explanation: quizExplanation,
+          poll_anonymous: pollAnonymous,
+          poll_multi_select: pollMultiSelect,
+          hide_results_until_vote: hideResultsUntilVote,
+          poll_starts_at: startsAt,
+          poll_expires_at: expiresAt,
+          poll_accent: pollAccent,
+          poll_category: pollCategory,
+          is_anonymous: pollAnonymous,
+        })
+        .select('id')
+        .single();
 
-        if (!fullErr && fullInsert?.id) {
-          createdPostId = fullInsert.id;
-        } else {
-          // Fallback to base posts columns
-          const { data: baseInsert } = await supa.client
-            .from('posts')
-            .insert({
-              author_id: userId,
-              church_id: body.church_id || null,
-              category_id: categoryId,
-              text_content: question,
-              visibility,
-              poll_expires_at: expiresAt,
-              is_anonymous: pollAnonymous,
-            })
-            .select('id')
-            .single();
-          if (baseInsert?.id) createdPostId = baseInsert.id;
-        }
+      if (postError || !insertedPost?.id) {
+        return NextResponse.json({ error: 'The poll could not be saved. Please confirm the polls migration has been applied.' }, { status: 500 });
+      }
+      createdPostId = insertedPost.id;
 
-        if (createdPostId) {
-          const { data: optRows, error: optErr } = await supa.client
-            .from('poll_options')
-            .insert(
-              cleanOptions.map((o) => ({
-                post_id: createdPostId,
-                label: o.label,
-                image_url: o.image_url,
-                is_correct: o.is_correct,
-                position: o.position,
-              }))
-            )
-            .select('*');
+      const { data: optionRows, error: optionError } = await supa.client
+        .from('poll_options')
+        .insert(cleanOptions.map((o) => ({
+          post_id: createdPostId,
+          label: o.label,
+          image_url: o.image_url,
+          is_correct: o.is_correct,
+          position: o.position,
+        })))
+        .select('*');
 
-          if (!optErr && Array.isArray(optRows)) {
-            createdOptions = optRows;
-          } else {
-            // Fallback without is_correct if migration not yet applied
-            const { data: basicOptRows } = await supa.client
-              .from('poll_options')
-              .insert(
-                cleanOptions.map((o) => ({
-                  post_id: createdPostId,
-                  label: o.label,
-                  image_url: o.image_url,
-                  position: o.position,
-                }))
-              )
-              .select('*');
-            if (Array.isArray(basicOptRows)) {
-              createdOptions = basicOptRows.map((bo, idx) => ({
-                ...bo,
-                is_correct: cleanOptions[idx]?.is_correct || false,
-              }));
-            }
-          }
-        }
-      } catch {}
+      if (optionError || !Array.isArray(optionRows) || optionRows.length !== cleanOptions.length) {
+        await supa.client.from('posts').delete().eq('id', createdPostId);
+        return NextResponse.json({ error: 'The poll options could not be saved. No incomplete poll was published.' }, { status: 500 });
+      }
+      createdOptions = optionRows;
+    } catch {
+      if (createdPostId) {
+        try { await supa.client.from('posts').delete().eq('id', createdPostId); } catch {}
+      }
+      return NextResponse.json({ error: 'The poll could not be saved to the database.' }, { status: 500 });
     }
 
     if (!createdPostId || createdOptions.length !== cleanOptions.length) {
@@ -835,49 +801,47 @@ export async function POST(req) {
   // -------------------------------------------------------------------------
   if (action === 'close_poll') {
     const pollId = body.poll_id;
-    if (!pollId) {
-      return NextResponse.json({ error: 'Missing poll_id' }, { status: 400 });
+    if (!pollId) return NextResponse.json({ error: 'Missing poll_id' }, { status: 400 });
+    if (!supa?.client) return NextResponse.json({ error: 'Poll closing is temporarily unavailable.' }, { status: 503 });
+
+    try {
+      const { data, error } = await supa.client.rpc('close_poll_early', { p_poll_id: pollId });
+      if (error) {
+        const status = error.code === '42501' ? 403 : error.code === 'P0002' ? 404 : 500;
+        return NextResponse.json({ error: status === 500 ? 'Unable to close this poll right now.' : error.message }, { status });
+      }
+      return NextResponse.json(data || { ok: true, poll_id: pollId });
+    } catch {
+      return NextResponse.json({ error: 'Unable to close this poll right now.' }, { status: 500 });
     }
-
-    const nowIso = new Date().toISOString();
-    runtimeState.closedPollIds.set(pollId, nowIso);
-
-    if (supa?.client) {
-      try {
-        const { error: rpcErr } = await supa.client.rpc('close_poll_early', {
-          p_poll_id: pollId,
-        });
-        if (rpcErr) {
-          await supa.client
-            .from('posts')
-            .update({ poll_expires_at: nowIso })
-            .eq('id', pollId);
-        }
-      } catch {}
-    }
-
-    return NextResponse.json({ ok: true, poll_id: pollId, closed_at: nowIso });
   }
 
+  // -------------------------------------------------------------------------
   // -------------------------------------------------------------------------
   // 4. DELETE POLL (Creator or Moderator)
   // -------------------------------------------------------------------------
   if (action === 'delete_poll') {
     const pollId = body.poll_id;
-    if (!pollId) {
-      return NextResponse.json({ error: 'Missing poll_id' }, { status: 400 });
+    if (!pollId) return NextResponse.json({ error: 'Missing poll_id' }, { status: 400 });
+    if (!supa?.client) return NextResponse.json({ error: 'Poll deletion is temporarily unavailable.' }, { status: 503 });
+
+    try {
+      const { data, error } = await supa.client
+        .from('posts')
+        .delete()
+        .eq('id', pollId)
+        .eq('author_id', userId)
+        .select('id');
+      if (error) {
+        return NextResponse.json({ error: 'Unable to delete this poll. You may not have permission.' }, { status: 403 });
+      }
+      if (!Array.isArray(data) || data.length === 0) {
+        return NextResponse.json({ error: 'Poll not found or you are not its creator.' }, { status: 404 });
+      }
+      return NextResponse.json({ ok: true, poll_id: pollId });
+    } catch {
+      return NextResponse.json({ error: 'Unable to delete this poll right now.' }, { status: 500 });
     }
-
-    runtimeState.deletedPollIds.add(pollId);
-    runtimeState.createdPolls = runtimeState.createdPolls.filter((p) => p.id !== pollId);
-
-    if (supa?.client) {
-      try {
-        await supa.client.from('posts').delete().eq('id', pollId);
-      } catch {}
-    }
-
-    return NextResponse.json({ ok: true, poll_id: pollId });
   }
 
   return NextResponse.json({ error: 'Unsupported action' }, { status: 400 });
