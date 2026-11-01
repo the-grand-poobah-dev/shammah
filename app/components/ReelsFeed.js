@@ -642,17 +642,16 @@ function ReelItem({
   return (
     <div className="reels-card-viewport">
       <div className="reels-card-frame" onClick={handleVideoClick}>
-        {/* Background Blurred Video / Backdrop to prevent black borders */}
-        {isMounted && (
-          <video
-            src={reel.media_url}
+        {/* Blurred thumbnail backdrop preserves the 9:16 contain fit without mounting a second video. */}
+        {isMounted && (reel.media_thumbnail_url || reel.thumb_url) ? (
+          <img
+            src={reel.media_thumbnail_url || reel.thumb_url}
             className="reels-video-blurred-backdrop"
-            muted
-            loop
-            playsInline
+            alt=""
             aria-hidden="true"
+            loading={isActive ? 'eager' : 'lazy'}
           />
-        )}
+        ) : null}
 
         {/* Foreground 9:16 Video */}
         {isMounted ? (
