@@ -67,6 +67,7 @@ export async function listMedia({
   sort = 'recent',
   limit = 20,
   offset = 0,
+  cursor = null,
   authorId,
   seriesId,
   churchId,
@@ -79,7 +80,7 @@ export async function listMedia({
         p_kind: kind || null,
         p_category: category && category !== 'All' ? category : null,
         p_limit: limit,
-        p_offset: offset,
+        p_offset: cursor ? 0 : offset,
       });
 
       if (error) {
@@ -150,7 +151,13 @@ export async function listMedia({
       q = q.order('published_at', { ascending: false });
     }
 
-    q = q.range(offset, offset + limit - 1);
+    // Cursor is the last published_at ISO timestamp. Keep offset pagination for
+    // older callers while recent-feed consumers can use keyset pagination.
+    if (sort === 'recent' && typeof cursor === 'string' && cursor) {
+      q = q.lt('published_at', cursor).order('id', { ascending: false }).limit(limit);
+    } else {
+      q = q.range(offset, offset + limit - 1);
+    }
 
     const { data, count, error } = await q;
 
@@ -163,6 +170,7 @@ export async function listMedia({
         sort,
         limit,
         offset,
+        cursor,
       });
       if (fb && Array.isArray(fb.data) && (fb.data.length > 0 || error)) {
         return {
@@ -187,6 +195,7 @@ export async function listMedia({
       sort,
       limit,
       offset,
+      cursor,
     });
     if (fb && Array.isArray(fb.data)) {
       return { data: fb.data, count: fb.count ?? fb.data.length, error: null };
@@ -855,4 +864,68 @@ export async function listSeries({ kind = 'video', limit = 12 } = {}) {
   }
 }
 
+/**
+ * Lists comments attached to a published media item.
+ * Cursor is the last comment's created_at ISO timestamp; offset remains available
+ * for callers that still use page-number pagination.
+ */
+export async function listMediaComments(itemId, { limit = 30, cursor = null, offset = 0 } = {}) {
+  if (!itemId) return { data: [], error: new Error('Media item ID required.') };
 
+  try {
+    const pageSize = Math.min(Math.max(Number(limit) || 30, 1), 100);
+    let query = supabase
+      .from('media_comments')
+      .select(`
+        id, item_id, user_id, parent_id, body, media_url, media_type, created_at,
+        author:profiles!user_id (id, display_name, avatar_url, badge, badge_verified)
+      `, { count: 'exact' })
+      .eq('item_id', itemId)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(pageSize);
+
+    if (cursor) query = query.gt('created_at', cursor);
+    else if (offset > 0) query = query.range(offset, offset + pageSize - 1);
+
+    const { data, error, count } = await query;
+    return { data: data || [], count: count || 0, error: error || null };
+  } catch (error) {
+    return { data: [], count: 0, error };
+  }
+}
+
+/**
+ * Creates a media comment using the signed-in user's identity and table RLS.
+ */
+export async function createMediaComment({ itemId, body, parentId = null, mediaUrl = null, mediaType = null } = {}) {
+  const text = typeof body === 'string' ? body.trim() : '';
+  if (!itemId) return { data: null, error: new Error('Media item ID required.') };
+  if (!text && !mediaUrl) return { data: null, error: new Error('Add text or media to your comment.') };
+  if (text.length > 2000) return { data: null, error: new Error('Comments must be 2,000 characters or fewer.') };
+  if (mediaType && !['image', 'video', 'audio', 'gif'].includes(mediaType)) {
+    return { data: null, error: new Error('Unsupported comment media type.') };
+  }
+
+  try {
+    const sessionRes = await supabase.auth.getSession().catch(() => null);
+    const userId = sessionRes?.data?.session?.user?.id;
+    if (!userId) return { data: null, error: new Error('Sign in to comment.') };
+
+    const { data, error } = await supabase
+      .from('media_comments')
+      .insert({
+        item_id: itemId, user_id: userId, parent_id: parentId || null,
+        body: text || '', media_url: mediaUrl || null, media_type: mediaType || null,
+      })
+      .select(`
+        id, item_id, user_id, parent_id, body, media_url, media_type, created_at,
+        author:profiles!user_id (id, display_name, avatar_url, badge, badge_verified)
+      `)
+      .single();
+
+    return { data: data || null, error: error || null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
