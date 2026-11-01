@@ -27,7 +27,7 @@ import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
 import CommentThread from './CommentThread';
 import ReelCreatorModal from './ReelCreatorModal';
-import { listReels, toggleReelLike, recordReelView, toggleFollowAuthor, checkIsFollowing } from '../lib/data/reelsApi';
+import { listReels, toggleReelLike, recordReelView, toggleFollowAuthor, checkIsFollowing, toggleReelSave, checkReelSaved } from '../lib/data/reelsApi';
 import { playSound } from '../lib/soundEffects';
 
 export default function ReelsFeed({
@@ -521,6 +521,19 @@ function ReelItem({
     }
   }, [session?.user?.id, reel.author_id]);
 
+  // Saved state is loaded from Supabase, not inferred from local component state.
+  useEffect(() => {
+    let cancelled = false;
+    if (session?.user?.id && reel.id) {
+      checkReelSaved(reel.id).then((isSaved) => {
+        if (!cancelled) setSaved(isSaved);
+      });
+    } else {
+      setSaved(false);
+    }
+    return () => { cancelled = true; };
+  }, [session?.user?.id, reel.id]);
+
   function handleVideoClick(e) {
     const now = Date.now();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -604,15 +617,23 @@ function ReelItem({
     showToast('Reel link copied!');
   }
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.stopPropagation();
     if (!session?.user?.id) {
       if (openAuth) openAuth('signin');
       return;
     }
-    setSaved((s) => !s);
+    const previous = saved;
+    setSaved(!previous);
+    const result = await toggleReelSave(reel.id);
+    if (result.error) {
+      setSaved(previous);
+      showToast(result.error.message || 'Could not update saved reels.');
+      return;
+    }
+    setSaved(Boolean(result.saved));
     playSound('reaction');
-    showToast(!saved ? 'Saved to Bookmarks' : 'Removed from Bookmarks');
+    showToast(result.saved ? 'Saved to Bookmarks' : 'Removed from Bookmarks');
   }
 
   const authorName = reel.profiles?.display_name || 'Faith Member';
