@@ -210,7 +210,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_user_id uuid := auth.uid();
   v_new_liked boolean;
@@ -252,14 +252,14 @@ begin
 
   return jsonb_build_object('item_id', p_item_id, 'liked', v_new_liked, 'like_count', coalesce(v_like_count, 0));
 end;
-$;
+$$;
 
 create or replace function public.toggle_media_save(p_item_id uuid)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_user_id uuid := auth.uid();
   v_new_saved boolean;
@@ -301,7 +301,7 @@ begin
 
   return jsonb_build_object('item_id', p_item_id, 'saved', v_new_saved, 'save_count', coalesce(v_save_count, 0));
 end;
-$;
+$$;
 
 -- Explicit RPC grants: view recording is intentionally available to guests;
 -- likes and saves require a real signed-in user (enforced inside each function).
