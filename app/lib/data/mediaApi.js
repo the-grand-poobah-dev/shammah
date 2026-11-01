@@ -823,6 +823,40 @@ export async function listContinueWatching({ kind = 'video', limit = 10 } = {}) 
 }
 
 /**
+ * Creates a media series owned by the signed-in user.
+ */
+export async function createMediaSeries({ title, description = null, kind = 'video', churchId = null, coverUrl = null, accent = null } = {}) {
+  const cleanTitle = typeof title === 'string' ? title.trim() : '';
+  if (!cleanTitle) return { data: null, error: new Error('Series title is required.') };
+  if (cleanTitle.length > 160) return { data: null, error: new Error('Series title must be 160 characters or fewer.') };
+  if (!['video', 'audio'].includes(kind)) return { data: null, error: new Error('Series kind must be video or audio.') };
+
+  try {
+    const sessionRes = await supabase.auth.getSession().catch(() => null);
+    const userId = sessionRes?.data?.session?.user?.id;
+    if (!userId) return { data: null, error: new Error('Sign in to create a media series.') };
+
+    const { data, error } = await supabase
+      .from('media_series')
+      .insert({
+        owner_id: userId,
+        church_id: churchId || null,
+        title: cleanTitle,
+        description: typeof description === 'string' && description.trim() ? description.trim() : null,
+        kind,
+        cover_url: coverUrl || null,
+        accent: accent || null,
+      })
+      .select()
+      .single();
+
+    return { data: data || null, error: error || null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
+/**
  * Lists published video/audio series.
  */
 export async function listSeries({ kind = 'video', limit = 12 } = {}) {
