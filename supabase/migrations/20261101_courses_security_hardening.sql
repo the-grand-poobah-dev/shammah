@@ -4,6 +4,9 @@
 
 begin;
 
+-- Compatibility column used by the current creator UI and API.
+alter table public.courses add column if not exists instructor_role text;
+
 -- Keep RLS enabled on every course-related table, including legacy progress.
 alter table public.courses enable row level security;
 alter table public.course_modules enable row level security;
