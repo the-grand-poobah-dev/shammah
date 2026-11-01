@@ -253,6 +253,34 @@ async function fetchCoursesFromDb(supabase, userId) {
   }
 }
 
+function sanitizeCourseForViewer(course, userId) {
+  const isOwner = Boolean(userId && course.author_id === userId);
+  const hasCourseAccess = Boolean(course.enrolled && course.paid);
+  const mayReadFullCourse = isOwner || hasCourseAccess;
+  return {
+    ...course,
+    modules: (course.modules || []).map((module) => ({
+      ...module,
+      lessons: (module.lessons || []).map((lesson) => {
+        const mayReadLesson = mayReadFullCourse || lesson.is_preview === true;
+        const questions = Array.isArray(lesson.quiz_questions) ? lesson.quiz_questions : [];
+        return {
+          ...lesson,
+          media_url: mayReadLesson ? lesson.media_url : null,
+          body_md: mayReadLesson ? lesson.body_md : null,
+          quiz_questions: mayReadLesson
+            ? questions.map((question) => {
+                if (isOwner) return question;
+                const { correct_index, explanation, ...safeQuestion } = question;
+                return safeQuestion;
+              })
+            : []
+        };
+      })
+    }))
+  };
+}
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -285,8 +313,12 @@ export async function GET(request) {
             return NextResponse.json({
               valid: true,
               certificate: {
-                ...cert,
-                course: course || findCourseInMemory(cert.course_id) || null
+                code: cert.code,
+                recipient_name: cert.recipient_name,
+                issued_at: cert.issued_at,
+                course_title: cert.course_title || course?.title || null,
+                instructor_name: cert.instructor_name || course?.instructor_name || null,
+                course: course || null
               }
             });
           }
@@ -297,15 +329,12 @@ export async function GET(request) {
     }
 
     const dbCourses = await fetchCoursesFromDb(supabase, userId);
-    const allCourses = (dbCourses || memoryStore.courses.map((c) => {
+    const visibleCourses = (dbCourses || memoryStore.courses.map((c) => {
       const stats = computeCourseStatsForUser(c, userId);
       const cReviews = memoryStore.reviews.filter((r) => r.course_id === c.id);
-      return {
-        ...c,
-        ...stats,
-        reviews: cReviews
-      };
+      return { ...c, ...stats, reviews: cReviews };
     })).filter((c) => c.status === 'published' || (userId && c.author_id === userId));
+    const allCourses = visibleCourses.map((course) => sanitizeCourseForViewer(course, userId));
 
     if (action === 'detail') {
       const courseId = searchParams.get('id');
@@ -455,32 +484,49 @@ export async function POST(request) {
 
     if (action === 'save_lesson_progress') {
       const { courseId, lessonId, positionSeconds, personalNotes, quizScore } = body;
-      const memCourse = findCourseInMemory(courseId);
-      const targetCourseId = memCourse?.id || courseId;
-
-      const prev = memoryStore.lessonProgress.get(`${userId}:${lessonId}`) || {};
-      const updated = {
-        ...prev,
-        user_id: userId,
-        lesson_id: lessonId,
-        course_id: targetCourseId,
-        completed: Boolean(prev.completed),
-        last_position_seconds:
-          positionSeconds !== undefined ? Math.max(0, Number(positionSeconds)) : prev.last_position_seconds || 0,
-        personal_notes:
-          personalNotes !== undefined ? String(personalNotes) : prev.personal_notes || '',
-        quiz_score: quizScore !== undefined ? quizScore : prev.quiz_score ?? null,
-        updated_at: new Date().toISOString()
-      };
-      memoryStore.lessonProgress.set(`${userId}:${lessonId}`, updated);
-
-      if (supabase) {
-        try {
-          await supabase.from('lesson_progress').upsert(updated, { onConflict: 'user_id,lesson_id' });
-        } catch {}
+      if (!courseId || !lessonId) {
+        return NextResponse.json({ error: 'Course and lesson IDs are required.' }, { status: 400 });
+      }
+      const { data: lesson, error: lessonError } = await supabase
+        .from('course_lessons')
+        .select('id, course_id')
+        .eq('id', lessonId)
+        .eq('course_id', courseId)
+        .maybeSingle();
+      if (lessonError || !lesson) {
+        return NextResponse.json({ error: 'Lesson not found in this course.' }, { status: 404 });
+      }
+      const { data: course } = await supabase
+        .from('courses')
+        .select('id, price_kes')
+        .eq('id', courseId)
+        .maybeSingle();
+      const { data: enrollment } = await supabase
+        .from('course_enrollments')
+        .select('paid')
+        .eq('user_id', userId)
+        .eq('course_id', courseId)
+        .maybeSingle();
+      if (!course || !enrollment || (Number(course.price_kes || 0) > 0 && enrollment.paid !== true)) {
+        return NextResponse.json({ error: 'Enroll in this course and complete any required payment before saving progress.' }, { status: 403 });
       }
 
-      return NextResponse.json({ ok: true, progress: updated });
+      const payload = {
+        user_id: userId,
+        lesson_id: lessonId,
+        course_id: courseId,
+        last_position_seconds: Math.max(0, Math.min(86400, Number(positionSeconds || 0))),
+        updated_at: new Date().toISOString()
+      };
+      if (quizScore !== undefined) payload.quiz_score = quizScore == null ? null : Math.max(0, Math.min(100, Math.round(Number(quizScore))));
+      if (personalNotes !== undefined) payload.personal_notes = String(personalNotes).slice(0, 10000);
+      const { data: progress, error } = await supabase
+        .from('lesson_progress')
+        .upsert(payload, { onConflict: 'user_id,lesson_id' })
+        .select('*')
+        .single();
+      if (error) return NextResponse.json({ error: error.message || 'Could not save lesson progress.' }, { status: 500 });
+      return NextResponse.json({ ok: true, progress });
     }
 
     if (action === 'issue_certificate') {
@@ -501,103 +547,41 @@ export async function POST(request) {
 
     if (action === 'submit_review') {
       const { courseId, rating, body: reviewBody } = body;
-      const memCourse = findCourseInMemory(courseId);
-      const targetCourseId = memCourse?.id || courseId;
       const cleanRating = Math.max(1, Math.min(5, Math.round(Number(rating || 5))));
-      const cleanBody = String(reviewBody || '').trim();
-
-      const reviewObj = {
-        id: `rev-${Date.now()}`,
-        user_id: userId,
-        course_id: targetCourseId,
-        reviewer_name: userName,
-        reviewer_avatar: sessionUser?.user_metadata?.avatar_url || null,
-        rating: cleanRating,
-        body: cleanBody,
-        created_at: new Date().toISOString()
-      };
-
-      memoryStore.reviews = [
-        reviewObj,
-        ...memoryStore.reviews.filter((r) => !(r.user_id === userId && r.course_id === targetCourseId))
-      ];
-
-      if (memCourse) {
-        const courseRevs = memoryStore.reviews.filter((r) => r.course_id === targetCourseId);
-        memCourse.rating_count = courseRevs.length;
-        memCourse.rating_avg = Number(
-          (courseRevs.reduce((a, r) => a + r.rating, 0) / Math.max(1, courseRevs.length)).toFixed(1)
-        );
+      const cleanBody = String(reviewBody || '').trim().slice(0, 3000);
+      if (!courseId || !Number.isFinite(cleanRating)) {
+        return NextResponse.json({ error: 'Course and valid rating are required.' }, { status: 400 });
       }
-
-      if (supabase) {
-        try {
-          await supabase.from('course_reviews').upsert(
-            {
-              user_id: userId,
-              course_id: targetCourseId,
-              reviewer_name: userName,
-              rating: cleanRating,
-              body: cleanBody,
-              updated_at: new Date().toISOString()
-            },
-            { onConflict: 'user_id,course_id' }
-          );
-        } catch {}
+      const { data: enrollment } = await supabase
+        .from('course_enrollments')
+        .select('paid')
+        .eq('user_id', userId)
+        .eq('course_id', courseId)
+        .maybeSingle();
+      if (!enrollment) {
+        return NextResponse.json({ error: 'You must enroll in this course before reviewing it.' }, { status: 403 });
       }
-
-      return NextResponse.json({
-        ok: true,
-        review: reviewObj,
-        rating_avg: memCourse?.rating_avg || cleanRating,
-        rating_count: memCourse?.rating_count || 1
-      });
+      const { data: savedReview, error } = await supabase
+        .from('course_reviews')
+        .upsert({
+          user_id: userId,
+          course_id: courseId,
+          rating: cleanRating,
+          body: cleanBody,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id,course_id' })
+        .select('*')
+        .single();
+      if (error) return NextResponse.json({ error: error.message || 'Could not submit review.' }, { status: 500 });
+      return NextResponse.json({ ok: true, review: savedReview });
     }
 
     if (action === 'migrate_legacy_progress') {
-      const { completedSlugs = [] } = body;
-      const migratedIds = [];
-
-      if (Array.isArray(completedSlugs)) {
-        for (const slug of completedSlugs) {
-          const memCourse = findCourseInMemory(String(slug));
-          if (!memCourse) continue;
-          const targetCourseId = memCourse.id;
-          migratedIds.push(targetCourseId);
-
-          memoryStore.enrollments.set(`${userId}:${targetCourseId}`, {
-            user_id: userId,
-            course_id: targetCourseId,
-            enrolled_at: new Date().toISOString(),
-            completed_at: new Date().toISOString(),
-            paid: true
-          });
-
-          const allLessons = (memCourse.modules || []).flatMap((m) => m.lessons || []);
-          for (const les of allLessons) {
-            memoryStore.lessonProgress.set(`${userId}:${les.id}`, {
-              user_id: userId,
-              lesson_id: les.id,
-              course_id: targetCourseId,
-              completed: true,
-              last_position_seconds: 0,
-              completed_at: new Date().toISOString()
-            });
-          }
-
-          const code = generateCertCode();
-          memoryStore.certificates.set(code, {
-            id: `cert-${targetCourseId}`,
-            user_id: userId,
-            course_id: targetCourseId,
-            recipient_name: userName,
-            issued_at: new Date().toISOString(),
-            code
-          });
-        }
-      }
-
-      return NextResponse.json({ ok: true, migrated_course_ids: migratedIds });
+      return NextResponse.json({
+        ok: false,
+        migrated_course_ids: [],
+        error: 'Legacy course progress has not been mapped to the current database catalogue. The browser copy is being preserved.'
+      }, { status: 409 });
     }
 
     if (action === 'save_course') {
@@ -606,7 +590,22 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Course title is required.' }, { status: 400 });
       }
 
-      const isUpdate = Boolean(inputCourse.id && findCourseInMemory(inputCourse.id));
+      let existingCourse = null;
+      if (inputCourse.id) {
+        const { data: foundCourse, error: lookupError } = await supabase
+          .from('courses')
+          .select('id, author_id')
+          .eq('id', inputCourse.id)
+          .maybeSingle();
+        if (lookupError) {
+          return NextResponse.json({ error: 'Could not verify course ownership.' }, { status: 500 });
+        }
+        existingCourse = foundCourse || null;
+        if (existingCourse && existingCourse.author_id !== userId) {
+          return NextResponse.json({ error: 'You can only edit courses you created.' }, { status: 403 });
+        }
+      }
+      const isUpdate = Boolean(existingCourse);
       const courseId = inputCourse.id || `c-${Date.now()}`;
       const modules = Array.isArray(inputCourse.modules)
         ? inputCourse.modules.map((m, mIdx) => {
@@ -705,7 +704,7 @@ export async function POST(request) {
             .from('courses')
             .upsert({
               id: /^[0-9a-f-]{36}$/i.test(courseId) ? courseId : undefined,
-              author_id: /^[0-9a-f-]{36}$/i.test(userId) ? userId : null,
+              author_id: existingCourse?.author_id || (/^[0-9a-f-]{36}$/i.test(userId) ? userId : null),
               instructor_name: newCourseObj.instructor_name,
               instructor_role: newCourseObj.instructor_role,
               title: newCourseObj.title,
