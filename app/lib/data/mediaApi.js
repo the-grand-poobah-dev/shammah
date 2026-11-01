@@ -315,6 +315,7 @@ export async function createMedia(payload) {
       kind: payload.kind || 'video',
       media_url: payload.media_url,
       thumb_url: payload.thumb_url || null,
+      transcript_url: payload.transcript_url || null,
       duration_seconds: payload.duration_seconds || 0,
       category: payload.category || 'General',
       tags: Array.isArray(payload.tags) ? payload.tags : [],
