@@ -651,7 +651,7 @@ export async function POST(request) {
       if (inputCourse.id) {
         const { data: foundCourse, error: lookupError } = await supabase
           .from('courses')
-          .select('id, author_id')
+          .select('id, author_id, rating_avg, rating_count, enrolled_count, created_at')
           .eq('id', inputCourse.id)
           .maybeSingle();
         if (lookupError) {
@@ -742,10 +742,10 @@ export async function POST(request) {
         outcomes: Array.isArray(inputCourse.outcomes)
           ? inputCourse.outcomes.map(String).filter(Boolean)
           : [],
-        rating_avg: isUpdate ? findCourseInMemory(courseId)?.rating_avg || 5.0 : 5.0,
-        rating_count: isUpdate ? findCourseInMemory(courseId)?.rating_count || 1 : 1,
-        enrolled_count: isUpdate ? findCourseInMemory(courseId)?.enrolled_count || 1 : 1,
-        created_at: isUpdate ? findCourseInMemory(courseId)?.created_at : new Date().toISOString(),
+        rating_avg: Number(existingCourse?.rating_avg || 0),
+        rating_count: Number(existingCourse?.rating_count || 0),
+        enrolled_count: Number(existingCourse?.enrolled_count || 0),
+        created_at: existingCourse?.created_at || new Date().toISOString(),
         modules
       };
 
