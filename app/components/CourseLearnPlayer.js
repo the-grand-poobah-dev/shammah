@@ -32,6 +32,7 @@ import {
   completeCourseLesson,
   saveLessonProgress,
   issueCourseCertificate,
+  submitCourseQuiz,
   formatDurationSeconds
 } from '../lib/data/coursesApi';
 import { playSound } from '../lib/soundEffects';
@@ -138,6 +139,8 @@ export default function CourseLearnPlayer({
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(null);
+  const [quizResults, setQuizResults] = useState({});
+  const [quizError, setQuizError] = useState('');
 
   // Certificate state
   const [certificate, setCertificate] = useState(course?.certificate || null);
@@ -156,6 +159,8 @@ export default function CourseLearnPlayer({
     setQuizAnswers({});
     setQuizSubmitted(false);
     setQuizScore(saved?.quiz_score ?? null);
+    setQuizResults({});
+    setQuizError('');
     setReadingProgress(saved?.completed ? 100 : 25);
     lastSavedPosRef.current = Number(saved?.last_position_seconds || 0);
   }, [currentLesson?.id]);
@@ -290,24 +295,27 @@ export default function CourseLearnPlayer({
     }
   };
 
-  const handleSubmitQuiz = () => {
+  const handleSubmitQuiz = async () => {
     if (!currentLesson) return;
     const questions = currentLesson.quiz_questions || [];
     if (questions.length === 0) {
       handleMarkComplete(100);
       return;
     }
-    let correct = 0;
-    questions.forEach((q, idx) => {
-      const qKey = q.id || idx;
-      if (Number(quizAnswers[qKey]) === Number(q.correct_index)) {
-        correct += 1;
-      }
-    });
-    const score = Math.round((correct / questions.length) * 100);
-    setQuizScore(score);
-    setQuizSubmitted(true);
-    handleMarkComplete(score);
+    setQuizError('');
+    try {
+      const result = await submitCourseQuiz({
+        lessonId: currentLesson.id,
+        answers: quizAnswers
+      });
+      const byId = Object.fromEntries((result.results || []).map((item) => [item.id, item]));
+      setQuizResults(byId);
+      setQuizScore(Number(result.score || 0));
+      setQuizSubmitted(true);
+      await handleMarkComplete(Number(result.score || 0));
+    } catch (error) {
+      setQuizError(error?.message || 'Could not submit this quiz. Please try again.');
+    }
   };
 
   const handleOpenCertificate = async () => {
@@ -629,6 +637,9 @@ export default function CourseLearnPlayer({
                       )}
                     </div>
 
+                    {quizError && (
+                      <p className="course-learn-quiz-error" role="alert">{quizError}</p>
+                    )}
                     {(currentLesson.quiz_questions || []).length === 0 ? (
                       <p className="course-learn-quiz-empty">
                         Click &ldquo;Mark Complete&rdquo; below once you have reviewed the module concepts.
@@ -647,7 +658,7 @@ export default function CourseLearnPlayer({
                               <div className="course-learn-quiz-options">
                                 {options.map((opt, oIdx) => {
                                   const isSelected = selectedOpt === oIdx;
-                                  const isCorrect = Number(q.correct_index) === oIdx;
+                                  const isCorrect = Number(quizResults[qKey]?.correct_index) === oIdx;
                                   let stateClass = '';
                                   if (quizSubmitted) {
                                     if (isCorrect) stateClass = 'is-correct';
@@ -673,9 +684,9 @@ export default function CourseLearnPlayer({
                                   );
                                 })}
                               </div>
-                              {quizSubmitted && q.explanation && (
+                              {quizSubmitted && quizResults[qKey]?.explanation && (
                                 <div className="course-learn-quiz-explanation">
-                                  <strong>Explanation:</strong> {q.explanation}
+                                  <strong>Explanation:</strong> {quizResults[qKey].explanation}
                                 </div>
                               )}
                             </div>
