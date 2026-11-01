@@ -20,6 +20,7 @@ const CATEGORY_ALIASES = {
   Youth: ['Youth', 'Youth & Gen-Z'],
   'Live Replays': ['Live Replays', 'Live'],
   Prayer: ['Prayer'],
+  Devotionals: ['Devotionals', 'Prayer'],
   Missions: ['Missions', 'Testimonies'],
 };
 
