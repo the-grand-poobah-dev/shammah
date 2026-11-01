@@ -418,32 +418,25 @@ export function AudioPlayerProvider({ children }) {
   }, []);
 
   const removeFromQueue = useCallback((index) => {
-    setQueue((prev) => {
-      if (index < 0 || index >= prev.length) return prev;
-      // Keep the currently playing item in the queue until playback changes.
-      if (index === queueIndex && prev[index]?.id === currentTrack?.id) return prev;
-      const copy = [...prev];
-      copy.splice(index, 1);
-      setQueueIndex((curr) => index < curr ? curr - 1 : curr);
-      return copy;
-    });
-  }, [queueIndex, currentTrack]);
+    if (index < 0 || index >= queue.length) return;
+    // Keep the currently playing item in the queue until playback changes.
+    if (index === queueIndex && queue[index]?.id === currentTrack?.id) return;
+    const copy = [...queue];
+    copy.splice(index, 1);
+    setQueue(copy);
+    if (index < queueIndex) setQueueIndex(queueIndex - 1);
+  }, [queue, queueIndex, currentTrack]);
 
   const reorderQueue = useCallback((fromIndex, toIndex) => {
-    setQueue((prev) => {
-      if (fromIndex < 0 || toIndex < 0 || fromIndex >= prev.length || toIndex >= prev.length || fromIndex === toIndex) return prev;
-      const copy = [...prev];
-      const [moved] = copy.splice(fromIndex, 1);
-      copy.splice(toIndex, 0, moved);
-      setQueueIndex((curr) => {
-        if (curr === fromIndex) return toIndex;
-        if (fromIndex < curr && toIndex >= curr) return curr - 1;
-        if (fromIndex > curr && toIndex <= curr) return curr + 1;
-        return curr;
-      });
-      return copy;
-    });
-  }, []);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= queue.length || toIndex >= queue.length || fromIndex === toIndex) return;
+    const copy = [...queue];
+    const [moved] = copy.splice(fromIndex, 1);
+    copy.splice(toIndex, 0, moved);
+    setQueue(copy);
+    if (queueIndex === fromIndex) setQueueIndex(toIndex);
+    else if (fromIndex < queueIndex && toIndex >= queueIndex) setQueueIndex(queueIndex - 1);
+    else if (fromIndex > queueIndex && toIndex <= queueIndex) setQueueIndex(queueIndex + 1);
+  }, [queue, queueIndex]);
 
   const clearQueue = useCallback(() => {
     setQueue(currentTrack ? [currentTrack] : []);
