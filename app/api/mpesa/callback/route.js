@@ -59,33 +59,50 @@ export async function POST(req) {
     // Also check if this callback corresponds to a paid course enrollment transaction
     const { data: tx } = await supabase
       .from('mpesa_transactions')
-      .select('id, project_id, user_id, plan_id, amount_kes')
+      .select('id, project_id, user_id, plan_id, amount_kes, status')
       .eq('checkout_request_id', checkoutId)
       .maybeSingle();
 
-    if (tx && tx.project_id && tx.user_id && success) {
-      await supabase
-        .from('mpesa_transactions')
-        .update({
-          status: 'completed',
-          receipt_code: receipt || undefined,
-          amount_kes: amount != null ? Math.round(amount) : tx.amount_kes,
-        })
-        .eq('id', tx.id);
-
-      await supabase
-        .from('course_enrollments')
-        .upsert(
-          {
-            user_id: tx.user_id,
-            course_id: String(tx.project_id).replace(/^course:/, ''),
-            paid: true,
-            mpesa_receipt: receipt || null,
-            amount_paid_kes: amount != null ? Math.round(amount) : tx.amount_kes || 0,
-            enrolled_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id,course_id' }
-        );
+    const isCoursePayment = Boolean(
+      tx &&
+      tx.project_id &&
+      tx.plan_id === tx.project_id &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(tx.project_id))
+    );
+    if (isCoursePayment && tx.status === 'pending') {
+      const verifiedAmount = amount != null && Math.round(amount) === Number(tx.amount_kes);
+      if (success && receipt && verifiedAmount) {
+        const { error: txUpdateError } = await supabase
+          .from('mpesa_transactions')
+          .update({
+            status: 'completed',
+            receipt_code: receipt,
+            amount_kes: Math.round(amount),
+          })
+          .eq('id', tx.id)
+          .eq('status', 'pending');
+        if (!txUpdateError) {
+          await supabase
+            .from('course_enrollments')
+            .upsert(
+              {
+                user_id: tx.user_id,
+                course_id: String(tx.project_id),
+                paid: true,
+                mpesa_receipt: receipt,
+                amount_paid_kes: Math.round(amount),
+                enrolled_at: new Date().toISOString(),
+              },
+              { onConflict: 'user_id,course_id' }
+            );
+        }
+      } else if (!success || !verifiedAmount) {
+        await supabase
+          .from('mpesa_transactions')
+          .update({ status: 'failed' })
+          .eq('id', tx.id)
+          .eq('status', 'pending');
+      }
     }
 
     // Check if this callback corresponds to a fundraiser donation
