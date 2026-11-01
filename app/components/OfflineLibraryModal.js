@@ -242,7 +242,7 @@ export default function OfflineLibraryModal({ isOpen = true, onClose, onOpenItem
                         type="button"
                         className="offline-open-btn"
                         onClick={handleOpenItemTarget}
-                        title="Open interactive page"
+                        title="Open or play saved item"
                       >
                         <ExternalLink size={15} />
                       </button>
