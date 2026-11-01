@@ -172,6 +172,11 @@ export default function OfflineLibraryModal({ isOpen = true, onClose, onOpenItem
               const bibleChapter = item.type === 'bible_chapter' ? (item.bibleChapterData || getOfflineBibleChapter(item.bibleChapterData?.bookName, item.bibleChapterData?.chapterNum, item.bibleChapterData?.translation)) : null;
 
               function handleOpenItemTarget() {
+                if (item.type === 'audio' && audioPlayer) {
+                  audioPlayer.playTrack(item.itemData || item, [item.itemData || item]);
+                  onClose && onClose();
+                  return;
+                }
                 playSound('reaction');
                 onClose?.();
                 if (item.type === 'church_feed') {
