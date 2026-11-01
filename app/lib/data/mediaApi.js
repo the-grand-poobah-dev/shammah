@@ -589,6 +589,62 @@ export async function createPlaylist({ title, description, kind = 'mixed', isPub
 }
 
 /**
+ * Updates a playlist owned by the signed-in user. RLS remains authoritative.
+ */
+export async function updatePlaylist(playlistId, changes = {}) {
+  if (!playlistId) return { data: null, error: new Error('Playlist ID required.') };
+  const sessionRes = await supabase.auth.getSession().catch(() => null);
+  const userId = sessionRes?.data?.session?.user?.id;
+  if (!userId) return { data: null, error: new Error('Sign-in required.') };
+
+  const update = {};
+  if (typeof changes.title === 'string') {
+    const title = changes.title.trim();
+    if (!title) return { data: null, error: new Error('Playlist title is required.') };
+    update.title = title.slice(0, 120);
+  }
+  if (typeof changes.description === 'string') update.description = changes.description.trim() || null;
+  if (typeof changes.isPublic === 'boolean') update.is_public = changes.isPublic;
+  if (typeof changes.coverUrl === 'string' || changes.coverUrl === null) update.cover_url = changes.coverUrl;
+
+  if (Object.keys(update).length === 0) return { data: null, error: new Error('No playlist changes supplied.') };
+  try {
+    const { data, error } = await supabase
+      .from('playlists')
+      .update(update)
+      .eq('id', playlistId)
+      .eq('owner_id', userId)
+      .select()
+      .maybeSingle();
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: new Error('Playlist not found or you do not own it.') };
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
+/**
+ * Deletes a playlist owned by the signed-in user. RLS remains authoritative.
+ */
+export async function deletePlaylist(playlistId) {
+  if (!playlistId) return { data: null, error: new Error('Playlist ID required.') };
+  const sessionRes = await supabase.auth.getSession().catch(() => null);
+  const userId = sessionRes?.data?.session?.user?.id;
+  if (!userId) return { data: null, error: new Error('Sign-in required.') };
+  try {
+    const { error } = await supabase
+      .from('playlists')
+      .delete()
+      .eq('id', playlistId)
+      .eq('owner_id', userId);
+    return { data: null, error: error || null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
+/**
  * Adds an item to a playlist.
  */
 export async function addPlaylistItem(playlistId, itemId, position = 0) {
