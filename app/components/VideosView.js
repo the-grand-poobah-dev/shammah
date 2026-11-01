@@ -55,28 +55,8 @@ import { saveForOffline, isItemSavedOffline, removeOfflineItem } from '../lib/of
 import { formatPostDate, useRelativeTimeTick } from '../lib/postDisplay';
 import { playSound } from '../lib/soundEffects';
 
-// Compatibility export in case external components import SAMPLE_VIDEOS
-export const SAMPLE_VIDEOS = [
-  {
-    id: 'vid-seed-1',
-    media_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    title: 'The Covenant of Grace: Walking in Supernatural Favor',
-    description: 'Sunday teaching on Romans 8 and Kingdom breakthrough in daily life.',
-    duration_seconds: 596,
-    category: 'Sermons',
-    accent: '#06b6d4',
-    view_count: 342,
-    like_count: 68,
-    save_count: 22,
-    published_at: new Date(Date.now() - 3600000 * 6).toISOString(),
-    author: {
-      display_name: 'Bishop Sarah Ndung\'u',
-      avatar_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-      badge: 'bishop',
-      badge_verified: true,
-    },
-  },
-];
+// Compatibility shim for legacy imports. Real video data is loaded from Supabase.
+export const SAMPLE_VIDEOS = [];
 
 const VIDEO_CATEGORIES = [
   { id: 'All', label: 'All Videos' },
