@@ -294,4 +294,212 @@ revoke execute on function public.issue_certificate(uuid) from public, anon;
 grant execute on function public.enroll(uuid), public.course_progress(uuid), public.issue_certificate(uuid)
   to authenticated;
 
+
+-- Replace the original enrollment RPC so unpublished courses cannot be joined.
+create or replace function public.enroll(p_course_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_uid uuid := auth.uid();
+  v_course record;
+  v_existing record;
+  v_has_paid_tx boolean := false;
+begin
+  if v_uid is null then
+    raise exception 'Authentication required to enroll in a course.' using errcode = '42501';
+  end if;
+
+  select id, title, price_kes, status
+    into v_course
+    from public.courses
+    where id = p_course_id;
+  if not found then
+    raise exception 'Course not found.' using errcode = 'P0002';
+  end if;
+  if v_course.status <> 'published' then
+    raise exception 'Only published courses can be enrolled in.' using errcode = '42501';
+  end if;
+
+  select * into v_existing
+    from public.course_enrollments
+    where user_id = v_uid and course_id = p_course_id;
+
+  if found and (coalesce(v_course.price_kes, 0) = 0 or v_existing.paid = true) then
+    return jsonb_build_object('ok', true, 'already_enrolled', true,
+      'course_id', p_course_id, 'paid', v_existing.paid, 'enrolled_at', v_existing.enrolled_at);
+  end if;
+
+  if coalesce(v_course.price_kes, 0) > 0 then
+    select exists (
+      select 1 from public.mpesa_transactions mt
+      where mt.user_id = v_uid
+        and (mt.project_id = p_course_id::text or mt.plan_id = p_course_id::text)
+        and mt.status in ('completed', 'confirmed')
+        and mt.amount_kes >= v_course.price_kes
+    ) into v_has_paid_tx;
+    if not v_has_paid_tx then
+      raise exception 'This is a paid course. Complete and verify M-Pesa payment first.'
+        using errcode = 'P0001';
+    end if;
+  end if;
+
+  insert into public.course_enrollments (user_id, course_id, enrolled_at, paid, amount_paid_kes)
+  values (v_uid, p_course_id, now(), true, coalesce(v_course.price_kes, 0))
+  on conflict (user_id, course_id) do update set
+    paid = true,
+    amount_paid_kes = greatest(public.course_enrollments.amount_paid_kes, excluded.amount_paid_kes);
+
+  update public.courses
+    set enrolled_count = (
+      select count(*)::integer from public.course_enrollments ce
+      where ce.course_id = p_course_id and ce.paid = true
+    )
+    where id = p_course_id;
+
+  return jsonb_build_object('ok', true, 'course_id', p_course_id, 'paid', true, 'enrolled_at', now());
+end;
+$;
+
+-- Do not let complete_lesson silently create an enrollment. The learner must already
+-- have an enrollment and paid access for any priced course.
+create or replace function public.complete_lesson(p_lesson_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_uid uuid := auth.uid();
+  v_course_id uuid;
+  v_price integer;
+  v_enrollment record;
+  v_progress jsonb;
+  v_cert jsonb := null;
+begin
+  if v_uid is null then
+    raise exception 'Authentication required to save lesson progress.' using errcode = '42501';
+  end if;
+
+  select cm.course_id, c.price_kes
+    into v_course_id, v_price
+    from public.course_lessons cl
+    join public.course_modules cm on cm.id = cl.module_id
+    join public.courses c on c.id = cm.course_id
+    where cl.id = p_lesson_id;
+  if v_course_id is null then
+    raise exception 'Lesson not found.' using errcode = 'P0002';
+  end if;
+
+  select * into v_enrollment
+    from public.course_enrollments ce
+    where ce.user_id = v_uid and ce.course_id = v_course_id;
+  if not found then
+    raise exception 'Enroll in this course before completing lessons.' using errcode = '42501';
+  end if;
+  if coalesce(v_price, 0) > 0 and coalesce(v_enrollment.paid, false) is not true then
+    raise exception 'Verified payment is required to access this course.' using errcode = '42501';
+  end if;
+
+  insert into public.lesson_progress (user_id, lesson_id, course_id, completed, updated_at)
+  values (v_uid, p_lesson_id, v_course_id, true, now())
+  on conflict (user_id, lesson_id) do update set completed = true, updated_at = now();
+
+  v_progress := public.course_progress(v_course_id);
+  if coalesce((v_progress->>'is_completed')::boolean, false) then
+    begin
+      v_cert := public.issue_certificate(v_course_id);
+    exception when others then
+      v_cert := null;
+    end;
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'lesson_id', p_lesson_id,
+    'course_id', v_course_id,
+    'progress', v_progress,
+    'certificate_result', v_cert
+  );
+end;
+$;
+
+-- Certificates cannot be minted by a learner who is not enrolled with valid access.
+create or replace function public.issue_certificate(p_course_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_uid uuid := auth.uid();
+  v_total_lessons integer := 0;
+  v_completed_lessons integer := 0;
+  v_existing record;
+  v_course record;
+  v_profile record;
+  v_code text;
+  v_enrollment record;
+begin
+  if v_uid is null then
+    raise exception 'Authentication required to issue a certificate.' using errcode = '42501';
+  end if;
+
+  select * into v_course from public.courses where id = p_course_id;
+  if not found then
+    raise exception 'Course not found.' using errcode = 'P0002';
+  end if;
+
+  select * into v_enrollment from public.course_enrollments
+    where user_id = v_uid and course_id = p_course_id;
+  if not found or (coalesce(v_course.price_kes, 0) > 0 and coalesce(v_enrollment.paid, false) is not true) then
+    raise exception 'A valid enrollment is required for a certificate.' using errcode = '42501';
+  end if;
+
+  select * into v_existing from public.course_certificates
+    where user_id = v_uid and course_id = p_course_id;
+  if found then
+    return jsonb_build_object('ok', true, 'certificate', row_to_json(v_existing));
+  end if;
+
+  select count(*)::integer into v_total_lessons
+    from public.course_lessons cl
+    join public.course_modules cm on cm.id = cl.module_id
+    where cm.course_id = p_course_id;
+  select count(*)::integer into v_completed_lessons
+    from public.lesson_progress lp
+    join public.course_lessons cl on cl.id = lp.lesson_id
+    join public.course_modules cm on cm.id = cl.module_id
+    where lp.user_id = v_uid and cm.course_id = p_course_id and lp.completed = true;
+
+  if v_total_lessons = 0 or v_completed_lessons < v_total_lessons then
+    raise exception 'Complete all course lessons before claiming a certificate.' using errcode = 'P0001';
+  end if;
+
+  select display_name into v_profile from public.profiles where id = v_uid;
+  v_code := 'SHM-CERT-' || upper(substring(replace(p_course_id::text, '-', '') from 1 for 6))
+    || '-' || upper(substring(md5(v_uid::text || clock_timestamp()::text) from 1 for 6));
+
+  insert into public.course_certificates (
+    user_id, course_id, issued_at, code, recipient_name, course_title, instructor_name, church_name
+  ) values (
+    v_uid, p_course_id, now(), v_code,
+    coalesce(v_profile.display_name, 'Believer in Christ'),
+    v_course.title, coalesce(v_course.instructor_name, 'Kingdom Instructor'),
+    coalesce(v_course.church_name, 'Shammah Discipleship Academy')
+  ) returning * into v_existing;
+
+  update public.course_enrollments
+    set completed_at = coalesce(completed_at, now())
+    where user_id = v_uid and course_id = p_course_id;
+
+  return jsonb_build_object('ok', true, 'certificate', row_to_json(v_existing));
+end;
+$;
+
+revoke execute on function public.complete_lesson(uuid) from public, anon;
+grant execute on function public.complete_lesson(uuid) to authenticated;
+
 commit;
