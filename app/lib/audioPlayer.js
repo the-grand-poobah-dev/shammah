@@ -16,6 +16,7 @@ export function useAudioPlayer() {
 
 export function AudioPlayerProvider({ children }) {
   const audioRef = useRef(null);
+  const activeTrackIdRef = useRef(null);
 
   // Playback state
   const [currentTrack, setCurrentTrack] = useState(null);
@@ -232,36 +233,52 @@ export function AudioPlayerProvider({ children }) {
 
     setCurrentTrack(track);
     setIsLoading(true);
+    activeTrackIdRef.current = track.id;
     // Persist the play event through the existing visibility-aware media RPC.
     recordView(track.id, 0).catch(() => {});
 
     if (audioRef.current) {
+      const audio = audioRef.current;
       const src = track.media_url || track.audio_url;
-      if (audioRef.current.src !== src) {
-        audioRef.current.src = src;
+      if (!src) {
+        setIsLoading(false);
+        return;
       }
+      if (audio.src !== src) audio.src = src;
+      audio.playbackRate = playbackSpeed;
 
-      // Check if resuming from saved progress
-      const resumePos = track.playback_position || track.watch_progress?.position_seconds || 0;
-      if (resumePos > 5 && (!track.playback_percent || track.playback_percent < 92)) {
-        audioRef.current.currentTime = resumePos;
-        setCurrentTime(resumePos);
+      const playAt = (position) => {
+        if (activeTrackIdRef.current !== track.id || !audioRef.current) return;
+        const safePosition = Math.max(0, Number(position) || 0);
+        audio.currentTime = safePosition;
+        setCurrentTime(safePosition);
+        audio.play()
+          .then(() => {
+            if (activeTrackIdRef.current === track.id) {
+              setIsPlaying(true);
+              setIsLoading(false);
+            }
+          })
+          .catch((err) => {
+            console.warn('[audioPlayer] Auto-play prevented or failed:', err);
+            if (activeTrackIdRef.current === track.id) setIsLoading(false);
+          });
+      };
+
+      const knownPosition = track.playback_position ?? track.watch_progress?.position_seconds;
+      const knownPercent = track.playback_percent ?? track.watch_progress?.completed ? 100 : 0;
+      if (Number(knownPosition) > 5 && Number(knownPercent) < 92) {
+        playAt(knownPosition);
+      } else if (knownPosition !== undefined && knownPosition !== null) {
+        playAt(0);
       } else {
-        audioRef.current.currentTime = 0;
-        setCurrentTime(0);
+        // Catalog items may have progress saved on another visit/device.
+        getProgress(track.id).then((result) => {
+          const position = result?.position || result?.data?.position || 0;
+          const completed = result?.completed || result?.data?.completed;
+          playAt(position > 5 && !completed ? position : 0);
+        }).catch(() => playAt(0));
       }
-
-      audioRef.current.playbackRate = playbackSpeed;
-      audioRef.current
-        .play()
-        .then(() => {
-          setIsPlaying(true);
-          setIsLoading(false);
-        })
-        .catch((err) => {
-          console.warn('[audioPlayer] Auto-play prevented or failed:', err);
-          setIsLoading(false);
-        });
     }
   }, [playbackSpeed]);
 
