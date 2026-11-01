@@ -203,6 +203,106 @@ begin
 end;
 $$;
 
+-- Likes and saves run as SECURITY DEFINER to update counters atomically, so
+-- validate visibility here instead of relying on caller-side RLS.
+create or replace function public.toggle_media_like(p_item_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_user_id uuid := auth.uid();
+  v_new_liked boolean;
+  v_like_count integer;
+begin
+  if v_user_id is null then
+    raise exception 'Authentication required to like media';
+  end if;
+
+  if not exists (
+    select 1
+    from public.media_items m
+    where m.id = p_item_id
+      and m.status = 'published'
+      and (
+        m.visibility = 'public'
+        or m.author_id = v_user_id
+        or (m.visibility = 'followers' and public.is_following_user(v_user_id, m.author_id))
+        or (m.visibility = 'church' and m.church_id is not null
+            and public.is_active_church_member(v_user_id, m.church_id))
+      )
+  ) then
+    raise exception 'Media item not found or not visible';
+  end if;
+
+  insert into public.media_engagement (user_id, item_id, liked, updated_at)
+  values (v_user_id, p_item_id, true, now())
+  on conflict (user_id, item_id)
+  do update set liked = not public.media_engagement.liked, updated_at = now()
+  returning liked into v_new_liked;
+
+  if v_new_liked then
+    update public.media_items set like_count = like_count + 1
+      where id = p_item_id returning like_count into v_like_count;
+  else
+    update public.media_items set like_count = greatest(0, like_count - 1)
+      where id = p_item_id returning like_count into v_like_count;
+  end if;
+
+  return jsonb_build_object('item_id', p_item_id, 'liked', v_new_liked, 'like_count', coalesce(v_like_count, 0));
+end;
+$;
+
+create or replace function public.toggle_media_save(p_item_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_user_id uuid := auth.uid();
+  v_new_saved boolean;
+  v_save_count integer;
+begin
+  if v_user_id is null then
+    raise exception 'Authentication required to save media';
+  end if;
+
+  if not exists (
+    select 1
+    from public.media_items m
+    where m.id = p_item_id
+      and m.status = 'published'
+      and (
+        m.visibility = 'public'
+        or m.author_id = v_user_id
+        or (m.visibility = 'followers' and public.is_following_user(v_user_id, m.author_id))
+        or (m.visibility = 'church' and m.church_id is not null
+            and public.is_active_church_member(v_user_id, m.church_id))
+      )
+  ) then
+    raise exception 'Media item not found or not visible';
+  end if;
+
+  insert into public.media_engagement (user_id, item_id, saved, updated_at)
+  values (v_user_id, p_item_id, true, now())
+  on conflict (user_id, item_id)
+  do update set saved = not public.media_engagement.saved, updated_at = now()
+  returning saved into v_new_saved;
+
+  if v_new_saved then
+    update public.media_items set save_count = save_count + 1
+      where id = p_item_id returning save_count into v_save_count;
+  else
+    update public.media_items set save_count = greatest(0, save_count - 1)
+      where id = p_item_id returning save_count into v_save_count;
+  end if;
+
+  return jsonb_build_object('item_id', p_item_id, 'saved', v_new_saved, 'save_count', coalesce(v_save_count, 0));
+end;
+$;
+
 -- Explicit RPC grants: view recording is intentionally available to guests;
 -- likes and saves require a real signed-in user (enforced inside each function).
 revoke all on function public.record_media_view(uuid, integer, text) from public;
