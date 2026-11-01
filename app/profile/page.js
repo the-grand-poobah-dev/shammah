@@ -101,7 +101,7 @@ export default function MyProfilePage() {
             <Avatar name={displayName} src={profile?.avatar_url} className="avatar-lg" />
             <div style={{ flex: 1, minWidth: 200 }}>
               <h2 style={{ margin: 0, fontSize: 20 }}>
-                <MemberName name={displayName} badge={profile?.badge} verified={profile?.badge_verified} />
+                <MemberName name={displayName} badge={profile?.badge} verified={profile?.badge_verified} role={profile?.role} userId={profile?.id || session?.user?.id} />
               </h2>
               {session?.user?.email && (
                 <div style={{ fontSize: 12.5, color: 'var(--ink-muted)' }}>{session.user.email}</div>
