@@ -74,7 +74,7 @@ export async function listMedia({
 } = {}) {
   try {
     // If text query provided, use the search_media RPC with trigram ranking
-    if (query && query.trim()) {
+    if (query && query.trim() && !cursor) {
       const { data, error } = await supabase.rpc('search_media', {
         q: query.trim(),
         p_kind: kind || null,
@@ -116,6 +116,10 @@ export async function listMedia({
 
     if (kind) {
       q = q.eq('kind', kind);
+    }
+
+    if (query && query.trim()) {
+      q = q.ilike('title', '%' + query.trim().replace(/[%_\\\\]/g, '') + '%');
     }
 
     const cats = expandCategories(category);
@@ -359,7 +363,7 @@ export async function updateMedia(id, payload) {
  * Deletes a media item (RLS ensures only owner can delete).
  */
 export async function deleteMedia(id) {
-  if (!id) return { error: new Error('ID required for deletion.') };
+  if (!id) return { data: null, error: new Error('ID required for deletion.') };
 
   try {
     const { error } = await supabase
@@ -367,9 +371,9 @@ export async function deleteMedia(id) {
       .delete()
       .eq('id', id);
 
-    return { error };
+    return { data: null, error };
   } catch (err) {
-    return { error: err };
+    return { data: null, error: err };
   }
 }
 
@@ -454,7 +458,7 @@ export async function recordView(itemId, watchedSeconds = 0) {
       error,
     };
   } catch (err) {
-    return { viewCount: 0, error: err };
+    return { data: null, viewCount: 0, error: err };
   }
 }
 
@@ -462,12 +466,12 @@ export async function recordView(itemId, watchedSeconds = 0) {
  * Saves cross-device playback progress.
  */
 export async function saveProgress(itemId, positionSeconds, durationSeconds) {
-  if (!itemId) return { error: null };
+  if (!itemId) return { data: null, error: null };
 
   try {
     const sessionRes = await supabase.auth.getSession().catch(() => null);
     const userId = sessionRes?.data?.session?.user?.id;
-    if (!userId) return { error: null }; // Guests do not write to watch_progress table
+    if (!userId) return { data: null, error: null }; // Guests do not write to watch_progress table
 
     const completed = positionSeconds >= (durationSeconds * 0.92);
 
@@ -482,9 +486,9 @@ export async function saveProgress(itemId, positionSeconds, durationSeconds) {
         updated_at: new Date().toISOString(),
       });
 
-    return { error };
+    return { data: null, error };
   } catch (err) {
-    return { error: err };
+    return { data: null, error: err };
   }
 }
 
@@ -506,14 +510,14 @@ export async function getProgress(itemId) {
       .eq('item_id', itemId)
       .maybeSingle();
 
-    return {
+    const progress = {
       position: data?.position_seconds || 0,
       duration: data?.duration_seconds || 0,
       completed: data?.completed || false,
-      error,
     };
+    return { data: progress, ...progress, error };
   } catch (err) {
-    return { position: 0, completed: false, error: err };
+    return { data: { position: 0, duration: 0, completed: false }, position: 0, duration: 0, completed: false, error: err };
   }
 }
 
@@ -613,9 +617,9 @@ export async function removePlaylistItem(playlistId, itemId) {
       .eq('playlist_id', playlistId)
       .eq('item_id', itemId);
 
-    return { error };
+    return { data: null, error };
   } catch (err) {
-    return { error: err };
+    return { data: null, error: err };
   }
 }
 
