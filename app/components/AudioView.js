@@ -25,6 +25,9 @@ import {
   Sliders,
   X,
   Volume2,
+  Pencil,
+  Trash2,
+  Save,
 } from 'lucide-react';
 import { useAudioPlayer } from '../lib/audioPlayer';
 import {
@@ -35,6 +38,8 @@ import {
   createPlaylist,
   toggleLike,
   toggleSave,
+  updateMedia,
+  deleteMedia,
 } from '../lib/data/mediaApi';
 import { saveOfflineItem, removeOfflineItem, isItemSavedOffline } from '../lib/offlineSyncManager';
 import { formatPostDate, useRelativeTimeTick } from '../lib/postDisplay';
@@ -134,6 +139,10 @@ export default function AudioView({ session, currentUser, openAuth }) {
   const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
   const [newPlaylistPublic, setNewPlaylistPublic] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
+  const [editingTrack, setEditingTrack] = useState(null);
+  const [editTrackTitle, setEditTrackTitle] = useState('');
+  const [editTrackDescription, setEditTrackDescription] = useState('');
+  const [savingTrack, setSavingTrack] = useState(false);
 
   const debounceTimerRef = useRef(null);
 
@@ -273,6 +282,46 @@ export default function AudioView({ session, currentUser, openAuth }) {
     } else {
       triggerToast('Failed to create playlist');
     }
+  }
+
+  async function handleSaveTrackEdits(e) {
+    e.preventDefault();
+    if (!editingTrack?.id || !editTrackTitle.trim()) return;
+    setSavingTrack(true);
+    const result = await updateMedia(editingTrack.id, {
+      title: editTrackTitle.trim(),
+      description: editTrackDescription.trim() || null,
+    });
+    setSavingTrack(false);
+    if (result.error) {
+      triggerToast(result.error.message || 'Could not update audio.');
+      return;
+    }
+    const applyUpdate = (items) => items.map((item) => item.id === editingTrack.id ? { ...item, ...result.data } : item);
+    setCatalogItems(applyUpdate);
+    setSermons(applyUpdate);
+    setWorshipTracks(applyUpdate);
+    setDevotionals(applyUpdate);
+    setContinueListening(applyUpdate);
+    setEditingTrack(null);
+    triggerToast('Audio details updated.');
+  }
+
+  async function handleDeleteTrack(track, event) {
+    event.stopPropagation();
+    if (!track?.id || !window.confirm(`Delete “${track.title}”? This cannot be undone.`)) return;
+    const result = await deleteMedia(track.id);
+    if (result.error) {
+      triggerToast(result.error.message || 'Could not delete audio.');
+      return;
+    }
+    const remove = (items) => items.filter((item) => item.id !== track.id);
+    setCatalogItems(remove);
+    setSermons(remove);
+    setWorshipTracks(remove);
+    setDevotionals(remove);
+    setContinueListening(remove);
+    triggerToast('Audio deleted.');
   }
 
   // Check if filtering/searching is active
@@ -1102,10 +1151,14 @@ export default function AudioView({ session, currentUser, openAuth }) {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       {isItemSavedOffline(track.id) && (
                         <Check size={16} color="#10b981" title="Saved for offline listening" />
                       )}
+                      {session?.user?.id && track.author_id === session.user.id && <>
+                        <button type="button" aria-label={`Edit ${track.title}`} title="Edit audio" onClick={(e) => { e.stopPropagation(); setEditingTrack(track); setEditTrackTitle(track.title || ''); setEditTrackDescription(track.description || ''); }} style={{ minWidth: '40px', minHeight: '40px', display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: '10px', background: 'transparent', color: 'var(--ink-muted)' }}><Pencil size={15} /></button>
+                        <button type="button" aria-label={`Delete ${track.title}`} title="Delete audio" onClick={(e) => handleDeleteTrack(track, e)} style={{ minWidth: '40px', minHeight: '40px', display: 'grid', placeItems: 'center', border: '1px solid rgba(239,68,68,.35)', borderRadius: '10px', background: 'transparent', color: '#ef4444' }}><Trash2 size={15} /></button>
+                      </>}
                     </div>
                   </div>
                 </AccentCard>
@@ -1122,6 +1175,24 @@ export default function AudioView({ session, currentUser, openAuth }) {
           />
         )}
       </SectionBlock>
+
+      {editingTrack && (
+        <div role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget && !savingTrack) setEditingTrack(null); }} style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,.78)', display: 'grid', placeItems: 'center', padding: '16px' }}>
+          <form onSubmit={handleSaveTrackEdits} role="dialog" aria-modal="true" aria-labelledby="edit-audio-title" style={{ width: 'min(480px,100%)', display: 'grid', gap: '14px', padding: '22px', borderRadius: '18px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}>
+            <h3 id="edit-audio-title" style={{ margin: 0 }}>Edit audio details</h3>
+            <label style={{ display: 'grid', gap: '6px', fontSize: '13px' }}>Title
+              <input required maxLength={180} value={editTrackTitle} onChange={(e) => setEditTrackTitle(e.target.value)} style={{ padding: '10px', borderRadius: '9px', border: '1px solid var(--border)', background: 'var(--surface-muted)', color: 'var(--ink)' }} />
+            </label>
+            <label style={{ display: 'grid', gap: '6px', fontSize: '13px' }}>Description
+              <textarea rows={4} value={editTrackDescription} onChange={(e) => setEditTrackDescription(e.target.value)} style={{ padding: '10px', borderRadius: '9px', border: '1px solid var(--border)', background: 'var(--surface-muted)', color: 'var(--ink)', resize: 'vertical' }} />
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button type="button" disabled={savingTrack} onClick={() => setEditingTrack(null)} style={{ minHeight: '44px', padding: '0 14px', borderRadius: '999px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--ink)' }}>Cancel</button>
+              <button type="submit" disabled={savingTrack || !editTrackTitle.trim()} style={{ minHeight: '44px', padding: '0 16px', borderRadius: '999px', border: 0, background: 'var(--teal)', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '7px' }}><Save size={15} />{savingTrack ? 'Saving…' : 'Save changes'}</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* SERIES EPISODES MODAL */}
       {selectedSeries && (
