@@ -3497,3 +3497,12 @@
   .shammah-audio-wave i,.shammah-audio-sheet-backdrop { animation: none !important; }
   .shammah-audio-player-icon,.shammah-audio-player-main { transition: none !important; }
 }
+
+.shammah-audio-queue-item[draggable="true"] { cursor: grab; }
+.shammah-audio-queue-item.is-dragging { opacity: .5; outline: 1px dashed var(--audio-accent); }
+.shammah-audio-queue-item button:focus-visible,
+.shammah-audio-timer-options button:focus-visible,
+.shammah-audio-tools button:focus-visible {
+  outline: 2px solid var(--sec-color, var(--audio-accent, #5eead4));
+  outline-offset: 2px;
+}
