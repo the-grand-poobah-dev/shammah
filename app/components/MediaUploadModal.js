@@ -76,6 +76,7 @@ export default function MediaUploadModal({
   const [tags, setTags] = useState([]);
   const [tagInput, setTagInput] = useState('');
   const [seriesTitle, setSeriesTitle] = useState('');
+  const [episodeNo, setEpisodeNo] = useState('');
   const [visibility, setVisibility] = useState('public');
   const [accent, setAccent] = useState(ACCENT_PALETTE[0]);
 
@@ -262,6 +263,7 @@ export default function MediaUploadModal({
         category,
         tags,
         series_id: seriesId,
+        episode_no: seriesId && episodeNo ? Number(episodeNo) : null,
         visibility,
         accent,
         church_id: sessionUser?.church_id || null,
@@ -659,6 +661,39 @@ export default function MediaUploadModal({
                   <option value="church">My Church Community</option>
                   <option value="private">Private (Only Me)</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Optional series and episode metadata */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 120px', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--ink)', marginBottom: '5px' }}>
+                  New Series Title (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={seriesTitle}
+                  onChange={(e) => setSeriesTitle(e.target.value)}
+                  placeholder="e.g. The Gospel of John"
+                  disabled={isUploading}
+                  maxLength={160}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: '13px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--ink)', marginBottom: '5px' }}>
+                  Episode #
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={episodeNo}
+                  onChange={(e) => setEpisodeNo(e.target.value)}
+                  placeholder="Optional"
+                  disabled={isUploading || !seriesTitle.trim()}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: '13px' }}
+                />
               </div>
             </div>
 
