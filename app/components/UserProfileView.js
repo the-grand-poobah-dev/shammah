@@ -32,6 +32,7 @@ import {
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
+import PlatformAdminBadge from './PlatformAdminBadge';
 import PostCard from './PostCard';
 import WatermarkShareModal from './WatermarkShareModal';
 import ProjectionModeModal from './ProjectionModeModal';
@@ -301,7 +302,7 @@ export default function UserProfileView({
           {/* User Details */}
           <div className="profile-meta-section">
             <div className="profile-title-row">
-              <h1 className="profile-display-name">{authorName}</h1>
+              <h1 className="profile-display-name" style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>{authorName}{role === 'platform_admin' && <PlatformAdminBadge />}</h1>
               {badge && <MemberBadge badgeId={badge} size="md" />}
               {verified && <VerifiedBadge badge={badge} role={role} size={18} />}
               {privacySettings.isLocked && (
