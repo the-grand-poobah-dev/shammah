@@ -40,15 +40,55 @@ function getSupabaseServerClient(req) {
   if (!url || (!serviceKey && !anonKey)) return null;
 
   const authHeader = req?.headers?.get?.('authorization') || '';
-  // Preserve the signed-in user's JWT for auth.uid()-based RPCs and RLS.
-  // Use service role only for requests that have no bearer token (public reads).
-  const useUserContext = Boolean(authHeader && anonKey);
-  const client = createClient(url, useUserContext ? anonKey : (serviceKey || anonKey), {
+  const client = createClient(url, serviceKey || anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: useUserContext ? { headers: { Authorization: authHeader } } : undefined,
   });
-  return { client, hasServiceKey: Boolean(serviceKey && !useUserContext), authHeader };
+  return { client, hasServiceKey: Boolean(serviceKey), authHeader };
 }
+
+function getSupabaseUserClient(req) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const authHeader = req?.headers?.get?.('authorization') || '';
+  if (!url || !anonKey || !authHeader.startsWith('Bearer ')) return null;
+  return createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: authHeader } },
+  });
+}
+
+async function canViewPoll(supa, poll, viewerId) {
+  if (!poll) return false;
+  const visibility = poll.visibility || 'public';
+  if (visibility === 'public') return true;
+  if (!viewerId) return false;
+  if (poll.author_id === viewerId) return true;
+
+  if (visibility === 'followers') {
+    const { data, error } = await supa.client
+      .from('follows')
+      .select('follower_id')
+      .eq('follower_id', viewerId)
+      .eq('followed_id', poll.author_id)
+      .maybeSingle();
+    return !error && Boolean(data);
+  }
+
+  if (visibility === 'church') {
+    const allowedChurchIds = new Set();
+    if (poll.church_id) allowedChurchIds.add(String(poll.church_id));
+    const [{ data: profile }, { data: memberships }] = await Promise.all([
+      supa.client.from('profiles').select('church_id').eq('id', viewerId).maybeSingle(),
+      supa.client.from('church_members').select('church_id').eq('user_id', viewerId),
+    ]);
+    const userChurchIds = new Set((memberships || []).map((m) => String(m.church_id)));
+    if (profile?.church_id) userChurchIds.add(String(profile.church_id));
+    return Boolean(poll.church_id && userChurchIds.has(String(poll.church_id)));
+  }
+
+  return false;
+}
+
 
 async function resolveAuthenticatedUser(req) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -89,6 +129,12 @@ function normalizePollRecord(rawPost, options = [], countsByOption = {}, myVotes
   const isQuiz = Boolean(rawPost.is_quiz || pollType === 'quiz' || options.some((o) => o.is_correct));
 
   // Merge option counts with runtime vote ledger
+  const hasVoted = Array.isArray(myVotes) && myVotes.length > 0;
+  const isExpired = Boolean(expiresAt && new Date(expiresAt).getTime() <= Date.now());
+  const canRevealQuizAnswers = !isQuiz ||
+    !Boolean(rawPost.hide_results_until_vote ?? rawPost.reveal_results_after_voting) ||
+    hasVoted || Boolean(closedAt) || isExpired;
+
   const normalizedOptions = options
     .slice()
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
@@ -105,7 +151,7 @@ function normalizePollRecord(rawPost, options = [], countsByOption = {}, myVotes
         post_id: rawPost.id,
         label: opt.label || `Option ${idx + 1}`,
         image_url: opt.image_url || null,
-        is_correct: Boolean(opt.is_correct),
+        is_correct: canRevealQuizAnswers ? Boolean(opt.is_correct) : false,
         position: opt.position ?? idx,
         vote_count: Math.max(0, baseCount + runtimeExtraVotes),
       };
@@ -297,6 +343,9 @@ export async function GET(req) {
       SEEDED_POLLS_CATALOG.find((p) => p.id === pollId) ||
       runtimeState.createdPolls.find((p) => p.id === pollId);
     const pollMeta = dbPoll || seededPoll;
+    if (!pollMeta || !(await canViewPoll(supa, pollMeta, authedUser?.id || null))) {
+      return NextResponse.json({ error: 'Poll not found or you do not have access to its analytics.' }, { status: 404 });
+    }
     const options =
       dbOptions.length > 0
         ? dbOptions
@@ -496,6 +545,11 @@ export async function GET(req) {
     }
   }
 
+  // Enforce visibility before any poll data is returned from this server-side client.
+  dbPosts = (await Promise.all(
+    dbPosts.map(async (post) => (await canViewPoll(supa, post, viewerId) ? post : null))
+  )).filter(Boolean);
+
   // Merge DB polls + runtime created polls + seeded polls (deduped by id)
   const mergedMap = new Map();
 
@@ -609,6 +663,7 @@ export async function POST(req) {
   }
 
   const supa = getSupabaseServerClient(req);
+  const userSupa = getSupabaseUserClient(req);
 
   // -------------------------------------------------------------------------
   // 1. CAST VOTE
@@ -619,12 +674,12 @@ export async function POST(req) {
     if (!pollId || !optionId) {
       return NextResponse.json({ error: 'poll_id and option_id are required.' }, { status: 400 });
     }
-    if (!supa?.client) {
-      return NextResponse.json({ error: 'Poll voting is temporarily unavailable. Please try again later.' }, { status: 503 });
+    if (!userSupa) {
+      return NextResponse.json({ error: 'Poll voting is temporarily unavailable. Please sign in again.' }, { status: 503 });
     }
 
     try {
-      const { data, error } = await supa.client.rpc('cast_vote', {
+      const { data, error } = await userSupa.rpc('cast_vote', {
         p_poll_id: pollId,
         p_option_id: optionId,
       });
@@ -802,10 +857,10 @@ export async function POST(req) {
   if (action === 'close_poll') {
     const pollId = body.poll_id;
     if (!pollId) return NextResponse.json({ error: 'Missing poll_id' }, { status: 400 });
-    if (!supa?.client) return NextResponse.json({ error: 'Poll closing is temporarily unavailable.' }, { status: 503 });
+    if (!userSupa) return NextResponse.json({ error: 'Poll closing is temporarily unavailable. Please sign in again.' }, { status: 503 });
 
     try {
-      const { data, error } = await supa.client.rpc('close_poll_early', { p_poll_id: pollId });
+      const { data, error } = await userSupa.rpc('close_poll_early', { p_poll_id: pollId });
       if (error) {
         const status = error.code === '42501' ? 403 : error.code === 'P0002' ? 404 : 500;
         return NextResponse.json({ error: status === 500 ? 'Unable to close this poll right now.' : error.message }, { status });
