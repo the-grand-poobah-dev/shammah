@@ -40,7 +40,7 @@ import {
   getMediaDuration,
   detectMediaType,
 } from '../lib/mediaUpload';
-import { createMedia } from '../lib/data/mediaApi';
+import { createMedia, createMediaSeries } from '../lib/data/mediaApi';
 import { ACCENT_PALETTE } from './layoutkit/palette';
 
 const CATEGORIES = [
@@ -236,7 +236,22 @@ export default function MediaUploadModal({
 
       setUploadProgress(95);
 
-      // 3. Insert database record
+      // 3. Create the optional series first so the uploaded item can reference it.
+      let seriesId = null;
+      if (seriesTitle.trim()) {
+        const { data: seriesData, error: seriesError } = await createMediaSeries({
+          title: seriesTitle.trim(),
+          kind,
+          churchId: sessionUser?.church_id || null,
+          accent,
+        });
+        if (seriesError) {
+          throw new Error(seriesError.message || 'Could not create the media series.');
+        }
+        seriesId = seriesData?.id || null;
+      }
+
+      // 4. Insert database record
       const payload = {
         kind,
         title: title.trim(),
@@ -246,7 +261,7 @@ export default function MediaUploadModal({
         duration_seconds: duration,
         category,
         tags,
-        series_id: null,
+        series_id: seriesId,
         visibility,
         accent,
         church_id: sessionUser?.church_id || null,
