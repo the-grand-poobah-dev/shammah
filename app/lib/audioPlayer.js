@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { saveProgress, recordView, toggleLike as apiToggleLike, toggleSave as apiToggleSave } from './data/mediaApi';
-import { saveOfflineItem, removeOfflineItem, isItemSavedOffline } from './offlineSyncManager';
+import { saveOfflineItem, removeOfflineItem, isItemSavedOffline, cacheOfflineAudio, getOfflineAudioBlob, removeOfflineAudio } from './offlineSyncManager';
 
 const AudioPlayerContext = createContext(null);
 
@@ -17,6 +17,7 @@ export function useAudioPlayer() {
 export function AudioPlayerProvider({ children }) {
   const audioRef = useRef(null);
   const activeTrackIdRef = useRef(null);
+  const offlineObjectUrlRef = useRef(null);
 
   // Playback state
   const [currentTrack, setCurrentTrack] = useState(null);
@@ -37,6 +38,7 @@ export function AudioPlayerProvider({ children }) {
   // UI state
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOfflineTrack, setIsOfflineTrack] = useState(false);
+  const [offlineActionMessage, setOfflineActionMessage] = useState('');
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
@@ -48,6 +50,13 @@ export function AudioPlayerProvider({ children }) {
 
   // Last progress sync timestamp to debounce saves
   const lastSyncTimeRef = useRef(0);
+
+  useEffect(() => () => {
+    if (offlineObjectUrlRef.current && typeof URL !== 'undefined') {
+      URL.revokeObjectURL(offlineObjectUrlRef.current);
+      offlineObjectUrlRef.current = null;
+    }
+  }, []);
 
   // Sync offline status and engagement when track changes
   useEffect(() => {
@@ -239,46 +248,62 @@ export function AudioPlayerProvider({ children }) {
 
     if (audioRef.current) {
       const audio = audioRef.current;
-      const src = track.media_url || track.audio_url;
-      if (!src) {
+      const remoteSrc = track.media_url || track.audio_url;
+      if (!remoteSrc) {
         setIsLoading(false);
         return;
       }
-      if (audio.src !== src) audio.src = src;
-      audio.playbackRate = playbackSpeed;
 
-      const playAt = (position) => {
+      const prepareAudio = async () => {
+        const cachedBlob = await getOfflineAudioBlob(track.id);
         if (activeTrackIdRef.current !== track.id || !audioRef.current) return;
-        const safePosition = Math.max(0, Number(position) || 0);
-        audio.currentTime = safePosition;
-        setCurrentTime(safePosition);
-        audio.play()
-          .then(() => {
-            if (activeTrackIdRef.current === track.id) {
-              setIsPlaying(true);
-              setIsLoading(false);
-            }
-          })
-          .catch((err) => {
-            console.warn('[audioPlayer] Auto-play prevented or failed:', err);
-            if (activeTrackIdRef.current === track.id) setIsLoading(false);
-          });
-      };
+        audio.pause();
+        let src = remoteSrc;
+        if (cachedBlob && typeof URL !== 'undefined') {
+          if (offlineObjectUrlRef.current) URL.revokeObjectURL(offlineObjectUrlRef.current);
+          offlineObjectUrlRef.current = URL.createObjectURL(cachedBlob);
+          src = offlineObjectUrlRef.current;
+        } else if (offlineObjectUrlRef.current) {
+          URL.revokeObjectURL(offlineObjectUrlRef.current);
+          offlineObjectUrlRef.current = null;
+        }
+        audio.src = src;
+        audio.load();
+        audio.playbackRate = playbackSpeed;
 
-      const knownPosition = track.playback_position ?? track.watch_progress?.position_seconds;
-      const knownPercent = track.playback_percent ?? (track.watch_progress?.completed ? 100 : 0);
-      if (Number(knownPosition) > 5 && Number(knownPercent) < 92) {
-        playAt(knownPosition);
-      } else if (knownPosition !== undefined && knownPosition !== null) {
-        playAt(0);
-      } else {
-        // Catalog items may have progress saved on another visit/device.
-        getProgress(track.id).then((result) => {
-          const position = result?.position || result?.data?.position || 0;
-          const completed = result?.completed || result?.data?.completed;
-          playAt(position > 5 && !completed ? position : 0);
-        }).catch(() => playAt(0));
-      }
+        const playAt = (position) => {
+          if (activeTrackIdRef.current !== track.id || !audioRef.current) return;
+          const safePosition = Math.max(0, Number(position) || 0);
+          audio.currentTime = safePosition;
+          setCurrentTime(safePosition);
+          audio.play()
+            .then(() => {
+              if (activeTrackIdRef.current === track.id) {
+                setIsPlaying(true);
+                setIsLoading(false);
+              }
+            })
+            .catch((err) => {
+              console.warn('[audioPlayer] Auto-play prevented or failed:', err);
+              if (activeTrackIdRef.current === track.id) setIsLoading(false);
+            });
+        };
+
+        const knownPosition = track.playback_position ?? track.watch_progress?.position_seconds;
+        const knownPercent = track.playback_percent ?? (track.watch_progress?.completed ? 100 : 0);
+        if (Number(knownPosition) > 5 && Number(knownPercent) < 92) {
+          playAt(knownPosition);
+        } else if (knownPosition !== undefined && knownPosition !== null) {
+          playAt(0);
+        } else {
+          getProgress(track.id).then((result) => {
+            const position = result?.position || result?.data?.position || 0;
+            const completed = result?.completed || result?.data?.completed;
+            playAt(position > 5 && !completed ? position : 0);
+          }).catch(() => playAt(0));
+        }
+      };
+      prepareAudio();
     }
   }, [playbackSpeed]);
 
@@ -499,17 +524,31 @@ export function AudioPlayerProvider({ children }) {
     }
   }, [currentTrack, isSaved]);
 
-  const toggleOfflineTrack = useCallback(() => {
+  const toggleOfflineTrack = useCallback(async () => {
     if (!currentTrack?.id) return;
+    setOfflineActionMessage('');
     if (isOfflineTrack) {
       removeOfflineItem(currentTrack.id);
+      await removeOfflineAudio(currentTrack.id);
       setIsOfflineTrack(false);
-    } else {
-      const res = saveOfflineItem(currentTrack, 'audio');
-      if (res.success) {
-        setIsOfflineTrack(true);
-      }
+      setOfflineActionMessage('Removed downloaded audio from this device.');
+      return;
     }
+    const source = currentTrack.media_url || currentTrack.audio_url;
+    const cached = await cacheOfflineAudio(currentTrack.id, source);
+    if (!cached.success) {
+      setOfflineActionMessage(cached.reason || 'Could not download this audio.');
+      return;
+    }
+    const saved = saveOfflineItem(currentTrack, 'audio');
+    if (!saved.success) {
+      await removeOfflineAudio(currentTrack.id);
+      setOfflineActionMessage(saved.reason || 'Could not save this audio.');
+      return;
+    }
+    setIsOfflineTrack(true);
+    const sizeMb = Math.max(0.1, Math.round((cached.bytes || 0) / 104857.6) / 10);
+    setOfflineActionMessage(`Audio downloaded for offline listening (${sizeMb} MB).`);
   }, [currentTrack, isOfflineTrack]);
 
   // Audio HTML5 event callbacks
@@ -560,6 +599,7 @@ export function AudioPlayerProvider({ children }) {
     repeatMode,
     isExpanded,
     isOfflineTrack,
+    offlineActionMessage,
     isLiked,
     likeCount,
     isSaved,
