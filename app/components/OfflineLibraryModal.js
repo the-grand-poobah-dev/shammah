@@ -31,9 +31,11 @@ import { playSound } from '../lib/soundEffects';
 import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 import PopupSheet from './PopupSheet';
+import { useOptionalAudioPlayer } from '../lib/audioPlayer';
 
 export default function OfflineLibraryModal({ isOpen = true, onClose, onOpenItem }) {
   const router = useRouter();
+  const audioPlayer = useOptionalAudioPlayer();
   const now = useRelativeTimeTick();
   const [offlineItems, setOfflineItems] = useState([]);
   const [activeFilter, setActiveFilter] = useState('all'); // all | church_feed | bible_chapter | courses | audio | posts
