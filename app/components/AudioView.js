@@ -132,6 +132,7 @@ export default function AudioView({ session, currentUser, openAuth }) {
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
   const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
   const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
+  const [newPlaylistPublic, setNewPlaylistPublic] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
 
   const debounceTimerRef = useRef(null);
@@ -171,7 +172,7 @@ export default function AudioView({ session, currentUser, openAuth }) {
         listSeries({ kind: 'audio', limit: 8 }),
         listMedia({ kind: 'audio', category: 'Worship', limit: 6, sort: 'views' }),
         listMedia({ kind: 'audio', category: 'Prayer', limit: 6, sort: 'recent' }),
-        listPlaylists({ kind: 'audio' }),
+        session?.user?.id ? listPlaylists({ kind: 'audio', ownerId: session.user.id }) : listPlaylists({ kind: 'audio' }),
       ]);
 
       setContinueListening(continueRes.data || []);
@@ -186,7 +187,7 @@ export default function AudioView({ session, currentUser, openAuth }) {
     } finally {
       setLoadingInitial(false);
     }
-  }, []);
+  }, [session?.user?.id]);
 
   useEffect(() => {
     loadInitialBlocks();
@@ -259,13 +260,14 @@ export default function AudioView({ session, currentUser, openAuth }) {
       title: newPlaylistTitle.trim(),
       description: newPlaylistDesc.trim(),
       kind: 'audio',
-      isPublic: true,
+      isPublic: newPlaylistPublic,
     });
 
     if (res.data) {
       setPlaylists((prev) => [res.data, ...prev]);
       setNewPlaylistTitle('');
       setNewPlaylistDesc('');
+      setNewPlaylistPublic(true);
       setIsCreatePlaylistOpen(false);
       triggerToast('Audio playlist created successfully!');
     } else {
@@ -1240,6 +1242,11 @@ export default function AudioView({ session, currentUser, openAuth }) {
                   }}
                 />
               </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--ink-muted)', fontSize: '13px' }}>
+                <input type="checkbox" checked={newPlaylistPublic} onChange={(e) => setNewPlaylistPublic(e.target.checked)} />
+                Make this playlist public
+              </label>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
                 <button
