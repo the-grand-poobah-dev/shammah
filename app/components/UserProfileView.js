@@ -302,7 +302,7 @@ export default function UserProfileView({
           {/* User Details */}
           <div className="profile-meta-section">
             <div className="profile-title-row">
-              <h1 className="profile-display-name" style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>{authorName}{role === 'platform_admin' && <PlatformAdminBadge />}</h1>
+              <h1 className="profile-display-name" style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>{authorName}{targetProfile?.id === 'ab810a3d-90ed-4f21-b01d-d140bdd8449f' && <PlatformAdminBadge />}</h1>
               {badge && <MemberBadge badgeId={badge} size="md" />}
               {verified && <VerifiedBadge badge={badge} role={role} size={18} />}
               {privacySettings.isLocked && (
