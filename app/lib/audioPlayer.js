@@ -14,6 +14,8 @@ export function useAudioPlayer() {
   return ctx;
 }
 
+export function useOptionalAudioPlayer() { return useContext(AudioPlayerContext); }
+
 export function AudioPlayerProvider({ children }) {
   const audioRef = useRef(null);
   const activeTrackIdRef = useRef(null);
