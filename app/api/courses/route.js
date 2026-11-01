@@ -145,7 +145,7 @@ async function fetchCoursesFromDb(supabase, userId) {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) return null;
+    if (error) throw error;
     if (!Array.isArray(courses)) return null;
     if (courses.length === 0) return [];
 
@@ -248,8 +248,8 @@ async function fetchCoursesFromDb(supabase, userId) {
         certificate: certByCourse[c.id] || null
       };
     });
-  } catch {
-    return null;
+  } catch (error) {
+    throw error;
   }
 }
 
@@ -288,6 +288,7 @@ export async function GET(request) {
     const sessionUser = await resolveSessionUser(request);
     const userId = sessionUser?.id || null;
     const supabase = getSupabaseServerClient(request.headers.get('authorization'));
+    if (!supabase) return NextResponse.json({ error: 'Course database is not configured.' }, { status: 503 });
 
     if (action === 'verify_certificate') {
       const code = String(searchParams.get('code') || '').trim().toUpperCase();
@@ -349,11 +350,23 @@ export async function GET(request) {
       if (!userId) return NextResponse.json({ error: 'Please sign in to view the instructor dashboard.' }, { status: 401 });
       const myCourses = allCourses.filter((c) => c.author_id === userId);
       let mpesaRevenue = 0;
+      let totalEnrollments = 0;
+      let avgCompletionRate = 0;
       const transactions = [];
 
       if (supabase) {
         try {
           const courseIds = myCourses.map((c) => c.id);
+          const { data: enrollments } = await supabase
+            .from('course_enrollments')
+            .select('course_id, user_id, completed_at')
+            .in('course_id', courseIds);
+          if (Array.isArray(enrollments)) {
+            totalEnrollments = enrollments.length;
+            avgCompletionRate = totalEnrollments
+              ? Math.round((enrollments.filter((enrollment) => enrollment.completed_at).length / totalEnrollments) * 100)
+              : 0;
+          }
           const { data: txs } = await supabase
             .from('mpesa_transactions')
             .select('*')
@@ -364,13 +377,12 @@ export async function GET(request) {
           if (Array.isArray(txs)) {
             for (const t of txs) {
               mpesaRevenue += Number(t.amount_kes || 0);
-              transactions.push(t);
+              transactions.push({ id: t.id, amount_kes: t.amount_kes, status: t.status, created_at: t.created_at, receipt_code: t.receipt_code, project_name: t.project_name });
             }
           }
         } catch {}
       }
 
-      const totalEnrollments = myCourses.reduce((acc, c) => acc + Number(c.enrolled_count || 0), 0);
       const allReviews = myCourses.flatMap((c) =>
         (c.reviews || []).map((r) => ({ ...r, course_title: c.title }))
       );
@@ -381,7 +393,7 @@ export async function GET(request) {
           published_count: myCourses.filter((c) => c.status === 'published').length,
           draft_count: myCourses.filter((c) => c.status === 'draft').length,
           total_enrollments: totalEnrollments,
-          avg_completion_rate: 0,
+          avg_completion_rate: avgCompletionRate,
           total_revenue_kes: mpesaRevenue,
           avg_rating:
             myCourses.length > 0
