@@ -255,7 +255,7 @@ async function fetchCoursesFromDb(supabase, userId) {
 
 function sanitizeCourseForViewer(course, userId) {
   const isOwner = Boolean(userId && course.author_id === userId);
-  const hasCourseAccess = Boolean(course.enrolled && course.paid);
+  const hasCourseAccess = Boolean(course.enrolled && (course.paid || Number(course.price_kes || 0) === 0));
   const mayReadFullCourse = isOwner || hasCourseAccess;
   return {
     ...course,
