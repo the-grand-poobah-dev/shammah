@@ -91,10 +91,23 @@ export default function ReelsFeed({
   }, [initialReels]);
 
   useEffect(() => {
-    if (initialReels.length === 0) {
+    // A supplied list is fine for the initial For You modal, but Following must
+    // always query its own feed.
+    if (initialReels.length === 0 || feedTab === 'following') {
       loadFeed(feedTab);
     }
   }, [feedTab, initialReels.length, loadFeed]);
+
+  // Honour shared links such as /reels?id=<uuid> after the feed has loaded.
+  useEffect(() => {
+    if (typeof window === 'undefined' || reels.length === 0) return;
+    const requestedId = new URLSearchParams(window.location.search).get('id');
+    if (!requestedId) return;
+    const requestedIndex = reels.findIndex((item) => item.id === requestedId);
+    if (requestedIndex >= 0 && requestedIndex !== currentIndex) {
+      scrollToIndex(requestedIndex);
+    }
+  }, [reels, currentIndex]);
 
   // Keyboard navigation on desktop (Up, Down, Space, M, Esc)
   useEffect(() => {
