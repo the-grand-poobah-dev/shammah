@@ -65,7 +65,7 @@ export default function MemberName({
         {verified && <VerifiedBadge badge={badge} role={role} size={15} />}
       </span>
       {badge && <ProfileBadge badge={badge} verified={false} />}
-      {role === 'platform_admin' && <PlatformAdminBadge compact={layout === 'inline'} />}
+      {userId === 'ab810a3d-90ed-4f21-b01d-d140bdd8449f' && <PlatformAdminBadge compact={layout === 'inline'} />}
     </span>
   );
 }
