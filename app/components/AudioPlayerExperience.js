@@ -24,7 +24,7 @@ function PlayerInterface() {
   const {
     currentTrack, isPlaying, currentTime, duration, playbackSpeed, volume, isMuted,
     queue, isShuffle, repeatMode, isExpanded, isOfflineTrack, isLiked,
-    isSaved, sleepTimerMinutes, sleepTimerSecondsLeft, togglePlay, seekTo, skip,
+    isSaved, sleepTimerMinutes, sleepTimerSecondsLeft, offlineActionMessage, togglePlay, seekTo, skip,
     nextTrack, prevTrack, setSpeed, setVolume, toggleMute, toggleShuffle, cycleRepeat,
     setSleepTimer, removeFromQueue, reorderQueue, clearQueue,
     expandPlayer, collapsePlayer, toggleLikeTrack, toggleSaveTrack, toggleOfflineTrack,
@@ -204,6 +204,8 @@ function PlayerInterface() {
                 <button type="button" onClick={() => setShowTimer((v) => !v)} className={sleepTimerMinutes ? 'is-active' : ''}><Timer size={18} />{sleepTimerSecondsLeft ? `${Math.ceil(sleepTimerSecondsLeft / 60)} min` : sleepTimerMinutes === 'end' ? 'End of track' : 'Sleep timer'}</button>
                 <label><Gauge size={18} /><span>Speed</span><select aria-label="Playback speed" value={playbackSpeed} onChange={(e) => setSpeed(Number(e.target.value))}>{[0.75, 1, 1.25, 1.5, 1.75, 2].map((speed) => <option key={speed} value={speed}>{speed}×</option>)}</select></label>
               </div>
+
+              {offlineActionMessage && <p role="status" style={{ margin: '8px 0', fontSize: '12px', color: 'var(--ink-muted)' }}>{offlineActionMessage}</p>}
 
               {showPlaylistPicker && <div className="shammah-audio-timer-options" aria-label="Add current audio to playlist">
                 {ownedPlaylists.length === 0 ? <span className="shammah-audio-muted">No audio playlists are available yet. Create one in Audio Sanctuary.</span> : ownedPlaylists.map((playlist) => <button key={playlist.id} type="button" onClick={async () => { const result = await addPlaylistItem(playlist.id, currentTrack.id, playlist.items?.length || 0); setPlaylistFeedback(result.error ? 'Could not add to playlist' : `Added to ${playlist.title}`); if (!result.error) setShowPlaylistPicker(false); }}>{playlist.title}</button>)}
