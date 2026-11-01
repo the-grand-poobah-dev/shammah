@@ -35,6 +35,7 @@ import FaithChallengesView from './components/FaithChallengesView';
 import FaithArcadeGamesView from './components/FaithArcadeGamesView';
 import FundraisersView from './components/FundraisersView';
 import GoogleWorkspaceHubView from './components/GoogleWorkspaceHubView';
+import ErrorBoundary from './components/ErrorBoundary';
 import PWAInstallButton from './components/PWAInstallButton';
 import {
   cacheMainFeedPosts,
@@ -1579,78 +1580,100 @@ export default function Feed() {
       <main className="feed">
         {/* Videos Section */}
         {tab === 'home' && section === 'videos' && (
-          <VideosView session={session} currentUser={profile} openAuth={openAuth} />
+          <ErrorBoundary sectionName="Faith Videos">
+            <VideosView session={session} currentUser={profile} openAuth={openAuth} />
+          </ErrorBoundary>
         )}
 
         {/* Faith Reels Dedicated Section */}
         {tab === 'home' && section === 'reels' && (
-          <ReelsFeed currentUser={profile} session={session} isModal={false} openAuth={openAuth} />
+          <ErrorBoundary sectionName="Faith Reels">
+            <ReelsFeed currentUser={profile} session={session} isModal={false} openAuth={openAuth} />
+          </ErrorBoundary>
         )}
 
         {/* Audio Section (Songs, Podcasts, Voice Notes) */}
         {tab === 'home' && section === 'podcasts' && (
-          <AudioView session={session} currentUser={profile} openAuth={openAuth} />
+          <ErrorBoundary sectionName="Audio & Sermons">
+            <AudioView session={session} currentUser={profile} openAuth={openAuth} />
+          </ErrorBoundary>
         )}
 
         {/* Polls Section */}
         {tab === 'home' && section === 'polls' && (
-          <PollsView
-            session={session}
-            currentUser={profile}
-            openAuth={openAuth}
-            feedPosts={posts}
-            pollOptionsByPost={pollOptionsByPost}
-            pollCountsByPost={pollCountsByPost}
-            myVoteByPost={myVoteByPost}
-            onVote={handleVote}
-            onFocusCompose={() => {
-              setSection('all');
-              setIsPoll(true);
-            }}
-          />
+          <ErrorBoundary sectionName="Community Polls">
+            <PollsView
+              session={session}
+              currentUser={profile}
+              openAuth={openAuth}
+              feedPosts={posts}
+              pollOptionsByPost={pollOptionsByPost}
+              pollCountsByPost={pollCountsByPost}
+              myVoteByPost={myVoteByPost}
+              onVote={handleVote}
+              onFocusCompose={() => {
+                setSection('all');
+                setIsPoll(true);
+              }}
+            />
+          </ErrorBoundary>
         )}
 
         {/* Courses & Discipleship Academy Section */}
         {tab === 'home' && section === 'courses' && (
-          <CoursesView session={session} currentUser={profile} openAuth={openAuth} />
+          <ErrorBoundary sectionName="Discipleship Academy">
+            <CoursesView session={session} currentUser={profile} openAuth={openAuth} />
+          </ErrorBoundary>
         )}
 
         {/* RSS Feeds Dedicated Section */}
         {tab === 'home' && section === 'rss' && (
-          <RssFeedsView
-            session={session}
-            currentUser={profile}
-            openAuth={openAuth}
-          />
+          <ErrorBoundary sectionName="Christian Devotions">
+            <RssFeedsView
+              session={session}
+              currentUser={profile}
+              openAuth={openAuth}
+            />
+          </ErrorBoundary>
         )}
 
         {/* Holy Bible Reader Section */}
         {tab === 'home' && section === 'bible' && (
-          <BibleReaderView session={session} currentUser={profile} openAuth={openAuth} />
+          <ErrorBoundary sectionName="Holy Bible">
+            <BibleReaderView session={session} currentUser={profile} openAuth={openAuth} />
+          </ErrorBoundary>
         )}
 
         {/* Kingdom Fundraisers & Missions Section */}
         {tab === 'home' && section === 'fundraisers' && (
-          <FundraisersView
-            session={session}
-            currentUser={profile}
-            openAuth={openAuth}
-          />
+          <ErrorBoundary sectionName="Kingdom Fundraisers">
+            <FundraisersView
+              session={session}
+              currentUser={profile}
+              openAuth={openAuth}
+            />
+          </ErrorBoundary>
         )}
 
         {/* Faith Challenges (TikTok-like creative video challenges) */}
         {tab === 'home' && section === 'challenges' && (
-          <FaithChallengesView session={session} profile={profile} />
+          <ErrorBoundary sectionName="Faith Challenges">
+            <FaithChallengesView session={session} profile={profile} />
+          </ErrorBoundary>
         )}
 
         {/* Faith Arcade Games (Kids, Teens & Youth offline HTML5 games) */}
         {tab === 'home' && section === 'games' && (
-          <FaithArcadeGamesView session={session} profile={profile} />
+          <ErrorBoundary sectionName="Faith Arcade">
+            <FaithArcadeGamesView session={session} profile={profile} />
+          </ErrorBoundary>
         )}
 
         {/* Google Workspace (Calendar, Keep, Meet, Classroom, Tasks, Chat) & Firebase Cloud Hub */}
         {tab === 'home' && section === 'workspace' && (
-          <GoogleWorkspaceHubView session={session} currentUser={profile} />
+          <ErrorBoundary sectionName="Church Workspace">
+            <GoogleWorkspaceHubView session={session} currentUser={profile} />
+          </ErrorBoundary>
         )}
 
         {tab === 'churches' && (

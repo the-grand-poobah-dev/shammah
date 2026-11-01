@@ -59,9 +59,14 @@ export async function POST(req) {
     // Also check if this callback corresponds to a paid course enrollment transaction
     const { data: tx } = await supabase
       .from('mpesa_transactions')
-      .select('id, project_id, user_id, plan_id, amount_kes')
+      .select('id, project_id, user_id, plan_id, amount_kes, status')
       .eq('checkout_request_id', checkoutId)
       .maybeSingle();
+
+    // Idempotency: if transaction is already completed, exit cleanly to prevent replay duplicates
+    if (tx && tx.status === 'completed') {
+      return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted (already processed)' });
+    }
 
     if (tx && tx.project_id && tx.user_id && success) {
       await supabase
@@ -94,6 +99,11 @@ export async function POST(req) {
       .select('id, fundraiser_id, amount_kes, status')
       .eq('checkout_request_id', checkoutId)
       .maybeSingle();
+
+    // Idempotency: if donation was already marked succeeded, don't double credit
+    if (donation && donation.status === 'succeeded') {
+      return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted (donation already credited)' });
+    }
 
     if (donation && donation.status === 'pending') {
       if (success) {
