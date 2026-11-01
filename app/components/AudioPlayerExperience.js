@@ -4,9 +4,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Heart, Bookmark, Download, Share2,
   ListMusic, X, ChevronDown, Repeat, Shuffle, Timer, Gauge, Volume2,
-  VolumeX, Trash2, ArrowUp, ArrowDown, Music2, ExternalLink,
+  VolumeX, Trash2, ArrowUp, ArrowDown, Music2, ExternalLink, ListPlus,
 } from 'lucide-react';
 import { AudioPlayerProvider, useAudioPlayer } from '../lib/audioPlayer';
+import { addPlaylistItem, listPlaylists } from '../lib/data/mediaApi';
 
 function clock(seconds) {
   const value = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -31,6 +32,9 @@ function PlayerInterface() {
   const [showQueue, setShowQueue] = useState(false);
   const [showTimer, setShowTimer] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
+  const [ownedPlaylists, setOwnedPlaylists] = useState([]);
+  const [playlistFeedback, setPlaylistFeedback] = useState('');
 
   const accent = currentTrack?.accent || '#0d9488';
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
@@ -54,6 +58,21 @@ function PlayerInterface() {
       window.removeEventListener('keydown', onKey);
     };
   }, [isExpanded, collapsePlayer, togglePlay, skip]);
+
+  useEffect(() => {
+    if (!isExpanded || !showPlaylistPicker) return undefined;
+    let active = true;
+    listPlaylists({ kind: 'audio' }).then((result) => {
+      if (active) setOwnedPlaylists(result.data || []);
+    }).catch(() => { if (active) setOwnedPlaylists([]); });
+    return () => { active = false; };
+  }, [isExpanded, showPlaylistPicker]);
+
+  useEffect(() => {
+    if (!playlistFeedback) return undefined;
+    const id = window.setTimeout(() => setPlaylistFeedback(''), 2200);
+    return () => window.clearTimeout(id);
+  }, [playlistFeedback]);
 
   useEffect(() => {
     if (!copied) return undefined;
@@ -140,11 +159,17 @@ function PlayerInterface() {
 
               <div className="shammah-audio-tools">
                 <button type="button" onClick={toggleSaveTrack} className={isSaved ? 'is-active' : ''}><Bookmark size={18} />{isSaved ? 'Saved' : 'Save'}</button>
+                <button type="button" onClick={() => setShowPlaylistPicker((v) => !v)} className={showPlaylistPicker ? 'is-active' : ''}><ListPlus size={18} />Playlist</button>
                 <button type="button" onClick={toggleOfflineTrack} className={isOfflineTrack ? 'is-active' : ''}><Download size={18} />{isOfflineTrack ? 'Offline ready' : 'Download'}</button>
                 <button type="button" onClick={shareTrack}><Share2 size={18} />{copied ? 'Link copied' : 'Share'}</button>
                 <button type="button" onClick={() => setShowTimer((v) => !v)} className={sleepTimerMinutes ? 'is-active' : ''}><Timer size={18} />{sleepTimerSecondsLeft ? `${Math.ceil(sleepTimerSecondsLeft / 60)} min` : sleepTimerMinutes === 'end' ? 'End of track' : 'Sleep timer'}</button>
                 <label><Gauge size={18} /><span>Speed</span><select aria-label="Playback speed" value={playbackSpeed} onChange={(e) => setSpeed(Number(e.target.value))}>{[0.75, 1, 1.25, 1.5, 1.75, 2].map((speed) => <option key={speed} value={speed}>{speed}×</option>)}</select></label>
               </div>
+
+              {showPlaylistPicker && <div className="shammah-audio-timer-options" aria-label="Add current audio to playlist">
+                {ownedPlaylists.length === 0 ? <span className="shammah-audio-muted">No public audio playlists are available yet. Create one in Audio Sanctuary.</span> : ownedPlaylists.map((playlist) => <button key={playlist.id} type="button" onClick={async () => { const result = await addPlaylistItem(playlist.id, currentTrack.id, playlist.items?.length || 0); setPlaylistFeedback(result.error ? 'Could not add to playlist' : `Added to ${playlist.title}`); if (!result.error) setShowPlaylistPicker(false); }}>{playlist.title}</button>)}
+                {playlistFeedback && <span role="status" className="shammah-audio-muted">{playlistFeedback}</span>}
+              </div>}
 
               {showTimer && <div className="shammah-audio-timer-options" aria-label="Sleep timer options">
                 {[15, 30, 60].map((minutes) => <button key={minutes} type="button" onClick={() => { setSleepTimer(minutes); setShowTimer(false); }}>{minutes} min</button>)}
