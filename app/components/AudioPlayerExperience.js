@@ -31,6 +31,7 @@ function PlayerInterface() {
     closePlayer,
   } = player;
   const [showQueue, setShowQueue] = useState(false);
+  const [draggingQueueIndex, setDraggingQueueIndex] = useState(null);
   const [showTimer, setShowTimer] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
@@ -188,7 +189,15 @@ function PlayerInterface() {
                 </button>
                 {showQueue && <div className="shammah-audio-queue-list">
                   {queue.length === 0 ? <p className="shammah-audio-muted">Your queue is empty.</p> : queue.map((track, index) => (
-                    <div key={track.id || index} className={`shammah-audio-queue-item ${track.id === currentTrack.id ? 'is-current' : ''}`}>
+                    <div
+                      key={track.id || index}
+                      className={`shammah-audio-queue-item ${track.id === currentTrack.id ? 'is-current' : ''} ${draggingQueueIndex === index ? 'is-dragging' : ''}`}
+                      draggable={queue.length > 1 && track.id !== currentTrack.id}
+                      onDragStart={(event) => { setDraggingQueueIndex(index); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(index)); }}
+                      onDragOver={(event) => { if (draggingQueueIndex !== null) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } }}
+                      onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer.getData('text/plain')); if (Number.isInteger(from)) moveQueueItem(from, index); setDraggingQueueIndex(null); }}
+                      onDragEnd={() => setDraggingQueueIndex(null)}
+                    >
                       <span className="shammah-audio-queue-number">{index + 1}</span>
                       <div><strong>{track.title || 'Untitled audio'}</strong><small>{track.author?.display_name || track.speaker || 'Shammah Audio'}</small></div>
                       <button type="button" onClick={() => moveQueueItem(index, index - 1)} disabled={index === 0} aria-label={`Move ${track.title} up`}><ArrowUp size={15} /></button>
