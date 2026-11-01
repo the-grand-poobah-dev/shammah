@@ -298,6 +298,54 @@ export async function fetchRealNotifications(userId) {
       });
     }
 
+    // Audio series updates: surface episodes published after the user followed a series.
+    // Isolated so an unapplied optional audio migration cannot break other notifications.
+    try {
+      const { data: seriesFollows } = await supabase
+        .from('media_series_follows')
+        .select('series_id, created_at, series:media_series!series_id(title, kind)')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      const followBySeries = new Map((seriesFollows || []).map((row) => [row.series_id, row]));
+      const followedSeriesIds = Array.from(followBySeries.keys());
+      if (followedSeriesIds.length) {
+        const { data: newEpisodes } = await supabase
+          .from('media_items')
+          .select('id, title, series_id, published_at, created_at')
+          .eq('kind', 'audio')
+          .eq('status', 'published')
+          .in('series_id', followedSeriesIds)
+          .order('published_at', { ascending: false })
+          .limit(50);
+        const alreadyStored = new Set(getNotifications().map((item) => item.id));
+        for (const episode of newEpisodes || []) {
+          const follow = followBySeries.get(episode.series_id);
+          const publishedAt = episode.published_at || episode.created_at;
+          if (!follow || !publishedAt || new Date(publishedAt) <= new Date(follow.created_at)) continue;
+          const id = `db-series-episode-${episode.id}`;
+          if (deletedIds.has(id)) continue;
+          const seriesTitle = follow.series?.title || 'a podcast series you follow';
+          const notification = {
+            id,
+            type: 'all',
+            category: 'all',
+            title: 'New podcast episode',
+            body: `${episode.title} is now available in ${seriesTitle}.`,
+            timestamp: publishedAt,
+            isRead: readIds.has(id),
+            actorName: seriesTitle,
+            targetLink: '/audio',
+            icon: '🎧',
+          };
+          derived.push(notification);
+          if (!alreadyStored.has(id)) triggerFirebaseBrowserPush(notification);
+        }
+      }
+    } catch (seriesNotificationError) {
+      console.warn('Could not load audio series notifications:', seriesNotificationError);
+    }
+
     // Keep any live FCM push alerts that are not db-* rows
     const existingLocal = getNotifications().filter(
       (n) => !String(n.id).startsWith('db-') && !deletedIds.has(n.id)
