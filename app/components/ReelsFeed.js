@@ -30,8 +30,10 @@ import ReelCreatorModal from './ReelCreatorModal';
 import { listReels, toggleReelLike, recordReelView, toggleFollowAuthor, checkIsFollowing, toggleReelSave, checkReelSaved } from '../lib/data/reelsApi';
 import { playSound } from '../lib/soundEffects';
 
+const EMPTY_REELS = [];
+
 export default function ReelsFeed({
-  initialReels = [],
+  initialReels = EMPTY_REELS,
   initialIndex = 0,
   currentUser,
   session,
@@ -105,7 +107,10 @@ export default function ReelsFeed({
     if (!requestedId) return;
     const requestedIndex = reels.findIndex((item) => item.id === requestedId);
     if (requestedIndex >= 0 && requestedIndex !== currentIndex) {
-      scrollToIndex(requestedIndex);
+      setCurrentIndex(requestedIndex);
+      const container = containerRef.current;
+      const child = container?.children[requestedIndex];
+      if (child) child.scrollIntoView({ behavior: 'auto', block: 'start' });
     }
   }, [reels, currentIndex]);
 
