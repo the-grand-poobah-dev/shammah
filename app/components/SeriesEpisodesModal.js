@@ -11,9 +11,11 @@ import {
   Sparkles,
   Share2,
   CheckCircle2,
+  Bell,
+  BellRing,
 } from 'lucide-react';
 import { useAudioPlayer } from '../lib/audioPlayer';
-import { listMedia, getProgress } from '../lib/data/mediaApi';
+import { listMedia, getProgress, checkSeriesFollow, toggleSeriesFollow } from '../lib/data/mediaApi';
 
 function formatDuration(sec) {
   if (!sec) return '0 min';
@@ -31,6 +33,9 @@ export default function SeriesEpisodesModal({ series, isOpen, onClose }) {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [episodeProgress, setEpisodeProgress] = useState({});
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [followMessage, setFollowMessage] = useState('');
 
   const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
 
@@ -42,6 +47,8 @@ export default function SeriesEpisodesModal({ series, isOpen, onClose }) {
     if (!series?.id || !isOpen) return;
 
     setLoading(true);
+    setFollowMessage('');
+    checkSeriesFollow(series.id).then((result) => setIsFollowing(Boolean(result.following)));
     listMedia({ kind: 'audio', seriesId: series.id, limit: 50 }).then(async (res) => {
       // Sort episodes by episode_no ascending
       const sorted = (res.data || []).sort((a, b) => (a.episode_no || 0) - (b.episode_no || 0));
@@ -54,6 +61,19 @@ export default function SeriesEpisodesModal({ series, isOpen, onClose }) {
       setLoading(false);
     });
   }, [series?.id, isOpen]);
+
+  async function handleToggleFollow() {
+    setFollowBusy(true);
+    setFollowMessage('');
+    const result = await toggleSeriesFollow(series.id);
+    setFollowBusy(false);
+    if (result.error) {
+      setFollowMessage(result.error.message || 'Could not update series notifications.');
+      return;
+    }
+    setIsFollowing(result.following);
+    setFollowMessage(result.following ? 'You’ll be notified when new episodes are published.' : 'Episode notifications turned off.');
+  }
 
   // Lock body scroll
   useEffect(() => {
@@ -241,9 +261,13 @@ export default function SeriesEpisodesModal({ series, isOpen, onClose }) {
             <span>Play Series ({episodes.length})</span>
           </button>
 
-          <span style={{ fontSize: '12px', color: 'var(--ink-muted, #94a3b8)' }}>
-            {series.owner?.display_name || 'Shammah Community'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
+            <button type="button" onClick={handleToggleFollow} disabled={followBusy} aria-pressed={isFollowing} style={{ minHeight: '40px', padding: '0 12px', borderRadius: '999px', border: `1px solid ${seriesAccent}88`, background: isFollowing ? `${seriesAccent}22` : 'transparent', color: 'var(--ink)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 650 }}>
+              {isFollowing ? <BellRing size={15} /> : <Bell size={15} />}{followBusy ? 'Saving…' : isFollowing ? 'Following' : 'Notify me'}
+            </button>
+            <span style={{ fontSize: '12px', color: 'var(--ink-muted, #94a3b8)' }}>{series.owner?.display_name || 'Shammah Community'}</span>
+          </div>
+          {followMessage && <span role="status" style={{ position: 'absolute', left: '20px', bottom: '4px', fontSize: '11px', color: 'var(--ink-muted)' }}>{followMessage}</span>
         </div>
 
         {/* Episodes List */}
