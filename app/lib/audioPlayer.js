@@ -228,6 +228,13 @@ export function AudioPlayerProvider({ children }) {
   const playTrack = useCallback((track, newQueue = null) => {
     if (!track) return;
 
+    // Flush the previous track's progress before changing currentTrack state.
+    if (audioRef.current && !audioRef.current.paused) {
+      syncPlaybackProgress(audioRef.current.currentTime, audioRef.current.duration, true);
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
+
     // Notify other components (videos) to pause
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('shammah:audio-play', { detail: { id: track.id } }));
@@ -315,7 +322,7 @@ export function AudioPlayerProvider({ children }) {
       };
       prepareAudio();
     }
-  }, [playbackSpeed]);
+  }, [playbackSpeed, syncPlaybackProgress]);
 
   const pauseTrack = useCallback(() => {
     if (audioRef.current) {
