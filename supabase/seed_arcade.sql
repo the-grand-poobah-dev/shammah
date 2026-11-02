@@ -68,3 +68,18 @@ insert into public.arcade_questions(category,testament,book,question,options,cor
 ('Gospels','NT','John','Who denied Jesus three times?','["Peter","John","Judas","James"]'::jsonb,0,'Matthew 26:69-75'),
 ('Gospels','NT','Luke','Which parable features a traveller helped by a Samaritan?','["The Good Samaritan","The Lost Sheep","The Sower","The Talents"]'::jsonb,0,'Luke 10:25-37')
 on conflict (book,question) do nothing;
+
+
+-- Expanded Arcade collection: family, children, teen and adult games.
+insert into public.arcade_games(slug,title,description,icon,accent,kind,is_active) values
+('ark-runner','Ark Runner','Guide the animals safely to the ark.','gamepad-2','#0ea5e9','action',true),
+('david-target-challenge','David’s Sling Challenge','Aim for the targets in this arcade-style skill game.','target','#10b981','action',true),
+('fruit-of-the-spirit-catch','Fruit of the Spirit Catch','Catch good fruit and avoid distractions.','apple','#f59e0b','action',true),
+('fisher-of-men','Fisher of Men','Catch fish before time runs out.','fish','#06b6d4','action',true),
+('bible-word-search','Bible Word Search','Find Bible names and faith words in a word grid.','search','#8b5cf6','quiz',true),
+('parable-pairs','Parable Pairs','Match parables with their lessons.','layers','#ec4899','memory',true),
+('book-order-race','Books of the Bible Race','Put Bible books in the right order.','book-open','#a855f7','quiz',true),
+('faith-builder','Faith Builder Logic','Solve short logic and pattern puzzles.','puzzle','#14b8a6','quiz',true),
+('daily-brain-teaser','Daily Brain Teaser','A quick daily puzzle for all ages.','brain','#f97316','quiz',true),
+('family-bible-challenge','Family Bible Challenge','A mixed-age round for family game night.','users','#eab308','trivia',true)
+on conflict (slug) do update set title=excluded.title, description=excluded.description, icon=excluded.icon, accent=excluded.accent, kind=excluded.kind, is_active=true;
