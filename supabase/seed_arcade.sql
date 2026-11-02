@@ -67,7 +67,7 @@ insert into public.arcade_questions(category,testament,book,question,options,cor
 ('Epistles', 'NT', 'Hebrews', 'What is faith according to Hebrews 11:1?', '["A kind of sacrifice","A temple ritual","A family name","Substance of things hoped for"]'::jsonb, 3, 'Hebrews 11:1'),
 ('Gospels', 'NT', 'John', 'Who denied Jesus three times?', '["Judas","James","Peter","John"]'::jsonb, 2, 'Matthew 26:69-75'),
 ('Gospels', 'NT', 'Luke', 'Which parable features a traveller helped by a Samaritan?', '["The Talents","The Good Samaritan","The Lost Sheep","The Sower"]'::jsonb, 1, 'Luke 10:25-37')
-on conflict (book,question) do nothing;
+on conflict do nothing;
 
 
 -- Expanded Arcade collection: family, children, teen and adult games.
@@ -215,11 +215,11 @@ insert into public.arcade_questions(category,testament,book,question,options,cor
 ('Epistles', 'NT', 'Ephesians', 'What is the shield in the armour of God called?', '["The shield of kings","The shield of silence","The shield of faith","The shield of gold"]'::jsonb, 2, 'Ephesians 6:16'),
 ('Epistles', 'NT', 'Philippians', 'What should believers do instead of being anxious?', '["Hide from everyone","Pray with thanksgiving","Give up","Blame others"]'::jsonb, 1, 'Philippians 4:6'),
 ('Epistles', 'NT', '1 John', 'How should we love, according to 1 John 3:18?', '["In deed and in truth","Only in words","Only in private","Only when rewarded"]'::jsonb, 0, '1 John 3:18'),
-on conflict (book,question) do nothing;
+on conflict do nothing;
 
 
 -- Final two questions bring the mixed-age Bible trivia bank to 100 questions.
 insert into public.arcade_questions(category,testament,book,question,options,correct_index,explanation) values
 ('Gospels','NT','Matthew','In the parable of the wise and foolish builders, what did the wise man build on?','["Sand","A tree","A rock","A boat"]'::jsonb,2,'Matthew 7:24-27'),
 ('Prophecy','NT','Revelation','Which city is described as coming down from God out of heaven?','["Babylon","Jericho","Nineveh","New Jerusalem"]'::jsonb,3,'Revelation 21:2')
-on conflict (book,question) do nothing;
+on conflict do nothing;
