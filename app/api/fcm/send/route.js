@@ -57,7 +57,7 @@ async function getGoogleAccessToken(credentials) {
 }
 
 async function verifiedUser(request) {
-  const token = (request.headers.get('authorization') || '').replace(/^Bearer\\s+/i, '').trim();
+  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!token || !url || !key) return null;
@@ -103,7 +103,7 @@ export async function POST(request) {
   try {
     const accessToken = await getGoogleAccessToken(credentials);
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
-      ? process.env.NEXT_PUBLIC_SITE_URL.replace(/\\/$/, '')
+      ? process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
       : process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : null;
     const notification = {
       title,
