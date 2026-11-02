@@ -53,7 +53,8 @@ const DARAJA_BASE = process.env.MPESA_ENVIRONMENT === 'production'
 function hasSecureCallbackConfiguration() {
   const secret = process.env.MPESA_CALLBACK_SECRET;
   const callbackUrl = process.env.MPESA_CALLBACK_URL;
-  if (!secret) return process.env.MPESA_ENVIRONMENT !== 'production';
+  // A deployed app must always authenticate callbacks, including Daraja sandbox tests.
+  if (!secret) return process.env.NODE_ENV !== 'production' && process.env.MPESA_ENVIRONMENT !== 'production';
   if (!callbackUrl) return false;
   try {
     return new URL(callbackUrl).searchParams.get('secret') === secret;
