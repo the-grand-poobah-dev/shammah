@@ -40,10 +40,10 @@ export async function POST(request) {
     }
     if ((recentStarts || 0) >= 3) return liveJsonError('You have started several broadcasts recently. Please wait a few minutes and try again.', 429);
 
-    const churchId = visibility === 'church' ? (profile?.church_id || body.churchId) : (profile?.church_id || null);
-    if (visibility === 'church' && profile?.church_id && body.churchId !== profile.church_id) {
+    if (visibility === 'church' && (!profile?.church_id || body.churchId !== profile.church_id)) {
       return liveJsonError('You can only start a church-only stream for your own church.', 403);
     }
+    const churchId = visibility === 'church' ? profile.church_id : (profile?.church_id || null);
 
     roomName = 'shammah-' + user.id.slice(0, 8) + '-' + randomUUID();
     const room = await createLiveRoom(roomName);
