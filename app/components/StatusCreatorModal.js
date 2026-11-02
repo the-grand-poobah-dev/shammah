@@ -731,6 +731,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
               maxVideoSeconds={60}
               onPickFile={(file) => processFiles([file])}
               onVoice={() => isRecordingVoice ? handleStopVoiceNote() : handleStartVoiceNote()}
+              voiceActive={isRecordingVoice}
               onGif={() => setShowGifPicker(true)}
               disabled={submitting}
             />
