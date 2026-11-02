@@ -50,6 +50,18 @@ const DARAJA_BASE = process.env.MPESA_ENVIRONMENT === 'production'
   ? 'https://api.safaricom.co.ke'
   : 'https://sandbox.safaricom.co.ke';
 
+function hasSecureCallbackConfiguration() {
+  if (process.env.MPESA_ENVIRONMENT !== 'production') return true;
+  const secret = process.env.MPESA_CALLBACK_SECRET;
+  const callbackUrl = process.env.MPESA_CALLBACK_URL;
+  if (!secret || !callbackUrl) return false;
+  try {
+    return new URL(callbackUrl).searchParams.get('secret') === secret;
+  } catch {
+    return false;
+  }
+}
+
 async function getDarajaAccessToken() {
   const consumerKey = process.env.MPESA_CONSUMER_KEY;
   const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
@@ -68,7 +80,7 @@ async function initiateFundraiserDonation(request, body, fundraiserId, phone, am
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) return NextResponse.json({ error: 'Fundraiser payment storage is not configured.' }, { status: 503 });
   if (!process.env.MPESA_SHORTCODE || !process.env.MPESA_PASSKEY || !process.env.MPESA_CALLBACK_URL ||
-      (process.env.MPESA_ENVIRONMENT === 'production' && !process.env.MPESA_CALLBACK_SECRET)) {
+      (process.env.MPESA_ENVIRONMENT === 'production' && !hasSecureCallbackConfiguration())) {
     return NextResponse.json({ error: 'M-Pesa STK Push is not configured. Please contact support.' }, { status: 503 });
   }
 
