@@ -169,7 +169,7 @@ export async function sendDirectMessage(recipientId, text, senderId) {
     throw new Error('You cannot message yourself.');
   }
 
-  // Ask the database to enforce the recipient's private inbox preference.
+  // Ask the database to evaluate the recipient's private inbox preference.
   // This RPC returns only an allow/deny result, never the private setting itself.
   const { data: canMessage, error: permissionError } = await supabase.rpc(
     'can_receive_direct_message',
