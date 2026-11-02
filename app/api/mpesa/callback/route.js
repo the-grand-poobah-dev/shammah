@@ -4,11 +4,21 @@
 // Must be publicly reachable (Vercel URL). No auth header from Daraja.
 
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { PERIODS } from '../../../lib/pricing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+function isAuthorizedCallback(request) {
+  const expected = process.env.MPESA_CALLBACK_SECRET;
+  if (!expected) return process.env.MPESA_ENVIRONMENT !== 'production';
+  const supplied = new URL(request.url).searchParams.get('secret') || '';
+  const expectedBytes = Buffer.from(expected);
+  const suppliedBytes = Buffer.from(supplied);
+  return suppliedBytes.length === expectedBytes.length && timingSafeEqual(suppliedBytes, expectedBytes);
+}
 
 function admin() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,6 +35,11 @@ function admin() {
 
 export async function POST(req) {
   try {
+    if (!isAuthorizedCallback(req)) {
+      console.warn('[mpesa/callback] Rejected callback without the configured shared secret.');
+      // Acknowledge the request without mutating payment records, avoiding retry storms.
+      return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+    }
     const body = await req.json().catch(() => ({}));
     // Daraja shape: { Body: { stkCallback: { ... } } }
     const cb = body?.Body?.stkCallback || body?.stkCallback || body;
