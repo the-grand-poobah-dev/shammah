@@ -157,6 +157,17 @@ export async function POST(request) {
       meta.perfect = correctCount === gradeResults.length;
     }
     if (!Number.isSafeInteger(score) || score < 0) return NextResponse.json({ error: 'Invalid score.' }, { status: 400 });
+    const html5Games = new Set([
+      'ark-runner', 'david-target-challenge', 'fruit-of-the-spirit-catch', 'fisher-of-men',
+      'faith-builder', 'daily-brain-teaser', 'bible-word-search', 'parable-pairs',
+      'book-order-race', 'family-bible-challenge'
+    ]);
+    if (html5Games.has(gameSlug)) {
+      const plausibleMaximum = Math.min(10000, Math.floor(durationMs / 1000) * 500 + 100);
+      if (score > plausibleMaximum) {
+        return NextResponse.json({ error: 'That score is too high for the recorded round duration. Please replay the game.' }, { status: 400 });
+      }
+    }
 
     const { data, error } = await service.rpc('submit_arcade_score', {
       p_user_id: user.id,
@@ -164,10 +175,9 @@ export async function POST(request) {
       p_score: score,
       p_duration_ms: durationMs,
       p_meta: {
-        perfect: meta.perfect === true,
-        completed: meta.completed === true,
-        questionsAnswered: questionsAnswered || (Number.isFinite(Number(meta.questionsAnswered))
-          ? Math.max(0, Math.min(200, Math.trunc(Number(meta.questionsAnswered)))) : 0)
+        perfect: gameSlug === 'bible-trivia' && Boolean(gradeResults?.length) && gradeResults.every((result) => result.correct),
+        completed: true,
+        questionsAnswered
       }
     });
     if (error) {
