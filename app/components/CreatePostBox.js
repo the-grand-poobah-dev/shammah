@@ -280,6 +280,7 @@ export default function CreatePostBox({
 
   function handleFileSelected(file) {
     if (!file) return;
+    setShowMediaLibrary(false);
     setSelectedLibraryMedia(null);
     setMediaFile(file);
     const url = URL.createObjectURL(file);
