@@ -1,3 +1,4 @@
+import { removeLiveParticipant } from '../../../lib/live/provider';
 import { getLiveServiceClient, getLiveUser, isUuid, liveJsonError, parseLiveJson } from '../../../lib/live/serverAuth';
 
 export const runtime = 'nodejs';
@@ -15,7 +16,7 @@ export async function POST(request) {
 
   try {
     const { data: stream, error: streamError } = await service.from('live_streams')
-      .select('id, host_id').eq('id', body.streamId).maybeSingle();
+      .select('id, host_id, room_name').eq('id', body.streamId).maybeSingle();
     if (streamError) throw streamError;
     if (!stream) return liveJsonError('Broadcast not found.', 404);
     const { data: moderator } = await service.from('live_moderators').select('user_id')
@@ -30,6 +31,7 @@ export async function POST(request) {
         stream_id: stream.id, user_id: body.userId, created_by: user.id,
       }, { onConflict: 'stream_id,user_id' });
       if (error) throw error;
+      await removeLiveParticipant(stream.room_name, body.userId);
       return Response.json({ ok: true });
     }
 
