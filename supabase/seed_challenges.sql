@@ -40,3 +40,18 @@ VALUES
    'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=900&auto=format&fit=crop&q=80',
    'one_off','Worship',now(),now()+interval '14 days',14,150,'#ef4444','public','active',0)
 ON CONFLICT (id) DO NOTHING;
+
+-- Reconcile displayed participant totals with actual participation rows instead of seeded vanity counts.
+UPDATE public.challenges c
+SET participants_count = (
+  SELECT count(*)::integer FROM public.challenge_participants cp WHERE cp.challenge_id = c.id
+),
+updated_at = now()
+WHERE c.id IN (
+  'c1000000-0000-4000-a000-000000000001',
+  'c1000000-0000-4000-a000-000000000002',
+  'c1000000-0000-4000-a000-000000000003',
+  'c1000000-0000-4000-a000-000000000004',
+  'c1000000-0000-4000-a000-000000000005',
+  'c1000000-0000-4000-a000-000000000006'
+);
