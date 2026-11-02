@@ -19,6 +19,8 @@ export default function CreatePostModal({
   setPollOptions,
   mediaFile,
   setMediaFile,
+  selectedLibraryMedia,
+  setSelectedLibraryMedia,
   mediaPreview,
   setMediaPreview,
   mediaUploading,
@@ -68,6 +70,8 @@ export default function CreatePostModal({
           setPollOptions={setPollOptions}
           mediaFile={mediaFile}
           setMediaFile={setMediaFile}
+          selectedLibraryMedia={selectedLibraryMedia}
+          setSelectedLibraryMedia={setSelectedLibraryMedia}
           mediaPreview={mediaPreview}
           setMediaPreview={setMediaPreview}
           mediaUploading={mediaUploading}
