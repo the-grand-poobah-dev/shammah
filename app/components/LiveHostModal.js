@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, CameraOff, Check, ChevronDown, Copy, Heart, Loader2, Mic, MicOff, Radio, Send, Shield, Signal, Video, VideoOff, X } from 'lucide-react';
+import { CameraOff, Check, Copy, Loader2, Mic, MicOff, Radio, Send, Shield, Signal, Video, VideoOff, X } from 'lucide-react';
 import { Room, RoomEvent, createLocalTracks } from 'livekit-client';
 import { supabase } from '../lib/supabaseClient';
 
