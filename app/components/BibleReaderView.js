@@ -55,6 +55,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const [parallelLoading, setParallelLoading] = useState(false);
   const [parallelError, setParallelError] = useState('');
   const [parallelRetry, setParallelRetry] = useState(0);
+  const [bookDownloadProgress, setBookDownloadProgress] = useState(null);
   const [isChapterOffline, setIsChapterOffline] = useState(false);
   const [testamentFilter, setTestamentFilter] = useState('ALL'); // ALL, OT, NT
   const [searchQuery, setSearchQuery] = useState('');
@@ -343,6 +344,38 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     }
   }
 
+  async function handleDownloadBookOffline() {
+    if (bookDownloadProgress) return;
+    const total = currentBook.chapters;
+    setBookDownloadProgress({ done: 0, total });
+    try {
+      for (let chapterNumber = 1; chapterNumber <= total; chapterNumber += 1) {
+        let chapterData = chapterNumber === selectedChapter ? verses : null;
+        if (!chapterData?.length) {
+          const response = await fetch(`/api/bible/chapter?translation=${encodeURIComponent(translation)}&book=${encodeURIComponent(currentBook.id)}&chapter=${chapterNumber}`);
+          const payload = await response.json();
+          if (!response.ok || !Array.isArray(payload.verses) || !payload.verses.length) throw new Error(payload?.error || `Could not download chapter ${chapterNumber}.`);
+          chapterData = payload.verses;
+        }
+        saveOfflineBibleChapter(currentBook.id, currentBook.name, chapterNumber, chapterData, translation);
+        setBookDownloadProgress({ done: chapterNumber, total });
+      }
+      let storageMessage = '';
+      try {
+        if (navigator.storage?.estimate) {
+          const estimate = await navigator.storage.estimate();
+          if (Number.isFinite(estimate.usage)) storageMessage = ` Device storage currently uses ${(estimate.usage / (1024 * 1024)).toFixed(1)} MB.`;
+        }
+      } catch {}
+      showToast(`${currentBook.name} saved for offline reading (${total} chapters).${storageMessage}`);
+    } catch (error) {
+      showToast(error?.message || 'The book download stopped. Download again to continue.');
+    } finally {
+      setBookDownloadProgress(null);
+      setIsChapterOffline(isBibleChapterSavedOffline(currentBook.name, selectedChapter, translation));
+    }
+  }
+
   function handleHighlight(vNum) {
     const key = `${currentBook.name}-${selectedChapter}-${vNum}`;
     const alreadyHighlighted = Boolean(highlights[key]);
@@ -480,7 +513,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
           </div>
           <span className="bible-offline-chip" title="Chapters you open can be saved for offline reading">
             <WifiOff size={13} />
-            <span>100% Offline Ready</span>
+            <span>Offline chapters</span>
           </span>
         </div>
 
@@ -695,6 +728,16 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
                   <span>Download Offline</span>
                 </>
               )}
+            </button>
+            <button
+              type="button"
+              className="chapter-offline-download-btn"
+              onClick={handleDownloadBookOffline}
+              disabled={Boolean(bookDownloadProgress)}
+              title={`Download all ${currentBook.chapters} chapters of ${currentBook.name} for offline reading`}
+            >
+              <DownloadCloud size={13} />
+              <span>{bookDownloadProgress ? `Saving ${bookDownloadProgress.done}/${bookDownloadProgress.total}` : 'Download Book'}</span>
             </button>
 
             {/* Highlighter Color Picker */}
