@@ -16,17 +16,44 @@ grant select on public.bible_chapters to anon, authenticated, service_role;
 grant insert, update, delete on public.bible_chapters to service_role;
 
 create table if not exists public.bible_verses (
-  translation text not null,
+  id text primary key,
+  translation text not null default 'KJV',
   book_id text not null,
-  book_name text not null,
+  book_name text,
   chapter integer not null,
   verse integer not null,
-  verse_text text not null,
-  search_vector tsvector generated always as (to_tsvector('english', coalesce(verse_text, ''))) stored,
-  primary key (translation, book_id, chapter, verse)
+  text text not null,
+  heading text,
+  fts tsvector
 );
-create index if not exists bible_verses_search_idx on public.bible_verses using gin (search_vector);
-create index if not exists bible_verses_ref_idx on public.bible_verses (book_id, chapter, verse);
+alter table public.bible_verses add column if not exists book_name text;
+alter table public.bible_verses add column if not exists fts tsvector;
+create index if not exists bible_verses_search_idx on public.bible_verses using gin (fts);
+create index if not exists bible_verses_ref_idx on public.bible_verses (translation, book_id, chapter, verse);
+create or replace function public.bible_verses_set_fts() returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.fts := to_tsvector('english', coalesce(new.text, ''));
+  return new;
+end;
+$$;
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.bible_verses'::regclass
+      and tgname = 'bible_verses_set_fts_trigger'
+      and not tgisinternal
+  ) then
+    create trigger bible_verses_set_fts_trigger
+      before insert or update of text on public.bible_verses
+      for each row execute function public.bible_verses_set_fts();
+  end if;
+end;
+$$;
+update public.bible_verses set fts = to_tsvector('english', coalesce(text, '')) where fts is null;
 alter table public.bible_verses enable row level security;
 drop policy if exists "Bible verses are readable by everyone" on public.bible_verses;
 create policy "Bible verses are readable by everyone" on public.bible_verses for select to anon, authenticated using (true);
@@ -46,14 +73,19 @@ create table if not exists public.bible_bookmarks (
 create table if not exists public.bible_highlights (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
+  book text not null,
   translation text not null default 'KJV',
-  book_id text not null,
+  book_id text,
   chapter integer not null check (chapter > 0),
   verse integer not null check (verse > 0),
   color text not null default 'gold' check (color in ('gold','blue','green','pink','purple')),
   created_at timestamptz not null default now(),
-  unique (user_id, translation, book_id, chapter, verse)
+  unique (user_id, book, chapter, verse)
 );
+alter table public.bible_highlights add column if not exists book text;
+alter table public.bible_highlights add column if not exists book_id text;
+alter table public.bible_highlights add column if not exists translation text not null default 'KJV';
+
 create table if not exists public.bible_notes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -95,8 +127,11 @@ create table if not exists public.verse_of_day (
   day date primary key,
   ref text not null,
   translation text not null default 'KJV',
-  image_url text
+  text text not null default '',
+  image_url text,
+  created_at timestamptz not null default now()
 );
+alter table public.verse_of_day add column if not exists text text not null default '';
 
 do $$
 declare t text;
