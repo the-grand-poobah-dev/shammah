@@ -37,6 +37,31 @@ CREATE POLICY "push_tokens_update_own" ON public.push_device_tokens
 CREATE POLICY "push_tokens_delete_own" ON public.push_device_tokens
   FOR DELETE TO authenticated USING (user_id = auth.uid());
 
+CREATE TABLE IF NOT EXISTS public.challenge_submission_comments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  submission_id uuid NOT NULL REFERENCES public.challenge_submissions(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  body text NOT NULL CHECK (length(btrim(body)) BETWEEN 1 AND 1000),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS challenge_submission_comments_created_idx
+  ON public.challenge_submission_comments (submission_id, created_at ASC);
+ALTER TABLE public.challenge_submission_comments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "challenge_comments_read" ON public.challenge_submission_comments;
+CREATE POLICY "challenge_comments_read" ON public.challenge_submission_comments
+  FOR SELECT TO anon, authenticated USING (
+    EXISTS (
+      SELECT 1 FROM public.challenge_submissions s
+      WHERE s.id = challenge_submission_comments.submission_id
+        AND (
+          s.status = 'approved'
+          OR s.user_id = auth.uid()
+          OR EXISTS (SELECT 1 FROM public.challenges c WHERE c.id = s.challenge_id AND c.creator_id = auth.uid())
+        )
+    )
+    OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','platform_admin','moderator'))
+  );
+
 CREATE TABLE IF NOT EXISTS public.challenge_badge_awards (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -427,6 +452,7 @@ GRANT EXECUTE ON FUNCTION public.challenge_leaderboard(uuid,text) TO authenticat
 GRANT EXECUTE ON FUNCTION public.award_points(uuid,uuid,integer,text) TO authenticated, service_role;
 
 REVOKE INSERT, UPDATE, DELETE ON public.challenges FROM anon, authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.challenge_submission_comments FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.challenge_participants FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.challenge_checkins FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.challenge_submissions FROM anon, authenticated;
