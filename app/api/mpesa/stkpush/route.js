@@ -54,7 +54,8 @@ async function initiateCoursePayment(req, body) {
     return NextResponse.json({ error: 'Please sign in before purchasing a course.' }, { status: 401 });
   }
   if (!process.env.MPESA_CONSUMER_KEY || !process.env.MPESA_CONSUMER_SECRET ||
-      !process.env.MPESA_SHORTCODE || !process.env.MPESA_PASSKEY || !process.env.MPESA_CALLBACK_URL) {
+      !process.env.MPESA_SHORTCODE || !process.env.MPESA_PASSKEY || !process.env.MPESA_CALLBACK_URL ||
+      (process.env.MPESA_ENVIRONMENT === 'production' && !process.env.MPESA_CALLBACK_SECRET)) {
     return NextResponse.json({ error: 'M-Pesa payment is not configured yet.' }, { status: 503 });
   }
 
