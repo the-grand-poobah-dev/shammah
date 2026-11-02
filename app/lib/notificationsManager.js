@@ -164,7 +164,63 @@ export async function fetchRealNotifications(userId) {
       profileById = new Map((profiles || []).map((p) => [p.id, p]));
     }
 
+    // Live notifications are optional until the Live schema migration is applied.
+    // Keep this isolated so a missing live_streams table never breaks other alerts.
+    let liveStreams = [];
+    try {
+      const { data: followedRows, error: followsError } = await supabase
+        .from('follows')
+        .select('followed_id')
+        .eq('follower_id', uid)
+        .limit(100);
+      if (followsError) throw followsError;
+      const followedIds = [...new Set((followedRows || []).map((row) => row.followed_id).filter(Boolean))];
+      if (followedIds.length) {
+        const { data: rows, error: liveError } = await supabase
+          .from('live_streams')
+          .select('id, host_id, title, started_at, visibility')
+          .in('host_id', followedIds)
+          .eq('status', 'live')
+          .in('visibility', ['public', 'followers'])
+          .order('started_at', { ascending: false })
+          .limit(20);
+        if (liveError) throw liveError;
+        liveStreams = rows || [];
+        const missingHostIds = [...new Set(liveStreams.map((row) => row.host_id).filter((id) => id && !profileById.has(id)))];
+        if (missingHostIds.length) {
+          const { data: liveProfiles } = await supabase
+            .from('profiles')
+            .select('id, display_name, avatar_url, badge, badge_verified')
+            .in('id', missingHostIds);
+          (liveProfiles || []).forEach((profile) => profileById.set(profile.id, profile));
+        }
+      }
+    } catch (liveNotificationError) {
+      console.warn('Could not load live broadcast notifications:', liveNotificationError?.message || liveNotificationError);
+    }
+
     const derived = [];
+
+    for (const stream of liveStreams) {
+      const id = `db-live-${stream.id}`;
+      if (deletedIds.has(id)) continue;
+      const actor = profileById.get(stream.host_id);
+      const actorName = actor?.display_name || 'Someone you follow';
+      derived.push({
+        id,
+        type: 'live',
+        category: 'church',
+        title: `${actorName} is live now`,
+        body: (stream.title || 'A live broadcast is happening now').slice(0, 140),
+        timestamp: stream.started_at,
+        isRead: readIds.has(id),
+        actorName,
+        actorAvatar: actor?.avatar_url || null,
+        actorBadge: actor?.badge || null,
+        targetLink: `/live/${stream.id}`,
+        icon: '🔴',
+      });
+    }
 
     for (const c of commentsRes.data || []) {
       const id = `db-comment-${c.id}`;
