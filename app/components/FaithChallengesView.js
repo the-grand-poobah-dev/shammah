@@ -110,6 +110,11 @@ export default function FaithChallengesView({ session, profile }) {
   const [category, setCategory] = useState('All');
   const [sort, setSort] = useState('trending');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [layout, setLayout] = useState('magazine-flat');
 
   // Media playback
@@ -132,38 +137,57 @@ export default function FaithChallengesView({ session, profile }) {
 
   // Load challenges data
   const fetchData = useCallback(
-    async (isPullToRefresh = false) => {
+    async (isPullToRefresh = false, requestedPage = 1, append = false) => {
       try {
-        if (isPullToRefresh) setRefreshing(true);
+        if (append) setLoadingMore(true);
+        else if (isPullToRefresh) setRefreshing(true);
         else setLoading(true);
         setError(null);
 
         const data = await listChallenges({
-          category: category !== 'All' ? category : undefined,
+          category,
           sort,
-          search: search.trim() || undefined,
-          userId: currentUser?.id,
+          search: debouncedSearch,
+          page: requestedPage,
+          pageSize: 12,
         });
 
-        setChallenges(data.challenges || []);
+        setChallenges((previous) => append ? [...previous, ...(data.challenges || [])] : (data.challenges || []));
         setTodayChallenge(data.today_challenge || (data.challenges && data.challenges[0]) || null);
         setMyActive(data.my_active || []);
         setSubmissions(data.submissions || []);
         setLeaderboard(data.leaderboard || []);
         setBadges(data.badges || []);
+        setTotalCount(Number(data.totalCount || 0));
+        setHasMore(Boolean(data.hasMore));
+        setPage(requestedPage);
+        setVotedMap((previous) => {
+          const next = { ...previous };
+          (data.user_votes || []).forEach((id) => { next[id] = true; });
+          return next;
+        });
       } catch (err) {
         console.error('Failed to load challenges:', err);
         setError(err.message || 'Unable to load faith challenges. Please try again.');
       } finally {
         setLoading(false);
         setRefreshing(false);
+        setLoadingMore(false);
       }
     },
-    [category, sort, search, currentUser?.id]
+    [category, sort, debouncedSearch]
   );
 
   useEffect(() => {
-    fetchData();
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    fetchData(false, 1, false);
   }, [fetchData]);
 
   // Handle Cheer / Like submission
@@ -285,13 +309,13 @@ export default function FaithChallengesView({ session, profile }) {
           stats={[
             {
               label: 'Active Challenges',
-              value: challenges.length || 6,
+              value: totalCount,
               icon: Sparkles,
               color: '#f59e0b',
             },
             {
               label: 'Participants',
-              value: totalParticipants > 0 ? totalParticipants.toLocaleString() : '5,000+',
+              value: totalParticipants.toLocaleString(),
               icon: Users,
               color: '#10b981',
             },
@@ -369,11 +393,11 @@ export default function FaithChallengesView({ session, profile }) {
                   <div className="flex items-center gap-4 text-xs text-slate-400 pt-1">
                     <span className="flex items-center gap-1 font-semibold text-white">
                       <Users className="w-3.5 h-3.5 text-amber-400" />
-                      {todayChallenge.participants_count || 1420} taking part
+                      {Number(todayChallenge.participants_count || 0).toLocaleString()} taking part
                     </span>
                     <span>·</span>
                     <span className="text-amber-300 font-bold">
-                      +{todayChallenge.points || 100} Devotion Points
+                      +{Number(todayChallenge.points || 0)} Devotion Points
                     </span>
                   </div>
                 </div>
@@ -500,7 +524,7 @@ export default function FaithChallengesView({ session, profile }) {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {submissions.map((sub) => {
                 const isVoted = votedMap[sub.id];
-                const cheersCount = (sub.cheers || sub.like_count || 0) + (isVoted ? 1 : 0);
+                const cheersCount = Number(sub.cheers || sub.like_count || 0);
                 const isPlaying = playingVideoId === sub.id;
 
                 return (
@@ -509,13 +533,28 @@ export default function FaithChallengesView({ session, profile }) {
                     className="group relative aspect-[9/15] rounded-2xl overflow-hidden border border-white/10 bg-black flex flex-col justify-between shadow-lg transition-all hover:scale-[1.01] hover:border-pink-500/40"
                   >
                     {/* Media Image / Video */}
-                    <div className="absolute inset-0">
-                      <img
-                        src={sub.thumb_url || sub.media_url || sub.videoUrl}
-                        alt={sub.caption || sub.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+                    <div className="absolute inset-0 bg-black">
+                      {sub.media_type === 'video' ? (
+                        <video
+                          src={sub.media_url || sub.videoUrl}
+                          poster={sub.thumb_url || undefined}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          autoPlay={isPlaying}
+                          controls={isPlaying}
+                          onEnded={() => setPlayingVideoId(null)}
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <img
+                          src={sub.thumb_url || sub.media_url || sub.videoUrl}
+                          alt={sub.caption || sub.title || 'Challenge submission'}
+                          loading="lazy"
+                          className="w-full h-full object-contain"
+                        />
+                      )}
+                      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black via-black/20 to-transparent" />
                     </div>
 
                     {/* Top Badges */}
@@ -523,13 +562,15 @@ export default function FaithChallengesView({ session, profile }) {
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-black/60 text-amber-300 border border-white/10 backdrop-blur-sm">
                         {sub.scripture || sub.hashtag || sub.challengeTag || '#Faith'}
                       </span>
-                      <button
-                        onClick={() => togglePlayVideo(sub.id)}
-                        aria-label={isPlaying ? 'Pause video' : 'Play video'}
-                        className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white border border-white/20 flex items-center justify-center hover:bg-black/80 transition-all"
-                      >
-                        {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-white" />}
-                      </button>
+                      {sub.media_type === 'video' && (
+                        <button
+                          onClick={() => togglePlayVideo(sub.id)}
+                          aria-label={isPlaying ? 'Pause video' : 'Play video'}
+                          className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md text-white border border-white/20 flex items-center justify-center hover:bg-black/80 transition-all"
+                        >
+                          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
+                        </button>
+                      )}
                     </div>
 
                     {/* Bottom Info & Cheer Action */}
@@ -592,7 +633,7 @@ export default function FaithChallengesView({ session, profile }) {
         <SectionBlock
           title="Browse Faith Challenges"
           icon={Layers}
-          badge={`${challenges.length} Available`}
+          badge={`${totalCount} Available`}
           accent="#8b5cf6"
         >
           {/* Controls: Search, Filter Chips, Sort & Layout Switcher */}
@@ -790,6 +831,19 @@ export default function FaithChallengesView({ session, profile }) {
                   </AccentCard>
                 );
               })}
+            </div>
+          )}
+          {!loading && !error && hasMore && (
+            <div className="flex justify-center pt-4">
+              <button
+                type="button"
+                onClick={() => fetchData(true, page + 1, true)}
+                disabled={loadingMore}
+                className="min-h-11 px-5 rounded-xl border text-sm font-semibold transition-opacity disabled:opacity-60"
+                style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+              >
+                {loadingMore ? 'Loading more…' : 'Load more challenges'}
+              </button>
             </div>
           )}
         </SectionBlock>
