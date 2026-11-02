@@ -75,7 +75,10 @@ export async function listMedia({
 } = {}) {
   try {
     // If text query provided, use the search_media RPC with trigram ranking
-    if (query && query.trim() && !cursor) {
+    // The search RPC does not accept author/series/church filters. Use the
+    // filtered table query whenever those constraints are requested so search
+    // cannot return unrelated creators' media ahead of the client-side filter.
+    if (query && query.trim() && !cursor && !authorId && !seriesId && !churchId) {
       const { data, error } = await supabase.rpc('search_media', {
         q: query.trim(),
         p_kind: kind || null,
