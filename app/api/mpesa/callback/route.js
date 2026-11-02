@@ -13,7 +13,9 @@ export const runtime = 'nodejs';
 
 function isAuthorizedCallback(request) {
   const expected = process.env.MPESA_CALLBACK_SECRET;
-  if (!expected) return process.env.MPESA_ENVIRONMENT !== 'production';
+  // Deployed Next.js environments set NODE_ENV=production, even when Daraja is sandboxed.
+  // Fail closed unless a callback secret is explicitly configured.
+  if (!expected) return process.env.NODE_ENV !== 'production' && process.env.MPESA_ENVIRONMENT !== 'production';
   const supplied = new URL(request.url).searchParams.get('secret') || '';
   const expectedBytes = Buffer.from(expected);
   const suppliedBytes = Buffer.from(supplied);
