@@ -984,7 +984,7 @@ export default function CommentThread({
             </div>
           )}
         </div>
-        {error && <p className="auth-message">{error}</p>}
+        {(error || commentAttachment.error) && <p className="auth-message">{error || commentAttachment.error}</p>}
       </form>
 
       {showGifPicker && <GifPicker onSelect={handleChooseCommentGif} onClose={() => setShowGifPicker(false)} />}
