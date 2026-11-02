@@ -74,7 +74,7 @@ export async function GET(request) {
         .eq('user_id', user.id);
       if (progressError) throw progressError;
       const { data: achievements, error: achievementError } = await client.from('arcade_achievements')
-        .select('code,earned_at,metadata').eq('user_id', user.id).order('earned_at', { ascending: false });
+        .select('code,earned_at').eq('user_id', user.id).order('earned_at', { ascending: false });
       if (achievementError) throw achievementError;
       return NextResponse.json({ games: data || [], progress: progress || [], achievements: achievements || [], signedIn: true });
     }
