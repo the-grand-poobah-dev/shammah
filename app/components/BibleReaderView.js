@@ -131,7 +131,8 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         const offlineChapter = getOfflineBibleChapter(currentBook.name, selectedChapter, translation);
         if (offlineChapter?.verses?.length) {
           setChapterVerses(offlineChapter.verses);
-          setChapterError('You are offline. Showing your saved chapter.');
+          setChapterError('');
+          showToast('You are offline. Showing your saved chapter.');
         } else {
           setChapterVerses([]);
           setChapterError(error?.message || 'Could not load this chapter. Check your connection and retry.');
