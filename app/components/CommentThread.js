@@ -160,7 +160,7 @@ export default function CommentThread({
     async function load() {
       let query = supabase
         .from('comments')
-        .select('id, parent_id, author_id, text_content, media_url, media_type, mentioned_user_ids, created_at, profiles(display_name, avatar_url, badge, badge_verified)')
+        .select('id, parent_id, author_id, text_content, media_url, media_type, media_meta, mentioned_user_ids, created_at, profiles(display_name, avatar_url, badge, badge_verified)')
         .order('created_at', { ascending: true });
 
       if (mediaId) {
@@ -354,7 +354,7 @@ export default function CommentThread({
     const { data, error: insertErr } = await supabase
       .from('comments')
       .insert(insertRow)
-      .select('id, parent_id, author_id, text_content, media_url, media_type, mentioned_user_ids, created_at')
+      .select('id, parent_id, author_id, text_content, media_url, media_type, media_meta, mentioned_user_ids, created_at')
       .single();
     setBusy(false);
     if (insertErr) {
