@@ -90,6 +90,15 @@ export async function moderateChallengeSubmission(submissionId, decision) {
   return data.submission;
 }
 
+export async function sendChallengePushReminder({ token, title, body, link = '/?tab=faith-challenges' }) {
+  const headers = await getAuthHeaders();
+  return requestJson('/api/fcm/send', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ token, title, body, link }),
+  });
+}
+
 export async function deleteChallengeSubmission(submissionId) {
   return postAction({ action: 'delete-submission', submissionId });
 }
