@@ -254,6 +254,7 @@ export default function FaithChallengesView({ session, profile }) {
       document.querySelectorAll('[data-faith-challenge-video]').forEach((video) => video.pause());
       playSound('click');
       setPlayingVideoId(subId);
+      if (current) current.play().catch(() => setPlayingVideoId(null));
     }
   }
 
