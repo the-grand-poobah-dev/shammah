@@ -55,7 +55,7 @@ insert into public.arcade_questions(category,testament,book,question,options,cor
 ('Gospels', 'NT', 'Matthew', 'Where was Jesus born?', '["Nazareth","Jerusalem","Capernaum","Bethlehem"]'::jsonb, 3, 'Matthew 2:1'),
 ('Gospels', 'NT', 'Matthew', 'Who baptized Jesus?', '["Andrew","Nicodemus","John the Baptist","Peter"]'::jsonb, 2, 'Matthew 3:13'),
 ('Gospels', 'NT', 'Matthew', 'How many loaves were used to feed the five thousand?', '["Two","Five","Seven","Twelve"]'::jsonb, 1, 'Matthew 14:17'),
-('Gospels', 'NT', 'Mark', 'Who climbed a sycamore tree to see Jesus?', '["Zacchaeus","Bartimaeus","Lazarus","Thomas"]'::jsonb, 0, 'Luke 19:4'),
+('Gospels', 'NT', 'Luke', 'Who climbed a sycamore tree to see Jesus?', '["Zacchaeus","Bartimaeus","Lazarus","Thomas"]'::jsonb, 0, 'Luke 19:4'),
 ('Gospels', 'NT', 'Luke', 'Who was the mother of Jesus?', '["Martha","Elizabeth","Anna","Mary"]'::jsonb, 3, 'Luke 1:30-31'),
 ('Gospels', 'NT', 'John', 'What was Jesus’ first recorded sign in John?', '["Feeding 5000","Healing a blind man","Turning water into wine","Walking on water"]'::jsonb, 2, 'John 2:1-11'),
 ('Acts', 'NT', 'Acts', 'Who was converted on the road to Damascus?', '["Philip","Saul","Barnabas","Stephen"]'::jsonb, 1, 'Acts 9'),
