@@ -3,6 +3,13 @@
 
 BEGIN;
 
+ALTER TABLE public.challenge_submissions
+  ADD COLUMN IF NOT EXISTS media_type text NOT NULL DEFAULT 'image';
+ALTER TABLE public.challenge_submissions
+  DROP CONSTRAINT IF EXISTS challenge_submissions_media_type_check;
+ALTER TABLE public.challenge_submissions
+  ADD CONSTRAINT challenge_submissions_media_type_check CHECK (media_type IN ('image','video'));
+
 CREATE TABLE IF NOT EXISTS public.challenge_badge_awards (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -181,6 +188,7 @@ DECLARE
   v_points integer := 10;
   v_badge_code text := NULL;
   v_badge_label text := NULL;
+  v_church uuid;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'You must be signed in to check in.');
@@ -199,6 +207,14 @@ BEGIN
   IF v_challenge.status <> 'active' OR v_challenge.starts_at > now()
      OR (v_challenge.ends_at IS NOT NULL AND v_challenge.ends_at < now()) THEN
     RETURN jsonb_build_object('success', false, 'error', 'This challenge is not currently accepting check-ins.');
+  END IF;
+  SELECT church_id INTO v_church FROM public.profiles WHERE id = v_uid;
+  IF v_challenge.visibility = 'private' AND v_challenge.creator_id <> v_uid THEN
+    RETURN jsonb_build_object('success', false, 'error', 'This challenge is private.');
+  END IF;
+  IF v_challenge.visibility = 'church' AND v_challenge.creator_id <> v_uid
+     AND (v_challenge.church_id IS NULL OR v_challenge.church_id IS DISTINCT FROM v_church) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'This challenge is only available to its church community.');
   END IF;
 
   INSERT INTO public.challenge_participants (challenge_id, user_id, joined_at, streak_current, streak_best, points)
