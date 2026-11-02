@@ -26,6 +26,7 @@ import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
 import VideosView from './components/VideosView';
 import ReelsFeed from './components/ReelsFeed';
+import LiveNowCard from './components/LiveNowCard';
 import AudioView from './components/AudioView';
 import PollsView from './components/PollsView';
 import CoursesView from './components/CoursesView';
@@ -1716,6 +1717,8 @@ export default function Feed() {
                 role: profile?.role,
               }}
             />
+
+            <LiveNowCard />
 
             {/* Quick Bar: Google Workspace & Church Community Hub */}
             <div className="gws-hero-card my-3 box-border w-full max-w-full overflow-hidden">
