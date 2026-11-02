@@ -47,12 +47,14 @@ const BG_THEMES = [
 
 const STATUS_MEDIA_LIMITS = {
   image: { maxBytes: 10 * 1024 * 1024, maxLabel: '10 MB', maxSeconds: null },
+  gif: { maxBytes: 10 * 1024 * 1024, maxLabel: '10 MB', maxSeconds: null },
   video: { maxBytes: 50 * 1024 * 1024, maxLabel: '50 MB', maxSeconds: 60 },
   audio: { maxBytes: 5 * 1024 * 1024, maxLabel: '5 MB', maxSeconds: 60 },
 };
 
 function getMediaType(file) {
   if (!file) return null;
+  if (file.type === 'image/gif' || /\\.gif$/i.test(file.name || '')) return 'gif';
   if (file.type?.startsWith('image/')) return 'image';
   if (file.type?.startsWith('video/')) return 'video';
   if (file.type?.startsWith('audio/')) return 'audio';
@@ -110,6 +112,7 @@ function createEmptySlide() {
     previewUrl: '',
     mediaUrl: '',
     mediaType: null,
+    mediaMeta: {},
     fileName: '',
     caption: '',
     scriptureTag: '',
@@ -131,10 +134,9 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
   const [globalError, setGlobalError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [publishProgress, setPublishProgress] = useState('');
+  const [showGifPicker, setShowGifPicker] = useState(false);
 
   const fileInputRef = useRef(null);
-  const cameraPhotoInputRef = useRef(null);
-  const cameraVideoInputRef = useRef(null);
   const cameraAudioInputRef = useRef(null);
 
   // Live Voice Note Recording State
@@ -374,6 +376,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
           text: resolvedText,
           mediaUrl: s.mediaUrl || s.previewUrl || null,
           mediaType: s.mediaType || null,
+          mediaMeta: s.mediaMeta || {},
           bgStyle: s.bgStyle || 'emerald',
           scriptureTag: s.scriptureTag?.trim() || null,
           visibility: audience,
