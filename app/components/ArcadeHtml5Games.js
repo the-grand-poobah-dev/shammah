@@ -11,6 +11,10 @@ const GAMES = [
   { slug: 'fisher-of-men', title: 'Fisher of Men', age: 'Family', icon: Fish, accent: '#06b6d4', goal: 'Catch fish before time runs out, but leave the boots and rubbish behind.', good: ['🐟','🐠','🐡','🦀'], bad: ['👢','🗑️'], start: '🐟' },
   { slug: 'faith-builder', title: 'Faith Builder', age: 'Adults', icon: Puzzle, accent: '#14b8a6', goal: 'A quick reaction challenge: select the matching symbols and avoid decoys.', good: ['✝️','📖','🕊️','❤️'], bad: ['💣','🌪️'], start: '📖' },
   { slug: 'daily-brain-teaser', title: 'Daily Brain Teaser', age: 'Teens', icon: Brain, accent: '#f97316', goal: 'Train attention and reaction speed with a short symbol challenge.', good: ['🔷','🟡','🟢','⭐'], bad: ['🔺','⚫'], start: '🔷' },
+  { slug: 'bible-word-search', title: 'Bible Word Search Dash', age: 'Kids', icon: Search, accent: '#8b5cf6', goal: 'Tap the Bible-themed symbols as they appear. Keep your eyes open for decoys.', good: ['📖','✝️','🕊️','⭐'], bad: ['🌪️','💣'], start: '📖' },
+  { slug: 'parable-pairs', title: 'Parable Picture Dash', age: 'Family', icon: Heart, accent: '#ec4899', goal: 'A quick visual challenge inspired by the parables Jesus taught.', good: ['🌱','🐑','🪙','🏠'], bad: ['🌩️','🪨'], start: '🌱' },
+  { slug: 'book-order-race', title: 'Books of the Bible Race', age: 'Teens', icon: BookOpen, accent: '#a855f7', goal: 'Tap the Bible book symbols quickly to build your focus and recall.', good: ['📜','📖','✉️','⭐'], bad: ['🌪️','💣'], start: '📜' },
+  { slug: 'family-bible-challenge', title: 'Family Bible Challenge', age: 'Family', icon: Users, accent: '#eab308', goal: 'A mixed-age reaction round for family game night. Take turns and cheer each other on.', good: ['❤️','📖','🕊️','⭐'], bad: ['🌩️','🪨'], start: '❤️' },
 ];
 
 const TILE_COUNT = 16;
