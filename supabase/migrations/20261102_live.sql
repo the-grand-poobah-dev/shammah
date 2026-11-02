@@ -180,6 +180,7 @@ as $$
 declare
   recent_count integer;
 begin
+  perform pg_advisory_xact_lock(hashtextextended(new.stream_id::text || ':' || new.user_id::text, 0));
   select count(*) into recent_count
   from public.live_chat_messages
   where stream_id = new.stream_id
@@ -260,4 +261,20 @@ begin
       execute format('alter table public.%I add constraint %I check (media_type is null or media_type in (''image'',''video'',''audio'',''gif'',''live''))', target_table, target_table || '_media_type_check');
     end if;
   end loop;
+end $$;
+
+-- Explicit grants are still subject to the policies above.
+grant select on public.live_streams, public.live_chat_messages to anon, authenticated;
+grant insert on public.live_chat_messages to authenticated;
+grant update on public.live_chat_messages to authenticated;
+grant select, insert, update, delete on public.live_moderators, public.live_bans to authenticated;
+grant all privileges on public.live_streams, public.live_chat_messages, public.live_moderators, public.live_bans to service_role;
+
+-- Enable realtime updates for chat and stream status when the publication exists.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    begin alter publication supabase_realtime add table public.live_chat_messages; exception when duplicate_object then null; end;
+    begin alter publication supabase_realtime add table public.live_streams; exception when duplicate_object then null; end;
+  end if;
 end $$;
