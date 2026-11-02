@@ -96,6 +96,30 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   useEffect(() => {
     setHighlights(getVerseHighlights());
     setNotes(getSavedNotes());
+    if (session?.access_token) {
+      fetch('/api/bible/notes', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        .then(async (response) => {
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload?.error || 'Could not sync notes.');
+          const cloudNotes = (payload.notes || []).map((note) => ({
+            id: note.id,
+            title: note.title || 'Bible note',
+            speaker: note.speaker || '',
+            church: note.church || '',
+            scripture: note.ref_range || `${note.book || note.book_id || 'Bible'} ${note.chapter}${note.verse ? `:${note.verse}` : ''}`,
+            content: note.content || note.body_md || '',
+            tags: Array.isArray(note.tags) ? note.tags : [],
+            color: note.color || '#0ea5e9',
+            createdAt: note.created_at,
+            updatedAt: note.updated_at
+          }));
+          setNotes((localNotes) => [
+            ...cloudNotes,
+            ...localNotes.filter((localNote) => !cloudNotes.some((cloudNote) => cloudNote.id === localNote.id))
+          ]);
+        })
+        .catch(() => {});
+    }
 
     function onNotesUpdated(e) {
       if (e.detail) setNotes(e.detail);
@@ -118,7 +142,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       window.removeEventListener('shammah:highlights-updated', onHighlightsUpdated);
       window.removeEventListener('shammah:open-sermon-note', onOpenSermonNote);
     };
-  }, [currentBook?.name, selectedChapter]);
+  }, [currentBook?.name, selectedChapter, session?.access_token]);
 
   useEffect(() => {
     let cancelled = false;
@@ -486,9 +510,52 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       tags: tagsArr,
     });
     setNotes(saved);
+    const localNoteId = activeNote?.id || saved[0]?.id;
     setShowNotesDrawer(false);
     setActiveNote(null);
     showToast('Sermon note saved offline! 📝');
+    if (session?.access_token) {
+      const verseMatch = noteForm.scripture.match(/:(\d+)/);
+      fetch('/api/bible/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          id: localNoteId,
+          title: noteForm.title.trim(),
+          speaker: noteForm.speaker.trim(),
+          church: noteForm.church.trim(),
+          scripture: noteForm.scripture.trim(),
+          content: noteForm.content.trim(),
+          tags: tagsArr,
+          book: currentBook.name,
+          book_id: currentBook.id,
+          chapter: selectedChapter,
+          verse: verseMatch ? Number(verseMatch[1]) : null,
+          translation
+        })
+      }).then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Note sync failed.');
+        const cloud = payload.note;
+        const cloudNote = {
+          id: cloud.id,
+          title: cloud.title || 'Bible note',
+          speaker: cloud.speaker || '',
+          church: cloud.church || '',
+          scripture: cloud.ref_range || noteForm.scripture.trim(),
+          content: cloud.content || cloud.body_md || '',
+          tags: Array.isArray(cloud.tags) ? cloud.tags : tagsArr,
+          color: cloud.color || '#0ea5e9',
+          createdAt: cloud.created_at,
+          updatedAt: cloud.updated_at
+        };
+        const current = getSavedNotes();
+        const synced = current.map((item) => item.id === localNoteId ? cloudNote : item);
+        window.localStorage.setItem('shammah_sermon_notes_v1', JSON.stringify(synced));
+        window.dispatchEvent(new CustomEvent('shammah:notes-updated', { detail: synced }));
+        setNotes((items) => [cloudNote, ...items.filter((item) => item.id !== localNoteId && item.id !== cloudNote.id)]);
+      }).catch((error) => showToast(error?.message || 'Note saved locally; cloud sync failed.'));
+    }
     playSound('reaction');
   }
 
@@ -496,6 +563,11 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     if (window.confirm('Delete this sermon note?')) {
       const remaining = deleteNote(id);
       setNotes(remaining);
+      if (session?.access_token && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id))) {
+        fetch('/api/bible/notes', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ id }) })
+          .then(async (response) => { if (!response.ok) { const payload = await response.json(); throw new Error(payload?.error || 'Cloud delete failed.'); } })
+          .catch((error) => showToast(error?.message || 'Could not sync note deletion.'));
+      }
       if (activeNote?.id === id) {
         setShowNotesDrawer(false);
         setActiveNote(null);
