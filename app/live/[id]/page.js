@@ -212,7 +212,7 @@ export default function LiveViewerPage() {
 
   async function followHost() {
     if (!session?.user?.id || !stream?.host_id || stream.host_id === session.user.id) return;
-    const { error: followError } = await supabase.from('follows').insert({ follower_id: session.user.id, following_id: stream.host_id });
+    const { error: followError } = await supabase.from('follows').insert({ follower_id: session.user.id, followed_id: stream.host_id });
     if (followError && !/duplicate|unique/i.test(followError.message || '')) setError(followError.message || 'Could not follow host.');
   }
 
