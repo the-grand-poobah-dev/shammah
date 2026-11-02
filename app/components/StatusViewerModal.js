@@ -640,6 +640,7 @@ export default function StatusViewerModal({
               src={currentStatus.mediaUrl}
               alt=""
               className="status-viewer-fill-image"
+              style={{ objectFit: 'contain', width: '100%', height: '100%' }}
             />
             <div className="status-viewer-image-scrim" />
           </div>
@@ -823,6 +824,7 @@ export default function StatusViewerModal({
                 muted={isMuted}
                 playsInline
                 className="status-viewer-video"
+                style={{ objectFit: 'contain' }}
                 onTimeUpdate={(e) => {
                   const v = e.currentTarget;
                   if (v.duration && v.duration > 0) {
