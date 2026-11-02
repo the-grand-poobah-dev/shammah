@@ -118,7 +118,7 @@ export async function GET(request) {
     if (db) {
       const payload = { translation, book_id: bookId, chapter, verses: result.verses, source: result.source, fetched_at: new Date().toISOString() };
       await db.from('bible_chapters').upsert(payload, { onConflict: 'translation,book_id,chapter' });
-      await db.from('bible_verses').upsert(result.verses.map(v => ({ translation, book_id: bookId, book_name: bookName, chapter, verse: v.num, verse_text: v.text })), { onConflict: 'translation,book_id,chapter,verse' });
+      await db.from('bible_verses').upsert(result.verses.map(v => ({ id: `${translation}:${bookId}:${chapter}:${v.num}`, translation, book_id: bookId, book_name: bookName, chapter, verse: v.num, text: v.text, heading: v.heading || null })), { onConflict: 'id' });
     }
     return NextResponse.json({ translation, book: bookName, book_id: bookId, chapter, verses: result.verses, source: result.source, cached: false }, { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' } });
   } catch (error) {
