@@ -30,6 +30,8 @@ from public.reading_plans p
 cross join lateral generate_series(1, p.days) as d(day)
 on conflict (plan_id, day) do update set refs = excluded.refs;
 
+update public.reading_plan_days set refs = jsonb_build_array(to_jsonb('Psalms ' || day), to_jsonb('Proverbs ' || day)) where plan_id = 'psalms-proverbs';
+
 -- Replace placeholder rotations with complete chapter-by-chapter schedules.
 with book_catalog(book_order, book_name, chapter_count, testament) as (
   values
