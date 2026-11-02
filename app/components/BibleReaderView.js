@@ -62,6 +62,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const [readingPlansError, setReadingPlansError] = useState('');
   const [activePlanId, setActivePlanId] = useState('');
   const [savingPlanProgress, setSavingPlanProgress] = useState(false);
+  const [bookmarkedVerseKeys, setBookmarkedVerseKeys] = useState([]);
   const [highlights, setHighlights] = useState({});
   const [selectedHighlightColor, setSelectedHighlightColor] = useState('gold');
   const [toastMsg, setToastMsg] = useState('');
@@ -150,6 +151,30 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   }, [currentBook.id, currentBook.chapters, selectedChapter, translation]);
 
   const verses = chapterVerses;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadBookmarks() {
+      const localKey = 'shammah_bible_bookmarks_v1';
+      let local = [];
+      try { local = JSON.parse(window.localStorage.getItem(localKey) || '[]'); } catch {}
+      const localMatches = local.filter((item) => item.translation === translation && item.book_id === currentBook.id && Number(item.chapter) === selectedChapter);
+      if (!session?.access_token) {
+        setBookmarkedVerseKeys(localMatches.map((item) => String(item.verse)));
+        return;
+      }
+      try {
+        const response = await fetch(`/api/bible/study?type=bookmarks&translation=${encodeURIComponent(translation)}&book_id=${encodeURIComponent(currentBook.id)}&chapter=${selectedChapter}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Could not load bookmarks.');
+        if (!cancelled) setBookmarkedVerseKeys((payload.items || []).map((item) => String(item.verse)));
+      } catch {
+        if (!cancelled) setBookmarkedVerseKeys(localMatches.map((item) => String(item.verse)));
+      }
+    }
+    loadBookmarks();
+    return () => { cancelled = true; };
+  }, [session?.access_token, currentBook.id, selectedChapter, translation]);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,10 +295,45 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
 
   function handleHighlight(vNum) {
     const key = `${currentBook.name}-${selectedChapter}-${vNum}`;
+    const alreadyHighlighted = Boolean(highlights[key]);
     const next = toggleVerseHighlight(key, selectedHighlightColor);
     setHighlights({ ...next });
+    if (session?.access_token) {
+      fetch('/api/bible/study', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ type: 'highlight', action: alreadyHighlighted ? 'remove' : 'save', translation, book_id: currentBook.id, chapter: selectedChapter, verse: vNum, color: selectedHighlightColor })
+      }).then(async (response) => { if (!response.ok) { const payload = await response.json(); throw new Error(payload?.error || 'Could not sync highlight.'); } }).catch((error) => showToast(error?.message || 'Highlight saved on this device only.'));
+    }
     playSound('reaction');
-    showToast('Verse highlighted!');
+    showToast(alreadyHighlighted ? 'Highlight removed.' : 'Verse highlighted!');
+  }
+
+  async function handleBookmarkVerse(vNum) {
+    const item = { translation, book_id: currentBook.id, chapter: selectedChapter, verse: vNum };
+    const key = 'shammah_bible_bookmarks_v1';
+    let local = [];
+    try { local = JSON.parse(window.localStorage.getItem(key) || '[]'); } catch {}
+    const exists = local.some((entry) => entry.translation === item.translation && entry.book_id === item.book_id && Number(entry.chapter) === item.chapter && Number(entry.verse) === item.verse);
+    const next = exists ? local.filter((entry) => !(entry.translation === item.translation && entry.book_id === item.book_id && Number(entry.chapter) === item.chapter && Number(entry.verse) === item.verse)) : [...local, item];
+    try { window.localStorage.setItem(key, JSON.stringify(next)); } catch {}
+    setBookmarkedVerseKeys((items) => exists ? items.filter((value) => value !== String(vNum)) : [...new Set([...items, String(vNum)])]);
+    if (session?.access_token) {
+      try {
+        const response = await fetch('/api/bible/study', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ type: 'bookmark', action: exists ? 'remove' : 'save', ...item })
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Could not sync bookmark.');
+        showToast(exists ? 'Bookmark removed.' : 'Bookmark saved.');
+      } catch (error) {
+        showToast(error?.message || 'Bookmark saved on this device only.');
+      }
+    } else {
+      showToast(exists ? 'Bookmark removed from this device.' : 'Bookmark saved on this device.');
+    }
   }
 
   async function handleShareVerse(v) {
@@ -665,6 +725,15 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
                     title="Copy & share verse"
                   >
                     <Share2 size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`verse-icon-btn${bookmarkedVerseKeys.includes(String(v.num)) ? ' active' : ''}`}
+                    onClick={() => handleBookmarkVerse(v.num)}
+                    title={bookmarkedVerseKeys.includes(String(v.num)) ? 'Remove bookmark' : 'Bookmark verse'}
+                    aria-label={bookmarkedVerseKeys.includes(String(v.num)) ? 'Remove bookmark' : 'Bookmark verse'}
+                  >
+                    <Bookmark size={13} />
                   </button>
                   <button
                     type="button"
