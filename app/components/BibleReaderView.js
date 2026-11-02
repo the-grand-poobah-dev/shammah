@@ -58,7 +58,6 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const [bookDownloadProgress, setBookDownloadProgress] = useState(null);
   const [isChapterOffline, setIsChapterOffline] = useState(false);
   const [testamentFilter, setTestamentFilter] = useState('ALL'); // ALL, OT, NT
-  const [searchQuery, setSearchQuery] = useState('');
   const [scriptureSearchQuery, setScriptureSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -326,17 +325,10 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [scriptureSearchQuery, translation]);
 
-  const filteredBooks = useMemo(() => {
-    return BIBLE_BOOKS.filter((b) => {
-      if (testamentFilter === 'OT' && b.testament !== 'OT') return false;
-      if (testamentFilter === 'NT' && b.testament !== 'NT') return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        return b.name.toLowerCase().includes(q) || b.genre.toLowerCase().includes(q);
-      }
-      return true;
-    });
-  }, [testamentFilter, searchQuery]);
+  const filteredBooks = useMemo(
+    () => BIBLE_BOOKS.filter((book) => testamentFilter === 'ALL' || book.testament === testamentFilter),
+    [testamentFilter]
+  );
 
   function showToast(msg) {
     setToastMsg(msg);
