@@ -111,6 +111,12 @@ export default function ReelsFeed({
     }
   }, [feedTab, initialReels.length, loadFeed]);
 
+  useEffect(() => {
+    const handleReelCreated = () => loadFeed(feedTab);
+    window.addEventListener('shammah:reel-created', handleReelCreated);
+    return () => window.removeEventListener('shammah:reel-created', handleReelCreated);
+  }, [feedTab, loadFeed]);
+
   // Honour shared links such as /reels?id=<uuid> after the feed has loaded.
   useEffect(() => {
     if (typeof window === 'undefined' || reels.length === 0) return;
