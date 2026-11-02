@@ -158,9 +158,13 @@ export async function GET(request) {
         checkins = ownCheckins || [];
       }
 
-      const { data: submissionRows, error: submissionsError } = await db.from('challenge_submissions').select('*')
-        .eq('challenge_id', id)
-        .or(user?.id ? 'status.eq.approved,user_id.eq.' + user.id : 'status.eq.approved')
+      let submissionQuery = db.from('challenge_submissions').select('*').eq('challenge_id', id);
+      if (challengeRow.creator_id === user?.id || isModerator(profile)) {
+        submissionQuery = submissionQuery.in('status', ['approved', 'pending_review']);
+      } else {
+        submissionQuery = submissionQuery.or(user?.id ? 'status.eq.approved,user_id.eq.' + user.id : 'status.eq.approved');
+      }
+      const { data: submissionRows, error: submissionsError } = await submissionQuery
         .order('created_at', { ascending: false }).limit(60);
       if (submissionsError) throw submissionsError;
       const authors = await profileMap(db, (submissionRows || []).map((row) => row.user_id));
