@@ -234,7 +234,24 @@ export async function POST(request) {
       if (!Number.isSafeInteger(numAmount) || numAmount < 10 || numAmount > 1000000) {
         return NextResponse.json({ error: 'Donation amount must be between KES 10 and KES 1,000,000.' }, { status: 400 });
       }
+      // Fundraiser donations use the authenticated, real STK Push flow above.
       return initiateFundraiserDonation(request, body, String(targetFundraiserId), cleanPhone, numAmount);
+    }
+
+    // This legacy branch fabricates a receipt and can mark subscriptions/course
+    // enrollments paid without a verified Safaricom callback. Never allow it in
+    // production; only enable it deliberately for local/test simulation.
+    if (process.env.NODE_ENV === 'production' || process.env.MPESA_ALLOW_SIMULATION !== 'true') {
+      return NextResponse.json(
+        { error: 'This legacy payment path is disabled. Use the secure M-Pesa STK Push flow.' },
+        { status: 503 }
+      );
+    }
+    if (simulateConfirmation !== true) {
+      return NextResponse.json(
+        { error: 'Payment simulation requires simulateConfirmation=true in an explicitly enabled non-production environment.' },
+        { status: 400 }
+      );
     }
 
     if (targetFundraiserId && (!Number.isFinite(numAmount) || numAmount < 10)) {
