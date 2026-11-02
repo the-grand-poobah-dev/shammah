@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 import ArcadeOnlineHub from './ArcadeOnlineHub';
+import { supabase } from '../lib/supabaseClient';
 
 const TRIVIA_QUESTIONS = [
   // Kids
@@ -134,6 +135,35 @@ const NOAH_ANIMALS = [
 export default function FaithArcadeGamesView() {
   const [selectedGame, setSelectedGame] = useState('trivia'); // 'trivia', 'david', 'ark'
   const [arcadeHighScore, setArcadeHighScore] = useState(0);
+  const [arcadeSaveMessage, setArcadeSaveMessage] = useState('');
+  const gameStartedAt = useRef(Date.now());
+
+  useEffect(() => {
+    gameStartedAt.current = Date.now();
+    setArcadeSaveMessage('');
+  }, [selectedGame]);
+
+  async function saveLegacyGameScore(gameSlug, score, meta = {}) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) {
+        setArcadeSaveMessage('Sign in to save this score and appear on leaderboards.');
+        return;
+      }
+      const response = await fetch('/api/arcade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ gameSlug, score: Math.max(0, Math.round(score)), durationMs: Math.max(1000, Date.now() - gameStartedAt.current), meta: { ...meta, completed: true } }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Score could not be saved.');
+      setArcadeHighScore((current) => Math.max(current, Number(score) || 0));
+      setArcadeSaveMessage('Score saved to your Arcade profile.');
+    } catch (error) {
+      setArcadeSaveMessage(error?.message || 'Score could not be saved.');
+    }
+  }
 
   // ------------------- TRIVIA STATE -------------------
   const [triviaCategory, setTriviaCategory] = useState('all'); // 'all', 'kids', 'teens', 'youth'
@@ -229,6 +259,7 @@ export default function FaithArcadeGamesView() {
     if (currentQIndex + 1 >= activeQuestions.length) {
       setTriviaFinished(true);
       playSound('bell');
+      saveLegacyGameScore('bible-champions', triviaScore, { questionsAnswered: activeQuestions.length, perfect: triviaScore > 0 });
     } else {
       setCurrentQIndex((i) => i + 1);
       setSelectedOption(null);
@@ -266,6 +297,7 @@ export default function FaithArcadeGamesView() {
         clearInterval(anim);
         setIsThrowing(false);
         setDavidStonesLeft((s) => s - 1);
+        if (davidStonesLeft <= 1) saveLegacyGameScore('david-sling', davidScore + (isHit ? 250 : 0), { perfect: isHit && davidScore === 1000 });
 
         if (isHit) {
           playSound('reaction');
@@ -299,6 +331,7 @@ export default function FaithArcadeGamesView() {
           if (next.length === NOAH_ANIMALS.length) {
             setArkWon(true);
             playSound('bell');
+            saveLegacyGameScore('noah-pairs', Math.max(100, arkTimeLeft * 10), { perfect: arkTimeLeft >= 30 });
           }
           return next;
         });
@@ -321,6 +354,8 @@ export default function FaithArcadeGamesView() {
         <p className="arcade-subtitle">
           Interactive offline Bible games for Sunday School, youth fellowships, and family fun. Learn scripture while having a blast!
         </p>
+
+        {arcadeSaveMessage && <p className="arcade-legacy-save-message" role="status">{arcadeSaveMessage}</p>}
 
         {/* Game Switcher Tabs */}
         <div className="arcade-game-tabs" role="tablist">
