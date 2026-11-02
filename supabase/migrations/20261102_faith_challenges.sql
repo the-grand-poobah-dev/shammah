@@ -3,6 +3,15 @@
 
 BEGIN;
 
+ALTER TABLE public.challenges
+  DROP CONSTRAINT IF EXISTS challenges_kind_check;
+ALTER TABLE public.challenges
+  ADD CONSTRAINT challenges_kind_check CHECK (kind IN ('daily','weekly','one_off','streak'));
+ALTER TABLE public.challenges
+  DROP CONSTRAINT IF EXISTS challenges_category_check;
+ALTER TABLE public.challenges
+  ADD CONSTRAINT challenges_category_check CHECK (category IN ('Prayer','Fasting','Scripture memory','Service','Worship','Generosity'));
+
 ALTER TABLE public.challenge_submissions
   ADD COLUMN IF NOT EXISTS media_type text NOT NULL DEFAULT 'image';
 ALTER TABLE public.challenge_submissions
