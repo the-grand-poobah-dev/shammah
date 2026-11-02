@@ -45,7 +45,6 @@ import { CATEGORY_STYLES, categoryStyle, initials } from '../lib/postDisplay';
 import { VISIBILITY_OPTIONS } from '../lib/postInteractions';
 import { playSound } from '../lib/soundEffects';
 import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousManager';
-import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
 import { detectMediaType } from '../lib/mediaUpload';
 import { listMedia } from '../lib/data/mediaApi';
 import ReelCreatorModal from './ReelCreatorModal';
@@ -216,14 +215,10 @@ export default function CreatePostBox({
   }
 
   const audioInputRef = useRef(null);
-  const cameraAudioInputRef = useRef(null);
-  const voiceRecorderRef = useRef(null);
   const categoryTriggerRef = useRef(null);
   const visMenuRef = useRef(null);
   const identityMenuRef = useRef(null);
 
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
-  const [voiceSeconds, setVoiceSeconds] = useState(0);
 
   const headerName = profile?.display_name || session?.user?.email || 'Member';
   const cat = composeCategory ? categoryStyle(composeCategory) : null;
@@ -309,51 +304,6 @@ export default function CreatePostBox({
     setMediaFile(null);
     setMediaPreview(null);
     if (audioInputRef.current) audioInputRef.current.value = '';
-    if (cameraAudioInputRef.current) cameraAudioInputRef.current.value = '';
-  }
-
-  async function handleStartVoiceNote() {
-    if (!isAudioRecordingSupported()) {
-      cameraAudioInputRef.current?.click();
-      return;
-    }
-    try {
-      setVoiceSeconds(0);
-      setIsRecordingVoice(true);
-      const recorder = await startAudioRecording({
-        maxSeconds: 120,
-        onTimeTick: (sec) => setVoiceSeconds(sec),
-      });
-      voiceRecorderRef.current = recorder;
-    } catch (err) {
-      console.warn('Voice record init failed:', err);
-      setIsRecordingVoice(false);
-      cameraAudioInputRef.current?.click();
-    }
-  }
-
-  async function handleStopVoiceNote() {
-    if (!voiceRecorderRef.current) return;
-    try {
-      const res = await voiceRecorderRef.current.stop();
-      setIsRecordingVoice(false);
-      voiceRecorderRef.current = null;
-      if (res?.file) {
-        handleFileSelected(res.file);
-      }
-    } catch (err) {
-      console.error('Error stopping voice note:', err);
-      setIsRecordingVoice(false);
-    }
-  }
-
-  function handleCancelVoiceNote() {
-    if (voiceRecorderRef.current) {
-      voiceRecorderRef.current.cancel();
-      voiceRecorderRef.current = null;
-    }
-    setIsRecordingVoice(false);
-    setVoiceSeconds(0);
   }
 
   function handleAddPollOption() {
@@ -1001,94 +951,6 @@ export default function CreatePostBox({
         hidden
         onChange={(event) => { handleFileSelected(event.target.files?.[0]); event.target.value = ''; }}
       />
-      <input
-        ref={cameraAudioInputRef}
-        type="file"
-        accept="audio/*"
-        capture
-        hidden
-        onChange={(event) => { handleFileSelected(event.target.files?.[0]); event.target.value = ''; }}
-      />
-
-      {/* Active Live Voice Recording Status Bar */}
-      {isRecordingVoice && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '10px 14px',
-            borderRadius: 12,
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid rgba(239, 68, 68, 0.35)',
-            marginBottom: 10,
-            width: '100%',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: '#ef4444',
-                display: 'inline-block',
-                animation: 'pulse 1s infinite',
-              }}
-            />
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#fca5a5' }}>
-              Recording Voice Note: {Math.floor(voiceSeconds / 60)}:{String(voiceSeconds % 60).padStart(2, '0')}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button
-              type="button"
-              onClick={handleCancelVoiceNote}
-              style={{
-                padding: '4px 10px',
-                borderRadius: 8,
-                background: 'rgba(255,255,255,0.1)',
-                border: 'none',
-                color: 'var(--ink)',
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleStopVoiceNote}
-              style={{
-                padding: '4px 12px',
-                borderRadius: 8,
-                background: 'var(--teal, #14b8a6)',
-                border: 'none',
-                color: '#ffffff',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              Done &amp; Attach
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showMediaLibrary && (
-        <div className="max-h-64 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2" aria-label="Your published media library">
-          <div className="flex items-center justify-between gap-3"><strong className="text-sm text-[var(--ink)]">Your published media</strong><button type="button" onClick={() => setShowMediaLibrary(false)} className="rounded-full p-1 text-[var(--ink-muted)] hover:bg-[var(--surface-hover,var(--surface))]" aria-label="Close media library"><X size={16} /></button></div>
-          {loadingMediaLibrary ? <p role="status" className="text-xs text-[var(--ink-muted)]">Loading your published videos and audio…</p> : mediaLibraryError ? <p role="alert" className="text-xs text-rose-400">{mediaLibraryError}</p> : libraryMedia.length ? libraryMedia.map((item) => (
-            <button key={item.id} type="button" onClick={() => handleChooseLibraryMedia(item)} className="flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-[var(--surface-hover,var(--surface))]">
-              {item.thumb_url ? <img src={item.thumb_url} alt="" className="h-10 w-14 rounded-md object-cover" /> : <span className="flex h-10 w-14 items-center justify-center rounded-md bg-black/10">{item.kind === 'audio' ? <FileAudio size={17} /> : <Film size={17} />}</span>}
-              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-[var(--ink)]">{item.title || 'Untitled media'}</strong><span className="block text-[10px] text-[var(--ink-muted)]">{item.kind === 'audio' ? 'Audio' : 'Video'} · Published</span></span>
-              {item.kind === 'audio' ? <FileAudio size={15} className="text-cyan-400" /> : <Film size={15} className="text-purple-400" />}
-            </button>
-          )) : <p className="text-xs text-[var(--ink-muted)]">No published videos or audio found in your library.</p>}
-        </div>
-      )}
-
       {/* Bottom Action Bar */}
       <div className="compose-bottom-toolbar">
         <div className="compose-tools-group" role="group" aria-label="Attachments and options">
