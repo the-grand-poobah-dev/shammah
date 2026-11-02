@@ -7,7 +7,7 @@ async function canWatch(service, stream, userId) {
   if (stream.host_id === userId || stream.visibility === 'public') return true;
   if (stream.visibility === 'followers') {
     const { data } = await service.from('follows').select('follower_id')
-      .eq('follower_id', userId).eq('following_id', stream.host_id).maybeSingle();
+      .eq('follower_id', userId).eq('followed_id', stream.host_id).maybeSingle();
     return Boolean(data);
   }
   if (stream.visibility === 'church' && stream.church_id) {
