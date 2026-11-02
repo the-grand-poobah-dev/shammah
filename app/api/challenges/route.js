@@ -225,7 +225,7 @@ export async function GET(request) {
       const byId = new Map(allChallenges.map((row) => [row.id, row]));
       myActive = (parts || []).map((part) => {
         const challenge = byId.get(part.challenge_id);
-        return challenge ? { ...normalizeChallenge(challenge), ...part, user_points: part.points } : null;
+        return challenge ? { ...normalizeChallenge(challenge), ...part, user_points: part.points, has_checked_in_today: part.last_checkin_on === new Date().toISOString().slice(0, 10) } : null;
       }).filter(Boolean);
       const { data: awards, error: awardError } = await db.from('challenge_badge_awards').select('*')
         .eq('user_id', user.id).order('earned_at', { ascending: false }).limit(40);
@@ -268,6 +268,7 @@ export async function GET(request) {
       page,
       pageSize,
       hasMore: page * pageSize < totalCount,
+      participantsTotal: allChallenges.reduce((sum, row) => sum + Number(row.participants_count || 0), 0),
       // Existing compatibility keys.
       todayChallenge,
       myActiveChallenges: myActive,
