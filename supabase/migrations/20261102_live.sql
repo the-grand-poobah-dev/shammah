@@ -210,27 +210,6 @@ create trigger live_chat_rate_limit_trigger
 before insert on public.live_chat_messages
 for each row execute function public.enforce_live_chat_rate_limit();
 
--- Add the new post media type without discarding other existing media types.
-alter table if exists public.posts add column if not exists media_meta jsonb not null default '{}'::jsonb;
-do $$
-declare
-  constraint_row record;
-begin
-  if to_regclass('public.posts') is not null then
-    for constraint_row in
-      select conname from pg_constraint
-      where conrelid = 'public.posts'::regclass
-        and contype = 'c'
-        and pg_get_constraintdef(oid) ilike '%media_type%'
-    loop
-      execute format('alter table public.posts drop constraint %I', constraint_row.conname);
-    end loop;
-    alter table public.posts add constraint posts_media_type_check
-      check (media_type is null or media_type in ('image','video','audio','reel','podcast','gif','live'));
-  end if;
-end $$;
-
-
 -- Allow the existing unified report flow to cover live broadcasts.
 do $
 declare
@@ -249,42 +228,3 @@ begin
       check (target_type in ('post','status','live_stream','reel','video','comment','poll','course','fundraiser','challenge'));
   end if;
 end $;
-
--- These columns are optional for deployments where comments/statuses already exist.
-do $$
-declare
-  target_table text;
-  constraint_row record;
-begin
-  foreach target_table in array array['comments','statuses'] loop
-    if to_regclass('public.' || target_table) is not null then
-      execute format('alter table public.%I add column if not exists media_type text', target_table);
-      execute format('alter table public.%I add column if not exists media_meta jsonb not null default %L::jsonb', target_table, '{}');
-      for constraint_row in
-        select conname from pg_constraint
-        where conrelid = to_regclass('public.' || target_table)
-          and contype = 'c'
-          and pg_get_constraintdef(oid) ilike '%media_type%'
-      loop
-        execute format('alter table public.%I drop constraint %I', target_table, constraint_row.conname);
-      end loop;
-      execute format('alter table public.%I add constraint %I check (media_type is null or media_type in (''image'',''video'',''audio'',''gif'',''live''))', target_table, target_table || '_media_type_check');
-    end if;
-  end loop;
-end $$;
-
--- Explicit grants are still subject to the policies above.
-grant select on public.live_streams, public.live_chat_messages to authenticated;
-grant insert on public.live_chat_messages to authenticated;
-grant update on public.live_chat_messages to authenticated;
-grant select, insert, update, delete on public.live_moderators, public.live_bans to authenticated;
-grant all privileges on public.live_streams, public.live_chat_messages, public.live_moderators, public.live_bans, public.live_viewers to service_role;
-
--- Enable realtime updates for chat and stream status when the publication exists.
-do $$
-begin
-  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    begin alter publication supabase_realtime add table public.live_chat_messages; exception when duplicate_object then null; end;
-    begin alter publication supabase_realtime add table public.live_streams; exception when duplicate_object then null; end;
-  end if;
-end $$;
