@@ -124,7 +124,7 @@ export default function ReelCreatorModal({
     setLoadingLibrary(true);
     setError('');
     try {
-      const result = await listMedia({ kind: 'video', sort: 'recent', limit: 30 });
+      const result = await listMedia({ kind: 'video', authorId: session.user.id, sort: 'recent', limit: 30 });
       if (result.error) throw result.error;
       setLibraryVideos((result.data || []).filter((item) => item.media_url && item.author_id === session?.user?.id));
     } catch (err) {
