@@ -36,6 +36,7 @@ export default function ArcadeHtml5Games() {
   const [active, setActive] = useState(GAMES[0]);
   const [board, setBoard] = useState(() => newBoard(GAMES[0]));
   const [seconds, setSeconds] = useState(ROUND_SECONDS);
+  const [roundKey, setRoundKey] = useState(0);
   const [score, setScore] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -118,7 +119,7 @@ export default function ArcadeHtml5Games() {
       });
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [playing, finish]);
+  }, [playing, finish, roundKey]);
 
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
@@ -127,6 +128,7 @@ export default function ArcadeHtml5Games() {
     setActive(game);
     setBoard(newBoard(game));
     setSeconds(ROUND_SECONDS);
+    setRoundKey((current) => current + 1);
     setScore(0);
     scoreRef.current = 0;
     startedAt.current = Date.now();
