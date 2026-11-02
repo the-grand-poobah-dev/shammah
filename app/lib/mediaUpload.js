@@ -11,6 +11,13 @@ export const MAX_BYTES = {
   audio: 50 * 1024 * 1024,   // 50 MB
 };
 
+function createUploadNonce() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2, 12);
+}
+
 export const ALLOWED_MIME = {
   image: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
   video: ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'],
@@ -56,7 +63,7 @@ export async function uploadPostMedia(file, userId) {
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .slice(0, 80);
 
-  const path = `${userId}/${Date.now()}-${safeName}`;
+  const path = `${userId}/${Date.now()}-${createUploadNonce()}-${safeName}`;
   const cleanContentType = (file.type || '').split(';')[0] || (type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'audio/webm');
 
   const { error } = await supabase.storage.from('post-media').upload(path, file, {
@@ -112,7 +119,7 @@ export async function uploadMediaItem(file, userId, options = {}) {
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .slice(0, 80);
 
-  const path = `${userId}/${Date.now()}-${safeName}`;
+  const path = `${userId}/${Date.now()}-${createUploadNonce()}-${safeName}`;
   const contentType = (file.type || '').split(';')[0] || (detectedKind === 'video' ? 'video/mp4' : detectedKind === 'audio' ? 'audio/mpeg' : 'image/jpeg');
 
   onProgress(10);
