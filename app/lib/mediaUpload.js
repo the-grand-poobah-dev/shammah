@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabaseClient';
 
 export const MAX_BYTES = {
   image: 15 * 1024 * 1024,   // 15 MB
+  gif: 10 * 1024 * 1024,     // 10 MB animated GIFs
   video: 100 * 1024 * 1024,  // 100 MB
   audio: 50 * 1024 * 1024,   // 50 MB
 };
@@ -30,6 +31,7 @@ export const ALLOWED_MIME = {
 export function detectMediaType(file) {
   if (!file) return null;
   const mime = (file.type || '').split(';')[0].trim().toLowerCase();
+  if (mime === 'image/gif' || /\\.gif$/i.test(file.name || '')) return 'gif';
   if (ALLOWED_MIME.image.includes(mime) || mime.startsWith('image/')) return 'image';
   if (ALLOWED_MIME.video.includes(mime) || mime.startsWith('video/')) return 'video';
   if (ALLOWED_MIME.audio.includes(mime) || mime.startsWith('audio/')) return 'audio';
@@ -56,7 +58,7 @@ function inferMediaMime(file, type) {
   };
   const extension = name.includes('.') ? name.split('.').pop() : '';
   if (extensionTypes[extension]) return extensionTypes[extension];
-  return type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'audio/mpeg';
+  return type === 'gif' ? 'image/gif' : type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'audio/mpeg';
 }
 
 /**
