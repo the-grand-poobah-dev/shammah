@@ -119,7 +119,7 @@ AS $message_permission$
           AND sender.church_id IS NOT NULL
           AND sender.church_id = recipient_profile.church_id
       )
-    ELSE true
+    ELSE (SELECT permission FROM recipient) = 'everyone'
   END;
 $message_permission$;
 
