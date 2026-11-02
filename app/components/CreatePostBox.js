@@ -1095,8 +1095,7 @@ export default function CreatePostBox({
           <MediaToolbar
             context="post"
             onPickFile={handleFileSelected}
-            onVoice={() => isRecordingVoice ? handleStopVoiceNote() : handleStartVoiceNote()}
-            voiceActive={isRecordingVoice}
+            onVoice={(file) => handleFileSelected(file)}
             onGif={() => setShowGifPicker(true)}
             onReel={() => setShowReelCreator(true)}
             onLive={() => setShowLiveModal(true)}
