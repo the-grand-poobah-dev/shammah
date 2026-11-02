@@ -50,7 +50,7 @@ export async function POST(req) {
 
     const { data: sub } = await supabase
       .from('subscriptions')
-      .select('id, church_id, period_id, status')
+      .select('id, church_id, plan_id, period_id, amount_kes, status')
       .eq('checkout_request_id', checkoutId)
       .maybeSingle();
 
@@ -169,9 +169,22 @@ export async function POST(req) {
       return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
     }
 
-    const period = PERIODS[sub.period_id] || PERIODS.monthly;
+    // Never activate a subscription unless the callback proves the expected payment.
+    // Daraja callbacks do not carry an auth header, so checkout ID alone is not enough.
+    const verifiedAmount = amount != null && Number.isFinite(amount) &&
+      Math.round(amount) === Number(sub.amount_kes);
+    if (!receipt || !verifiedAmount) {
+      console.error('Subscription callback amount/receipt mismatch for checkout:', checkoutId);
+      return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+    }
+
+    const period = PERIODS[sub.period_id];
+    if (!period) {
+      console.error('Subscription callback has an unknown billing period:', sub.period_id);
+      return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+    }
     const ends = new Date();
-    ends.setMonth(ends.getMonth() + (period.months || 1));
+    ends.setMonth(ends.getMonth() + period.months);
 
     await supabase
       .from('subscriptions')
