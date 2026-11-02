@@ -31,7 +31,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import PopupSheet from './PopupSheet';
-import { uploadPostMedia, detectMediaType } from '../lib/mediaUpload';
+import { uploadPostMedia } from '../lib/mediaUpload';
 import MediaToolbar from './media/MediaToolbar';
 import GifPicker from './media/GifPicker';
 import { useMediaAttachment } from '../hooks/useMediaAttachment';
