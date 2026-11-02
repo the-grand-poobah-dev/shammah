@@ -216,6 +216,14 @@ export default function LiveViewerPage() {
     if (followError && !/duplicate|unique/i.test(followError.message || '')) setError(followError.message || 'Could not follow host.');
   }
 
+  async function sendHeart() {
+    if (!session?.user?.id || !stream || stream.status !== 'live') return;
+    const { error: reactionError } = await supabase.from('live_chat_messages').insert({
+      stream_id: stream.id, user_id: session.user.id, body: '❤️',
+    });
+    if (reactionError) setError(reactionError.message || 'Could not send your reaction.');
+  }
+
   async function reportStream() {
     if (!session?.user?.id || !stream?.id) return;
     const reason = window.prompt('Why are you reporting this live broadcast?');
@@ -251,7 +259,7 @@ export default function LiveViewerPage() {
             {stream.status === 'live' && <span className="sh-live-viewer-badge"><i /> LIVE</span>}
             {stream.status === 'live' && <span className="sh-live-viewer-count">{viewerCount} watching</span>}
           </div>
-          <div className="sh-live-viewer-details"><h1>{stream.title}</h1>{stream.description && <p>{stream.description}</p>}<div className="sh-live-viewer-actions"><button type="button" onClick={followHost} disabled={stream.host_id === session.user.id}><UserPlus size={17} /> Follow host</button><button type="button" onClick={shareStream}><Share2 size={17} /> Share</button><button type="button" onClick={reportStream} disabled={reportSent}><ShieldAlert size={17} /> {reportSent ? 'Reported' : 'Report'}</button><button type="button" onClick={() => setError('Reaction sent!')}><Heart size={17} /> Send heart</button></div>{error && <p className="sh-live-viewer-error" role="alert">{error}</p>}</div>
+          <div className="sh-live-viewer-details"><h1>{stream.title}</h1>{stream.description && <p>{stream.description}</p>}<div className="sh-live-viewer-actions"><button type="button" onClick={followHost} disabled={stream.host_id === session.user.id}><UserPlus size={17} /> Follow host</button><button type="button" onClick={shareStream}><Share2 size={17} /> Share</button><button type="button" onClick={reportStream} disabled={reportSent}><ShieldAlert size={17} /> {reportSent ? 'Reported' : 'Report'}</button><button type="button" onClick={sendHeart}><Heart size={17} /> Send heart</button></div>{error && <p className="sh-live-viewer-error" role="alert">{error}</p>}</div>
         </section>
         <aside className="sh-live-viewer-chat"><div className="sh-live-chat-head"><strong>Live chat</strong><span>{messages.filter((item) => !item.is_deleted).length} messages</span></div><div className="sh-live-messages" aria-live="polite">{messages.filter((item) => !item.is_deleted).map((item) => <div key={item.id} className={item.is_pinned ? 'sh-live-message is-pinned' : 'sh-live-message'}><span>{item.user_id === session.user.id ? 'You' : item.user_id.slice(0, 8)}</span><p>{item.body}</p>{item.is_pinned && <small>Pinned</small>}</div>)}</div>{stream.status === 'live' && <form className="sh-live-chat-form" onSubmit={sendMessage}><input value={draft} maxLength={500} onChange={(event) => setDraft(event.target.value)} placeholder="Say something kind…" aria-label="Live chat message" /><button type="submit" disabled={!draft.trim()} aria-label="Send message"><Send size={18} /></button></form>}</aside>
       </div>
