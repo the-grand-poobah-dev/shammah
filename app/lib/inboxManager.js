@@ -46,7 +46,6 @@ export async function getInboxConversations(currentUserId) {
           participantBadge: row.participant_badge || 'member',
           participantVerified: Boolean(row.participant_verified),
           participantRole: row.participant_role || 'member',
-          participantInboxPermission: row.participant_inbox_permission || 'everyone',
           lastMessage: row.last_message || '',
           lastMessageTime: row.last_message_time || new Date().toISOString(),
           unreadCount: Number(row.unread_count || 0),
