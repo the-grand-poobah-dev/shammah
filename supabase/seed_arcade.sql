@@ -76,12 +76,12 @@ insert into public.arcade_games(slug,title,description,icon,accent,kind,is_activ
 ('david-target-challenge','David’s Sling Challenge','Aim for the targets in this arcade-style skill game.','target','#10b981','action',true),
 ('fruit-of-the-spirit-catch','Fruit of the Spirit Catch','Catch good fruit and avoid distractions.','apple','#f59e0b','action',true),
 ('fisher-of-men','Fisher of Men','Catch fish before time runs out.','fish','#06b6d4','action',true),
-('bible-word-search','Bible Word Search','Find Bible names and faith words in a word grid.','search','#8b5cf6','quiz',true),
-('parable-pairs','Parable Pairs','Match parables with their lessons.','layers','#ec4899','memory',true),
-('book-order-race','Books of the Bible Race','Put Bible books in the right order.','book-open','#a855f7','quiz',true),
+('bible-word-search','Bible Word Search Dash','Tap Bible-themed symbols in a quick browser challenge.','search','#8b5cf6','action',true),
+('parable-pairs','Parable Picture Dash','A quick visual challenge inspired by the parables.','heart','#ec4899','action',true),
+('book-order-race','Books of the Bible Race','A fast visual recall challenge for Bible learners.','book-open','#a855f7','action',true),
 ('faith-builder','Faith Builder Logic','Solve short logic and pattern puzzles.','puzzle','#14b8a6','quiz',true),
 ('daily-brain-teaser','Daily Brain Teaser','A quick daily puzzle for all ages.','brain','#f97316','quiz',true),
-('family-bible-challenge','Family Bible Challenge','A mixed-age round for family game night.','users','#eab308','trivia',true)
+('family-bible-challenge','Family Bible Challenge','A mixed-age browser game for family game night.','users','#eab308','action',true)
 on conflict (slug) do update set title=excluded.title, description=excluded.description, icon=excluded.icon, accent=excluded.accent, kind=excluded.kind, is_active=true;
 
 
