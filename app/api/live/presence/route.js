@@ -35,6 +35,12 @@ export async function POST(request) {
     if (!stream) return liveJsonError('Broadcast not found.', 404);
     if (body.action !== 'leave' && stream.status !== 'live') return liveJsonError('This broadcast has ended.', 409);
     if (!(await canWatch(service, stream, user.id))) return liveJsonError('You do not have permission to watch this broadcast.', 403);
+    if (body.action !== 'leave' && stream.host_id !== user.id) {
+      const { data: ban, error: banError } = await service.from('live_bans')
+        .select('user_id').eq('stream_id', stream.id).eq('user_id', user.id).maybeSingle();
+      if (banError) throw banError;
+      if (ban) return liveJsonError('You have been removed from this broadcast by a moderator.', 403);
+    }
 
     if (body.action === 'leave' || stream.host_id === user.id) {
       await service.from('live_viewers').delete().eq('stream_id', stream.id).eq('user_id', user.id);
