@@ -1087,6 +1087,7 @@ export default function CommentThread({
             <div className="comment-media-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0 6px', flexWrap: 'wrap' }}>
               <MediaToolbar
                 context="comment"
+                maxVideoSeconds={60}
                 onPickFile={handleCommentFileSelected}
                 onVoice={() => isRecordingVoice ? handleStopCommentVoiceNote() : handleStartCommentVoiceNote()}
                 onGif={() => setShowGifPicker(true)}
