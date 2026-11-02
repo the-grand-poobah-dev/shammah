@@ -253,6 +253,23 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
     });
   }
 
+  function handleChooseStatusGif(gif) {
+    if (!gif?.url) return;
+    const slide = {
+      ...createEmptySlide(),
+      previewUrl: gif.url,
+      mediaUrl: gif.url,
+      mediaType: 'gif',
+      mediaMeta: { provider: gif.provider || 'giphy', gif_id: gif.id, width: gif.width || null, height: gif.height || null },
+      fileName: gif.title || 'GIF',
+      isUploading: false,
+    };
+    const replaceEmpty = slides.length === 1 && !slides[0].file && !slides[0].previewUrl && !slides[0].caption.trim();
+    setSlides((previous) => replaceEmpty ? [slide] : [...previous, slide]);
+    setActiveIdx(replaceEmpty ? 0 : slides.length);
+    setShowGifPicker(false);
+  }
+
   // Handle Bulk File Selection or Live Camera Captures
   async function handleFileSelect(e) {
     const files = Array.from(e.target.files || []);
