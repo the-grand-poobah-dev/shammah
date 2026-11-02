@@ -36,6 +36,12 @@ export async function deleteLiveRoom(roomName) {
   try { await roomService(config).deleteRoom(roomName); } catch {}
 }
 
+export async function removeLiveParticipant(roomName, identity) {
+  const config = getLiveKitConfig();
+  if (!config) return;
+  try { await roomService(config).removeParticipant(roomName, String(identity)); } catch {}
+}
+
 export async function countLiveParticipants(roomName) {
   const config = getLiveKitConfig();
   if (!config) return 0;
