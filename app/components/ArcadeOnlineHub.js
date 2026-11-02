@@ -54,6 +54,7 @@ export default function ArcadeOnlineHub() {
   const [triviaAnswers, setTriviaAnswers] = useState([]);
   const [triviaChoice, setTriviaChoice] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [dailySeed, setDailySeed] = useState('');
   const [leaderScope, setLeaderScope] = useState('weekly');
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
@@ -220,6 +221,21 @@ export default function ArcadeOnlineHub() {
       }, 550);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadDailySeed() {
+      if (!token) { setDailySeed(''); return; }
+      try {
+        const data = await apiGet({ action: 'daily_seed', game: activeGame }, token);
+        if (!cancelled) setDailySeed(data.seed || '');
+      } catch {
+        if (!cancelled) setDailySeed('');
+      }
+    }
+    loadDailySeed();
+    return () => { cancelled = true; };
+  }, [activeGame, token]);
 
   const currentOption = GAME_OPTIONS.find((game) => game.slug === activeGame) || GAME_OPTIONS[0];
 
