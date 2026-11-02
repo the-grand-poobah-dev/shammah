@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Flame,
   Sparkles,
@@ -140,8 +140,10 @@ export default function FaithChallengesView({ session, profile }) {
   const [selectedDetailChallengeId, setSelectedDetailChallengeId] = useState(null);
 
   // Load challenges data
+  const challengeRequestRef = useRef(0);
   const fetchData = useCallback(
     async (isPullToRefresh = false, requestedPage = 1, append = false) => {
+      const requestId = ++challengeRequestRef.current;
       try {
         if (append) setLoadingMore(true);
         else if (isPullToRefresh) setRefreshing(true);
@@ -156,6 +158,7 @@ export default function FaithChallengesView({ session, profile }) {
           pageSize: 12,
         });
 
+        if (requestId !== challengeRequestRef.current) return;
         setChallenges((previous) => append ? [...previous, ...(data.challenges || [])] : (data.challenges || []));
         setTodayChallenge(data.today_challenge || (data.challenges && data.challenges[0]) || null);
         setMyActive(data.my_active || []);
@@ -172,12 +175,16 @@ export default function FaithChallengesView({ session, profile }) {
           return next;
         });
       } catch (err) {
-        console.error('Failed to load challenges:', err);
-        setError(err.message || 'Unable to load faith challenges. Please try again.');
+        if (requestId === challengeRequestRef.current) {
+          console.error('Failed to load challenges:', err);
+          setError(err.message || 'Unable to load faith challenges. Please try again.');
+        }
       } finally {
-        setLoading(false);
-        setRefreshing(false);
-        setLoadingMore(false);
+        if (requestId === challengeRequestRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+          setLoadingMore(false);
+        }
       }
     },
     [category, sort, debouncedSearch]
