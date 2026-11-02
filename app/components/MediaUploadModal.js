@@ -468,7 +468,7 @@ export default function MediaUploadModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,audio/m4a,audio/aac"
+                accept="video/mp4,video/webm,video/quicktime,video/x-m4v,audio/mpeg,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/x-m4a,audio/aac"
                 style={{ display: 'none' }}
                 onChange={(e) => handleFileSelect(e.target.files?.[0])}
               />
