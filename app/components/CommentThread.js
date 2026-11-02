@@ -341,7 +341,7 @@ export default function CommentThread({
       text_content: clean || null,
       media_url: uploadedMediaUrl,
       media_type: uploadedMediaType,
-      media_meta: selectedCommentGif ? { provider: selectedCommentGif.provider || 'giphy', gif_id: selectedCommentGif.id, width: selectedCommentGif.width || null, height: selectedCommentGif.height || null } : {},
+      media_meta: commentAttachment.meta || {},
       mentioned_user_ids: mentionedIds,
     };
     if (mediaId) {
