@@ -65,6 +65,7 @@ export default function ReelCreatorModal({
 
   const fileInputRef = useRef(null);
   const videoElemRef = useRef(null);
+  const videoSelectionRef = useRef(0);
 
   const displayName = cleanDisplayName(
     profile?.display_name || session?.user?.email?.split('@')[0] || 'Disciple',
@@ -95,6 +96,7 @@ export default function ReelCreatorModal({
       return;
     }
 
+    const selectionId = ++videoSelectionRef.current;
     if (videoPreview && videoPreview.startsWith('blob:')) URL.revokeObjectURL(videoPreview);
     setSelectedLibraryVideo(null);
     const objectUrl = URL.createObjectURL(file);
@@ -105,7 +107,9 @@ export default function ReelCreatorModal({
     const tempVideo = document.createElement('video');
     tempVideo.preload = 'metadata';
     tempVideo.onloadedmetadata = () => {
-      setVideoDuration(Math.round(tempVideo.duration || 0));
+      if (selectionId === videoSelectionRef.current) {
+        setVideoDuration(Math.round(tempVideo.duration || 0));
+      }
     };
     tempVideo.src = objectUrl;
   }
@@ -128,6 +132,7 @@ export default function ReelCreatorModal({
 
   function handleChooseLibraryVideo(item) {
     if (!item?.media_url) return;
+    videoSelectionRef.current += 1;
     if (videoPreview && videoPreview.startsWith('blob:')) URL.revokeObjectURL(videoPreview);
     setVideoFile(null);
     setSelectedLibraryVideo(item);
@@ -139,6 +144,7 @@ export default function ReelCreatorModal({
   }
 
   function handleRemoveVideo() {
+    videoSelectionRef.current += 1;
     if (videoPreview && videoPreview.startsWith('blob:')) {
       URL.revokeObjectURL(videoPreview);
     }
