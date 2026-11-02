@@ -101,6 +101,12 @@ create table if not exists public.bible_notes (
   check (verse_end is null or verse_end > 0),
   check (verse_start is null or verse_end is null or verse_end >= verse_start)
 );
+alter table public.bible_notes add column if not exists translation text not null default 'KJV';
+alter table public.bible_notes add column if not exists book text;
+alter table public.bible_notes add column if not exists book_id text;
+alter table public.bible_notes add column if not exists verse_start integer;
+alter table public.bible_notes add column if not exists verse_end integer;
+
 create table if not exists public.reading_plans (
   id text primary key,
   title text not null,
