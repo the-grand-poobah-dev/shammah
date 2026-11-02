@@ -551,7 +551,21 @@ export async function POST(request) {
           is_correct: isCorrect
         };
       });
-      return NextResponse.json({ ok: true, score: Math.round((correct / questions.length) * 100), results });
+      const score = Math.round((correct / questions.length) * 100);
+      const { error: attemptError } = await supabase.from('course_quiz_attempts').insert({
+        user_id: userId,
+        course_id: lesson.course_id,
+        lesson_id: lessonId,
+        score,
+        correct_count: correct,
+        total_questions: questions.length,
+        passed: score >= 70
+      });
+      if (attemptError) {
+        console.error('Course quiz attempt could not be saved:', attemptError.message);
+        return NextResponse.json({ error: 'Your quiz could not be recorded. Please try again.' }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, score, passed: score >= 70, passingScore: 70, results });
     }
 
     if (action === 'complete_lesson') {
