@@ -26,7 +26,8 @@ export async function GET(request) {
   const params = new URL(request.url).searchParams;
   const type = params.get('type') === 'highlights' ? 'bible_highlights' : 'bible_bookmarks';
   let query = auth.client.from(type).select('*').eq('translation', String(params.get('translation') || 'KJV').toUpperCase()).order('created_at', { ascending: false }).limit(500);
-  if (params.get('book_id')) query = query.eq('book_id', params.get('book_id'));
+  if (type === 'bible_highlights' && params.get('book')) query = query.eq('book', params.get('book'));
+  else if (params.get('book_id')) query = query.eq('book_id', params.get('book_id'));
   if (params.get('chapter')) query = query.eq('chapter', Number(params.get('chapter')));
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: 'Could not load your Bible study items.' }, { status: 500 });
@@ -42,15 +43,16 @@ export async function POST(request) {
   if (!type || !validRef(body)) return NextResponse.json({ error: 'Choose a valid verse reference.' }, { status: 400 });
   const ref = { user_id: auth.user.id, translation: String(body.translation).toUpperCase(), book_id: String(body.book_id), chapter: Number(body.chapter), verse: Number(body.verse) };
   if (type === 'bible_highlights') {
+    const highlightRef = { ...ref, book: String(body.book || body.book_id) };
     const color = ['gold','blue','green','pink','purple'].includes(body.color) ? body.color : 'gold';
-    const { data: existing, error: findError } = await auth.client.from(type).select('id').match(ref).maybeSingle();
+    const { data: existing, error: findError } = await auth.client.from(type).select('id').match(highlightRef).maybeSingle();
     if (findError) return NextResponse.json({ error: 'Could not check your highlight.' }, { status: 500 });
     if (body.action === 'remove') {
-      const { error } = await auth.client.from(type).delete().match(ref);
+      const { error } = await auth.client.from(type).delete().match(highlightRef);
       if (error) return NextResponse.json({ error: 'Could not remove highlight.' }, { status: 500 });
       return NextResponse.json({ saved: false });
     }
-    const { error } = await auth.client.from(type).upsert({ ...ref, color }, { onConflict: 'user_id,translation,book_id,chapter,verse' });
+    const { error } = await auth.client.from(type).upsert({ ...highlightRef, color }, { onConflict: 'user_id,book,chapter,verse' });
     if (error) return NextResponse.json({ error: 'Could not save highlight.' }, { status: 500 });
     return NextResponse.json({ saved: true });
   }
