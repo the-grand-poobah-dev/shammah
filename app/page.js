@@ -122,6 +122,7 @@ export default function Feed() {
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState('');
   const [mediaFile, setMediaFile] = useState(null);
+  const [selectedLibraryMedia, setSelectedLibraryMedia] = useState(null);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [mediaUploading, setMediaUploading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -963,7 +964,7 @@ export default function Feed() {
       return;
     }
     const text = composeText.trim();
-    if ((!text && !mediaFile) || !session) return;
+    if ((!text && !mediaFile && !selectedLibraryMedia) || !session) return;
     const cleanOptions = pollOptions.filter((o) => o.label.trim() || o.file);
     if (isPoll && cleanOptions.length < 2) {
       setPostError('A poll needs at least 2 options.');
@@ -1005,7 +1006,10 @@ export default function Feed() {
     // Real media upload (image / video / audio)
     let media_url = null;
     let media_type = null;
-    if (mediaFile) {
+    if (selectedLibraryMedia && !mediaFile) {
+      media_url = selectedLibraryMedia.media_url;
+      media_type = selectedLibraryMedia.kind;
+    } else if (mediaFile) {
       setMediaUploading(true);
       try {
         const uploaded = await uploadPostMedia(mediaFile, session.user.id);
@@ -1195,6 +1199,7 @@ export default function Feed() {
     setIsPinnedAnnouncement(false);
     setPollOptions([{ label: '', file: null, preview: null }, { label: '', file: null, preview: null }]);
     setMediaFile(null);
+    setSelectedLibraryMedia(null);
     setMediaPreview(null);
     setShowCreateModal(false);
     // Show the new post: if a different category is filtered, jump to the one just posted in
@@ -1839,6 +1844,8 @@ export default function Feed() {
             setPollOptions={setPollOptions}
             mediaFile={mediaFile}
             setMediaFile={setMediaFile}
+            selectedLibraryMedia={selectedLibraryMedia}
+            setSelectedLibraryMedia={setSelectedLibraryMedia}
             mediaPreview={mediaPreview}
             setMediaPreview={setMediaPreview}
             mediaUploading={mediaUploading}
@@ -2006,6 +2013,8 @@ export default function Feed() {
         setPollOptions={setPollOptions}
         mediaFile={mediaFile}
         setMediaFile={setMediaFile}
+        selectedLibraryMedia={selectedLibraryMedia}
+        setSelectedLibraryMedia={setSelectedLibraryMedia}
         mediaPreview={mediaPreview}
         setMediaPreview={setMediaPreview}
         mediaUploading={mediaUploading}
