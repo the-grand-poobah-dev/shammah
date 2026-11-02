@@ -163,7 +163,7 @@ async function initiateFundraiserDonation(request, body, fundraiserId, phone, am
     if (updateError) return NextResponse.json({ error: 'M-Pesa started the prompt, but its reference could not be saved. Please contact support before retrying.' }, { status: 500 });
 
     await supabase.from('mpesa_transactions').insert({
-      phone, amount_kes: amountKes, receipt_code: null, checkout_request_id: stk.CheckoutRequestID,
+      phone, amount_kes: amountKes, receipt_code: 'PENDING-' + stk.CheckoutRequestID, checkout_request_id: stk.CheckoutRequestID,
       project_id: 'fundraiser:' + fundraiserId, project_name: fundraiser.title,
       plan_id: 'fundraiser_donation', user_id: donorId,
       donor_name: body.anonymous === true ? 'Anonymous donor' : donorName, status: 'pending',
