@@ -1399,11 +1399,11 @@ export default function StatusViewerModal({
             )}
             {currentStatus.mediaUrl && (
               <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', maxHeight: 160, position: 'relative' }}>
-                {resolvedMediaType === 'image' && (
-                  <img src={currentStatus.mediaUrl} alt="" style={{ width: '100%', maxHeight: 160, objectFit: 'cover' }} />
+                {(resolvedMediaType === 'image' || resolvedMediaType === 'gif') && (
+                  <img src={currentStatus.mediaUrl} alt="" style={{ width: '100%', maxHeight: 160, objectFit: 'contain' }} />
                 )}
                 {resolvedMediaType === 'video' && (
-                  <video src={currentStatus.mediaUrl} style={{ width: '100%', maxHeight: 160, objectFit: 'cover' }} muted />
+                  <video src={currentStatus.mediaUrl} style={{ width: '100%', maxHeight: 160, objectFit: 'contain' }} muted />
                 )}
               </div>
             )}
