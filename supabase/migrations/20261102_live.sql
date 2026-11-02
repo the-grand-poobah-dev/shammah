@@ -227,6 +227,7 @@ declare
 begin
   foreach target_table in array array['comments','statuses'] loop
     if to_regclass('public.' || target_table) is not null then
+      execute format('alter table public.%I add column if not exists media_type text', target_table);
       execute format('alter table public.%I add column if not exists media_meta jsonb not null default %L::jsonb', target_table, '{}');
       for constraint_row in
         select conname from pg_constraint
