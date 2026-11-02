@@ -164,7 +164,7 @@ async function fetchCoursesFromDb(supabase, userId) {
       supabase.from('course_lessons').select('*').in('course_id', courseIds).order('position', { ascending: true }),
       supabase.from('course_quiz_questions').select('*').order('position', { ascending: true }),
       supabase.from('course_reviews').select('*').in('course_id', courseIds).order('created_at', { ascending: false }),
-      supabase.from('course_enrollments').select('course_id').in('course_id', courseIds),
+      supabase.from('course_enrollments').select('course_id, paid').in('course_id', courseIds),
       userId
         ? supabase.from('course_enrollments').select('*').eq('user_id', userId)
         : Promise.resolve({ data: [], error: null }),
@@ -200,7 +200,9 @@ async function fetchCoursesFromDb(supabase, userId) {
     const reviews = reviewsRes.data || [];
     const enrollmentCountsByCourse = {};
     for (const enrollment of enrollmentCountsRes.data || []) {
-      enrollmentCountsByCourse[enrollment.course_id] = (enrollmentCountsByCourse[enrollment.course_id] || 0) + 1;
+      if (enrollment.paid === true) {
+        enrollmentCountsByCourse[enrollment.course_id] = (enrollmentCountsByCourse[enrollment.course_id] || 0) + 1;
+      }
     }
 
     const questionsByLesson = {};
