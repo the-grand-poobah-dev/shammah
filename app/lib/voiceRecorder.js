@@ -35,8 +35,16 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60, onLevel
 
   const mimeType = chooseAudioMime();
   let recorder;
-  try { recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream); }
-  catch { recorder = new MediaRecorder(stream); }
+  try {
+    recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  } catch {
+    try {
+      recorder = new MediaRecorder(stream);
+    } catch (err) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new Error(err?.message || 'Could not initialize the audio recorder in this browser.');
+    }
+  }
 
   const chunks = [];
   let seconds = 0;
