@@ -13,7 +13,7 @@ const BOOKS = {
   '2TH':'2 Thessalonians','1TI':'1 Timothy','2TI':'2 Timothy',TIT:'Titus',PHM:'Philemon',HEB:'Hebrews',JAS:'James','1PE':'1 Peter',
   '2PE':'2 Peter','1JN':'1 John','2JN':'2 John','3JN':'3 John',JUD:'Jude',REV:'Revelation'
 };
-const ALIASES = { ps:'Psalms',psalm:'Psalms',song:'Song of Solomon',canticles:'Song of Solomon',jn:'John',jhn:'John',mt:'Matthew',matt:'Matthew',mk:'Mark',lk:'Luke',acts:'Acts',rom:'Romans',cor:'1 Corinthians',rev:'Revelation',obad:'Obadiah' };
+const ALIASES = { ps:'Psalms',psalm:'Psalms',song:'Song of Solomon',canticles:'Song of Solomon',jn:'John',jhn:'John',mt:'Matthew',matt:'Matthew',mk:'Mark',lk:'Luke',acts:'Acts',rom:'Romans',cor:'1 Corinthians',rev:'Revelation',obad:'Obadiah', '1 sam':'1 Samuel','2 sam':'2 Samuel','1 kgs':'1 Kings','2 kgs':'2 Kings','1 chr':'1 Chronicles','2 chr':'2 Chronicles','1 cor':'1 Corinthians','2 cor':'2 Corinthians','1 thess':'1 Thessalonians','2 thess':'2 Thessalonians','1 tim':'1 Timothy','2 tim':'2 Timothy','1 pet':'1 Peter','2 pet':'2 Peter','1 jn':'1 John','2 jn':'2 John','3 jn':'3 John','phlm':'Philemon','zech':'Zechariah','nah':'Nahum' };
 
 function client() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
