@@ -106,6 +106,13 @@ alter table public.bible_notes add column if not exists book text;
 alter table public.bible_notes add column if not exists book_id text;
 alter table public.bible_notes add column if not exists verse_start integer;
 alter table public.bible_notes add column if not exists verse_end integer;
+alter table public.bible_notes add column if not exists title text;
+alter table public.bible_notes add column if not exists content text not null default '';
+alter table public.bible_notes add column if not exists speaker text;
+alter table public.bible_notes add column if not exists church text;
+alter table public.bible_notes add column if not exists tags text[] not null default '{}';
+alter table public.bible_notes add column if not exists color text;
+alter table public.bible_notes add column if not exists ref_range text;
 
 create table if not exists public.reading_plans (
   id text primary key,
