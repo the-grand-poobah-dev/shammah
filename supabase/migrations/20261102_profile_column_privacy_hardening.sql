@@ -29,9 +29,9 @@ WHERE location_place_id IS NOT NULL
    OR who_can_tag_me IS NOT NULL
    OR review_tags IS NOT NULL
 ON CONFLICT (id) DO UPDATE
-SET location_place_id = COALESCE(EXCLUDED.location_place_id, profile_private.location_place_id),
-    location_lat = COALESCE(EXCLUDED.location_lat, profile_private.location_lat),
-    location_lng = COALESCE(EXCLUDED.location_lng, profile_private.location_lng),
+SET location_place_id = COALESCE(profile_private.location_place_id, EXCLUDED.location_place_id),
+    location_lat = COALESCE(profile_private.location_lat, EXCLUDED.location_lat),
+    location_lng = COALESCE(profile_private.location_lng, EXCLUDED.location_lng),
     inbox_permission = COALESCE(profile_private.inbox_permission, EXCLUDED.inbox_permission),
     theme_preference = COALESCE(profile_private.theme_preference, EXCLUDED.theme_preference),
     who_can_tag_me = COALESCE(profile_private.who_can_tag_me, EXCLUDED.who_can_tag_me),
