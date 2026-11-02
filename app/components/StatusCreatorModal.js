@@ -18,7 +18,6 @@ import {
   Plus,
   Trash2,
   ChevronDown,
-  Mic,
 } from 'lucide-react';
 import {
   createStatusUpdate,
@@ -29,7 +28,6 @@ import {
 import { uploadPostMedia } from '../lib/mediaUpload';
 import MediaToolbar from './media/MediaToolbar';
 import GifPicker from './media/GifPicker';
-import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
 import { supabase } from '../../lib/supabaseClient';
 import { cleanDisplayName } from '../lib/postDisplay';
 import Avatar from './Avatar';
@@ -136,12 +134,8 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
   const [showGifPicker, setShowGifPicker] = useState(false);
 
   const fileInputRef = useRef(null);
-  const cameraAudioInputRef = useRef(null);
 
   // Live Voice Note Recording State
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
-  const [voiceSeconds, setVoiceSeconds] = useState(0);
-  const voiceRecorderRef = useRef(null);
 
   const displayName = cleanDisplayName(currentUser?.name || currentUser?.display_name || 'You', 'You');
 
@@ -275,58 +269,6 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
     const files = Array.from(e.target.files || []);
     if (e.target) e.target.value = '';
     await processFiles(files);
-  }
-
-  // Live Voice Note handlers
-  async function handleStartVoiceNote() {
-    setGlobalError('');
-    if (!isAudioRecordingSupported()) {
-      cameraAudioInputRef.current?.click();
-      return;
-    }
-
-    try {
-      setVoiceSeconds(0);
-      setIsRecordingVoice(true);
-      const recorder = await startAudioRecording({
-        maxSeconds: 60, // STATUS_MEDIA_LIMITS.audio.maxSeconds
-        onTimeTick: (sec) => setVoiceSeconds(sec),
-      });
-      voiceRecorderRef.current = recorder;
-    } catch (err) {
-      console.warn('Live voice recording init error:', err);
-      setIsRecordingVoice(false);
-      if (cameraAudioInputRef.current) {
-        cameraAudioInputRef.current.click();
-      } else {
-        setGlobalError(err.message || 'Could not access microphone.');
-      }
-    }
-  }
-
-  async function handleStopVoiceNote() {
-    if (!voiceRecorderRef.current) return;
-    try {
-      const res = await voiceRecorderRef.current.stop();
-      setIsRecordingVoice(false);
-      voiceRecorderRef.current = null;
-      if (res?.file) {
-        await processFiles([res.file]);
-      }
-    } catch (err) {
-      console.error('Error stopping voice note:', err);
-      setIsRecordingVoice(false);
-      setGlobalError('Could not save voice note recording.');
-    }
-  }
-
-  function handleCancelVoiceNote() {
-    if (voiceRecorderRef.current) {
-      voiceRecorderRef.current.cancel();
-      voiceRecorderRef.current = null;
-    }
-    setIsRecordingVoice(false);
-    setVoiceSeconds(0);
   }
 
   // Delete an individual slide (like WhatsApp status delete item)
@@ -716,15 +658,6 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
             style={{ display: 'none' }}
           />
 
-          <input
-            ref={cameraAudioInputRef}
-            type="file"
-            accept="audio/*"
-            capture
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
-
           {/* Media Capture & Import Options Group */}
           <div className="status-media-options-group" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
             <MediaToolbar
@@ -735,70 +668,6 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
               onGif={() => setShowGifPicker(true)}
               disabled={submitting}
             />
-
-            {/* Active Live Voice Recording Status Bar */}
-            {isRecordingVoice && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  borderRadius: 12,
-                  background: 'rgba(239, 68, 68, 0.12)',
-                  border: '1px solid rgba(239, 68, 68, 0.35)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: '50%',
-                      background: '#ef4444',
-                      display: 'inline-block',
-                      animation: 'pulse 1s infinite',
-                    }}
-                  />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#fca5a5' }}>
-                    Recording Voice Note: {formatMediaTime(voiceSeconds)} / 1:00
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={handleCancelVoiceNote}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 8,
-                      background: 'rgba(255,255,255,0.1)',
-                      border: 'none',
-                      color: 'var(--ink)',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleStopVoiceNote}
-                    style={{
-                      padding: '4px 12px',
-                      borderRadius: 8,
-                      background: 'var(--teal, #14b8a6)',
-                      border: 'none',
-                      color: '#ffffff',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Done &amp; Attach
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Import Media Button (Bulk photos/videos/audio file picker) */}
             <button
