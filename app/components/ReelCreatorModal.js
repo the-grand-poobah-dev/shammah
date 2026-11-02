@@ -118,7 +118,7 @@ export default function ReelCreatorModal({
     try {
       const result = await listMedia({ kind: 'video', sort: 'recent', limit: 30 });
       if (result.error) throw result.error;
-      setLibraryVideos((result.data || []).filter((item) => item.media_url));
+      setLibraryVideos((result.data || []).filter((item) => item.media_url && item.author_id === session?.user?.id));
     } catch (err) {
       setError(err?.message || 'Could not load published videos.');
     } finally {
