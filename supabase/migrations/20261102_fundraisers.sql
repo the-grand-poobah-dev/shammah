@@ -24,6 +24,20 @@ alter table public.fundraisers
   add column if not exists expires_at timestamptz,
   add column if not exists gallery_updated_at timestamptz;
 
+do $owner_fk$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'fundraisers_owner_id_fkey'
+      and conrelid = 'public.fundraisers'::regclass
+  ) then
+    alter table public.fundraisers
+      add constraint fundraisers_owner_id_fkey
+      foreign key (owner_id) references public.profiles(id) on delete set null;
+  end if;
+end;
+$owner_fk$;
+
 alter table public.fundraiser_donations
   add column if not exists idempotency_key text,
   add column if not exists merchant_request_id text,
@@ -502,6 +516,35 @@ revoke insert, update, delete on public.fundraiser_milestones from anon, authent
 revoke insert, update, delete on public.fundraiser_updates from anon, authenticated;
 revoke insert, update, delete on public.fundraiser_withdrawals from anon, authenticated;
 revoke insert, update, delete on public.fundraiser_reports from anon, authenticated;
+
+-- Public campaign media and private verification documents.
+insert into storage.buckets (id, name, public)
+values ('fundraiser-media', 'fundraiser-media', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Fundraiser media public read" on storage.objects;
+create policy "Fundraiser media public read"
+on storage.objects for select to public
+using (bucket_id = 'fundraiser-media');
+
+drop policy if exists "Fundraiser owners upload media" on storage.objects;
+create policy "Fundraiser owners upload media"
+on storage.objects for insert to authenticated
+with check (
+  bucket_id = 'fundraiser-media'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "Fundraiser owners update media" on storage.objects;
+create policy "Fundraiser owners update media"
+on storage.objects for update to authenticated
+using (bucket_id = 'fundraiser-media' and (storage.foldername(name))[1] = auth.uid()::text)
+with check (bucket_id = 'fundraiser-media' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Fundraiser owners delete media" on storage.objects;
+create policy "Fundraiser owners delete media"
+on storage.objects for delete to authenticated
+using (bucket_id = 'fundraiser-media' and (storage.foldername(name))[1] = auth.uid()::text);
 
 -- Private storage for campaign verification documents.
 insert into storage.buckets (id, name, public)
