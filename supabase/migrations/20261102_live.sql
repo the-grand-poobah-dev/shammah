@@ -216,7 +216,7 @@ for each row execute function public.enforce_live_chat_rate_limit();
 
 -- Extend the unified report flow for live broadcasts while preserving
 -- any application-specific target types already present in the table.
-do $
+do $$
 declare
   constraint_row record;
   existing_types text[];
@@ -250,4 +250,4 @@ begin
       allowed_types
     );
   end if;
-end $;
+end $$;
