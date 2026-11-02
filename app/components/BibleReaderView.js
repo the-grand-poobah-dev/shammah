@@ -121,7 +121,10 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     }
 
     function onNotesUpdated(e) {
-      if (e.detail) setNotes(e.detail);
+      if (e.detail) setNotes((current) => [
+        ...e.detail,
+        ...current.filter((note) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(note.id)) && !e.detail.some((localNote) => localNote.id === note.id))
+      ]);
     }
     function onHighlightsUpdated(e) {
       if (e.detail) setHighlights(e.detail);
@@ -544,8 +547,11 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         const current = getSavedNotes();
         const synced = current.map((item) => item.id === localNoteId ? cloudNote : item);
         window.localStorage.setItem('shammah_sermon_notes_v1', JSON.stringify(synced));
-        window.dispatchEvent(new CustomEvent('shammah:notes-updated', { detail: synced }));
-        setNotes((items) => [cloudNote, ...items.filter((item) => item.id !== localNoteId && item.id !== cloudNote.id)]);
+        setNotes([
+          cloudNote,
+          ...notes.filter((item) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(item.id)) && item.id !== localNoteId && item.id !== cloudNote.id),
+          ...synced.filter((item) => item.id !== cloudNote.id)
+        ]);
       }).catch((error) => showToast(error?.message || 'Note saved locally; cloud sync failed.'));
     }
     playSound('reaction');
@@ -554,7 +560,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   function handleDeleteNote(id) {
     if (window.confirm('Delete this sermon note?')) {
       const remaining = deleteNote(id);
-      setNotes(remaining);
+      setNotes((items) => [...items.filter((item) => item.id !== id), ...remaining.filter((localItem) => !items.some((item) => item.id === localItem.id))]);
       if (session?.access_token && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id))) {
         fetch('/api/bible/notes', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ id }) })
           .then(async (response) => { if (!response.ok) { const payload = await response.json(); throw new Error(payload?.error || 'Cloud delete failed.'); } })
