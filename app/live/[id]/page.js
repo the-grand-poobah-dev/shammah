@@ -64,11 +64,6 @@ export default function LiveViewerPage() {
         if (!response.ok) throw new Error(payload.error || 'Could not load this broadcast.');
         if (cancelled) return;
         setStream(payload.stream);
-        if (payload.stream.status === 'ended' && payload.stream.replay_media_id) {
-          const mediaResponse = await fetch('/api/media?action=get&id=' + encodeURIComponent(payload.stream.replay_media_id));
-          const mediaPayload = await mediaResponse.json().catch(() => ({}));
-          if (!cancelled && mediaResponse.ok) setReplay(mediaPayload.data || null);
-        }
       } catch (err) {
         if (!cancelled) setError(err.message || 'Could not load this broadcast.');
       } finally {
@@ -78,6 +73,25 @@ export default function LiveViewerPage() {
     loadStream();
     return () => { cancelled = true; };
   }, [sessionLoading, session?.access_token, streamId]);
+
+  useEffect(() => {
+    if (!stream?.id || stream.status !== 'live') return undefined;
+    const channel = supabase.channel('shammah-live-status-' + stream.id)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'live_streams', filter: 'id=eq.' + stream.id }, (payload) => {
+        setStream((current) => current ? { ...current, ...payload.new } : current);
+      }).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [stream?.id, stream?.status]);
+
+  useEffect(() => {
+    if (stream?.status !== 'ended' || !stream.replay_media_id) return undefined;
+    let cancelled = false;
+    fetch('/api/media?action=get&id=' + encodeURIComponent(stream.replay_media_id))
+      .then((response) => response.json().then((payload) => ({ response, payload })))
+      .then(({ response, payload }) => { if (!cancelled && response.ok) setReplay(payload.data || null); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [stream?.status, stream?.replay_media_id]);
 
   useEffect(() => {
     if (!stream || stream.status !== 'live' || !session?.access_token) return undefined;
