@@ -6,6 +6,8 @@ import {
   Mic as MicIcon,
   Camera,
   Film,
+  Clapperboard,
+  Radio,
   FileAudio,
   BarChart3,
   Pin,
@@ -51,6 +53,8 @@ import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousMana
 import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
 import { detectMediaType } from '../lib/mediaUpload';
 import { listMedia } from '../lib/data/mediaApi';
+import ReelCreatorModal from './ReelCreatorModal';
+import LiveHostModal from './LiveHostModal';
 import {
   FEELINGS_LIST,
   formatFeelingString,
@@ -118,6 +122,8 @@ export default function CreatePostBox({
   const [mediaLibraryLoaded, setMediaLibraryLoaded] = useState(false);
   const [loadingMediaLibrary, setLoadingMediaLibrary] = useState(false);
   const [mediaLibraryError, setMediaLibraryError] = useState('');
+  const [showReelCreator, setShowReelCreator] = useState(false);
+  const [showLiveModal, setShowLiveModal] = useState(false);
 
   useEffect(() => {
     const previewUrl = mediaPreview?.url;
@@ -1204,6 +1210,28 @@ export default function CreatePostBox({
             <span className="tool-label">{isRecordingVoice ? 'Recording…' : 'Voice Note'}</span>
           </button>
 
+          <button
+            type="button"
+            className="tool-btn"
+            onClick={() => setShowReelCreator(true)}
+            title="Create a vertical video Reel"
+            aria-label="Create Reel"
+          >
+            <Clapperboard size={18} className="tool-icon text-pink-400" />
+            <span className="tool-label">Reel</span>
+          </button>
+
+          <button
+            type="button"
+            className="tool-btn"
+            onClick={() => setShowLiveModal(true)}
+            title="Start a live broadcast"
+            aria-label="Go live"
+          >
+            <span className="sh-live-toolbar-icon"><Radio size={18} /><i /></span>
+            <span className="tool-label">Live</span>
+          </button>
+
           {/* Storage File Pickers */}
           <button
             type="button"
@@ -1663,6 +1691,22 @@ export default function CreatePostBox({
           </div>
         </div>
       </PopupSheet>
+    <ReelCreatorModal
+      isOpen={showReelCreator}
+      onClose={() => setShowReelCreator(false)}
+      session={session}
+      profile={profile}
+      onCreated={(newReel) => {
+        setShowReelCreator(false);
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('shammah:reel-created', { detail: newReel }));
+      }}
+    />
+    <LiveHostModal
+      isOpen={showLiveModal}
+      onClose={() => setShowLiveModal(false)}
+      session={session}
+      profile={profile}
+    />
     </form>
   );
 }
