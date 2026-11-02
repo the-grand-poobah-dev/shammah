@@ -49,6 +49,7 @@ import { VISIBILITY_OPTIONS } from '../lib/postInteractions';
 import { playSound } from '../lib/soundEffects';
 import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousManager';
 import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
+import { detectMediaType } from '../lib/mediaUpload';
 import {
   FEELINGS_LIST,
   formatFeelingString,
@@ -109,6 +110,13 @@ export default function CreatePostBox({
   const [isQuizMode, setIsQuizMode] = useState(false);
   const [correctOptionIdx, setCorrectOptionIdx] = useState(0);
   const [quizExplanation, setQuizExplanation] = useState('');
+
+  useEffect(() => {
+    const previewUrl = mediaPreview?.url;
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    };
+  }, [mediaPreview?.url]);
 
   // Location, Feeling & Member Tagging state
   const [location, setLocation] = useState(null);
@@ -222,13 +230,10 @@ export default function CreatePostBox({
     if (!file) return;
     setMediaFile(file);
     const url = URL.createObjectURL(file);
+    const detectedType = detectMediaType(file);
     setMediaPreview({
       url,
-      type: file.type.startsWith('video/')
-        ? 'video'
-        : file.type.startsWith('audio/')
-          ? 'audio'
-          : 'image',
+      type: detectedType || (file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'image'),
     });
   }
 
@@ -975,7 +980,7 @@ export default function CreatePostBox({
       <input
         ref={videoInputRef}
         type="file"
-        accept="video/mp4,video/webm,video/quicktime"
+        accept="video/*,.mp4,.webm,.mov,.m4v"
         hidden
         onChange={(e) => {
           handleFileSelected(e.target.files?.[0]);
@@ -985,7 +990,7 @@ export default function CreatePostBox({
       <input
         ref={audioInputRef}
         type="file"
-        accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
+        accept="audio/*,.mp3,.wav,.ogg,.webm,.m4a,.aac,.flac"
         hidden
         onChange={(e) => {
           handleFileSelected(e.target.files?.[0]);
