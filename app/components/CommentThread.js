@@ -995,13 +995,13 @@ export default function CommentThread({
                 <img
                   src={commentMediaPreview.url}
                   alt="Preview"
-                  style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover' }}
+                  style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'contain', background: 'var(--bg)' }}
                 />
               )}
               {commentMediaPreview.type === 'video' && (
                 <video
                   src={commentMediaPreview.url}
-                  style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover', background: '#000' }}
+                  style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'contain', background: '#000' }}
                 />
               )}
               {commentMediaPreview.type === 'audio' && (
