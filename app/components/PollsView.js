@@ -666,7 +666,7 @@ export default function PollsView({
         setError(err.message || 'Unable to load community polls');
       }
     } finally {
-      if (requestId === pollRequestRef.current && !silent) setLoading(false);
+      if (requestId === pollRequestRef.current) setLoading(false);
     }
   }, [session?.user?.id]);
 
