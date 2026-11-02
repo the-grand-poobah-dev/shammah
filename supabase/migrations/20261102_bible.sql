@@ -78,7 +78,7 @@ create table if not exists public.bible_highlights (
   book_id text,
   chapter integer not null check (chapter > 0),
   verse integer not null check (verse > 0),
-  color text not null default 'gold' check (color in ('gold','blue','green','pink','purple')),
+  color text not null default 'gold' check (color in ('gold','aqua','emerald','rose','blue','green','pink','purple')),
   created_at timestamptz not null default now(),
   unique (user_id, book, chapter, verse)
 );
