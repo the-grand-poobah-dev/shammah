@@ -2,571 +2,454 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+const CATEGORIES = ['Prayer', 'Fasting', 'Scripture memory', 'Service', 'Worship', 'Generosity'];
+const KINDS = ['daily', 'weekly', 'one_off', 'streak'];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function resolveSupabaseUrl() {
-  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (
-    rawUrl &&
-    (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) &&
-    !rawUrl.includes('placeholder') &&
-    !rawUrl.includes('your-project-url')
-  ) {
-    return rawUrl;
-  }
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (raw && /^https?:\/\//i.test(raw) && !/placeholder|your-project-url/i.test(raw)) return raw;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (serviceKey && serviceKey.split('.').length === 3) {
     try {
       const payload = JSON.parse(Buffer.from(serviceKey.split('.')[1], 'base64').toString('utf8'));
-      if (payload?.ref) return `https://${payload.ref}.supabase.co`;
+      if (payload?.ref) return 'https://' + payload.ref + '.supabase.co';
     } catch {}
   }
   return null;
 }
 
-function getSupabaseServerClient(authHeader) {
+function serviceClient() {
   const url = resolveSupabaseUrl();
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const key = serviceKey || anonKey;
-  if (!url || !key || key.includes('your-anon-key')) return null;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
 
-  const headers = {};
-  if (!serviceKey && authHeader) {
-    headers.Authorization = authHeader;
-  }
+function userClient(request) {
+  const url = resolveSupabaseUrl();
+  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !token || !key) return null;
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers },
+    global: { headers: { Authorization: 'Bearer ' + token } },
   });
 }
 
-async function resolveSessionUser(request) {
-  const authHeader = request.headers.get('authorization') || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+async function sessionUser(request) {
+  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   const url = resolveSupabaseUrl();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (token && url && key && !key.includes('your-anon-key')) {
-    try {
-      const client = createClient(url, key, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-      const { data } = await client.auth.getUser(token);
-      if (data?.user) return data.user;
-    } catch {}
+  if (!token || !url || !key) return null;
+  try {
+    const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data, error } = await client.auth.getUser(token);
+    return !error ? data?.user || null : null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
-// In-memory / seed fallback mirroring supabase/seed_faith_challenges.sql
-const SEED_CHALLENGES = [
-  {
-    id: 'c1000000-0000-4000-a000-000000000001',
-    title: '7-Day Secret Place Prayer Sprint',
-    description: 'Set your alarm 20 minutes earlier each morning for uninterrupted communion with the Father (Matthew 6:6).',
-    rules_md: `### Rules & Daily Posture:\n- Spend at least 20 minutes in focused, silent prayer before opening social media.\n- Use the SOAP devotional model (Scripture, Observation, Application, Prayer).\n- Check in daily to track your flame streak and share a brief prayer reflection.`,
-    cover_url: 'https://images.unsplash.com/photo-1544427920-c49ccfb85579?w=900&auto=format&fit=crop&q=80',
-    kind: 'daily',
-    category: 'Prayer',
-    duration_days: 7,
-    points: 70,
-    accent: '#06b6d4',
-    participants_count: 412,
-    status: 'active',
-  },
-  {
-    id: 'c1000000-0000-4000-a000-000000000002',
-    title: 'Romans 8 Scripture Memory Mastery',
-    description: 'Hide God’s word in your heart by memorizing 1 verse per day from the greatest chapter in the New Testament.',
-    rules_md: `### Rules & Daily Posture:\n- Memorize the verse of the day word-for-word.\n- Record a 30-60 second recitation video with the hashtag #ScriptureIn60s.\n- Review previous days to build your full chapter recitation.`,
-    cover_url: 'https://images.unsplash.com/photo-1507842229451-7f01be8610ce?w=900&auto=format&fit=crop&q=80',
-    kind: 'streak',
-    category: 'Scripture memory',
-    duration_days: 14,
-    points: 140,
-    accent: '#8b5cf6',
-    participants_count: 286,
-    status: 'active',
-  },
-  {
-    id: 'c1000000-0000-4000-a000-000000000003',
-    title: '21-Day Daniel Fast & Spiritual Clarity',
-    description: 'Consecrate your appetite for deep spiritual breakthrough, physical renewal, and discerning God’s will.',
-    rules_md: `### Rules & Daily Posture:\n- Abstain from meats, refined sugars, and carbonated beverages.\n- Focus on vegetables, fruits, whole grains, nuts, and pure water.\n- Pair fasting with intercession for church revival and national unity.`,
-    cover_url: 'https://images.unsplash.com/photo-1519491050282-cf00c82424b4?w=900&auto=format&fit=crop&q=80',
-    kind: 'daily',
-    category: 'Fasting',
-    duration_days: 21,
-    points: 210,
-    accent: '#10b981',
-    participants_count: 530,
-    status: 'active',
-  },
-  {
-    id: 'c1000000-0000-4000-a000-000000000004',
-    title: '30 Days of Unspoken Kingdom Gratitude',
-    description: 'Shift your spiritual atmosphere by recording 3 specific answered prayers or daily blessings without complaining.',
-    rules_md: `### Rules & Daily Posture:\n- Post 3 unique blessings each day.\n- No complaining or cynical talk allowed for 30 consecutive days (Philippians 2:14).\n- Notice the supernatural peace that guards your heart.`,
-    cover_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=900&auto=format&fit=crop&q=80',
-    kind: 'daily',
-    category: 'Prayer',
-    duration_days: 30,
-    points: 300,
-    accent: '#f59e0b',
-    participants_count: 195,
-    status: 'active',
-  },
-  {
-    id: 'c1000000-0000-4000-a000-000000000005',
-    title: 'Random Acts of Christlike Kindness',
-    description: 'Be the hands and feet of Jesus: pay a matatu fare, buy lunch for a security guard, or visit an elderly neighbor.',
-    rules_md: `### Rules & Daily Posture:\n- Complete 1 intentional act of servant love daily without seeking personal acclaim.\n- Encourage others by sharing a short praise testimony or note.`,
-    cover_url: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=900&auto=format&fit=crop&q=80',
-    kind: 'daily',
-    category: 'Service',
-    duration_days: 7,
-    points: 100,
-    accent: '#ec4899',
-    participants_count: 320,
-    status: 'active',
-  },
-  {
-    id: 'c1000000-0000-4000-a000-000000000006',
-    title: 'Raw Acoustic & Acapella Worship Cover',
-    description: 'Share a pure 60-90 second acoustic, piano, or vocal worship chorus honoring the name of Jesus.',
-    rules_md: `### Rules & Daily Posture:\n- High sound clarity, zero autotune, pure heart of adoration.\n- Tag your local fellowship or campus Christian Union.`,
-    cover_url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=900&auto=format&fit=crop&q=80',
-    kind: 'one_off',
-    category: 'Worship',
-    duration_days: 14,
-    points: 150,
-    accent: '#ef4444',
-    participants_count: 215,
-    status: 'active',
-  },
-];
+async function getProfile(db, userId) {
+  if (!userId) return null;
+  const { data } = await db.from('profiles').select('id, display_name, avatar_url, badge, role, church_id').eq('id', userId).maybeSingle();
+  return data || null;
+}
 
-const SEED_SUBMISSIONS = [
-  {
-    id: 'd1000000-0000-4000-b000-000000000001',
-    challenge_id: 'c1000000-0000-4000-a000-000000000002',
-    media_url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600',
-    thumb_url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=400',
-    caption: 'Romans 8:31-39 in one continuous breath! If God is for us, who can be against us?! 🔥',
-    hashtag: '#ScriptureIn60s',
-    scripture: 'Romans 8:37',
-    audio_title: 'Deep Worship Beat · Original Praise Sound',
-    like_count: 842,
-    comment_count: 67,
-    status: 'approved',
-    created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-    author: {
-      display_name: 'Evangelist Samuel',
-      avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-      badge: 'youth',
-      branch: 'UoN Christian Union',
-    },
-  },
-  {
-    id: 'd1000000-0000-4000-b000-000000000002',
-    challenge_id: 'c1000000-0000-4000-a000-000000000006',
-    media_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600',
-    thumb_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400',
-    caption: 'Way Maker (Swahili & English Acoustic Mashup) recorded during morning chapel devotion! 🎸',
-    hashtag: '#AcousticWorship',
-    scripture: 'Psalm 100:1-2',
-    audio_title: 'Acoustic Guitar in E Major · Mary Grace',
-    like_count: 1240,
-    comment_count: 114,
-    status: 'approved',
-    created_at: new Date(Date.now() - 3600000 * 36).toISOString(),
-    author: {
-      display_name: 'Sister Mary Grace',
-      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      badge: 'worship',
-      branch: 'CITAM Woodley Youth',
-    },
-  },
-  {
-    id: 'd1000000-0000-4000-b000-000000000003',
-    challenge_id: 'c1000000-0000-4000-a000-000000000005',
-    media_url: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=600',
-    thumb_url: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=400',
-    caption: 'Paid the bus fare for 3 stranded university students in Nairobi CBD today. Jesus is Lord! 🚌✨',
-    hashtag: '#KindnessInAction',
-    scripture: 'Matthew 25:40',
-    audio_title: 'Joy In The Morning · Gospel Rhythm',
-    like_count: 420,
-    comment_count: 38,
-    status: 'approved',
-    created_at: new Date(Date.now() - 3600000 * 48).toISOString(),
-    author: {
-      display_name: 'Deaconess Rebecca',
-      avatar_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-      badge: 'deacon',
-      branch: 'Grace Community Fellowship',
-    },
-  },
-];
+function isModerator(profile) {
+  return ['admin', 'platform_admin', 'moderator'].includes(profile?.role);
+}
 
-const SEED_LEADERBOARD = [
-  { user_id: 'u1', display_name: 'Pastor Julius Mwangi', avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', badge: 'pastor', points: 420, streak_current: 14, streak_best: 21 },
-  { user_id: 'u2', display_name: 'Sister Mary Grace', avatar_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', badge: 'worship', points: 380, streak_current: 12, streak_best: 14 },
-  { user_id: 'u3', display_name: 'Evangelist Samuel', avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', badge: 'youth', points: 310, streak_current: 9, streak_best: 11 },
-  { user_id: 'u4', display_name: 'David Kimani', avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', badge: 'student', points: 260, streak_current: 7, streak_best: 9 },
-  { user_id: 'u5', display_name: 'Faith Wanjiku', avatar_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150', badge: 'teacher', points: 190, streak_current: 5, streak_best: 7 },
-];
+function safeUrl(value) {
+  if (!value) return null;
+  try {
+    const parsed = new URL(String(value).trim());
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeChallenge(row) {
+  if (!row) return null;
+  const tag = '#' + String(row.title || 'FaithChallenge').replace(/[^a-zA-Z0-9]/g, '').slice(0, 32);
+  return {
+    ...row,
+    tag,
+    tagline: row.description || '',
+    participantsCount: Number(row.participants_count || 0),
+    deadline: row.ends_at || null,
+    isCompleted: row.status === 'completed',
+  };
+}
+
+function normalizeSubmission(row, profiles = {}) {
+  const author = profiles[row.user_id] || row.author || null;
+  return {
+    ...row,
+    challengeId: row.challenge_id,
+    videoUrl: row.video_url || row.media_url,
+    audioTitle: row.audio_title || null,
+    scripture: row.scripture || row.verse_ref || null,
+    cheers: Number(row.like_count || row.votes_count || 0),
+    commentsCount: Number(row.comment_count || 0),
+    author: author ? {
+      id: row.user_id,
+      name: author.display_name || 'Shammah member',
+      display_name: author.display_name || 'Shammah member',
+      avatar: author.avatar_url || null,
+      avatar_url: author.avatar_url || null,
+      badge: author.badge || null,
+      church_id: author.church_id || null,
+    } : { id: row.user_id, name: 'Shammah member', avatar: null },
+  };
+}
+
+async function profileMap(db, userIds) {
+  const ids = [...new Set((userIds || []).filter(Boolean))];
+  if (!ids.length) return {};
+  const { data, error } = await db.from('profiles').select('id, display_name, avatar_url, badge, church_id').in('id', ids);
+  if (error) throw error;
+  return Object.fromEntries((data || []).map((profile) => [profile.id, profile]));
+}
+
+function visibleTo(row, user, profile) {
+  if (row.visibility === 'public') return true;
+  if (user?.id && row.creator_id === user.id) return true;
+  if (isModerator(profile)) return true;
+  return Boolean(row.visibility === 'church' && profile?.church_id && row.church_id === profile.church_id);
+}
+
+function jsonError(message, status = 400) {
+  return NextResponse.json({ ok: false, error: message }, { status });
+}
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const action = searchParams.get('action') || 'list';
-  const supabase = getSupabaseServerClient(request.headers.get('authorization'));
-  const user = await resolveSessionUser(request);
+  const db = serviceClient();
+  if (!db) return jsonError('Faith Challenges storage is not configured.', 503);
+  const user = await sessionUser(request);
+  const profile = await getProfile(db, user?.id);
+  const params = new URL(request.url).searchParams;
+  const action = params.get('action') || 'list';
 
   try {
-    // 1. DETAIL VIEW
     if (action === 'detail') {
-      const id = searchParams.get('id');
-      if (!id) return NextResponse.json({ error: 'Missing challenge id.' }, { status: 400 });
+      const id = params.get('id') || '';
+      if (!UUID_RE.test(id)) return jsonError('A valid challenge ID is required.');
+      const { data: challengeRow, error } = await db.from('challenges').select('*').eq('id', id).maybeSingle();
+      if (error) throw error;
+      if (!challengeRow || !visibleTo(challengeRow, user, profile) || !['active', 'completed'].includes(challengeRow.status) && challengeRow.creator_id !== user?.id && !isModerator(profile)) {
+        return jsonError('Challenge not found.', 404);
+      }
 
-      let challenge = null;
       let participant = null;
       let checkins = [];
-      let submissions = [];
+      if (user?.id) {
+        const { data: part, error: partError } = await db.from('challenge_participants').select('*')
+          .eq('challenge_id', id).eq('user_id', user.id).maybeSingle();
+        if (partError) throw partError;
+        participant = part || null;
+        const { data: ownCheckins, error: checkinError } = await db.from('challenge_checkins').select('id, challenge_id, user_id, day, note, media_url, points_awarded, created_at')
+          .eq('challenge_id', id).eq('user_id', user.id).order('day', { ascending: false }).limit(90);
+        if (checkinError) throw checkinError;
+        checkins = ownCheckins || [];
+      }
+
+      const { data: submissionRows, error: submissionsError } = await db.from('challenge_submissions').select('*')
+        .eq('challenge_id', id)
+        .or(user?.id ? 'status.eq.approved,user_id.eq.' + user.id : 'status.eq.approved')
+        .order('created_at', { ascending: false }).limit(60);
+      if (submissionsError) throw submissionsError;
+      const authors = await profileMap(db, (submissionRows || []).map((row) => row.user_id));
+      const submissions = (submissionRows || []).map((row) => normalizeSubmission(row, authors));
+      const scope = ['all', 'week', 'church'].includes(params.get('scope')) ? params.get('scope') : 'all';
+      const rpcClient = scope === 'church' ? userClient(request) : db;
       let leaderboard = [];
-
-      if (supabase) {
-        try {
-          const { data: ch } = await supabase
-            .from('challenges')
-            .select('*')
-            .eq('id', id)
-            .maybeSingle();
-          if (ch) challenge = ch;
-
-          if (user?.id) {
-            const { data: part } = await supabase
-              .from('challenge_participants')
-              .select('*')
-              .eq('challenge_id', id)
-              .eq('user_id', user.id)
-              .maybeSingle();
-            participant = part;
-
-            const { data: chk } = await supabase
-              .from('challenge_checkins')
-              .select('*')
-              .eq('challenge_id', id)
-              .eq('user_id', user.id)
-              .order('day', { ascending: false });
-            if (chk) checkins = chk;
-          }
-
-          const { data: subs } = await supabase
-            .from('challenge_submissions')
-            .select('*, author:user_id(display_name, avatar_url, badge)')
-            .eq('challenge_id', id)
-            .eq('status', 'approved')
-            .order('created_at', { ascending: false });
-          if (subs) submissions = subs;
-
-          const { data: lb } = await supabase.rpc('challenge_leaderboard', { p_challenge_id: id, p_scope: 'all' });
-          if (lb && lb.length > 0) leaderboard = lb;
-        } catch {}
+      if (rpcClient && (scope !== 'church' || user?.id)) {
+        const { data, error: leaderboardError } = await rpcClient.rpc('challenge_leaderboard', { p_challenge_id: id, p_scope: scope });
+        if (leaderboardError) throw leaderboardError;
+        leaderboard = data || [];
       }
-
-      if (!challenge) {
-        challenge = SEED_CHALLENGES.find((c) => c.id === id) || SEED_CHALLENGES[0];
-        submissions = SEED_SUBMISSIONS.filter((s) => s.challenge_id === id);
-        leaderboard = SEED_LEADERBOARD;
-      }
-
-      // Check if user checked in today
-      const todayStr = new Date().toISOString().split('T')[0];
-      const hasCheckedInToday = Boolean(
-        checkins.some((c) => c.day === todayStr) || (participant?.last_checkin_on === todayStr)
-      );
-
+      const today = new Date().toISOString().slice(0, 10);
+      const hasCheckedInToday = checkins.some((row) => String(row.day || '').slice(0, 10) === today);
+      const participantPayload = participant ? {
+        ...participant,
+        isJoined: true,
+        has_checked_in_today: hasCheckedInToday,
+      } : null;
+      const recentCheckins = checkins.slice(0, 28);
+      const challenge = normalizeChallenge(challengeRow);
       return NextResponse.json({
-        ok: true,
-        challenge,
-        participant: participant || {
-          isJoined: false,
-          streak_current: 0,
-          streak_best: 0,
-          points: 0,
-        },
-        hasCheckedInToday,
-        checkins,
-        submissions,
-        leaderboard,
+        ok: true, challenge, participant: participantPayload,
+        has_checked_in_today: hasCheckedInToday, hasCheckedInToday,
+        checkins, recent_checkins: recentCheckins,
+        submissions, leaderboard,
       });
     }
 
-    // 2. MAIN HUB LIST VIEW
-    const category = searchParams.get('category') || 'All';
-    const sort = searchParams.get('sort') || 'popular';
-    const search = (searchParams.get('search') || '').trim().toLowerCase();
-    const userId = user?.id || searchParams.get('userId');
+    const category = (params.get('category') || 'All').trim();
+    const sort = params.get('sort') || 'trending';
+    const search = (params.get('search') || '').trim().toLowerCase().slice(0, 100);
+    const page = Math.max(1, Number.parseInt(params.get('page') || '1', 10) || 1);
+    const pageSize = Math.min(24, Math.max(6, Number.parseInt(params.get('pageSize') || '12', 10) || 12));
 
-    let allChallenges = [];
+    const { data: rows, error } = await db.from('challenges').select('*')
+      .in('status', ['active', 'completed']).order('created_at', { ascending: false }).limit(500);
+    if (error) throw error;
+    let allChallenges = (rows || []).filter((row) => visibleTo(row, user, profile));
+    if (category !== 'All') allChallenges = allChallenges.filter((row) => row.category?.toLowerCase() === category.toLowerCase());
+    if (search) allChallenges = allChallenges.filter((row) =>
+      [row.title, row.description, row.rules_md, row.category].some((value) => String(value || '').toLowerCase().includes(search))
+    );
+
+    if (sort === 'newest') allChallenges.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    else if (sort === 'points_high') allChallenges.sort((a, b) => Number(b.points || 0) - Number(a.points || 0));
+    else if (sort === 'most_participants' || sort === 'popular') allChallenges.sort((a, b) => Number(b.participants_count || 0) - Number(a.participants_count || 0));
+    else allChallenges.sort((a, b) => Number(b.participants_count || 0) - Number(a.participants_count || 0) || new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+    const totalCount = allChallenges.length;
+    const pageRows = allChallenges.slice((page - 1) * pageSize, page * pageSize);
+    const normalizedChallenges = pageRows.map(normalizeChallenge);
+    const activeRows = allChallenges.filter((row) => row.status === 'active');
+    const todayChallenge = normalizeChallenge(activeRows[0] || null);
+
     let myActive = [];
-    let trendingSubs = [];
-    let globalLeaderboard = [];
-
-    if (supabase) {
-      try {
-        const { data: chList } = await supabase
-          .from('challenges')
-          .select('*')
-          .in('status', ['active', 'completed'])
-          .order('participants_count', { ascending: false });
-        if (chList && chList.length > 0) allChallenges = chList;
-
-        if (userId) {
-          const { data: myParts } = await supabase
-            .from('challenge_participants')
-            .select('*, challenge:challenge_id(*)')
-            .eq('user_id', userId);
-          if (myParts) myActive = myParts;
-        }
-
-        const { data: subs } = await supabase
-          .from('challenge_submissions')
-          .select('*, author:user_id(display_name, avatar_url, badge)')
-          .eq('status', 'approved')
-          .order('like_count', { ascending: false })
-          .limit(8);
-        if (subs) trendingSubs = subs;
-      } catch {}
+    let userVotes = [];
+    let earnedBadges = [];
+    if (user?.id) {
+      const { data: parts, error: partError } = await db.from('challenge_participants').select('*').eq('user_id', user.id);
+      if (partError) throw partError;
+      const byId = new Map(allChallenges.map((row) => [row.id, row]));
+      myActive = (parts || []).map((part) => {
+        const challenge = byId.get(part.challenge_id);
+        return challenge ? { ...normalizeChallenge(challenge), ...part, user_points: part.points } : null;
+      }).filter(Boolean);
+      const { data: awards, error: awardError } = await db.from('challenge_badge_awards').select('*')
+        .eq('user_id', user.id).order('earned_at', { ascending: false }).limit(40);
+      if (awardError && awardError.code !== '42P01') throw awardError;
+      earnedBadges = (awards || []).map((award) => ({ ...award, earned: true, unlocked: true }));
     }
 
-    if (allChallenges.length === 0) allChallenges = [...SEED_CHALLENGES];
-    if (trendingSubs.length === 0) trendingSubs = [...SEED_SUBMISSIONS];
-    globalLeaderboard = [...SEED_LEADERBOARD];
+    const { data: submissionRows, error: subsError } = await db.from('challenge_submissions').select('*')
+      .eq('status', 'approved').order('like_count', { ascending: false }).order('created_at', { ascending: false }).limit(8);
+    if (subsError) throw subsError;
+    const authors = await profileMap(db, (submissionRows || []).map((row) => row.user_id));
+    const submissions = (submissionRows || []).map((row) => normalizeSubmission(row, authors));
 
-    // Filter by category & search
-    let filtered = allChallenges.filter((c) => {
-      if (search) {
-        const titleMatch = c.title?.toLowerCase().includes(search);
-        const descMatch = c.description?.toLowerCase().includes(search);
-        if (!titleMatch && !descMatch) return false;
-      }
-      if (category && category !== 'All') {
-        if (c.category?.toLowerCase() !== category.toLowerCase()) return false;
-      }
-      return true;
-    });
+    const { data: participantRows, error: leaderboardError } = await db.from('challenge_participants').select('user_id, points, streak_current, streak_best')
+      .order('points', { ascending: false }).order('streak_best', { ascending: false }).limit(12);
+    if (leaderboardError) throw leaderboardError;
+    const leaderProfiles = await profileMap(db, (participantRows || []).map((row) => row.user_id));
+    const leaderboard = (participantRows || []).map((row) => ({
+      ...row, display_name: leaderProfiles[row.user_id]?.display_name || 'Shammah member',
+      avatar_url: leaderProfiles[row.user_id]?.avatar_url || null, badge: leaderProfiles[row.user_id]?.badge || null,
+    }));
 
-    // Today's featured challenge
-    const todayChallenge = allChallenges[0] || SEED_CHALLENGES[0];
-
-    // Badges earned showcase
-    const badgesEarned = [
-      { id: 'b-spark', title: 'Spiritual Spark', milestone: '3-Day Streak', icon: '⚡', accent: '#06b6d4', unlocked: true },
-      { id: 'b-steadfast', title: 'Steadfast Believer', milestone: '7-Day Streak', icon: '🔥', accent: '#8b5cf6', unlocked: true },
-      { id: 'b-overcomer', title: 'Overcomer in Christ', milestone: '21-Day Streak', icon: '🛡️', accent: '#10b981', unlocked: false },
-      { id: 'b-champion', title: 'Kingdom Champion', milestone: '40-Day Fast/Prayer', icon: '👑', accent: '#f59e0b', unlocked: false },
-    ];
+    if (user?.id && submissions.length) {
+      const { data: votes, error: votesError } = await db.from('challenge_votes').select('submission_id').eq('user_id', user.id)
+        .in('submission_id', submissions.map((row) => row.id));
+      if (votesError) throw votesError;
+      userVotes = (votes || []).map((row) => row.submission_id);
+    }
 
     return NextResponse.json({
       ok: true,
+      challenges: normalizedChallenges,
+      today_challenge: todayChallenge,
+      my_active: myActive,
+      submissions,
+      leaderboard,
+      badges: earnedBadges,
+      user_votes: userVotes,
+      totalCount,
+      page,
+      pageSize,
+      hasMore: page * pageSize < totalCount,
+      // Existing compatibility keys.
       todayChallenge,
-      myActiveChallenges: myActive.map((p) => ({
-        ...p.challenge,
-        streak_current: p.streak_current,
-        streak_best: p.streak_best,
-        user_points: p.points,
-        last_checkin_on: p.last_checkin_on,
-      })),
-      trendingSubmissions: trendingSubs,
-      allChallenges: filtered,
-      leaderboard: globalLeaderboard,
-      badgesEarned,
-      totalCount: filtered.length,
+      myActiveChallenges: myActive,
+      trendingSubmissions: submissions,
+      allChallenges: normalizedChallenges,
+      badgesEarned: earnedBadges,
     });
-  } catch (err) {
-    return NextResponse.json({ error: err.message || 'Unable to fetch challenges.' }, { status: 500 });
+  } catch (error) {
+    console.error('Faith Challenges GET failed:', error?.message || error);
+    return jsonError('Unable to load Faith Challenges right now. Please retry.', 500);
   }
 }
 
 export async function POST(request) {
+  const db = serviceClient();
+  if (!db) return jsonError('Faith Challenges storage is not configured.', 503);
+  const user = await sessionUser(request);
+  if (!user?.id) return jsonError('Please sign in to continue.', 401);
+  const rpcClient = userClient(request);
+  if (!rpcClient) return jsonError('Your authenticated session could not be verified. Please sign in again.', 401);
+  const profile = await getProfile(db, user.id);
+
   try {
-    const user = await resolveSessionUser(request);
-    const body = await request.json();
-    const { action } = body || {};
-    const supabase = getSupabaseServerClient(request.headers.get('authorization'));
+    const body = await request.json().catch(() => ({}));
+    const action = String(body.action || '');
+    const challengeId = String(body.challengeId || '');
+    const submissionId = String(body.submissionId || '');
 
-    if (!user && action !== 'vote') {
-      // In guest preview mode, generate mock participant response for clean UX
+    if (['join', 'checkin', 'submit', 'leave', 'close'].includes(action) && !UUID_RE.test(challengeId)) {
+      return jsonError('A valid challenge ID is required.');
+    }
+    if (['vote', 'delete-submission', 'moderate-submission'].includes(action) && !UUID_RE.test(submissionId)) {
+      return jsonError('A valid submission ID is required.');
     }
 
-    // 1. JOIN CHALLENGE
     if (action === 'join') {
-      const { challengeId } = body;
-      if (!challengeId) return NextResponse.json({ error: 'Missing challenge id.' }, { status: 400 });
-
-      if (supabase && user?.id) {
-        const { data, error } = await supabase.rpc('join_challenge', { p_challenge_id: challengeId });
-        if (error) {
-          // Fallback direct insert
-          await supabase
-            .from('challenge_participants')
-            .upsert({ challenge_id: challengeId, user_id: user.id }, { onConflict: 'challenge_id,user_id' });
-        }
-      }
-
-      return NextResponse.json({
-        ok: true,
-        message: 'Successfully joined challenge! Start your daily streak today.',
-        participant: { challenge_id: challengeId, streak_current: 0, streak_best: 0, points: 0 },
-      });
+      const { data, error } = await rpcClient.rpc('join_challenge', { p_challenge_id: challengeId });
+      if (error) throw error;
+      if (!data?.success) return jsonError(data?.error || 'Could not join this challenge.', 409);
+      return NextResponse.json({ ok: true, participant: { ...data.participant, isJoined: true }, message: 'You joined this challenge.' });
     }
 
-    // 2. CHECK-IN
     if (action === 'checkin') {
-      const { challengeId, note, mediaUrl } = body;
-      if (!challengeId) return NextResponse.json({ error: 'Missing challenge id.' }, { status: 400 });
-
-      const todayStr = new Date().toISOString().split('T')[0];
-
-      if (supabase && user?.id) {
-        const { data, error } = await supabase.rpc('checkin', {
-          p_challenge_id: challengeId,
-          p_note: note || null,
-          p_media_url: mediaUrl || null,
-        });
-
-        if (error || data?.success === false) {
-          return NextResponse.json({ error: data?.error || error?.message || 'Check-in failed.' }, { status: 400 });
-        }
-
-        return NextResponse.json({ ok: true, ...data });
-      }
-
-      // Preview mode simulation
-      return NextResponse.json({
-        ok: true,
-        day: todayStr,
-        streak_current: 1,
-        streak_best: 1,
-        points_awarded: 10,
-        badge_awarded: null,
+      const note = String(body.note || '').trim().slice(0, 1000);
+      const mediaUrl = body.mediaUrl ? safeUrl(body.mediaUrl) : null;
+      if (body.mediaUrl && !mediaUrl) return jsonError('Choose a valid http or https media URL.');
+      const { data, error } = await rpcClient.rpc('checkin', {
+        p_challenge_id: challengeId, p_note: note || null, p_media_url: mediaUrl,
       });
+      if (error) throw error;
+      if (!data?.success) return jsonError(data?.error || 'Check-in failed.', /already checked in/i.test(data?.error || '') ? 409 : 400);
+      return NextResponse.json({ ok: true, ...data });
     }
 
-    // 3. SUBMIT CHALLENGE VIDEO / ENTRY
     if (action === 'submit') {
-      const { challengeId, mediaUrl, thumbUrl, caption, hashtag, scripture, audioTitle } = body;
-      if (!challengeId || !mediaUrl) {
-        return NextResponse.json({ error: 'Please attach a photo or video for your challenge entry.' }, { status: 400 });
-      }
-
-      const newSub = {
-        challenge_id: challengeId,
-        user_id: user?.id || null,
-        media_url: mediaUrl,
-        thumb_url: thumbUrl || mediaUrl,
-        caption: caption?.trim() || '',
-        hashtag: hashtag?.trim() || '#FaithChallenge',
-        scripture: scripture?.trim() || null,
-        audio_title: audioTitle?.trim() || 'Original Praise Sound',
-        status: 'approved',
-        like_count: 1,
-        comment_count: 0,
-        created_at: new Date().toISOString(),
-      };
-
-      let inserted = null;
-      if (supabase && user?.id) {
-        const { data, error } = await supabase
-          .from('challenge_submissions')
-          .insert(newSub)
-          .select()
-          .single();
-        if (error) throw new Error(error.message);
-        inserted = data;
-      } else {
-        inserted = { id: `sub-${Date.now()}`, ...newSub };
-      }
-
-      return NextResponse.json({
-        ok: true,
-        submission: inserted,
-        message: 'Submission published! You are a Kingdom Faith Champion! 🔥',
-      });
+      const mediaUrl = safeUrl(body.mediaUrl);
+      const caption = String(body.caption || '').trim().slice(0, 500);
+      const hashtag = String(body.hashtag || '').trim().slice(0, 80);
+      const scripture = String(body.scripture || '').trim().slice(0, 160);
+      const audioTitle = String(body.audioTitle || '').trim().slice(0, 120);
+      const thumbUrl = body.thumbUrl ? safeUrl(body.thumbUrl) : mediaUrl;
+      if (!mediaUrl) return jsonError('Attach a valid photo or video URL.');
+      if (caption.length < 3) return jsonError('Please add a caption of at least 3 characters.');
+      if (body.thumbUrl && !thumbUrl) return jsonError('Thumbnail URL is invalid.');
+      const { data: challenge, error: challengeError } = await db.from('challenges').select('id,status,visibility,creator_id,church_id')
+        .eq('id', challengeId).maybeSingle();
+      if (challengeError) throw challengeError;
+      if (!challenge || challenge.status !== 'active') return jsonError('This challenge is not accepting submissions.', 409);
+      if (challenge.visibility === 'private' && challenge.creator_id !== user.id) return jsonError('This challenge is private.', 403);
+      if (challenge.visibility === 'church' && challenge.church_id !== profile?.church_id) return jsonError('This challenge is only available to its church community.', 403);
+      const { data: participant, error: participantError } = await db.from('challenge_participants').select('user_id')
+        .eq('challenge_id', challengeId).eq('user_id', user.id).maybeSingle();
+      if (participantError) throw participantError;
+      if (!participant) return jsonError('Join the challenge before submitting an entry.', 409);
+      const { data, error } = await db.from('challenge_submissions').insert({
+        challenge_id: challengeId, user_id: user.id, media_url: mediaUrl, video_url: mediaUrl,
+        thumb_url: thumbUrl, caption, hashtag: hashtag || null, scripture: scripture || null,
+        verse_ref: scripture || null, audio_title: audioTitle || null, like_count: 0, votes_count: 0,
+        comment_count: 0, status: 'pending_review',
+      }).select('*').single();
+      if (error) throw error;
+      return NextResponse.json({ ok: true, submission: data, message: 'Your entry was submitted for review.' }, { status: 201 });
     }
 
-    // 4. VOTE / CHEER SUBMISSION
     if (action === 'vote') {
-      const { submissionId } = body;
-      if (!submissionId) return NextResponse.json({ error: 'Missing submission id.' }, { status: 400 });
-
-      if (supabase && user?.id) {
-        const { data } = await supabase.rpc('vote_submission', { p_submission_id: submissionId });
-        if (data) return NextResponse.json({ ok: true, ...data });
-      }
-
-      return NextResponse.json({ ok: true, voted: true, like_count: 1 });
+      const { data, error } = await rpcClient.rpc('vote_submission', { p_submission_id: submissionId });
+      if (error) throw error;
+      if (!data?.success) return jsonError(data?.error || 'Vote could not be recorded.', 400);
+      return NextResponse.json({ ok: true, ...data });
     }
 
-    // 5. CREATE CHALLENGE
     if (action === 'create') {
-      const { title, description, rulesMd, category, kind, durationDays, points, coverUrl, accent } = body;
-      if (!title || title.trim().length < 5) {
-        return NextResponse.json({ error: 'Please enter a clear challenge title.' }, { status: 400 });
-      }
-
-      const newChallenge = {
-        title: title.trim(),
-        description: description?.trim() || '',
-        rules_md: rulesMd?.trim() || '',
-        category: category || 'Prayer',
-        kind: kind || 'daily',
-        duration_days: Math.max(1, Number(durationDays || 7)),
-        points: Math.max(10, Number(points || 50)),
-        cover_url: coverUrl || 'https://images.unsplash.com/photo-1544427920-c49ccfb85579?w=900&auto=format&fit=crop&q=80',
-        accent: accent || '#8b5cf6',
-        creator_id: user?.id || null,
-        visibility: 'public',
-        status: 'active',
-        participants_count: 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      let inserted = null;
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('challenges')
-          .insert(newChallenge)
-          .select()
-          .single();
-        if (error) throw new Error(error.message);
-        inserted = data;
-      } else {
-        inserted = { id: `c-${Date.now()}`, ...newChallenge };
-      }
-
-      return NextResponse.json({ ok: true, challenge: inserted });
+      const title = String(body.title || '').trim().slice(0, 160);
+      const description = String(body.description || '').trim().slice(0, 2000);
+      const rulesMd = String(body.rulesMd || '').trim().slice(0, 12000);
+      const category = String(body.category || 'Prayer');
+      const kind = String(body.kind || 'daily');
+      const durationDays = Number(body.durationDays || 7);
+      const points = Number(body.points || 50);
+      const coverUrl = safeUrl(body.coverUrl);
+      const visibility = ['public', 'church', 'private'].includes(body.visibility) ? body.visibility : 'public';
+      if (title.length < 5) return jsonError('Please enter a clear challenge title.');
+      if (description.length < 10) return jsonError('Please provide a description of at least 10 characters.');
+      if (!CATEGORIES.includes(category)) return jsonError('Choose a valid challenge category.');
+      if (!KINDS.includes(kind)) return jsonError('Choose a valid challenge type.');
+      if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 365) return jsonError('Challenge duration must be 1 to 365 days.');
+      if (!Number.isInteger(points) || points < 10 || points > 10000) return jsonError('Challenge points must be between 10 and 10000.');
+      if (body.coverUrl && !coverUrl) return jsonError('Cover image URL is invalid.');
+      if (visibility === 'church' && !profile?.church_id) return jsonError('Join a church before creating a church-only challenge.');
+      const startsAt = new Date();
+      const endsAt = new Date(startsAt.getTime() + durationDays * 86400000);
+      const { data: challenge, error } = await db.from('challenges').insert({
+        title, description, rules_md: rulesMd, category, kind, duration_days: durationDays,
+        points, cover_url: coverUrl, accent: String(body.accent || '#8b5cf6').slice(0, 20),
+        creator_id: user.id, church_id: visibility === 'church' ? profile.church_id : null,
+        visibility, status: 'active', starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(),
+        participants_count: 0,
+      }).select('*').single();
+      if (error) throw error;
+      const { error: joinError } = await rpcClient.rpc('join_challenge', { p_challenge_id: challenge.id });
+      if (joinError) console.error('Challenge creator auto-join failed:', joinError.message);
+      return NextResponse.json({ ok: true, challenge: normalizeChallenge(challenge) }, { status: 201 });
     }
 
-    // 6. DELETE SUBMISSION
+    if (action === 'leave') {
+      const { data: existing, error: existingError } = await db.from('challenge_participants').select('challenge_id')
+        .eq('challenge_id', challengeId).eq('user_id', user.id).maybeSingle();
+      if (existingError) throw existingError;
+      if (!existing) return jsonError('You have not joined this challenge.', 409);
+      const { error } = await db.from('challenge_participants').delete().eq('challenge_id', challengeId).eq('user_id', user.id);
+      if (error) throw error;
+      const { count, error: countError } = await db.from('challenge_participants').select('user_id', { count: 'exact', head: true }).eq('challenge_id', challengeId);
+      if (countError) throw countError;
+      await db.from('challenges').update({ participants_count: count || 0 }).eq('id', challengeId);
+      return NextResponse.json({ ok: true, left: true });
+    }
+
+    if (action === 'close') {
+      const { data: challenge, error: challengeError } = await db.from('challenges').select('id,creator_id,status').eq('id', challengeId).maybeSingle();
+      if (challengeError) throw challengeError;
+      if (!challenge) return jsonError('Challenge not found.', 404);
+      if (challenge.creator_id !== user.id && !isModerator(profile)) return jsonError('Only the challenge creator or a moderator can close it.', 403);
+      const { data, error } = await db.from('challenges').update({ status: 'completed', ends_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', challengeId).select('*').single();
+      if (error) throw error;
+      return NextResponse.json({ ok: true, challenge: normalizeChallenge(data) });
+    }
+
+    if (action === 'moderate-submission') {
+      const decision = String(body.decision || '');
+      if (!['approve', 'reject'].includes(decision)) return jsonError('Choose approve or reject.');
+      const { data: submission, error: submissionError } = await db.from('challenge_submissions').select('id,challenge_id,user_id,status')
+        .eq('id', submissionId).maybeSingle();
+      if (submissionError) throw submissionError;
+      if (!submission) return jsonError('Submission not found.', 404);
+      const { data: challenge, error: challengeError } = await db.from('challenges').select('creator_id').eq('id', submission.challenge_id).maybeSingle();
+      if (challengeError) throw challengeError;
+      if (challenge?.creator_id !== user.id && !isModerator(profile)) return jsonError('Only the challenge creator or a moderator can review submissions.', 403);
+      const { data, error } = await db.from('challenge_submissions').update({ status: decision === 'approve' ? 'approved' : 'rejected' })
+        .eq('id', submissionId).select('*').single();
+      if (error) throw error;
+      return NextResponse.json({ ok: true, submission: data });
+    }
+
     if (action === 'delete-submission') {
-      const { submissionId } = body;
-      if (!submissionId) return NextResponse.json({ error: 'Missing submission id.' }, { status: 400 });
-
-      if (supabase && user?.id) {
-        await supabase
-          .from('challenge_submissions')
-          .delete()
-          .eq('id', submissionId);
+      const { data: submission, error: submissionError } = await db.from('challenge_submissions').select('id,challenge_id,user_id')
+        .eq('id', submissionId).maybeSingle();
+      if (submissionError) throw submissionError;
+      if (!submission) return jsonError('Submission not found.', 404);
+      const { data: challenge, error: challengeError } = await db.from('challenges').select('creator_id').eq('id', submission.challenge_id).maybeSingle();
+      if (challengeError) throw challengeError;
+      if (submission.user_id !== user.id && challenge?.creator_id !== user.id && !isModerator(profile)) {
+        return jsonError('You do not have permission to remove this submission.', 403);
       }
-
+      const { error } = await db.from('challenge_submissions').delete().eq('id', submissionId);
+      if (error) throw error;
       return NextResponse.json({ ok: true, message: 'Submission removed.' });
     }
 
-    return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
-  } catch (err) {
-    return NextResponse.json({ error: err.message || 'Operation failed.' }, { status: 500 });
+    return jsonError('Unsupported Faith Challenges action.', 400);
+  } catch (error) {
+    console.error('Faith Challenges POST failed:', error?.message || error);
+    return jsonError('Unable to complete this Faith Challenges action. Please retry.', 500);
   }
 }
