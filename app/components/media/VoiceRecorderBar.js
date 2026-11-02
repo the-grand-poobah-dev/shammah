@@ -32,11 +32,15 @@ export default function VoiceRecorderBar({ onDone, onCancel, maxSeconds = 60 }) 
           setSeconds(value);
           if (value >= maxSeconds) {
             recorderRef.current?.stop().then((result) => {
-              if (result && mountedRef.current) {
+              if (!result) return;
+              if (mountedRef.current) {
+                recorderRef.current = null;
                 previewUrlRef.current = result.previewUrl;
                 setReview(result);
                 setRecording(false);
                 setPaused(false);
+              } else if (result.previewUrl?.startsWith('blob:')) {
+                URL.revokeObjectURL(result.previewUrl);
               }
             }).catch(() => {});
           }
@@ -70,6 +74,10 @@ export default function VoiceRecorderBar({ onDone, onCancel, maxSeconds = 60 }) 
     try {
       const result = await recorderRef.current.stop();
       recorderRef.current = null;
+      if (!mountedRef.current) {
+        if (result?.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(result.previewUrl);
+        return;
+      }
       if (result) {
         previewUrlRef.current = result.previewUrl;
         setReview(result);
@@ -78,9 +86,9 @@ export default function VoiceRecorderBar({ onDone, onCancel, maxSeconds = 60 }) 
       setPaused(false);
       setLevel(0);
     } catch (err) {
-      setError(err.message || 'Could not finish voice recording.');
+      if (mountedRef.current) setError(err.message || 'Could not finish voice recording.');
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
 
