@@ -67,4 +67,4 @@ insert into public.arcade_questions(category,testament,book,question,options,cor
 ('Epistles','NT','Hebrews','What is faith according to Hebrews 11:1?','["Substance of things hoped for","A kind of sacrifice","A temple ritual","A family name"]'::jsonb,0,'Hebrews 11:1'),
 ('Gospels','NT','John','Who denied Jesus three times?','["Peter","John","Judas","James"]'::jsonb,0,'Matthew 26:69-75'),
 ('Gospels','NT','Luke','Which parable features a traveller helped by a Samaritan?','["The Good Samaritan","The Lost Sheep","The Sower","The Talents"]'::jsonb,0,'Luke 10:25-37')
-on conflict do nothing;
+on conflict (book,question) do nothing;
