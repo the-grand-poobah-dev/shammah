@@ -282,7 +282,7 @@ export default function ReelCreatorModal({
       <button
         type="button"
         className="gws-btn-primary px-5 py-2.5 text-xs font-bold flex items-center gap-2"
-        disabled={!videoFile || uploading}
+        disabled={(!videoFile && !selectedLibraryVideo) || uploading}
         onClick={handlePublishReel}
       >
         {uploading ? (
