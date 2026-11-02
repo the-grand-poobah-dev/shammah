@@ -16,6 +16,7 @@ export default function MediaToolbar({
   onGif,
   onReel,
   onLive,
+  maxVideoSeconds = 90,
   disabled = false,
 }) {
   const inputRef = useRef(null);
@@ -45,7 +46,7 @@ export default function MediaToolbar({
         {context === 'post' && onReel && <ToolButton label="Reel" title="Create a Reel" onClick={onReel} disabled={disabled}><Clapperboard size={19} /></ToolButton>}
         {context === 'post' && onLive && <ToolButton label="Live" title="Start a live broadcast" onClick={onLive} disabled={disabled}><span className="sh-live-toolbar-icon"><Radio size={19} /><i /></span></ToolButton>}
       </div>
-      {cameraOpen && <CameraCaptureModal mode="both" maxVideoSeconds={90} onCapture={(file) => pickFile(file)} onClose={() => setCameraOpen(false)} />}
+      {cameraOpen && <CameraCaptureModal mode="both" maxVideoSeconds={maxVideoSeconds} onCapture={(file) => pickFile(file)} onClose={() => setCameraOpen(false)} />}
     </>
   );
 }
