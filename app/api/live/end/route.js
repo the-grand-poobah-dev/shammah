@@ -19,7 +19,7 @@ export async function POST(request) {
     if (error) throw error;
     if (!stream) return liveJsonError('Broadcast not found.', 404);
     const { data: profile } = await service.from('profiles').select('role').eq('id', user.id).maybeSingle();
-    if (stream.host_id !== user.id && profile?.role !== 'platform_admin') {
+    if (stream.host_id !== user.id && !['platform_admin', 'admin'].includes(profile?.role)) {
       return liveJsonError('Only the host or a platform administrator can end this broadcast.', 403);
     }
     if (stream.status === 'ended') return Response.json({ stream, alreadyEnded: true });
