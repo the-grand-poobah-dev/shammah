@@ -714,23 +714,6 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
             style={{ display: 'none' }}
           />
 
-          {/* Hidden Device Camera / Capture Inputs */}
-          <input
-            ref={cameraPhotoInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
-          <input
-            ref={cameraVideoInputRef}
-            type="file"
-            accept="video/*"
-            capture="environment"
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
           <input
             ref={cameraAudioInputRef}
             type="file"
