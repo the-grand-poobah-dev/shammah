@@ -204,4 +204,16 @@ revoke all on function public.submit_arcade_score(uuid, text, integer, integer, 
 grant execute on function public.submit_arcade_score(uuid, text, integer, integer, jsonb)
   to service_role;
 
+-- Remove older RPC overloads that accept client-scored results directly.
+do $legacy_arcade_rpc$
+begin
+  if to_regprocedure('public.submit_arcade_score(text,integer,text)') is not null then
+    execute 'revoke all on function public.submit_arcade_score(text, integer, text) from public, anon, authenticated';
+  end if;
+  if to_regprocedure('public.submit_arcade_score(text,integer,jsonb,integer)') is not null then
+    execute 'revoke all on function public.submit_arcade_score(text, integer, jsonb, integer) from public, anon, authenticated';
+  end if;
+end;
+$legacy_arcade_rpc$;
+
 commit;
