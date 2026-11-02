@@ -157,13 +157,11 @@ export async function POST(request) {
       meta.perfect = correctCount === gradeResults.length;
     }
     if (!Number.isSafeInteger(score) || score < 0) return NextResponse.json({ error: 'Invalid score.' }, { status: 400 });
-    const html5Games = new Set([
-      'ark-runner', 'david-target-challenge', 'fruit-of-the-spirit-catch', 'fisher-of-men',
-      'faith-builder', 'daily-brain-teaser', 'bible-word-search', 'parable-pairs',
-      'book-order-race', 'family-bible-challenge'
-    ]);
-    if (html5Games.has(gameSlug)) {
-      const plausibleMaximum = Math.min(10000, Math.floor(durationMs / 1000) * 500 + 100);
+    // Bible Trivia is graded from the submitted answer IDs above. For every
+    // other client-scored game, cap the score against the recorded round time
+    // so legacy games cannot bypass the HTML5 score sanity check.
+    if (gameSlug !== 'bible-trivia') {
+      const plausibleMaximum = Math.min(10000, Math.floor(durationMs / 1000) * 1000 + 100);
       if (score > plausibleMaximum) {
         return NextResponse.json({ error: 'That score is too high for the recorded round duration. Please replay the game.' }, { status: 400 });
       }
