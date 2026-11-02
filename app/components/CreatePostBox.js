@@ -50,6 +50,7 @@ import { playSound } from '../lib/soundEffects';
 import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousManager';
 import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
 import { detectMediaType } from '../lib/mediaUpload';
+import { listMedia } from '../lib/data/mediaApi';
 import {
   FEELINGS_LIST,
   formatFeelingString,
@@ -77,6 +78,8 @@ export default function CreatePostBox({
   setPollOptions,
   mediaFile,
   setMediaFile,
+  selectedLibraryMedia,
+  setSelectedLibraryMedia,
   mediaPreview,
   setMediaPreview,
   mediaUploading,
@@ -110,6 +113,11 @@ export default function CreatePostBox({
   const [isQuizMode, setIsQuizMode] = useState(false);
   const [correctOptionIdx, setCorrectOptionIdx] = useState(0);
   const [quizExplanation, setQuizExplanation] = useState('');
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [libraryMedia, setLibraryMedia] = useState([]);
+  const [mediaLibraryLoaded, setMediaLibraryLoaded] = useState(false);
+  const [loadingMediaLibrary, setLoadingMediaLibrary] = useState(false);
+  const [mediaLibraryError, setMediaLibraryError] = useState('');
 
   useEffect(() => {
     const previewUrl = mediaPreview?.url;
@@ -226,8 +234,53 @@ export default function CreatePostBox({
       ? null
       : profile?.avatar_url;
 
+  async function handleToggleMediaLibrary() {
+    if (!session?.user?.id) {
+      openAuth?.('signin');
+      return;
+    }
+    if (showMediaLibrary) {
+      setShowMediaLibrary(false);
+      return;
+    }
+    setShowMediaLibrary(true);
+    if (mediaLibraryLoaded || loadingMediaLibrary) return;
+    setLoadingMediaLibrary(true);
+    setMediaLibraryError('');
+    try {
+      const [videos, audio] = await Promise.all([
+        listMedia({ kind: 'video', sort: 'recent', limit: 30 }),
+        listMedia({ kind: 'audio', sort: 'recent', limit: 30 }),
+      ]);
+      if (videos.error) throw videos.error;
+      if (audio.error) throw audio.error;
+      const owned = [...(videos.data || []), ...(audio.data || [])]
+        .filter((item) => item.media_url && item.author_id === session.user.id && (item.kind === 'video' || item.kind === 'audio'))
+        .sort((a, b) => new Date(b.published_at || b.created_at || 0).getTime() - new Date(a.published_at || a.created_at || 0).getTime());
+      setLibraryMedia(owned);
+      setMediaLibraryLoaded(true);
+    } catch (err) {
+      setMediaLibraryError(err?.message || 'Could not load your published media.');
+    } finally {
+      setLoadingMediaLibrary(false);
+    }
+  }
+
+  function handleChooseLibraryMedia(item) {
+    if (!item?.media_url || !['video', 'audio'].includes(item.kind)) return;
+    setSelectedLibraryMedia(item);
+    setMediaFile(null);
+    setMediaPreview({ url: item.media_url, type: item.kind });
+    setShowMediaLibrary(false);
+    setMediaLibraryError('');
+    if (photoInputRef.current) photoInputRef.current.value = '';
+    if (videoInputRef.current) videoInputRef.current.value = '';
+    if (audioInputRef.current) audioInputRef.current.value = '';
+  }
+
   function handleFileSelected(file) {
     if (!file) return;
+    setSelectedLibraryMedia(null);
     setMediaFile(file);
     const url = URL.createObjectURL(file);
     const detectedType = detectMediaType(file);
@@ -238,6 +291,7 @@ export default function CreatePostBox({
   }
 
   function handleRemoveMedia() {
+    setSelectedLibraryMedia(null);
     setMediaFile(null);
     setMediaPreview(null);
     if (photoInputRef.current) photoInputRef.current.value = '';
@@ -345,7 +399,7 @@ export default function CreatePostBox({
     pollUploading ||
     mediaUploading ||
     !composeCategory ||
-    (!composeText.trim() && !mediaFile) ||
+    (!composeText.trim() && !mediaFile && !selectedLibraryMedia) ||
     (isPoll && pollOptions.filter((o) => o.label.trim() || o.file).length < 2);
 
   // Filter categories in popover dropdown (excluding FAQ as requested)
@@ -914,7 +968,7 @@ export default function CreatePostBox({
                 <MicIcon size={20} />
               </div>
               <div className="audio-preview-details">
-                <span className="audio-preview-title">{mediaFile?.name || 'Audio Recording'}</span>
+                <span className="audio-preview-title">{selectedLibraryMedia?.title || mediaFile?.name || 'Audio Recording'}</span>
                 <audio src={mediaPreview.url} controls className="audio-preview-player" />
               </div>
               <button
@@ -1099,6 +1153,19 @@ export default function CreatePostBox({
         </div>
       )}
 
+      {showMediaLibrary && (
+        <div className="max-h-64 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2" aria-label="Your published media library">
+          <div className="flex items-center justify-between gap-3"><strong className="text-sm text-[var(--ink)]">Your published media</strong><button type="button" onClick={() => setShowMediaLibrary(false)} className="rounded-full p-1 text-[var(--ink-muted)] hover:bg-[var(--surface-hover,var(--surface))]" aria-label="Close media library"><X size={16} /></button></div>
+          {loadingMediaLibrary ? <p role="status" className="text-xs text-[var(--ink-muted)]">Loading your published videos and audio…</p> : mediaLibraryError ? <p role="alert" className="text-xs text-rose-400">{mediaLibraryError}</p> : libraryMedia.length ? libraryMedia.map((item) => (
+            <button key={item.id} type="button" onClick={() => handleChooseLibraryMedia(item)} className="flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-[var(--surface-hover,var(--surface))]">
+              {item.thumb_url ? <img src={item.thumb_url} alt="" className="h-10 w-14 rounded-md object-cover" /> : <span className="flex h-10 w-14 items-center justify-center rounded-md bg-black/10">{item.kind === 'audio' ? <FileAudio size={17} /> : <Film size={17} />}</span>}
+              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-[var(--ink)]">{item.title || 'Untitled media'}</strong><span className="block text-[10px] text-[var(--ink-muted)]">{item.kind === 'audio' ? 'Audio' : 'Video'} · Published</span></span>
+              {item.kind === 'audio' ? <FileAudio size={15} className="text-cyan-400" /> : <Film size={15} className="text-purple-400" />}
+            </button>
+          )) : <p className="text-xs text-[var(--ink-muted)]">No published videos or audio found in your library.</p>}
+        </div>
+      )}
+
       {/* Bottom Action Bar */}
       <div className="compose-bottom-toolbar">
         <div className="compose-tools-group" role="group" aria-label="Attachments and options">
@@ -1137,6 +1204,19 @@ export default function CreatePostBox({
           </button>
 
           {/* Storage File Pickers */}
+          <button
+            type="button"
+            className={`tool-btn${showMediaLibrary ? ' active' : ''}`}
+            onClick={handleToggleMediaLibrary}
+            title="Choose a published video or audio file from your media library"
+            aria-label="Choose from media library"
+            aria-expanded={showMediaLibrary}
+            disabled={loadingMediaLibrary}
+          >
+            <Film size={18} className="tool-icon text-purple-400" />
+            <span className="tool-label">Library</span>
+          </button>
+
           <button
             type="button"
             className="tool-btn"
