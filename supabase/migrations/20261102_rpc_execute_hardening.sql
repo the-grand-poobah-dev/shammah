@@ -33,6 +33,16 @@ revoke all on function public.increment_stream_like(uuid)
   from public, anon, authenticated;
 grant execute on function public.increment_stream_like(uuid) to service_role;
 
+-- Retire the legacy seed RPC so it cannot pre-empt the current deterministic daily seed.
+do $legacy_arcade_seed$
+begin
+  if to_regprocedure('public.get_arcade_daily_seed(text)') is not null then
+    execute 'revoke all on function public.get_arcade_daily_seed(text) from public, anon, authenticated';
+    execute 'grant execute on function public.get_arcade_daily_seed(text) to service_role';
+  end if;
+end;
+$legacy_arcade_seed$;
+
 -- A public call could otherwise end every stream whose updated_at is older than six hours.
 revoke all on function public.sweep_stale_live_streams()
   from public, anon, authenticated;
