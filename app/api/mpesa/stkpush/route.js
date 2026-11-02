@@ -18,6 +18,18 @@ const DARJA_BASE = process.env.MPESA_ENVIRONMENT === 'production'
   ? 'https://api.safaricom.co.ke'
   : 'https://sandbox.safaricom.co.ke';
 
+function hasSecureCallbackConfiguration() {
+  if (process.env.MPESA_ENVIRONMENT !== 'production') return true;
+  const secret = process.env.MPESA_CALLBACK_SECRET;
+  const callbackUrl = process.env.MPESA_CALLBACK_URL;
+  if (!secret || !callbackUrl) return false;
+  try {
+    return new URL(callbackUrl).searchParams.get('secret') === secret;
+  } catch {
+    return false;
+  }
+}
+
 function admin() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const url = rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
@@ -55,7 +67,7 @@ async function initiateCoursePayment(req, body) {
   }
   if (!process.env.MPESA_CONSUMER_KEY || !process.env.MPESA_CONSUMER_SECRET ||
       !process.env.MPESA_SHORTCODE || !process.env.MPESA_PASSKEY || !process.env.MPESA_CALLBACK_URL ||
-      (process.env.MPESA_ENVIRONMENT === 'production' && !process.env.MPESA_CALLBACK_SECRET)) {
+      (process.env.MPESA_ENVIRONMENT === 'production' && !hasSecureCallbackConfiguration())) {
     return NextResponse.json({ error: 'M-Pesa payment is not configured yet.' }, { status: 503 });
   }
 
@@ -171,7 +183,7 @@ export async function POST(req) {
     if (body?.courseId) return await initiateCoursePayment(req, body);
     const { phone: rawPhone, churchId, planId, periodId, userId } = body || {};
 
-    if (process.env.MPESA_ENVIRONMENT === 'production' && !process.env.MPESA_CALLBACK_SECRET) {
+    if (process.env.MPESA_ENVIRONMENT === 'production' && !hasSecureCallbackConfiguration()) {
       return NextResponse.json({ error: 'Secure M-Pesa callbacks are not configured.' }, { status: 503 });
     }
     if (!process.env.MPESA_CONSUMER_KEY || !process.env.MPESA_CONSUMER_SECRET ||
