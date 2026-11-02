@@ -170,7 +170,7 @@ export async function GET(request) {
       const authors = await profileMap(db, (submissionRows || []).map((row) => row.user_id));
       const submissions = (submissionRows || []).map((row) => normalizeSubmission(row, authors));
       const scope = ['all', 'week', 'church'].includes(params.get('scope')) ? params.get('scope') : 'all';
-      const rpcClient = scope === 'church' ? userClient(request) : db;
+      const rpcClient = user?.id ? (userClient(request) || db) : db;
       let leaderboard = [];
       if (rpcClient && (scope !== 'church' || user?.id)) {
         const { data, error: leaderboardError } = await rpcClient.rpc('challenge_leaderboard', { p_challenge_id: id, p_scope: scope });
@@ -179,6 +179,13 @@ export async function GET(request) {
       }
       const today = new Date().toISOString().slice(0, 10);
       const hasCheckedInToday = checkins.some((row) => String(row.day || '').slice(0, 10) === today);
+      let userVotes = [];
+      if (user?.id && submissions.length) {
+        const { data: voteRows, error: voteError } = await db.from('challenge_votes').select('submission_id')
+          .eq('user_id', user.id).in('submission_id', submissions.map((row) => row.id));
+        if (voteError) throw voteError;
+        userVotes = (voteRows || []).map((row) => row.submission_id);
+      }
       const participantPayload = participant ? {
         ...participant,
         isJoined: true,
@@ -190,7 +197,7 @@ export async function GET(request) {
         ok: true, challenge, participant: participantPayload,
         has_checked_in_today: hasCheckedInToday, hasCheckedInToday,
         checkins, recent_checkins: recentCheckins,
-        submissions, leaderboard,
+        submissions, leaderboard, user_votes: userVotes,
       });
     }
 
