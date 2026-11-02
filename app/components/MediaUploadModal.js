@@ -96,6 +96,13 @@ export default function MediaUploadModal({
   const thumbnailRequestRef = useRef(0);
 
   useEffect(() => {
+    if (!isOpen) {
+      selectionTokenRef.current += 1;
+      thumbnailRequestRef.current += 1;
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     setMounted(true);
   }, []);
 
