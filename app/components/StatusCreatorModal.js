@@ -828,6 +828,8 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
         </form>
       </PopupSheet>
 
+      {showGifPicker && <GifPicker onSelect={handleChooseStatusGif} onClose={() => setShowGifPicker(false)} />}
+
       {/* =========================================
           PopupSheet: Story Audience / Privacy Selector
          ========================================= */}
