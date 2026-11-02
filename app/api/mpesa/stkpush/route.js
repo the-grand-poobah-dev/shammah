@@ -64,7 +64,7 @@ async function initiateCoursePayment(req, body) {
   if (authError || !authData?.user) {
     return NextResponse.json({ error: 'Your sign-in session expired. Please sign in again.' }, { status: 401 });
   }
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(courseId)) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)) {
     return NextResponse.json({ error: 'A valid course ID is required.' }, { status: 400 });
   }
   const phone = toMpesaPhone(body?.phone);
