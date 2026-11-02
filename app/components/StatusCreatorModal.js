@@ -728,6 +728,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
           <div className="status-media-options-group" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
             <MediaToolbar
               context="status"
+              maxVideoSeconds={60}
               onPickFile={(file) => processFiles([file])}
               onVoice={() => isRecordingVoice ? handleStopVoiceNote() : handleStartVoiceNote()}
               onGif={() => setShowGifPicker(true)}
