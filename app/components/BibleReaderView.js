@@ -50,6 +50,10 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const [chapterLoading, setChapterLoading] = useState(true);
   const [chapterError, setChapterError] = useState('');
   const [chapterRetry, setChapterRetry] = useState(0);
+  const [parallelEnabled, setParallelEnabled] = useState(false);
+  const [parallelVerses, setParallelVerses] = useState([]);
+  const [parallelLoading, setParallelLoading] = useState(false);
+  const [parallelError, setParallelError] = useState('');
   const [isChapterOffline, setIsChapterOffline] = useState(false);
   const [testamentFilter, setTestamentFilter] = useState('ALL'); // ALL, OT, NT
   const [searchQuery, setSearchQuery] = useState('');
@@ -144,6 +148,30 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     loadChapter();
     return () => { cancelled = true; controller.abort(); };
   }, [currentBook.id, currentBook.name, selectedChapter, translation, chapterRetry]);
+
+  const parallelTranslation = translation === 'KJV' ? 'WEB' : 'KJV';
+
+  useEffect(() => {
+    if (!parallelEnabled) return undefined;
+    let cancelled = false;
+    const controller = new AbortController();
+    async function loadParallel() {
+      setParallelLoading(true);
+      setParallelError('');
+      try {
+        const response = await fetch(`/api/bible/chapter?translation=${parallelTranslation}&book=${encodeURIComponent(currentBook.id)}&chapter=${selectedChapter}`, { signal: controller.signal });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Could not load the parallel translation.');
+        if (!cancelled) setParallelVerses(payload.verses || []);
+      } catch (error) {
+        if (!cancelled && error?.name !== 'AbortError') { setParallelVerses([]); setParallelError(error?.message || 'Could not load the parallel translation.'); }
+      } finally {
+        if (!cancelled) setParallelLoading(false);
+      }
+    }
+    loadParallel();
+    return () => { cancelled = true; controller.abort(); };
+  }, [parallelEnabled, parallelTranslation, currentBook.id, selectedChapter]);
 
   // Warm the next chapter in the server cache without blocking the current reading.
   useEffect(() => {
@@ -575,6 +603,9 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
                 </option>
               ))}
             </select>
+            <button type="button" className={`bible-filter-btn${parallelEnabled ? ' active' : ''}`} onClick={() => setParallelEnabled((enabled) => !enabled)} aria-pressed={parallelEnabled} style={{ marginLeft: '8px' }}>
+              {parallelEnabled ? 'Hide parallel' : 'Parallel view'}
+            </button>
           </div>
         </div>
 
@@ -708,6 +739,9 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         ) : verses.length === 0 ? (
           <div className="bible-verses-list" role="status"><p>No verses were returned for this chapter.</p><button type="button" className="cx-btn cx-btn-ghost" onClick={() => setChapterRetry((n) => n + 1)}>Retry</button></div>
         ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: parallelEnabled ? 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))' : 'minmax(0, 1fr)', gap: '14px', alignItems: 'start' }}>
+        <section aria-label={`${translation} scripture`}>
+          {parallelEnabled && <h4 style={{ margin: '0 0 8px', color: 'var(--ink-muted)' }}>{translation}</h4>}
         <div className="bible-verses-list">
           {verses.map((v) => {
             const vKey = `${currentBook.name}-${selectedChapter}-${v.num}`;
@@ -768,6 +802,12 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
               </div>
             );
           })}
+        </div>
+        </section>
+        {parallelEnabled && <section aria-label={`${parallelTranslation} parallel scripture`}>
+          <h4 style={{ margin: '0 0 8px', color: 'var(--ink-muted)' }}>{parallelTranslation}</h4>
+          {parallelLoading ? <div role="status" className="bible-verses-list"><p>Loading parallel translation…</p></div> : parallelError ? <div role="alert" className="bible-verses-list"><p>{parallelError}</p><button type="button" className="cx-btn cx-btn-ghost" onClick={() => setParallelEnabled(false) || setParallelEnabled(true)}>Retry parallel view</button></div> : <div className="bible-verses-list">{parallelVerses.map((v) => <div className="bible-verse-row" key={v.num}><span className="verse-number-btn" aria-hidden="true">{v.num}</span><p className="verse-text">{v.text}</p></div>)}</div>}
+        </section>}
         </div>
         )}
 
