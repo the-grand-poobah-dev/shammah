@@ -79,11 +79,13 @@ export default function ChallengeDetailModal({
   const submissions = challengeData?.submissions || [];
   const leaderboard = challengeData?.leaderboard || [];
   const recentCheckins = challengeData?.recent_checkins || [];
+  const participantAvatars = challengeData?.participant_avatars || [];
 
   const isJoined = !!participant;
   const streak = participant?.streak_current || 0;
   const hasCheckedInToday = participant?.has_checked_in_today || false;
   const accent = challenge?.accent || '#f59e0b';
+  const daysRemaining = challenge.ends_at ? Math.max(0, Math.ceil((new Date(challenge.ends_at).getTime() - Date.now()) / 86400000)) : null;
 
   async function handleJoin() {
     if (joining) return;
@@ -259,7 +261,7 @@ export default function ChallengeDetailModal({
               </span>
               <span className="text-xs text-white/80 drop-shadow flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                {challenge.duration_days ? `${challenge.duration_days} Days` : 'Ongoing'}
+                {daysRemaining === null ? (challenge.duration_days ? `${challenge.duration_days} Days` : 'Ongoing') : daysRemaining > 0 ? `${daysRemaining} days left` : 'Challenge ended'}
               </span>
             </div>
             <h1 id="challenge-detail-title" className="text-xl sm:text-2xl font-black text-white drop-shadow-md line-clamp-1">
@@ -462,7 +464,16 @@ export default function ChallengeDetailModal({
 
               {/* Share and Action Footer */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
-                <div className="flex items-center gap-2 text-xs text-slate-400">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                  {participantAvatars.length > 0 && (
+                    <div className="flex items-center -space-x-2 mr-1" aria-label="Challenge participants">
+                      {participantAvatars.slice(0, 5).map((person) => (
+                        <div key={person.user_id} className="rounded-full border-2 border-slate-900" title={person.display_name}>
+                          <Avatar src={person.avatar_url} name={person.display_name} size={24} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <Users className="w-4 h-4" />
                   <span>
                     <strong className="text-white">{Number(challenge.participants_count || 0).toLocaleString()}</strong> believers participating
