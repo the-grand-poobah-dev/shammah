@@ -187,9 +187,11 @@ export default function LiveViewerPage() {
     if (!reason?.trim()) return;
     const { error: reportError } = await supabase.from('content_reports').insert({
       reporter_id: session.user.id,
-      content_type: 'live_stream',
-      content_id: stream.id,
-      reason: reason.trim().slice(0, 500),
+      reported_user_id: stream.host_id,
+      target_type: 'live_stream',
+      target_id: stream.id,
+      reason: reason.trim().slice(0, 120),
+      notes: null,
     });
     if (reportError) setError('Could not submit report. Please try again.');
     else setReportSent(true);
