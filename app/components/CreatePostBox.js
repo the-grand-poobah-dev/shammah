@@ -55,6 +55,9 @@ import { detectMediaType } from '../lib/mediaUpload';
 import { listMedia } from '../lib/data/mediaApi';
 import ReelCreatorModal from './ReelCreatorModal';
 import LiveHostModal from './LiveHostModal';
+import MediaToolbar from './media/MediaToolbar';
+import GifPicker from './media/GifPicker';
+import MediaPreviewFrame from './media/MediaPreviewFrame';
 import {
   FEELINGS_LIST,
   formatFeelingString,
@@ -124,6 +127,7 @@ export default function CreatePostBox({
   const [mediaLibraryError, setMediaLibraryError] = useState('');
   const [showReelCreator, setShowReelCreator] = useState(false);
   const [showLiveModal, setShowLiveModal] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
 
   useEffect(() => {
     const previewUrl = mediaPreview?.url;
@@ -210,12 +214,6 @@ export default function CreatePostBox({
     }
   }
 
-  const photoInputRef = useRef(null);
-  const videoInputRef = useRef(null);
-  const audioInputRef = useRef(null);
-  const cameraPhotoInputRef = useRef(null);
-  const cameraVideoInputRef = useRef(null);
-  const cameraAudioInputRef = useRef(null);
   const voiceRecorderRef = useRef(null);
   const categoryTriggerRef = useRef(null);
   const visMenuRef = useRef(null);
@@ -279,9 +277,15 @@ export default function CreatePostBox({
     setMediaPreview({ url: item.media_url, type: item.kind });
     setShowMediaLibrary(false);
     setMediaLibraryError('');
-    if (photoInputRef.current) photoInputRef.current.value = '';
-    if (videoInputRef.current) videoInputRef.current.value = '';
-    if (audioInputRef.current) audioInputRef.current.value = '';
+  }
+
+  function handleChooseGif(gif) {
+    if (!gif?.url) return;
+    setSelectedLibraryMedia({ ...gif, kind: 'gif', type: 'gif', media_type: 'gif', media_url: gif.url });
+    setMediaFile(null);
+    setMediaPreview({ url: gif.url, type: 'gif', title: gif.title || 'GIF' });
+    setShowMediaLibrary(false);
+    setMediaLibraryError('');
   }
 
   function handleFileSelected(file) {
@@ -939,56 +943,20 @@ export default function CreatePostBox({
         )}
       </div>
 
-      {/* Media Preview (Photo / Video / Audio) */}
-      {mediaPreview && (
+      {/* Contain-based image/video/GIF preview; audio retains its player controls. */}
+      {mediaPreview && mediaPreview.type !== 'audio' && (
+        <MediaPreviewFrame mode="composer" media={{ ...mediaPreview, title: selectedLibraryMedia?.title || mediaFile?.name }} onRemove={handleRemoveMedia} />
+      )}
+      {mediaPreview?.type === 'audio' && (
         <div className="compose-media-preview-container">
-          {mediaPreview.type === 'image' && (
-            <div className="media-preview-box">
-              <img src={mediaPreview.url} alt="Upload preview" className="media-preview-img" />
-              <button
-                type="button"
-                className="media-preview-remove"
-                onClick={handleRemoveMedia}
-                title="Remove photo"
-              >
-                <X size={16} />
-              </button>
+          <div className="media-preview-audio-box">
+            <div className="audio-preview-icon"><MicIcon size={20} /></div>
+            <div className="audio-preview-details">
+              <span className="audio-preview-title">{selectedLibraryMedia?.title || mediaFile?.name || 'Audio Recording'}</span>
+              <audio src={mediaPreview.url} controls className="audio-preview-player" />
             </div>
-          )}
-
-          {mediaPreview.type === 'video' && (
-            <div className="media-preview-box">
-              <video src={mediaPreview.url} controls className="media-preview-video" />
-              <button
-                type="button"
-                className="media-preview-remove"
-                onClick={handleRemoveMedia}
-                title="Remove video"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
-
-          {mediaPreview.type === 'audio' && (
-            <div className="media-preview-audio-box">
-              <div className="audio-preview-icon">
-                <MicIcon size={20} />
-              </div>
-              <div className="audio-preview-details">
-                <span className="audio-preview-title">{selectedLibraryMedia?.title || mediaFile?.name || 'Audio Recording'}</span>
-                <audio src={mediaPreview.url} controls className="audio-preview-player" />
-              </div>
-              <button
-                type="button"
-                className="media-preview-remove"
-                onClick={handleRemoveMedia}
-                title="Remove audio"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
+            <button type="button" className="media-preview-remove" onClick={handleRemoveMedia} title="Remove audio" aria-label="Remove audio"><X size={16} /></button>
+          </div>
         </div>
       )}
 
@@ -1026,74 +994,6 @@ export default function CreatePostBox({
           showExtendedSettings={false}
         />
       )}
-
-      {/* Hidden File Inputs */}
-      {/* Hidden File Picker Inputs */}
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
-      <input
-        ref={videoInputRef}
-        type="file"
-        accept="video/*,.mp4,.webm,.mov,.m4v"
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
-      <input
-        ref={audioInputRef}
-        type="file"
-        accept="audio/*,.mp3,.wav,.ogg,.webm,.m4a,.aac,.flac"
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
-
-      {/* Hidden Live Camera & Microphone Fallback Inputs */}
-      <input
-        ref={cameraPhotoInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
-      <input
-        ref={cameraVideoInputRef}
-        type="file"
-        accept="video/*"
-        capture="environment"
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
-      <input
-        ref={cameraAudioInputRef}
-        type="file"
-        accept="audio/*"
-        capture
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
 
       {/* Active Live Voice Recording Status Bar */}
       {isRecordingVoice && (
@@ -1177,63 +1077,16 @@ export default function CreatePostBox({
       {/* Bottom Action Bar */}
       <div className="compose-bottom-toolbar">
         <div className="compose-tools-group" role="group" aria-label="Attachments and options">
-          {/* Live Capture Tools */}
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => cameraPhotoInputRef.current?.click()}
-            title="Take a photo with camera"
-            aria-label="Take photo"
-          >
-            <Camera size={18} className="tool-icon text-emerald-400" />
-            <span className="tool-label">Camera</span>
-          </button>
+          <MediaToolbar
+            context="post"
+            onPickFile={handleFileSelected}
+            onVoice={() => isRecordingVoice ? handleStopVoiceNote() : handleStartVoiceNote()}
+            onGif={() => setShowGifPicker(true)}
+            onReel={() => setShowReelCreator(true)}
+            onLive={() => setShowLiveModal(true)}
+            disabled={posting || mediaUploading}
+          />
 
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => cameraVideoInputRef.current?.click()}
-            title="Record video with camera"
-            aria-label="Record video"
-          >
-            <VideoIcon size={18} className="tool-icon text-amber-400" />
-            <span className="tool-label">Record</span>
-          </button>
-
-          <button
-            type="button"
-            className={`tool-btn${isRecordingVoice ? ' active' : ''}`}
-            onClick={isRecordingVoice ? handleStopVoiceNote : handleStartVoiceNote}
-            title={isRecordingVoice ? 'Stop recording voice note' : 'Record voice note or prayer'}
-            aria-label="Record voice note"
-          >
-            <MicIcon size={18} className="tool-icon text-cyan-400" />
-            <span className="tool-label">{isRecordingVoice ? 'Recording…' : 'Voice Note'}</span>
-          </button>
-
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => setShowReelCreator(true)}
-            title="Create a vertical video Reel"
-            aria-label="Create Reel"
-          >
-            <Clapperboard size={18} className="tool-icon text-pink-400" />
-            <span className="tool-label">Reel</span>
-          </button>
-
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => setShowLiveModal(true)}
-            title="Start a live broadcast"
-            aria-label="Go live"
-          >
-            <span className="sh-live-toolbar-icon"><Radio size={18} /><i /></span>
-            <span className="tool-label">Live</span>
-          </button>
-
-          {/* Storage File Pickers */}
           <button
             type="button"
             className={`tool-btn${showMediaLibrary ? ' active' : ''}`}
@@ -1245,28 +1098,6 @@ export default function CreatePostBox({
           >
             <Film size={18} className="tool-icon text-purple-400" />
             <span className="tool-label">Library</span>
-          </button>
-
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => photoInputRef.current?.click()}
-            title="Attach a photo from device"
-            aria-label="Attach photo"
-          >
-            <ImageIcon size={18} className="tool-icon tool-photo" />
-            <span className="tool-label">Photo</span>
-          </button>
-
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => videoInputRef.current?.click()}
-            title="Attach a video from device"
-            aria-label="Attach video"
-          >
-            <Film size={18} className="tool-icon tool-video" />
-            <span className="tool-label">Video</span>
           </button>
 
           <button
@@ -1709,6 +1540,7 @@ export default function CreatePostBox({
       session={session}
       profile={profile}
     />
+    {showGifPicker && <GifPicker onSelect={handleChooseGif} onClose={() => setShowGifPicker(false)} />}
     </>
   );
 }
