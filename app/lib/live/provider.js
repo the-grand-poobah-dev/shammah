@@ -53,13 +53,13 @@ export async function countLiveParticipants(roomName) {
   }
 }
 
-export async function createLiveToken({ identity, name, roomName, canPublish, canSubscribe = true }) {
+export async function createLiveToken({ identity, name, roomName, canPublish, canSubscribe = true, ttl = '1h' }) {
   const config = getLiveKitConfig();
   if (!config) throw new Error('Live is not configured yet.');
   const token = new AccessToken(config.apiKey, config.apiSecret, {
     identity: String(identity),
     name: String(name || 'Shammah member').slice(0, 80),
-    ttl: '1h',
+    ttl,
   });
   token.addGrant({
     roomJoin: true,
