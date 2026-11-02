@@ -188,6 +188,9 @@ export async function listMedia({
         limit,
         offset,
         cursor,
+        authorId,
+        seriesId,
+        churchId,
       });
       if (fb && Array.isArray(fb.data) && (fb.data.length > 0 || error)) {
         return {
@@ -213,6 +216,9 @@ export async function listMedia({
       limit,
       offset,
       cursor,
+      authorId,
+      seriesId,
+      churchId,
     });
     if (fb && Array.isArray(fb.data)) {
       return { data: fb.data, count: fb.count ?? fb.data.length, error: null };
