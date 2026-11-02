@@ -46,7 +46,11 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const now = useRelativeTimeTick();
   const [selectedBookId, setSelectedBookId] = useState('PSA');
   const [selectedChapter, setSelectedChapter] = useState(23);
-  const [translation, setTranslation] = useState('NIV');
+  const [translation, setTranslation] = useState('KJV');
+  const [chapterVerses, setChapterVerses] = useState([]);
+  const [chapterLoading, setChapterLoading] = useState(true);
+  const [chapterError, setChapterError] = useState('');
+  const [chapterRetry, setChapterRetry] = useState(0);
   const [isChapterOffline, setIsChapterOffline] = useState(false);
   const [testamentFilter, setTestamentFilter] = useState('ALL'); // ALL, OT, NT
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,10 +103,45 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     };
   }, [currentBook?.name, selectedChapter]);
 
-  const verses = useMemo(
-    () => getChapterVerses(currentBook.name, selectedChapter, translation),
-    [currentBook.name, selectedChapter, translation]
-  );
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    async function loadChapter() {
+      setChapterLoading(true);
+      setChapterError('');
+      try {
+        const response = await fetch(`/api/bible/chapter?translation=${encodeURIComponent(translation)}&book=${encodeURIComponent(currentBook.id)}&chapter=${selectedChapter}`, { signal: controller.signal });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Could not load this chapter.');
+        if (cancelled) return;
+        setChapterVerses(Array.isArray(payload.verses) ? payload.verses : []);
+        saveOfflineBibleChapter(currentBook.id, currentBook.name, selectedChapter, payload.verses || [], translation);
+        setIsChapterOffline(true);
+      } catch (error) {
+        if (cancelled || error?.name === 'AbortError') return;
+        const offlineChapter = getOfflineBibleChapter(currentBook.name, selectedChapter, translation);
+        if (offlineChapter?.verses?.length) {
+          setChapterVerses(offlineChapter.verses);
+          setChapterError('You are offline. Showing your saved chapter.');
+        } else {
+          setChapterVerses([]);
+          setChapterError(error?.message || 'Could not load this chapter. Check your connection and retry.');
+        }
+      } finally {
+        if (!cancelled) setChapterLoading(false);
+      }
+    }
+    loadChapter();
+    return () => { cancelled = true; controller.abort(); };
+  }, [currentBook.id, currentBook.name, selectedChapter, translation, chapterRetry]);
+
+  // Warm the next chapter in the server cache without blocking the current reading.
+  useEffect(() => {
+    if (selectedChapter >= currentBook.chapters) return;
+    fetch(`/api/bible/chapter?translation=${encodeURIComponent(translation)}&book=${encodeURIComponent(currentBook.id)}&chapter=${selectedChapter + 1}`).catch(() => {});
+  }, [currentBook.id, currentBook.chapters, selectedChapter, translation]);
+
+  const verses = chapterVerses;
 
   const filteredBooks = useMemo(() => {
     return BIBLE_BOOKS.filter((b) => {
@@ -315,7 +354,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             <select
               className="bible-select"
               value={translation}
-              onChange={(e) => setTranslation(e.target.value)}
+              onChange={(e) => setTranslation(e.target.value); setChapterRetry((n) => n + 1)}
               aria-label="Bible Translation"
             >
               {BIBLE_TRANSLATIONS.map((t) => (
@@ -443,6 +482,20 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         </div>
 
         {/* Verses List */}
+        {chapterLoading ? (
+          <div className="bible-verses-list" role="status" aria-live="polite">
+            {[1, 2, 3, 4, 5].map((n) => <div className="bible-verse-row" key={n}><span className="verse-number-btn" aria-hidden="true">{n}</span><p className="verse-text" style={{ opacity: 0.35 }}>Loading scripture…</p></div>)}
+          </div>
+        ) : chapterError ? (
+          <div className="bible-verses-list" role="alert">
+            <div className="bible-empty-state">
+              <p>{chapterError}</p>
+              <button type="button" className="cx-btn cx-btn-primary" onClick={() => setChapterRetry((n) => n + 1)}>Retry chapter</button>
+            </div>
+          </div>
+        ) : verses.length === 0 ? (
+          <div className="bible-verses-list" role="status"><p>No verses were returned for this chapter.</p><button type="button" className="cx-btn cx-btn-ghost" onClick={() => setChapterRetry((n) => n + 1)}>Retry</button></div>
+        ) : (
         <div className="bible-verses-list">
           {verses.map((v) => {
             const vKey = `${currentBook.name}-${selectedChapter}-${v.num}`;
@@ -495,6 +548,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             );
           })}
         </div>
+        )}
 
         {/* Chapter Navigation Buttons */}
         <div className="bible-ch-nav-row">
@@ -502,7 +556,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             type="button"
             className="ch-prev-next-btn"
             disabled={selectedChapter <= 1}
-            onClick={() => setSelectedChapter((c) => Math.max(1, c - 1))}
+            onClick={() => { setSelectedChapter((c) => Math.max(1, c - 1)); setChapterRetry((n) => n + 1); }}
           >
             ← Previous Chapter
           </button>
@@ -510,7 +564,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             type="button"
             className="ch-prev-next-btn"
             disabled={selectedChapter >= currentBook.chapters}
-            onClick={() => setSelectedChapter((c) => Math.min(currentBook.chapters, c + 1))}
+            onClick={() => { setSelectedChapter((c) => Math.min(currentBook.chapters, c + 1)); setChapterRetry((n) => n + 1); }}
           >
             Next Chapter →
           </button>
