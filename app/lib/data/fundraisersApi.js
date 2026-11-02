@@ -48,7 +48,7 @@ export async function donateToFundraiser({
   const headers = await getAuthHeaders();
   const key = idempotencyKey || (typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
-    : \`donation-\${Date.now()}-\${Math.random().toString(36).slice(2)}\`);
+    : `donation-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   headers['Idempotency-Key'] = key;
   const res = await fetch('/api/mpesa/donate', {
     method: 'POST',
