@@ -81,6 +81,51 @@ BEGIN
 END;
 $$;
 
+-- Expose only a messaging allow/deny decision; never expose another
+-- member's private inbox preference. Enforce the selected audience server-side.
+CREATE OR REPLACE FUNCTION public.can_receive_direct_message(p_recipient_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $
+  WITH recipient AS (
+    SELECT COALESCE(pp.inbox_permission, 'everyone') AS permission
+    FROM (SELECT 1) AS seed
+    LEFT JOIN public.profile_private AS pp ON pp.id = p_recipient_id
+  )
+  SELECT CASE
+    WHEN auth.uid() IS NULL
+      OR p_recipient_id IS NULL
+      OR p_recipient_id = auth.uid()
+      THEN false
+    WHEN (SELECT permission FROM recipient) IN ('none', 'no_one')
+      THEN false
+    WHEN (SELECT permission FROM recipient) = 'followers'
+      THEN EXISTS (
+        SELECT 1
+        FROM public.follows AS f
+        WHERE f.follower_id = auth.uid()
+          AND f.followed_id = p_recipient_id
+      )
+    WHEN (SELECT permission FROM recipient) = 'church'
+      THEN EXISTS (
+        SELECT 1
+        FROM public.profiles AS sender
+        JOIN public.profiles AS recipient_profile
+          ON recipient_profile.id = p_recipient_id
+        WHERE sender.id = auth.uid()
+          AND sender.church_id IS NOT NULL
+          AND sender.church_id = recipient_profile.church_id
+      )
+    ELSE true
+  END;
+$;
+
+REVOKE ALL ON FUNCTION public.can_receive_direct_message(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.can_receive_direct_message(uuid) TO authenticated;
+
 -- Remove non-application table privileges and all broad SELECT grants.
 -- Public profile reads are re-granted below on an explicit safe column list.
 REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLE public.profiles FROM PUBLIC, anon, authenticated;
