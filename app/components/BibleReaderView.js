@@ -676,7 +676,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             {searching ? <p>Searching Scripture…</p> : searchError ? <p role="alert">{searchError} <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setScriptureSearchQuery((q) => q + ' ')}>Retry</button></p> : searchResults.length ? (
               <div style={{ display: 'grid', gap: '6px' }}>
                 {searchResults.slice(0, 12).map((result) => (
-                  <button key={`${result.book_id}-${result.chapter}-${result.verse}`} type="button" onClick={() => { setSelectedBookId(result.book_id); setSelectedChapter(result.chapter); setScriptureSearchQuery(''); setChapterRetry((n) => n + 1); }} style={{ textAlign: 'left', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)', cursor: 'pointer' }}>
+                  <button key={`${result.book_id}-${result.chapter}-${result.verse}`} type="button" onClick={() => { setSelectedBookId(result.book_id); setSelectedChapter(result.chapter); setPendingVerseJump(Number(result.verse) || null); setJumpVerse(String(result.verse || '')); setScriptureSearchQuery(''); setChapterRetry((n) => n + 1); }} style={{ textAlign: 'left', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)', cursor: 'pointer' }}>
                     <strong>{result.reference}</strong><span style={{ display: 'block', marginTop: '3px', color: 'var(--ink-muted)' }}>{result.verse_text}</span>
                   </button>
                 ))}
@@ -760,6 +760,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
 
       {/* Main Chapter Reader Card */}
       <article
+        id="bible-chapter-reader"
         className="post-card bible-chapter-card article-reading-target"
         data-article-title={`${currentBook.name} ${selectedChapter}`}
       >
