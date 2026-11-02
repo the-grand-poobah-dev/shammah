@@ -21,7 +21,7 @@ import {
 } from '../lib/statusManager';
 
 const COLS =
-  'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, onboarding_completed_at, display_name_changed_at, allow_status_reshare, who_can_tag_me, review_tags';
+  'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, onboarding_completed_at, display_name_changed_at, allow_status_reshare';
 const ABOUT_MAX = 250;
 const MIN_AGE = 13;
 
@@ -102,8 +102,8 @@ export default function ProfileSettings({ session }) {
     setWhoCanTagMe(newPref);
     try {
       const { error } = await supabase
-        .from('profiles')
-        .update({ who_can_tag_me: newPref })
+        .from('profile_private')
+        .upsert({ id: uid, who_can_tag_me: newPref }, { onConflict: 'id' })
         .eq('id', uid);
       if (error) {
         setWhoCanTagMe(prev);
@@ -129,8 +129,8 @@ export default function ProfileSettings({ session }) {
     setReviewTags(nextVal);
     try {
       const { error } = await supabase
-        .from('profiles')
-        .update({ review_tags: nextVal })
+        .from('profile_private')
+        .upsert({ id: uid, review_tags: nextVal }, { onConflict: 'id' })
         .eq('id', uid);
       if (error) {
         setReviewTags(!nextVal);
@@ -188,7 +188,7 @@ export default function ProfileSettings({ session }) {
     (async () => {
       const [profRes, privRes, reqRes] = await Promise.all([
         supabase.from('profiles').select(COLS).eq('id', uid).single(),
-        supabase.from('profile_private').select('date_of_birth, location_place_id, location_lat, location_lng').eq('id', uid).maybeSingle(),
+        supabase.from('profile_private').select('date_of_birth, location_place_id, location_lat, location_lng, who_can_tag_me, review_tags').eq('id', uid).maybeSingle(),
         supabase.from('badge_requests').select('id, requested_badge, created_at').eq('user_id', uid).eq('status', 'pending').maybeSingle(),
       ]);
       if (cancelled) return;
