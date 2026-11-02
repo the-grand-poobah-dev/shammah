@@ -1,5 +1,17 @@
 begin;
 
+-- Remove older permissive policies: PostgreSQL ORs permissive policies together,
+-- so leaving them would bypass the stricter visibility and moderation checks below.
+drop policy if exists "Stream viewers can read chat messages" on public.live_chat_messages;
+drop policy if exists "Non-banned authenticated users can insert chat messages" on public.live_chat_messages;
+drop policy if exists "Hosts and moderators can update chat messages" on public.live_chat_messages;
+drop policy if exists "Hosts and moderators can delete chat messages" on public.live_chat_messages;
+
+-- Chat clients may read and send messages, but moderation edits/deletes are server-only.
+revoke select, insert, update, delete, truncate, references, trigger
+  on table public.live_chat_messages from public, anon, authenticated;
+grant select, insert on table public.live_chat_messages to authenticated;
+
 -- Stream lifecycle and viewer-count mutations must go through authenticated server routes.
 -- Direct inserts would bypass the host trust/age/rate-limit checks in /api/live/start.
 revoke insert, update, delete, truncate, references, trigger
