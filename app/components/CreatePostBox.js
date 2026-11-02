@@ -214,6 +214,8 @@ export default function CreatePostBox({
     }
   }
 
+  const audioInputRef = useRef(null);
+  const cameraAudioInputRef = useRef(null);
   const voiceRecorderRef = useRef(null);
   const categoryTriggerRef = useRef(null);
   const visMenuRef = useRef(null);
@@ -305,11 +307,7 @@ export default function CreatePostBox({
     setSelectedLibraryMedia(null);
     setMediaFile(null);
     setMediaPreview(null);
-    if (photoInputRef.current) photoInputRef.current.value = '';
-    if (videoInputRef.current) videoInputRef.current.value = '';
     if (audioInputRef.current) audioInputRef.current.value = '';
-    if (cameraPhotoInputRef.current) cameraPhotoInputRef.current.value = '';
-    if (cameraVideoInputRef.current) cameraVideoInputRef.current.value = '';
     if (cameraAudioInputRef.current) cameraAudioInputRef.current.value = '';
   }
 
@@ -994,6 +992,22 @@ export default function CreatePostBox({
           showExtendedSettings={false}
         />
       )}
+
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept="audio/*,.mp3,.wav,.ogg,.webm,.m4a,.aac,.flac"
+        hidden
+        onChange={(event) => { handleFileSelected(event.target.files?.[0]); event.target.value = ''; }}
+      />
+      <input
+        ref={cameraAudioInputRef}
+        type="file"
+        accept="audio/*"
+        capture
+        hidden
+        onChange={(event) => { handleFileSelected(event.target.files?.[0]); event.target.value = ''; }}
+      />
 
       {/* Active Live Voice Recording Status Bar */}
       {isRecordingVoice && (
