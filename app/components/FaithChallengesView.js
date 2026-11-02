@@ -264,7 +264,12 @@ export default function FaithChallengesView({ session, profile }) {
       alert('Please sign in to check in to a Faith Challenge.');
       return;
     }
-    setSelectedCheckinChallenge(ch);
+    const active = myActive.find((item) => item.id === ch.id || item.challenge_id === ch.id);
+    setSelectedCheckinChallenge({
+      ...ch,
+      has_checked_in_today: ch.has_checked_in_today ?? active?.has_checked_in_today ?? false,
+      currentStreak: ch.currentStreak ?? active?.streak_current ?? 0,
+    });
     setCheckinModalOpen(true);
   }
 
@@ -1035,6 +1040,8 @@ export default function FaithChallengesView({ session, profile }) {
         onClose={() => setCheckinModalOpen(false)}
         challenge={selectedCheckinChallenge}
         currentUser={currentUser}
+        currentStreak={selectedCheckinChallenge?.currentStreak || 0}
+        hasCheckedInToday={Boolean(selectedCheckinChallenge?.has_checked_in_today)}
         onCheckinSuccess={() => {
           fetchData(true);
         }}
