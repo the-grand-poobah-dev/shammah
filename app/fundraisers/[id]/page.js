@@ -85,7 +85,7 @@ export default function FundraiserDetailPage() {
 
   const isOwner = Boolean(
     profile?.id &&
-    (profile.id === fundraiser?.owner_id || profile.id === fundraiser?.owner?.id || profile.role === 'platform_admin')
+    (profile.id === fundraiser?.owner_id || profile.id === fundraiser?.owner?.id)
   );
 
   const goal = Number(fundraiser?.goal_kes || 1);
