@@ -104,7 +104,7 @@ export default function ArcadeOnlineHub() {
     if (slug === 'scripture-scramble' && verses.length) {
       const chosenVerse = verses[Math.floor(Math.random() * verses.length)];
       setScrambleVerse(chosenVerse);
-      setScrambledWords(shuffle(String(chosenVerse.text || '').split(/\\s+/)));
+      setScrambledWords(shuffle(String(chosenVerse.text || '').split(/\s+/)));
     }
     if (slug === 'memory-verse-match' && verses.length) {
       const chosen = shuffle(verses).slice(0, 4);
@@ -119,7 +119,7 @@ export default function ArcadeOnlineHub() {
     if (!verses.length) return;
     if (activeGame === 'scripture-scramble' && !scrambleVerse) {
       setScrambleVerse(verses[0]);
-      setScrambledWords(shuffle(String(verses[0].text || '').split(/\\s+/)));
+      setScrambledWords(shuffle(String(verses[0].text || '').split(/\s+/)));
     }
     if (activeGame === 'memory-verse-match' && !matchCards.length) {
       const chosen = shuffle(verses).slice(0, 4);
