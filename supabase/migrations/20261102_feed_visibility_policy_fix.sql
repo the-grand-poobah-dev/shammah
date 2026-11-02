@@ -47,21 +47,8 @@ using (
       select 1
       from public.media_items m
       where m.id = comments.media_id
-        and m.status = 'published'
         and (
-          m.visibility = 'public'
-          or m.author_id = (select auth.uid())
-          or (
-            m.visibility = 'followers'
-            and (select auth.uid()) is not null
-            and public.is_following_user((select auth.uid()), m.author_id)
-          )
-          or (
-            m.visibility = 'church'
-            and (select auth.uid()) is not null
-            and m.church_id is not null
-            and public.is_active_church_member((select auth.uid()), m.church_id)
-          )
+          m.author_id = (select auth.uid())
           or exists (
             select 1 from public.profiles p
             where p.id = (select auth.uid())
@@ -69,6 +56,23 @@ using (
                 p.role in ('platform_admin', 'church_admin')
                 or p.badge in ('lead_pastor', 'admin', 'moderator')
               )
+          )
+          or (
+            m.status = 'published'
+            and (
+              m.visibility = 'public'
+              or (
+                m.visibility = 'followers'
+                and (select auth.uid()) is not null
+                and public.is_following_user((select auth.uid()), m.author_id)
+              )
+              or (
+                m.visibility = 'church'
+                and (select auth.uid()) is not null
+                and m.church_id is not null
+                and public.is_active_church_member((select auth.uid()), m.church_id)
+              )
+            )
           )
         )
     )
