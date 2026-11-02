@@ -145,7 +145,6 @@ export default function ArcadeHtml5Games() {
 
   const selectWordCell = (row, col, letter) => {
     if (!playingRef.current) return;
-    const target = WORD_SEARCH_ROWS[row];
     const next = wordSelection.length && wordSelection[0].row === row && wordSelection[wordSelection.length - 1].col === col - 1
       ? [...wordSelection, { row, col, letter }]
       : [{ row, col, letter }];
@@ -210,7 +209,7 @@ export default function ArcadeHtml5Games() {
                 {WORD_SEARCH_ROWS.map((line, row) => line.split('').map((letter, col) => {
                   const selected = wordSelection.some((cell) => cell.row === row && cell.col === col);
                   const found = foundWords.some((word) => row >= 0 && WORD_SEARCH_ROWS[row].slice(0, word.length) === word && col < word.length);
-                  return <button key={`${row}-${col}`} type="button" onClick={() => selectWordCell(row, col, letter)} disabled={!playing || foundWords.includes(line.slice(0, WORD_SEARCH_WORDS.find((word) => line.startsWith(word))?.length || 0)} className={selected ? 'selected' : found ? 'found' : ''} aria-label={`Row ${row + 1}, column ${col + 1}, letter ${letter}`}>{letter}</button>;
+                  return <button key={`${row}-${col}`} type="button" onClick={() => selectWordCell(row, col, letter)} disabled={!playing || foundWords.some((word) => WORD_SEARCH_ROWS[row].startsWith(word) && col < word.length)} className={selected ? 'selected' : found ? 'found' : ''} aria-label={`Row ${row + 1}, column ${col + 1}, letter ${letter}`}>{letter}</button>;
                 }))}
               </div>
             </div>
