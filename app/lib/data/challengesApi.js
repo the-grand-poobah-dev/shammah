@@ -71,6 +71,10 @@ export async function submitChallengeEntry({
   return data.submission;
 }
 
+export async function addChallengeComment(submissionId, comment) {
+  return postAction({ action: 'comment', submissionId, comment });
+}
+
 export async function voteChallengeSubmission(submissionId) {
   return postAction({ action: 'vote', submissionId });
 }
