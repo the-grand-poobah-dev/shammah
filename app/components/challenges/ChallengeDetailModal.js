@@ -26,7 +26,7 @@ import {
 import Avatar from '../Avatar';
 import MemberName from '../MemberName';
 import { playSound } from '../../lib/soundEffects';
-import { getChallengeDetail, joinChallenge, leaveChallenge, voteChallengeSubmission, moderateChallengeSubmission, deleteChallengeSubmission } from '../../lib/data/challengesApi';
+import { getChallengeDetail, joinChallenge, leaveChallenge, closeChallenge, voteChallengeSubmission, moderateChallengeSubmission, deleteChallengeSubmission } from '../../lib/data/challengesApi';
 
 export default function ChallengeDetailModal({
   isOpen,
@@ -151,6 +151,17 @@ export default function ChallengeDetailModal({
       ['admin', 'platform_admin', 'moderator'].includes(currentUser.role)
     )
   );
+
+  async function handleCloseChallenge() {
+    if (!challenge?.id || !canModerate || challenge.status !== 'active') return;
+    if (typeof window !== 'undefined' && !window.confirm('Close this challenge early? Participants will no longer be able to join or check in.')) return;
+    try {
+      const updated = await closeChallenge(challenge.id);
+      setChallengeData((prev) => ({ ...prev, challenge: updated }));
+    } catch (err) {
+      alert(err.message || 'Could not close this challenge.');
+    }
+  }
 
   async function handleModerateSubmission(submissionId, decision) {
     try {
@@ -314,6 +325,15 @@ export default function ChallengeDetailModal({
 
           {/* Quick CTA */}
           <div className="flex items-center gap-2">
+            {canModerate && challenge.status === 'active' && (
+              <button
+                type="button"
+                onClick={handleCloseChallenge}
+                className="min-h-11 px-3 rounded-xl text-xs font-semibold border border-red-500/40 text-red-300 hover:bg-red-500/10"
+              >
+                Close early
+              </button>
+            )}
             {isJoined && (
               <button
                 type="button"
