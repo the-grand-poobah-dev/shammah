@@ -19,6 +19,8 @@ const GAMES = [
 
 const TILE_COUNT = 16;
 const ROUND_SECONDS = 20;
+const WORD_SEARCH_ROWS = ['FAITHX', 'GRACEQ', 'JESUSW', 'PRAYZM', 'LOVECT', 'BIBLED'];
+const WORD_SEARCH_WORDS = ['FAITH', 'GRACE', 'JESUS', 'PRAY', 'LOVE', 'BIBLE'];
 function newBoard(game) {
   const tiles = Array.from({ length: TILE_COUNT }, (_, i) => ({ id: i, item: game.bad[i % game.bad.length] }));
   const positions = new Set();
@@ -43,6 +45,8 @@ export default function ArcadeHtml5Games() {
   const [feedback, setFeedback] = useState('Choose a game and press Start round.');
   const [leaderboard, setLeaderboard] = useState([]);
   const [leaderboardMessage, setLeaderboardMessage] = useState('Sign in to view the weekly leaderboard.');
+  const [wordSelection, setWordSelection] = useState([]);
+  const [foundWords, setFoundWords] = useState([]);
   const [filter, setFilter] = useState('All ages');
   const timerRef = useRef(null);
   const startedAt = useRef(0);
@@ -127,6 +131,8 @@ export default function ArcadeHtml5Games() {
     if (timerRef.current) clearInterval(timerRef.current);
     setActive(game);
     setBoard(newBoard(game));
+    setWordSelection([]);
+    setFoundWords([]);
     setSeconds(ROUND_SECONDS);
     setRoundKey((current) => current + 1);
     setScore(0);
@@ -135,6 +141,31 @@ export default function ArcadeHtml5Games() {
     playingRef.current = true;
     setPlaying(true);
     setFeedback('Go! Tap as many good targets as you can.');
+  };
+
+  const selectWordCell = (row, col, letter) => {
+    if (!playingRef.current) return;
+    const target = WORD_SEARCH_ROWS[row];
+    const next = wordSelection.length && wordSelection[0].row === row && wordSelection[wordSelection.length - 1].col === col - 1
+      ? [...wordSelection, { row, col, letter }]
+      : [{ row, col, letter }];
+    const formed = next.map((cell) => cell.letter).join('');
+    const possible = WORD_SEARCH_WORDS.some((word) => word.startsWith(formed));
+    if (!possible) {
+      setWordSelection(letter && WORD_SEARCH_WORDS.some((word) => word.startsWith(letter)) ? [{ row, col, letter }] : []);
+      return;
+    }
+    setWordSelection(next);
+    if (WORD_SEARCH_WORDS.includes(formed) && !foundWords.includes(formed)) {
+      const found = [...foundWords, formed];
+      setFoundWords(found);
+      setWordSelection([]);
+      const nextScore = scoreRef.current + 100;
+      scoreRef.current = nextScore;
+      setScore(nextScore);
+      setFeedback(`Found ${formed}! +100 points.`);
+      if (found.length === WORD_SEARCH_WORDS.length) setTimeout(() => finish(nextScore), 0);
+    }
   };
 
   const tapTile = (tile) => {
@@ -171,9 +202,23 @@ export default function ArcadeHtml5Games() {
         </div>
         <div className="arcade-html5-stage" style={{ '--arcade-accent': active.accent }}>
           <div className="arcade-html5-stage-head"><div><h3>{active.title}</h3><p>{active.goal}</p></div><div className={seconds <= 5 && playing ? 'urgent' : ''}><strong>{seconds}s</strong><small>remaining</small></div></div>
-          <div className={`arcade-html5-board${playing ? ' is-playing' : ''}`} aria-label={`${active.title} game board`}>
-            {board.map((tile) => <button key={tile.id} type="button" onClick={() => tapTile(tile)} disabled={!playing} aria-label={playing ? `Tap ${tile.item}` : 'Game tile'}>{playing ? tile.item : '✦'}</button>)}
-          </div>
+          {active.slug === 'bible-word-search' ? (
+            <div className="arcade-word-search">
+              <p>Find all six words by tapping their letters from left to right.</p>
+              <div className="arcade-word-search-words">{WORD_SEARCH_WORDS.map((word) => <span key={word} className={foundWords.includes(word) ? 'found' : ''}>{word}</span>)}</div>
+              <div className="arcade-word-search-grid" aria-label="Bible word search grid">
+                {WORD_SEARCH_ROWS.map((line, row) => line.split('').map((letter, col) => {
+                  const selected = wordSelection.some((cell) => cell.row === row && cell.col === col);
+                  const found = foundWords.some((word) => row >= 0 && WORD_SEARCH_ROWS[row].slice(0, word.length) === word && col < word.length);
+                  return <button key={`${row}-${col}`} type="button" onClick={() => selectWordCell(row, col, letter)} disabled={!playing || foundWords.includes(line.slice(0, WORD_SEARCH_WORDS.find((word) => line.startsWith(word))?.length || 0)} className={selected ? 'selected' : found ? 'found' : ''} aria-label={`Row ${row + 1}, column ${col + 1}, letter ${letter}`}>{letter}</button>;
+                }))}
+              </div>
+            </div>
+          ) : (
+            <div className={`arcade-html5-board${playing ? ' is-playing' : ''}`} aria-label={`${active.title} game board`}>
+              {board.map((tile) => <button key={tile.id} type="button" onClick={() => tapTile(tile)} disabled={!playing} aria-label={playing ? `Tap ${tile.item}` : 'Game tile'}>{playing ? tile.item : '✦'}</button>)}
+            </div>
+          )}
           <div className="arcade-html5-controls"><p role="status">{saving && <LoaderCircle size={15} className="arcade-spin" />}{feedback}</p><button type="button" onClick={() => start(active)} disabled={saving}><RefreshCw size={16} /> {playing ? 'Restart round' : 'Start round'}</button></div>
           <small className="arcade-html5-hint">Good target: {active.good.join(' ')} · Avoid: {active.bad.join(' ')}</small>
         </div>
