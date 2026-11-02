@@ -254,6 +254,18 @@ export default function LiveHostModal({ isOpen, onClose, session, profile }) {
     }
   }
 
+  async function shareLive() {
+    if (!stream || typeof window === 'undefined') return;
+    const url = window.location.origin + '/live/' + stream.id;
+    try {
+      if (navigator.share) await navigator.share({ title: stream.title || 'Shammah Live', url });
+      else {
+        await navigator.clipboard.writeText(url);
+        setError('Viewer link copied.');
+      }
+    } catch {}
+  }
+
   async function sendMessage(event) {
     event.preventDefault();
     const body = draft.trim();
@@ -314,7 +326,7 @@ export default function LiveHostModal({ isOpen, onClose, session, profile }) {
             <video ref={localVideoRef} autoPlay muted playsInline className={cameraEnabled ? 'sh-live-preview' : 'sh-live-preview is-hidden'} />
             {!previewReady || !cameraEnabled ? <div className="sh-live-camera-placeholder"><CameraOff size={34} /><span>{cameraEnabled ? 'Starting camera preview…' : 'Camera is off'}</span></div> : null}
             {stream && <div className="sh-live-badge"><span /> LIVE</div>}
-            {stream && <div className="sh-live-count"><Signal size={15} /> {viewerCount} watching · {formatTime(elapsed)}</div>}
+            {stream && <div className="sh-live-count"><Signal size={15} /> {viewerCount} watching · {formatTime(elapsed)} <button type="button" className="sh-live-share" onClick={shareLive} aria-label="Share viewer link" title="Share viewer link"><Copy size={14} /></button></div>}
             {error && <p className="sh-live-error" role="alert">{error}</p>}
           </div>
           <div className="sh-live-controls">
