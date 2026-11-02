@@ -11,7 +11,7 @@ const BOOKS = {
   EZR:'Ezra', NEH:'Nehemiah', EST:'Esther', JOB:'Job', PSA:'Psalms', PRO:'Proverbs',
   ECC:'Ecclesiastes', SNG:'Song of Solomon', ISA:'Isaiah', JER:'Jeremiah',
   LAM:'Lamentations', EZK:'Ezekiel', DAN:'Daniel', HOS:'Hosea', JOL:'Joel',
-  AMO:'Amos', OBA:'Obadiah', JON:'Jonah', MIC:'Micah', NAH:'Nahum, HAB:'Habakkuk',
+  AMO:'Amos', OBA:'Obadiah', JON:'Jonah', MIC:'Micah', NAH:'Nahum', HAB:'Habakkuk',
   ZEP:'Zephaniah', HAG:'Haggai', ZEC:'Zechariah', MAL:'Malachi', MAT:'Matthew',
   MRK:'Mark', LUK:'Luke', JHN:'John', ACT:'Acts', ROM:'Romans', '1CO':'1 Corinthians',
   '2CO':'2 Corinthians', GAL:'Galatians', EPH:'Ephesians', PHP:'Philippians',
