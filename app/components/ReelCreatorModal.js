@@ -67,6 +67,10 @@ export default function ReelCreatorModal({
   const videoElemRef = useRef(null);
   const videoSelectionRef = useRef(0);
 
+  useEffect(() => {
+    if (!isOpen) videoSelectionRef.current += 1;
+  }, [isOpen]);
+
   const displayName = cleanDisplayName(
     profile?.display_name || session?.user?.email?.split('@')[0] || 'Disciple',
     'Disciple'
