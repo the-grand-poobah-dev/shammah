@@ -60,6 +60,16 @@ create table if not exists public.live_bans (
   primary key (stream_id, user_id)
 );
 
+create table if not exists public.live_viewers (
+  stream_id uuid not null references public.live_streams(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  primary key (stream_id, user_id)
+);
+create index if not exists live_viewers_last_seen_idx on public.live_viewers (stream_id, last_seen_at desc);
+alter table public.live_viewers enable row level security;
+
 alter table public.live_streams enable row level security;
 alter table public.live_chat_messages enable row level security;
 alter table public.live_moderators enable row level security;
@@ -268,7 +278,7 @@ grant select on public.live_streams, public.live_chat_messages to anon, authenti
 grant insert on public.live_chat_messages to authenticated;
 grant update on public.live_chat_messages to authenticated;
 grant select, insert, update, delete on public.live_moderators, public.live_bans to authenticated;
-grant all privileges on public.live_streams, public.live_chat_messages, public.live_moderators, public.live_bans to service_role;
+grant all privileges on public.live_streams, public.live_chat_messages, public.live_moderators, public.live_bans, public.live_viewers to service_role;
 
 -- Enable realtime updates for chat and stream status when the publication exists.
 do $$
