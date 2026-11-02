@@ -48,13 +48,13 @@ export async function GET(request) {
         return NextResponse.json({ results: (data || []).map(v => ({ ...v, verse_text: v.text, book_name: v.book_name || BOOKS[v.book_id] || v.book_id, reference: `${v.book_name || BOOKS[v.book_id] || v.book_id} ${v.chapter}:${v.verse}` })), mode: 'reference' });
       }
     }
-    const { data, error } = await db.from('bible_verses').select('translation,book_id,book_name,chapter,verse,verse_text').eq('translation', translation).textSearch('fts', q, { type: 'websearch', config: 'english' }).limit(30);
+    const { data, error } = await db.from('bible_verses').select('translation,book_id,book_name,chapter,verse,text').eq('translation', translation).textSearch('fts', q, { type: 'websearch', config: 'english' }).limit(30);
     if (error) throw error;
     const rows = data || [];
-    if (rows.length) return NextResponse.json({ results: rows.map(v => ({ ...v, reference: `${v.book_name} ${v.chapter}:${v.verse}` })), mode: 'text' });
-    const { data: fallback, error: fallbackError } = await db.from('bible_verses').select('translation,book_id,book_name,chapter,verse,verse_text').eq('translation', translation).ilike('text', `%${q.replace(/[%_]/g, '')}%`).limit(20);
+    if (rows.length) return NextResponse.json({ results: rows.map(v => ({ ...v, verse_text: v.text, book_name: v.book_name || BOOKS[v.book_id] || v.book_id, reference: `${v.book_name || BOOKS[v.book_id] || v.book_id} ${v.chapter}:${v.verse}` })), mode: 'text' });
+    const { data: fallback, error: fallbackError } = await db.from('bible_verses').select('translation,book_id,book_name,chapter,verse,text').eq('translation', translation).ilike('text', `%${q.replace(/[%_]/g, '')}%`).limit(20);
     if (fallbackError) throw fallbackError;
-    return NextResponse.json({ results: (fallback || []).map(v => ({ ...v, reference: `${v.book_name} ${v.chapter}:${v.verse}` })), mode: 'text' });
+    return NextResponse.json({ results: (fallback || []).map(v => ({ ...v, verse_text: v.text, book_name: v.book_name || BOOKS[v.book_id] || v.book_id, reference: `${v.book_name || BOOKS[v.book_id] || v.book_id} ${v.chapter}:${v.verse}` })), mode: 'text' });
   } catch (error) {
     return NextResponse.json({ error: 'Search failed. Try a shorter phrase or a reference such as John 3:16.', detail: process.env.NODE_ENV === 'development' ? String(error?.message || error) : undefined }, { status: 500 });
   }
