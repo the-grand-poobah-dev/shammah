@@ -113,6 +113,7 @@ export default function FaithChallengesView({ session, profile }) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [participantsTotal, setParticipantsTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [layout, setLayout] = useState('magazine-flat');
@@ -159,6 +160,7 @@ export default function FaithChallengesView({ session, profile }) {
         setLeaderboard(data.leaderboard || []);
         setBadges(data.badges || []);
         setTotalCount(Number(data.totalCount || 0));
+        setParticipantsTotal(Number(data.participantsTotal || 0));
         setHasMore(Boolean(data.hasMore));
         setPage(requestedPage);
         setVotedMap((previous) => {
@@ -259,10 +261,6 @@ export default function FaithChallengesView({ session, profile }) {
   }
 
   // Stats calculation
-  const totalParticipants = useMemo(() => {
-    return challenges.reduce((acc, c) => acc + (c.participants_count || c.participantsCount || 0), 0);
-  }, [challenges]);
-
   const activeStreaksCount = useMemo(() => {
     return myActive.reduce((max, a) => Math.max(max, a.streak_current || 0), 0);
   }, [myActive]);
@@ -315,7 +313,7 @@ export default function FaithChallengesView({ session, profile }) {
             },
             {
               label: 'Participants',
-              value: totalParticipants.toLocaleString(),
+              value: participantsTotal.toLocaleString(),
               icon: Users,
               color: '#10b981',
             },
@@ -928,7 +926,7 @@ export default function FaithChallengesView({ session, profile }) {
                 title: 'Spiritual Spark',
                 description: 'Complete 3 consecutive days of devotion.',
                 icon: '⚡',
-                unlocked: activeStreaksCount >= 3,
+                unlocked: badges.some((item) => item.badge_code === 'spiritual_spark'),
                 color: '#f59e0b',
               },
               {
@@ -937,7 +935,7 @@ export default function FaithChallengesView({ session, profile }) {
                 title: 'Steadfast Believer',
                 description: 'Hold a 7-day uninterrupted streak.',
                 icon: '🛡️',
-                unlocked: activeStreaksCount >= 7,
+                unlocked: badges.some((item) => item.badge_code === 'steadfast_believer'),
                 color: '#0ea5e9',
               },
               {
@@ -946,7 +944,7 @@ export default function FaithChallengesView({ session, profile }) {
                 title: 'Overcomer',
                 description: '21 days of unbroken faith habit formation.',
                 icon: '🦅',
-                unlocked: activeStreaksCount >= 21,
+                unlocked: badges.some((item) => item.badge_code === 'overcomer_in_christ'),
                 color: '#8b5cf6',
               },
               {
@@ -955,7 +953,7 @@ export default function FaithChallengesView({ session, profile }) {
                 title: 'Kingdom Champion',
                 description: '40 days of prayer and fasting like Christ.',
                 icon: '👑',
-                unlocked: activeStreaksCount >= 40,
+                unlocked: badges.some((item) => item.badge_code === 'kingdom_champion'),
                 color: '#ec4899',
               },
             ].map((badge) => (
