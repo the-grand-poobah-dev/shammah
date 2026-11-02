@@ -217,8 +217,17 @@ export default function FaithChallengesView({ session, profile }) {
       await voteChallengeSubmission(subId);
     } catch (err) {
       console.error('Failed to vote:', err);
-      // Rollback
+      // Roll back both the selected state and the optimistic counter.
       setVotedMap((prev) => ({ ...prev, [subId]: isCurrentlyVoted }));
+      setSubmissions((prev) => prev.map((s) => {
+        if (s.id !== subId) return s;
+        const currentCheers = Number(s.cheers || s.like_count || 0);
+        return {
+          ...s,
+          cheers: isCurrentlyVoted ? currentCheers + 1 : Math.max(0, currentCheers - 1),
+          like_count: isCurrentlyVoted ? currentCheers + 1 : Math.max(0, currentCheers - 1),
+        };
+      }));
     }
   }
 
