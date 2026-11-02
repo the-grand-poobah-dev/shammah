@@ -857,6 +857,7 @@ export default function PostCard({
                 alt=""
                 className="quoted-post-media"
                 loading="lazy"
+                style={{ objectFit: 'contain', maxHeight: 320 }}
               />
             </div>
           )}
