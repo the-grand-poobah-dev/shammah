@@ -9,7 +9,7 @@ alter table public.arcade_questions
 
 -- Recover book names from the existing reference field.
 update public.arcade_questions
-set book = nullif(regexp_replace(coalesce(reference, ''), '\\s+\\d.*$', ''), '')
+set book = nullif(regexp_replace(coalesce(reference, ''), '\s+\d.*$', ''), '')
 where book = '' and coalesce(reference, '') <> '';
 
 update public.arcade_questions set book = 'General' where book = '';
@@ -29,7 +29,7 @@ begin
     new.explanation := new.reference;
   end if;
   if (new.book is null or btrim(new.book) = '') and coalesce(new.reference, '') <> '' then
-    new.book := nullif(regexp_replace(new.reference, '\\s+\\d.*$', ''), '');
+    new.book := nullif(regexp_replace(new.reference, '\s+\d.*$', ''), '');
   end if;
   if exists (
     select 1 from public.arcade_questions q
@@ -77,7 +77,8 @@ drop policy if exists arcade_verses_read on public.arcade_verses;
 create policy arcade_verses_read on public.arcade_verses
   for select to anon, authenticated using (true);
 
-grant select on public.arcade_games, public.arcade_daily, public.arcade_verses to anon, authenticated;\ngrant select on public.arcade_questions to service_role;
+grant select on public.arcade_games, public.arcade_daily, public.arcade_verses to anon, authenticated;
+grant select on public.arcade_questions to service_role;
 revoke select on public.arcade_questions from anon, authenticated;
 revoke insert, update, delete on public.arcade_scores, public.arcade_progress,
   public.arcade_achievements, public.arcade_daily, public.arcade_verses,
