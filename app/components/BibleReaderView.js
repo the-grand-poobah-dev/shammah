@@ -25,7 +25,6 @@ import {
 import {
   BIBLE_BOOKS,
   BIBLE_TRANSLATIONS,
-  getChapterVerses,
   getSavedNotes,
   saveNote,
   deleteNote,
@@ -354,7 +353,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             <select
               className="bible-select"
               value={translation}
-              onChange={(e) => setTranslation(e.target.value); setChapterRetry((n) => n + 1)}
+              onChange={(e) => { setTranslation(e.target.value); setChapterRetry((n) => n + 1); }}
               aria-label="Bible Translation"
             >
               {BIBLE_TRANSLATIONS.map((t) => (
