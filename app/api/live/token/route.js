@@ -20,6 +20,13 @@ export async function POST(request) {
     if (error) throw error;
     if (!stream || stream.status !== 'live') return liveJsonError('This broadcast is no longer live.', 404);
 
+    if (stream.host_id !== user.id) {
+      const { data: ban, error: banError } = await service.from('live_bans')
+        .select('user_id').eq('stream_id', stream.id).eq('user_id', user.id).maybeSingle();
+      if (banError) throw banError;
+      if (ban) return liveJsonError('You have been removed from this broadcast by a moderator.', 403);
+    }
+
     let allowed = stream.host_id === user.id || stream.visibility === 'public';
     if (!allowed && stream.visibility === 'followers') {
       const { data } = await service.from('follows').select('follower_id')
