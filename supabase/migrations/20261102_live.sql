@@ -214,12 +214,20 @@ create trigger live_chat_rate_limit_trigger
 before insert on public.live_chat_messages
 for each row execute function public.enforce_live_chat_rate_limit();
 
--- Allow the existing unified report flow to cover live broadcasts.
+-- Extend the unified report flow for live broadcasts while preserving
+-- any application-specific target types already present in the table.
 do $
 declare
   constraint_row record;
+  existing_types text[];
+  legacy_type text;
+  allowed_types text := '''post'',''status'',''live_stream'',''reel'',''video'',''comment'',''poll'',''course'',''fundraiser'',''challenge''';
 begin
-  if to_regclass('public.content_reports') is not null then
+  if to_regclass('public.content_reports') is not null
+     and exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'content_reports' and column_name = 'target_type'
+     ) then
     for constraint_row in
       select conname from pg_constraint
       where conrelid = 'public.content_reports'::regclass
@@ -228,7 +236,18 @@ begin
     loop
       execute format('alter table public.content_reports drop constraint %I', constraint_row.conname);
     end loop;
-    -- The existing target_type checks are removed so the unified report table can
-    -- accept live_stream without rejecting other reportable content types.
+
+    execute 'select coalesce(array_agg(distinct target_type), ARRAY[]::text[]) from public.content_reports'
+      into existing_types;
+    foreach legacy_type in array existing_types loop
+      if legacy_type <> all(array['post','status','live_stream','reel','video','comment','poll','course','fundraiser','challenge']) then
+        allowed_types := allowed_types || ',' || quote_literal(legacy_type);
+      end if;
+    end loop;
+
+    execute format(
+      'alter table public.content_reports add constraint content_reports_target_type_check check (target_type in (%s))',
+      allowed_types
+    );
   end if;
 end $;
