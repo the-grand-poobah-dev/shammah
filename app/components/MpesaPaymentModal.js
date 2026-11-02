@@ -135,11 +135,9 @@ export default function MpesaPaymentModal({
       setStatus('waiting_pin');
       playSound('alert');
 
-      // Simulate the completion of PIN entry after 4.5 seconds for UX verification
-      setTimeout(() => {
-        setStatus('success');
-        playSound('postPublished');
-      }, 4500);
+      // Never infer payment success from elapsed time or an STK initiation response.
+      // This legacy giving flow has no verified status endpoint; the backend fails closed
+      // until it is wired to a real callback-backed payment record.
     } catch (err) {
       setStatus('error');
       setErrorMsg(err.message || 'Payment initiation failed. Please try again.');
@@ -406,7 +404,7 @@ export default function MpesaPaymentModal({
               </div>
 
               <p className="text-[11px] text-gray-400">
-                Do not close this window. Your donation will confirm automatically once you enter your PIN.
+                Do not treat this as a completed donation. This legacy payment option is awaiting secure callback-backed status verification.
               </p>
             </div>
           ) : (
@@ -432,7 +430,7 @@ export default function MpesaPaymentModal({
                 <div className="flex items-center justify-between text-gray-400">
                   <span>M-Pesa Receipt:</span>
                   <span className="font-mono text-emerald-400 font-bold">
-                    {receiptData?.receiptNumber || 'NL89421034X'}
+                    {receiptData?.receiptNumber || 'Awaiting verified receipt'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-gray-400">
