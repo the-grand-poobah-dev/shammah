@@ -273,11 +273,19 @@ export default function CourseDetailView({
         body: reviewBody.trim()
       });
       if (res?.review) {
+        let refreshed = null;
+        if (res.rating_avg == null || res.rating_count == null) {
+          try { refreshed = await getCourseDetail(course.id, userId); } catch {}
+        }
+        const existingReviewIndex = (course.reviews || []).findIndex((review) => review.user_id === res.review.user_id);
+        const currentReviews = [...(course.reviews || [])];
+        if (existingReviewIndex >= 0) currentReviews.splice(existingReviewIndex, 1);
         const updated = {
           ...course,
-          rating_avg: res.rating_avg || course.rating_avg,
-          rating_count: res.rating_count || (course.rating_count || 0) + 1,
-          reviews: [res.review, ...(course.reviews || [])]
+          ...(refreshed || {}),
+          rating_avg: res.rating_avg ?? refreshed?.rating_avg ?? course.rating_avg ?? 0,
+          rating_count: res.rating_count ?? refreshed?.rating_count ?? course.rating_count ?? 0,
+          reviews: [res.review, ...currentReviews]
         };
         setCourse(updated);
         onCourseUpdated?.(updated);
@@ -372,8 +380,8 @@ export default function CourseDetailView({
           <div className="course-detail-stats-row">
             <span className="course-detail-stat">
               <Star size={15} fill="#fbbf24" color="#fbbf24" />
-              <strong>{course?.rating_avg || course?.rating || 4.9}</strong>
-              <span>({course?.rating_count || 42} reviews)</span>
+              <strong>{Number(course?.rating_avg ?? course?.rating ?? 0).toFixed(2)}</strong>
+              <span>({Number(course?.rating_count ?? 0).toLocaleString()} reviews)</span>
             </span>
             <span className="course-detail-stat">
               <Users size={15} />
