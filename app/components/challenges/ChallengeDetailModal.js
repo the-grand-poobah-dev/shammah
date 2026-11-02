@@ -465,7 +465,7 @@ export default function ChallengeDetailModal({
                 <div className="flex items-center gap-2 text-xs text-slate-400">
                   <Users className="w-4 h-4" />
                   <span>
-                    <strong className="text-white">{challenge.participants_count || 1}</strong> believers participating
+                    <strong className="text-white">{Number(challenge.participants_count || 0).toLocaleString()}</strong> believers participating
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
