@@ -93,6 +93,7 @@ export default function MediaUploadModal({
   const customThumbInputRef = useRef(null);
   const transcriptInputRef = useRef(null);
   const selectionTokenRef = useRef(0);
+  const thumbnailRequestRef = useRef(0);
 
   useEffect(() => {
     setMounted(true);
@@ -145,6 +146,7 @@ export default function MediaUploadModal({
     }
 
     const selectionToken = ++selectionTokenRef.current;
+    const thumbnailToken = ++thumbnailRequestRef.current;
     setKind(detected);
     setFile(selectedFile);
     setThumbBlob(null);
@@ -172,7 +174,7 @@ export default function MediaUploadModal({
     if (detected === 'video') {
       try {
         const blob = await generateVideoThumbnail(selectedFile);
-        if (blob && selectionToken === selectionTokenRef.current) {
+        if (blob && thumbnailToken === thumbnailRequestRef.current) {
           setThumbBlob(blob);
           const preview = URL.createObjectURL(blob);
           setThumbPreviewUrl(preview);
@@ -185,6 +187,7 @@ export default function MediaUploadModal({
 
   const handleCustomThumbSelect = (imgFile) => {
     if (!imgFile) return;
+    thumbnailRequestRef.current += 1;
     setThumbBlob(imgFile);
     const url = URL.createObjectURL(imgFile);
     setThumbPreviewUrl(url);
