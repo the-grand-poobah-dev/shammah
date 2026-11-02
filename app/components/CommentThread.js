@@ -34,6 +34,7 @@ import PopupSheet from './PopupSheet';
 import { uploadPostMedia, detectMediaType } from '../lib/mediaUpload';
 import MediaToolbar from './media/MediaToolbar';
 import GifPicker from './media/GifPicker';
+import { useMediaAttachment } from '../hooks/useMediaAttachment';
 
 export default function CommentThread({
   postId,
@@ -105,9 +106,10 @@ export default function CommentThread({
   const isPostAuthor = Boolean(session?.user?.id && postAuthorId && session.user.id === postAuthorId);
 
   // Comment Media Attachment & Live Capture State
-  const [commentMediaFile, setCommentMediaFile] = useState(null);
-  const [commentMediaPreview, setCommentMediaPreview] = useState(null);
-  const [selectedCommentGif, setSelectedCommentGif] = useState(null);
+  const commentAttachment = useMediaAttachment();
+  const commentMediaFile = commentAttachment.file;
+  const commentMediaPreview = commentAttachment.preview;
+  const selectedCommentGif = commentAttachment.gifRef;
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [mediaUploading, setMediaUploading] = useState(false);
 
@@ -115,22 +117,11 @@ export default function CommentThread({
 
   function handleCommentFileSelected(file) {
     if (!file) return;
-    setSelectedCommentGif(null);
-    setCommentMediaFile(file);
-    const url = URL.createObjectURL(file);
-    const type = detectMediaType(file) || (file.type?.startsWith('video/') ? 'video' : file.type?.startsWith('audio/') ? 'audio' : 'image');
-    setCommentMediaPreview({ url, type, name: file.name });
+    commentAttachment.selectFile(file);
   }
 
   function handleRemoveCommentMedia() {
-    setSelectedCommentGif(null);
-    setCommentMediaFile(null);
-    if (commentMediaPreview?.url && commentMediaPreview.url.startsWith('blob:')) {
-      try {
-        URL.revokeObjectURL(commentMediaPreview.url);
-      } catch (_) {}
-    }
-    setCommentMediaPreview(null);
+    commentAttachment.clear();
     if (audioInputRef.current) audioInputRef.current.value = '';
   }
 
@@ -315,10 +306,7 @@ export default function CommentThread({
   }
 
   function handleChooseCommentGif(gif) {
-    if (!gif?.url) return;
-    setSelectedCommentGif(gif);
-    setCommentMediaFile(null);
-    setCommentMediaPreview({ url: gif.url, type: 'gif', name: gif.title || 'GIF' });
+    commentAttachment.selectGif(gif);
   }
 
   async function submit(e) {
