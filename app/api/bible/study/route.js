@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 
 async function userClient(request) {
-  const token = (request.headers.get('authorization') || '').replace(/^Bearer\\s+/i, '').trim();
+  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!token || !url || !key || /placeholder/i.test(url)) return null;
