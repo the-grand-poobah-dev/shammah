@@ -15,7 +15,7 @@ drop policy if exists "Allow chapter update" on public.bible_chapters;
 drop policy if exists "Server and authenticated users can insert chapters" on public.bible_chapters;
 drop policy if exists "Bible chapters are readable by everyone" on public.bible_chapters;
 create policy "Bible chapters are readable by everyone" on public.bible_chapters for select to anon, authenticated using (true);
-revoke insert, update, delete on public.bible_chapters from anon, authenticated;
+revoke insert, update, delete on public.bible_chapters from public, anon, authenticated;
 grant select on public.bible_chapters to anon, authenticated, service_role;
 grant insert, update, delete on public.bible_chapters to service_role;
 
