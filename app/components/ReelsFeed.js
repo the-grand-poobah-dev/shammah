@@ -61,6 +61,7 @@ export default function ReelsFeed({
   const containerRef = useRef(null);
   const reelRefs = useRef({});
   const lastTapRef = useRef({ time: 0, x: 0, y: 0 });
+  const feedRequestRef = useRef(0);
 
   // Update localStorage when mute status toggles
   const handleToggleMute = useCallback(() => {
@@ -80,16 +81,26 @@ export default function ReelsFeed({
 
   // Fetch reels from Supabase
   const loadFeed = useCallback(async (tab) => {
+    const requestId = ++feedRequestRef.current;
     setLoading(true);
-    const { data } = await listReels({ feed: tab, limit: 20 });
-    if (data && data.length > 0) {
-      setReels(data);
-    } else if (initialReels.length > 0 && tab === 'foryou') {
-      setReels(initialReels);
-    } else {
-      setReels([]);
+    try {
+      const { data } = await listReels({ feed: tab, limit: 20 });
+      if (requestId !== feedRequestRef.current) return;
+      if (data && data.length > 0) {
+        setReels(data);
+      } else if (initialReels.length > 0 && tab === 'foryou') {
+        setReels(initialReels);
+      } else {
+        setReels([]);
+      }
+    } catch (error) {
+      if (requestId === feedRequestRef.current) {
+        console.warn('[ReelsFeed] Could not load feed:', error);
+        setReels(initialReels.length > 0 && tab === 'foryou' ? initialReels : []);
+      }
+    } finally {
+      if (requestId === feedRequestRef.current) setLoading(false);
     }
-    setLoading(false);
   }, [initialReels]);
 
   useEffect(() => {
