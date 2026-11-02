@@ -63,10 +63,10 @@ export async function checkinChallenge({ challengeId, note = '', mediaUrl = null
 }
 
 export async function submitChallengeEntry({
-  challengeId, mediaUrl, thumbUrl = null, caption = '', hashtag = '', scripture = '', audioTitle = '',
+  challengeId, mediaUrl, mediaType = 'image', thumbUrl = null, caption = '', hashtag = '', scripture = '', audioTitle = '',
 }) {
   const data = await postAction({
-    action: 'submit', challengeId, mediaUrl, thumbUrl, caption, hashtag, scripture, audioTitle,
+    action: 'submit', challengeId, mediaUrl, mediaType, thumbUrl, caption, hashtag, scripture, audioTitle,
   });
   return data.submission;
 }
