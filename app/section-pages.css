@@ -3594,3 +3594,5 @@
 @media (prefers-reduced-motion: reduce) {
   .arcade-online-hub *, .arcade-online-hub *::before, .arcade-online-hub *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+.arcade-legacy-save-message { margin: 10px 0; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--ink-muted); font-size: .84rem; }
