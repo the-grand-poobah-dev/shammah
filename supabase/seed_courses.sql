@@ -2,7 +2,7 @@
 -- Shammah Seed File: supabase/seed_courses.sql
 -- Purpose: Seeds the 5 Discipleship & Leadership courses from COURSES_CATALOG
 --          with modules, multi-modal lessons (video, audio, text, quiz, download),
---          quiz questions, and sample reviews.
+--          quiz questions. Ratings and enrollment totals are derived from actual rows.
 -- Safe to run multiple times (100% idempotent via ON CONFLICT DO UPDATE).
 -- =============================================================================
 
@@ -65,9 +65,9 @@ BEGIN
       'Pillars of Faith Foundation Certificate',
       '🔥',
       'Faith Foundation Pillar',
-      4.90,
-      42,
-      248,
+      0,
+      0,
+      0,
       now() - interval '14 days'
     ),
     (
@@ -99,9 +99,9 @@ BEGIN
       'Watchman Intercession & Warfare Diploma',
       '🛡️',
       'City Gate Watchman',
-      4.85,
-      31,
-      182,
+      0,
+      0,
+      0,
       now() - interval '10 days'
     ),
     (
@@ -134,9 +134,9 @@ BEGIN
       'Executive Kingdom Leadership Credential',
       '👑',
       'Servant Shepherd Leader',
-      4.95,
-      27,
-      134,
+      0,
+      0,
+      0,
       now() - interval '7 days'
     ),
     (
@@ -168,9 +168,9 @@ BEGIN
       'Kingdom Family & Covenant Marriage Award',
       '💍',
       'Covenant Marriage Builder',
-      4.88,
-      54,
-      310,
+      0,
+      0,
+      0,
       now() - interval '5 days'
     ),
     (
@@ -202,9 +202,9 @@ BEGIN
       'Prophetic Worship Leader Certificate',
       '🕊️',
       'Prophetic Atmosphere Builder',
-      4.92,
-      38,
-      220,
+      0,
+      0,
+      0,
       now() - interval '2 days'
     )
   ON CONFLICT (id) DO UPDATE SET
@@ -528,4 +528,31 @@ BEGIN
     correct_index = EXCLUDED.correct_index,
     explanation = EXCLUDED.explanation;
 
-END $$;
+  -- Never display fabricated ratings or enrolment totals. Reconcile all seeded
+  -- course summaries from the current review/enrollment rows on every seed run.
+  UPDATE public.courses c
+  SET rating_avg = COALESCE((
+        SELECT ROUND(AVG(r.rating)::numeric, 2)
+        FROM public.course_reviews r
+        WHERE r.course_id = c.id
+      ), 0),
+      rating_count = (
+        SELECT COUNT(*)::integer
+        FROM public.course_reviews r
+        WHERE r.course_id = c.id
+      ),
+      enrolled_count = (
+        SELECT COUNT(*)::integer
+        FROM public.course_enrollments e
+        WHERE e.course_id = c.id
+      ),
+      updated_at = now()
+  WHERE c.id IN (
+    'a1000000-0000-0000-0000-000000000001',
+    'a1000000-0000-0000-0000-000000000002',
+    'a1000000-0000-0000-0000-000000000003',
+    'a1000000-0000-0000-0000-000000000004',
+    'a1000000-0000-0000-0000-000000000005'
+  );
+
+END $;
