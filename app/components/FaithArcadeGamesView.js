@@ -19,6 +19,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
+import ArcadeOnlineHub from './ArcadeOnlineHub';
 
 const TRIVIA_QUESTIONS = [
   // Kids
@@ -672,6 +673,7 @@ export default function FaithArcadeGamesView() {
           )}
         </div>
       )}
+      <ArcadeOnlineHub />
     </div>
   );
 }
