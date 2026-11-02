@@ -895,6 +895,7 @@ export default function CommentThread({
                 <FileAudio size={18} className="text-cyan-400" /><span className="tool-label">Audio</span>
               </button>
             </div>
+          )}
 
           {/* Live Preview directly next to the Send button */}
           {session && (
