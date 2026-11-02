@@ -90,6 +90,22 @@ export async function POST(request) {
     return NextResponse.json({ ok: false, error: 'Notification link must be a local path.' }, { status: 400 });
   }
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    return NextResponse.json({ ok: false, error: 'Push token verification is not configured.' }, { status: 503 });
+  }
+  const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: registeredToken, error: tokenError } = await db.from('push_device_tokens').select('id')
+    .eq('user_id', user.id).eq('token', token).eq('enabled', true).maybeSingle();
+  if (tokenError) {
+    console.error('FCM token verification failed:', tokenError.message);
+    return NextResponse.json({ ok: false, error: 'Push token verification is unavailable.' }, { status: 503 });
+  }
+  if (!registeredToken) {
+    return NextResponse.json({ ok: false, error: 'Register this device before sending a push reminder.' }, { status: 403 });
+  }
+
   let credentials;
   try {
     credentials = firebaseCredentials();
