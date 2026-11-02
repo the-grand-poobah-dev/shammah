@@ -1,3 +1,5 @@
+begin;
+
 -- Enforce the same visibility rules for direct Supabase chat inserts as the app API.
 drop policy if exists live_chat_insert_eligible on public.live_chat_messages;
 
@@ -95,3 +97,5 @@ drop trigger if exists live_chat_insert_guard_trigger on public.live_chat_messag
 create trigger live_chat_insert_guard_trigger
 before insert on public.live_chat_messages
 for each row execute function public.guard_live_chat_insert();
+
+commit;
