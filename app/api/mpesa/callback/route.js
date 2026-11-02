@@ -105,66 +105,49 @@ export async function POST(req) {
       }
     }
 
-    // Check if this callback corresponds to a fundraiser donation
-    const { data: donation } = await supabase
+    // Fundraiser totals are changed only by the atomic credit_donation RPC.
+    const { data: donation, error: donationLookupError } = await supabase
       .from('fundraiser_donations')
-      .select('id, fundraiser_id, amount_kes, status')
+      .select('id, fundraiser_id, amount_kes, status, checkout_request_id')
       .eq('checkout_request_id', checkoutId)
       .maybeSingle();
 
-    if (donation && donation.status === 'pending') {
-      if (success) {
-        const donationAmount = amount != null ? Math.round(amount) : donation.amount_kes;
-        const { error: rpcErr } = await supabase.rpc('credit_donation', {
-          p_donation_id: donation.id,
-          p_mpesa_receipt: receipt || null,
-          p_amount_kes: donationAmount,
-        });
-
-        if (rpcErr) {
-          // Fallback service_role direct update
-          await supabase
-            .from('fundraiser_donations')
-            .update({
-              status: 'succeeded',
-              mpesa_transaction_id: receipt || undefined,
-            })
-            .eq('id', donation.id);
-
-          const { data: fr } = await supabase
-            .from('fundraisers')
-            .select('raised_kes, donors_count, goal_kes, status')
-            .eq('id', donation.fundraiser_id)
-            .single();
-
-          if (fr) {
-            const newRaised = (Number(fr.raised_kes) || 0) + donationAmount;
-            const newDonors = (Number(fr.donors_count) || 0) + 1;
-            const isCompleted = newRaised >= fr.goal_kes;
-
-            await supabase
-              .from('fundraisers')
-              .update({
-                raised_kes: newRaised,
-                donors_count: newDonors,
-                status: isCompleted && fr.status === 'active' ? 'completed' : fr.status,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', donation.fundraiser_id);
-
-            await supabase
-              .from('fundraiser_milestones')
-              .update({ reached_at: new Date().toISOString() })
-              .eq('fundraiser_id', donation.fundraiser_id)
-              .lte('amount_kes', newRaised)
-              .is('reached_at', null);
-          }
-        }
-      } else {
-        await supabase
-          .from('fundraiser_donations')
+    if (donationLookupError) {
+      console.error('Fundraiser callback lookup failed:', donationLookupError.message);
+    } else if (donation && donation.status === 'pending') {
+      if (!success) {
+        await supabase.from('fundraiser_donations')
+          .update({ status: 'failed' }).eq('id', donation.id).eq('status', 'pending');
+        await supabase.from('mpesa_transactions')
           .update({ status: 'failed' })
-          .eq('id', donation.id);
+          .eq('checkout_request_id', checkoutId)
+          .eq('status', 'pending');
+      } else {
+        const verifiedAmount = amount != null && Number.isFinite(amount) &&
+          Math.round(amount) === Number(donation.amount_kes);
+        if (receipt && verifiedAmount) {
+          const { data: creditResult, error: creditError } = await supabase.rpc('credit_donation', {
+            p_donation_id: donation.id,
+            p_mpesa_receipt: receipt,
+            p_amount_kes: Math.round(amount),
+          });
+
+          if (!creditError && creditResult?.success) {
+            await supabase.from('mpesa_transactions')
+              .update({
+                status: 'completed',
+                receipt_code: receipt,
+                amount_kes: Math.round(amount),
+              })
+              .eq('checkout_request_id', checkoutId)
+              .eq('status', 'pending');
+          } else {
+            console.error('Fundraiser donation credit failed:', creditError?.message || creditResult?.error || 'Unknown credit error');
+          }
+        } else {
+          // Do not credit an unverifiable callback. Leave it pending for reconciliation.
+          console.error('Fundraiser callback amount/receipt mismatch for checkout:', checkoutId);
+        }
       }
     }
 
