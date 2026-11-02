@@ -45,6 +45,7 @@ export async function POST(request) {
       roomName: stream.room_name,
       canPublish: false,
       canSubscribe: true,
+      ttl: '5m',
     });
     return Response.json({ stream: { id: stream.id, title: stream.title, host_id: stream.host_id }, token, url });
   } catch (error) {
