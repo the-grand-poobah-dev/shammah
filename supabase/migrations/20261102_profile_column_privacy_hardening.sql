@@ -89,7 +89,7 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $
+AS $message_permission$
   WITH recipient AS (
     SELECT COALESCE(pp.inbox_permission, 'everyone') AS permission
     FROM (SELECT 1) AS seed
@@ -121,7 +121,7 @@ AS $
       )
     ELSE true
   END;
-$;
+$message_permission$;
 
 REVOKE ALL ON FUNCTION public.can_receive_direct_message(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.can_receive_direct_message(uuid) TO authenticated;
