@@ -23,7 +23,7 @@ export async function POST(request) {
     let allowed = stream.host_id === user.id || stream.visibility === 'public';
     if (!allowed && stream.visibility === 'followers') {
       const { data } = await service.from('follows').select('follower_id')
-        .eq('follower_id', user.id).eq('following_id', stream.host_id).maybeSingle();
+        .eq('follower_id', user.id).eq('followed_id', stream.host_id).maybeSingle();
       allowed = Boolean(data);
     }
     if (!allowed && stream.visibility === 'church' && stream.church_id) {
