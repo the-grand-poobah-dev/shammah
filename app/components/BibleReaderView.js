@@ -187,7 +187,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     let cancelled = false;
     async function loadHighlights() {
       try {
-        const response = await fetch(`/api/bible/study?type=highlights&translation=${encodeURIComponent(translation)}&book_id=${encodeURIComponent(currentBook.id)}&chapter=${selectedChapter}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const response = await fetch(`/api/bible/study?type=highlights&translation=${encodeURIComponent(translation)}&book_id=${encodeURIComponent(currentBook.id)}&book=${encodeURIComponent(currentBook.name)}&chapter=${selectedChapter}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
         const payload = await response.json();
         if (!response.ok) return;
         const bookName = currentBook.name;
@@ -352,7 +352,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       fetch('/api/bible/study', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ type: 'highlight', action: alreadyHighlighted ? 'remove' : 'save', translation, book_id: currentBook.id, chapter: selectedChapter, verse: vNum, color: selectedHighlightColor })
+        body: JSON.stringify({ type: 'highlight', action: alreadyHighlighted ? 'remove' : 'save', translation, book: currentBook.name, book_id: currentBook.id, chapter: selectedChapter, verse: vNum, color: selectedHighlightColor })
       }).then(async (response) => { if (!response.ok) { const payload = await response.json(); throw new Error(payload?.error || 'Could not sync highlight.'); } }).catch((error) => showToast(error?.message || 'Highlight saved on this device only.'));
     }
     playSound('reaction');
