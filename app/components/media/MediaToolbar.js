@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, Clapperboard, FileAudio, ImagePlus, Mic, Radio } from 'lucide-react';
 import CameraCaptureModal from './CameraCaptureModal';
 
-function ToolButton({ label, title, onClick, children, className = '' }) {
-  return <button type="button" className={'sh-media-tool ' + className} onClick={onClick} title={title || label} aria-label={label}><span className="sh-media-tool-icon">{children}</span><span className="sh-media-toolbar-label">{label}</span></button>;
+function ToolButton({ label, title, onClick, children, className = '', disabled = false }) {
+  return <button type="button" className={'sh-media-tool ' + className} onClick={onClick} title={title || label} aria-label={label} disabled={disabled}><span className="sh-media-tool-icon">{children}</span><span className="sh-media-toolbar-label">{label}</span></button>;
 }
 
 export default function MediaToolbar({
