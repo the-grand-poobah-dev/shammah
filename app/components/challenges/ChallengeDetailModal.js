@@ -345,16 +345,18 @@ export default function ChallengeDetailModal({
                 {leaving ? 'Leaving…' : 'Leave'}
               </button>
             )}
-            {!isJoined ? (
+            {!isJoined ? challenge.status === 'active' ? (
               <button
                 onClick={handleJoin}
                 disabled={joining}
-                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-1.5 transition-transform active:scale-95"
+                className="min-h-11 px-4 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-1.5 transition-transform active:scale-95 disabled:opacity-60"
                 style={{ background: `linear-gradient(135deg, ${accent}, #ec4899)` }}
               >
                 {joining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Flame className="w-3.5 h-3.5 fill-amber-200" />}
                 Join Challenge
               </button>
+            ) : (
+              <span className="text-xs font-semibold text-slate-400">Challenge ended</span>
             ) : hasCheckedInToday ? (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/30">
                 <CheckCircle2 className="w-4 h-4" />
