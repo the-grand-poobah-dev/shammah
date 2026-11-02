@@ -46,6 +46,7 @@ export default function ArcadeOnlineHub() {
   const [message, setMessage] = useState('');
   const [answer, setAnswer] = useState('');
   const [scrambleVerse, setScrambleVerse] = useState(null);
+  const [scrambledWords, setScrambledWords] = useState([]);
   const [matchCards, setMatchCards] = useState([]);
   const [selectedCards, setSelectedCards] = useState([]);
   const [matchedRefs, setMatchedRefs] = useState([]);
@@ -100,7 +101,9 @@ export default function ArcadeOnlineHub() {
     setTriviaAnswers([]);
     setTriviaChoice(null);
     if (slug === 'scripture-scramble' && verses.length) {
-      setScrambleVerse(verses[Math.floor(Math.random() * verses.length)]);
+      const chosenVerse = verses[Math.floor(Math.random() * verses.length)];
+      setScrambleVerse(chosenVerse);
+      setScrambledWords(shuffle(String(chosenVerse.text || '').split(/\\s+/)));
     }
     if (slug === 'memory-verse-match' && verses.length) {
       const chosen = shuffle(verses).slice(0, 4);
@@ -113,7 +116,10 @@ export default function ArcadeOnlineHub() {
 
   useEffect(() => {
     if (!verses.length) return;
-    if (activeGame === 'scripture-scramble' && !scrambleVerse) setScrambleVerse(verses[0]);
+    if (activeGame === 'scripture-scramble' && !scrambleVerse) {
+      setScrambleVerse(verses[0]);
+      setScrambledWords(shuffle(String(verses[0].text || '').split(/\\s+/)));
+    }
     if (activeGame === 'memory-verse-match' && !matchCards.length) {
       const chosen = shuffle(verses).slice(0, 4);
       setMatchCards(shuffle(chosen.flatMap((verse, index) => [
