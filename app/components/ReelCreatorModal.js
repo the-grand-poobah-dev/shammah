@@ -115,6 +115,10 @@ export default function ReelCreatorModal({
   }
 
   async function handleOpenMediaLibrary() {
+    if (!session?.user?.id) {
+      setError('Please sign in to choose a video from your media library.');
+      return;
+    }
     if (showMediaLibrary) {
       setShowMediaLibrary(false);
       return;
