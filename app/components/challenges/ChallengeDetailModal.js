@@ -57,6 +57,7 @@ export default function ChallengeDetailModal({
         const data = await getChallengeDetail(challengeId, leaderboardScope);
         if (isMounted) {
           setChallengeData(data);
+          setVotingMap(Object.fromEntries((data.user_votes || []).map((id) => [id, true])));
         }
       } catch (err) {
         console.error('Failed to load challenge details:', err);
