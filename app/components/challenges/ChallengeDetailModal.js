@@ -536,7 +536,7 @@ export default function ChallengeDetailModal({
                               playsInline
                               preload="metadata"
                               onPlay={(event) => handleSubmissionPlay(event, sub.id)}
-                              onPause={() => { if (playingSubmissionId === sub.id) setPlayingSubmissionId(null); }}
+                              onPause={() => setPlayingSubmissionId((current) => current === sub.id ? null : current)}
                               className="w-full h-full object-contain"
                             />
                           ) : (
