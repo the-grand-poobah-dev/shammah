@@ -53,6 +53,9 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const [isChapterOffline, setIsChapterOffline] = useState(false);
   const [testamentFilter, setTestamentFilter] = useState('ALL'); // ALL, OT, NT
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [highlights, setHighlights] = useState({});
   const [selectedHighlightColor, setSelectedHighlightColor] = useState('gold');
   const [toastMsg, setToastMsg] = useState('');
@@ -141,6 +144,31 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   }, [currentBook.id, currentBook.chapters, selectedChapter, translation]);
 
   const verses = chapterVerses;
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchError('');
+      setSearching(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/bible/search?q=${encodeURIComponent(query)}&translation=${encodeURIComponent(translation)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Search could not be completed.');
+        if (!cancelled) { setSearchResults(payload.results || []); setSearchError(''); }
+      } catch (error) {
+        if (!cancelled) { setSearchResults([]); setSearchError(error?.message || 'Search failed. Retry in a moment.'); }
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [searchQuery, translation]);
 
   const filteredBooks = useMemo(() => {
     return BIBLE_BOOKS.filter((b) => {
@@ -284,9 +312,9 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         <div className="bible-hero-topline">
           <div className="bible-badge-tag">
             <BookOpen size={16} />
-            <span>Complete Holy Bible · Word of Life</span>
+            <span>Holy Bible · Word of Life</span>
           </div>
-          <span className="bible-offline-chip" title="Complete Bible and notes are fully available offline on this device">
+          <span className="bible-offline-chip" title="Chapters you open can be saved for offline reading">
             <WifiOff size={13} />
             <span>100% Offline Ready</span>
           </span>
@@ -294,7 +322,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
 
         <h2 className="bible-title">Thy Word is a Lamp Unto My Feet</h2>
         <p className="bible-subtitle">
-          Read the complete NIV Bible, highlight life-giving verses, and capture sermon & fellowship notes during service.
+          Read Scripture in KJV or WEB, highlight verses, and capture sermon and fellowship notes.
         </p>
 
         {/* Quick Action Ribbon */}
@@ -319,6 +347,29 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       </div>
 
       {toastMsg && <div className="video-toast-pill">{toastMsg}</div>}
+
+      {/* Search references and cached scripture text */}
+      <div className="bible-search-panel" style={{ margin: '0 0 14px', padding: '12px', border: '1px solid var(--border)', borderRadius: '14px', background: 'var(--surface)' }}>
+        <label htmlFor="bible-scripture-search" style={{ display: 'block', fontWeight: 600, marginBottom: '7px' }}>Search Scripture or enter a reference</label>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <Search size={17} aria-hidden="true" />
+          <input id="bible-scripture-search" type="search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="e.g. John 3:16 or faith" aria-label="Search Bible text or reference" style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }} />
+          {searchQuery && <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setSearchQuery('')} aria-label="Clear Bible search">Clear</button>}
+        </div>
+        {searchQuery.trim().length >= 2 && (
+          <div style={{ marginTop: '10px' }} aria-live="polite">
+            {searching ? <p>Searching Scripture…</p> : searchError ? <p role="alert">{searchError} <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setSearchQuery((q) => q + ' ')}>Retry</button></p> : searchResults.length ? (
+              <div style={{ display: 'grid', gap: '6px' }}>
+                {searchResults.slice(0, 12).map((result) => (
+                  <button key={`${result.book_id}-${result.chapter}-${result.verse}`} type="button" onClick={() => { setSelectedBookId(result.book_id); setSelectedChapter(result.chapter); setSearchQuery(''); setChapterRetry((n) => n + 1); }} style={{ textAlign: 'left', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)', cursor: 'pointer' }}>
+                    <strong>{result.reference}</strong><span style={{ display: 'block', marginTop: '3px', color: 'var(--ink-muted)' }}>{result.verse_text}</span>
+                  </button>
+                ))}
+              </div>
+            ) : <p>No matches in chapters cached so far. Open a chapter first, then try again.</p>}
+          </div>
+        )}
+      </div>
 
       {/* Bible Navigation Controls */}
       <div className="bible-controls-card">
