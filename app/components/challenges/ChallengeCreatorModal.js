@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   X,
   Sparkles,
@@ -16,9 +16,11 @@ import {
   Heart,
   Music,
   Users,
+  UploadCloud,
 } from 'lucide-react';
 import { playSound } from '../../lib/soundEffects';
 import { createChallenge } from '../../lib/data/challengesApi';
+import { uploadPostMedia } from '../../lib/mediaUpload';
 
 const CATEGORIES = [
   { id: 'Prayer', label: 'Prayer', icon: '🙏' },
@@ -73,6 +75,8 @@ export default function ChallengeCreatorModal({
   const [points, setPoints] = useState(100);
   const [coverUrl, setCoverUrl] = useState(PRESET_COVERS[0].url);
   const [customCover, setCustomCover] = useState('');
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const coverInputRef = useRef(null);
   const [accent, setAccent] = useState('#f59e0b');
   const [visibility, setVisibility] = useState('public');
 
@@ -80,6 +84,28 @@ export default function ChallengeCreatorModal({
   const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen) return null;
+
+  async function handleCoverUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!currentUser?.id) {
+      setErrorMsg('Please sign in before uploading a challenge cover.');
+      return;
+    }
+    setErrorMsg('');
+    setUploadingCover(true);
+    try {
+      const uploaded = await uploadPostMedia(file, currentUser.id);
+      if (uploaded.type !== 'image') throw new Error('Challenge covers must be images.');
+      setCoverUrl(uploaded.url);
+      setCustomCover('');
+    } catch (err) {
+      setErrorMsg(err.message || 'Cover upload failed. Please try again.');
+    } finally {
+      setUploadingCover(false);
+      e.target.value = '';
+    }
+  }
 
   async function handleSubmit(e) {
     if (e) e.preventDefault();
@@ -378,6 +404,17 @@ export default function ChallengeCreatorModal({
                 );
               })}
             </div>
+            <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+            <button
+              type="button"
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingCover}
+              className="min-h-11 w-full rounded-xl border px-3 py-2 text-xs font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+              style={{ borderColor: 'var(--border, rgba(255,255,255,0.15))', background: 'var(--surface)', color: 'var(--ink)' }}
+            >
+              <UploadCloud className="w-4 h-4" />
+              {uploadingCover ? 'Uploading cover…' : 'Upload your own cover image'}
+            </button>
             <input
               type="url"
               value={customCover}
