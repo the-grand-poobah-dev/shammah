@@ -634,7 +634,7 @@ export default function StatusViewerModal({
     >
       <div className={`status-viewer-stage status-bg-${currentStatus.bgStyle || 'emerald'} ${slideAnim}`}>
         {/* Full-frame image background with readable overlay scrim */}
-        {resolvedMediaType === 'image' && currentStatus.mediaUrl && (
+        {(resolvedMediaType === 'image' || resolvedMediaType === 'gif') && currentStatus.mediaUrl && (
           <div className="status-viewer-image-wrap">
             <img
               src={currentStatus.mediaUrl}
