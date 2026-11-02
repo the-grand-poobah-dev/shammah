@@ -224,19 +224,6 @@ export default function CourseLearnPlayer({
       const pos = Math.floor(mediaRef.current?.currentTime || lastSavedPosRef.current || 0);
       const finalScore = overrideQuizScore !== null ? overrideQuizScore : quizScore;
 
-      // Optimistic update
-      setLessonProgressMap((prev) => ({
-        ...prev,
-        [currentLesson.id]: {
-          ...(prev[currentLesson.id] || {}),
-          lesson_id: currentLesson.id,
-          completed: true,
-          last_position_seconds: pos,
-          quiz_score: finalScore,
-          personal_notes: notesText
-        }
-      }));
-
       try {
         playSound?.('confirm');
       } catch {}
@@ -251,12 +238,27 @@ export default function CourseLearnPlayer({
           quizScore: finalScore,
           personalNotes: notesText
         });
+        setLessonProgressMap((prev) => ({
+          ...prev,
+          [currentLesson.id]: {
+            ...(prev[currentLesson.id] || {}),
+            lesson_id: currentLesson.id,
+            completed: true,
+            last_position_seconds: pos,
+            quiz_score: finalScore,
+            personal_notes: notesText
+          }
+        }));
         if (res?.certificate) {
           setCertificate(res.certificate);
           setShowCertificateModal(true);
         }
         onCourseUpdated?.(res);
-      } catch {} finally {
+      } catch (error) {
+        const message = error?.message || 'Progress could not be saved. Please try again.';
+        if (currentLesson.kind === 'quiz') setQuizError(message);
+        else if (typeof window !== 'undefined') window.alert(message);
+      } finally {
         setCompleting(false);
       }
     },
