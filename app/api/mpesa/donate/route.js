@@ -67,7 +67,8 @@ async function initiateFundraiserDonation(request, body, fundraiserId, phone, am
   const url = resolveSupabaseUrl();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) return NextResponse.json({ error: 'Fundraiser payment storage is not configured.' }, { status: 503 });
-  if (!process.env.MPESA_SHORTCODE || !process.env.MPESA_PASSKEY || !process.env.MPESA_CALLBACK_URL) {
+  if (!process.env.MPESA_SHORTCODE || !process.env.MPESA_PASSKEY || !process.env.MPESA_CALLBACK_URL ||
+      (process.env.MPESA_ENVIRONMENT === 'production' && !process.env.MPESA_CALLBACK_SECRET)) {
     return NextResponse.json({ error: 'M-Pesa STK Push is not configured. Please contact support.' }, { status: 503 });
   }
 
