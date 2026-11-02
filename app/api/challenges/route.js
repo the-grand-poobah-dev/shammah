@@ -169,6 +169,18 @@ export async function GET(request) {
       if (submissionsError) throw submissionsError;
       const authors = await profileMap(db, (submissionRows || []).map((row) => row.user_id));
       const submissions = (submissionRows || []).map((row) => normalizeSubmission(row, authors));
+      const { data: participantRows, error: participantsError } = await db.from('challenge_participants')
+        .select('user_id, points, streak_current, streak_best').eq('challenge_id', id)
+        .order('points', { ascending: false }).limit(8);
+      if (participantsError) throw participantsError;
+      const participantProfiles = await profileMap(db, (participantRows || []).map((row) => row.user_id));
+      const participantAvatars = (participantRows || []).map((row) => ({
+        user_id: row.user_id,
+        display_name: participantProfiles[row.user_id]?.display_name || 'Shammah member',
+        avatar_url: participantProfiles[row.user_id]?.avatar_url || null,
+        badge: participantProfiles[row.user_id]?.badge || null,
+        points: row.points,
+      }));
       const scope = ['all', 'week', 'church'].includes(params.get('scope')) ? params.get('scope') : 'all';
       const rpcClient = user?.id ? (userClient(request) || db) : db;
       let leaderboard = [];
@@ -197,7 +209,7 @@ export async function GET(request) {
         ok: true, challenge, participant: participantPayload,
         has_checked_in_today: hasCheckedInToday, hasCheckedInToday,
         checkins, recent_checkins: recentCheckins,
-        submissions, leaderboard, user_votes: userVotes,
+        submissions, leaderboard, user_votes: userVotes, participant_avatars: participantAvatars,
       });
     }
 
