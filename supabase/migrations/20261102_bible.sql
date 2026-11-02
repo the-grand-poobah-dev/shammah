@@ -85,6 +85,8 @@ create table if not exists public.bible_highlights (
 alter table public.bible_highlights add column if not exists book text;
 alter table public.bible_highlights add column if not exists book_id text;
 alter table public.bible_highlights add column if not exists translation text not null default 'KJV';
+alter table public.bible_highlights drop constraint if exists bible_highlights_color_check;
+alter table public.bible_highlights add constraint bible_highlights_color_check check (color in ('gold','teal','aqua','emerald','rose','blue','green','pink','purple'));
 
 create table if not exists public.bible_notes (
   id uuid primary key default gen_random_uuid(),
