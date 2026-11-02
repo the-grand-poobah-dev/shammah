@@ -340,7 +340,7 @@ export default function ChallengeDetailModal({
               </div>
             ) : (
               <button
-                onClick={() => onOpenCheckin && onOpenCheckin({ ...challenge, has_checked_in_today: hasCheckedInToday, currentStreak: streak })
+                onClick={() => onOpenCheckin && onOpenCheckin({ ...challenge, has_checked_in_today: hasCheckedInToday, currentStreak: streak })}
                 className="px-4 py-1.5 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-1.5 transition-transform active:scale-95"
                 style={{ background: `linear-gradient(135deg, #10b981, #059669)` }}
               >
