@@ -10,6 +10,9 @@ create table if not exists public.bible_chapters (
   primary key (translation, book_id, chapter)
 );
 alter table public.bible_chapters enable row level security;
+-- Remove legacy public write policies; chapter cache writes must stay server-side.
+drop policy if exists "Allow chapter update" on public.bible_chapters;
+drop policy if exists "Server and authenticated users can insert chapters" on public.bible_chapters;
 drop policy if exists "Bible chapters are readable by everyone" on public.bible_chapters;
 create policy "Bible chapters are readable by everyone" on public.bible_chapters for select to anon, authenticated using (true);
 grant select on public.bible_chapters to anon, authenticated, service_role;
@@ -55,6 +58,9 @@ end;
 $$;
 update public.bible_verses set fts = to_tsvector('english', coalesce(text, '')) where fts is null;
 alter table public.bible_verses enable row level security;
+-- Remove legacy public write policies; indexed verse text must stay server-side.
+drop policy if exists "Allow insert to bible verses" on public.bible_verses;
+drop policy if exists "Allow update to bible verses" on public.bible_verses;
 drop policy if exists "Bible verses are readable by everyone" on public.bible_verses;
 create policy "Bible verses are readable by everyone" on public.bible_verses for select to anon, authenticated using (true);
 grant select on public.bible_verses to anon, authenticated, service_role;
