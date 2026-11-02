@@ -1,6 +1,7 @@
 import { Fraunces, Work_Sans } from 'next/font/google';
 import './globals.css';
 import './cx.css';
+import './media-capture.css';
 import './section-pages.css';
 import './desktop-layout.css';
 import AppClientInit from './components/AppClientInit';
