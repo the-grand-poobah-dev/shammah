@@ -168,7 +168,33 @@ export async function GET(request) {
         .order('created_at', { ascending: false }).limit(60);
       if (submissionsError) throw submissionsError;
       const authors = await profileMap(db, (submissionRows || []).map((row) => row.user_id));
-      const submissions = (submissionRows || []).map((row) => normalizeSubmission(row, authors));
+      let submissions = (submissionRows || []).map((row) => normalizeSubmission(row, authors));
+      if (submissions.length) {
+        const { data: commentRows, error: commentsError } = await db.from('challenge_submission_comments').select('*')
+          .in('submission_id', submissions.map((row) => row.id)).order('created_at', { ascending: true }).limit(300);
+        if (commentsError) throw commentsError;
+        const commentAuthors = await profileMap(db, (commentRows || []).map((row) => row.user_id));
+        const commentsBySubmission = new Map();
+        (commentRows || []).forEach((row) => {
+          const author = commentAuthors[row.user_id];
+          const comment = {
+            ...row,
+            author: {
+              id: row.user_id,
+              name: author?.display_name || 'Shammah member',
+              avatar: author?.avatar_url || null,
+            },
+          };
+          const list = commentsBySubmission.get(row.submission_id) || [];
+          list.push(comment);
+          commentsBySubmission.set(row.submission_id, list);
+        });
+        submissions = submissions.map((row) => ({
+          ...row,
+          comments: commentsBySubmission.get(row.id) || [],
+          comment_count: Math.max(Number(row.comment_count || 0), (commentsBySubmission.get(row.id) || []).length),
+        }));
+      }
       const { data: participantRows, error: participantsError } = await db.from('challenge_participants')
         .select('user_id, points, streak_current, streak_best').eq('challenge_id', id)
         .order('points', { ascending: false }).limit(8);
@@ -324,7 +350,7 @@ export async function POST(request) {
     if (['join', 'checkin', 'submit', 'leave', 'close'].includes(action) && !UUID_RE.test(challengeId)) {
       return jsonError('A valid challenge ID is required.');
     }
-    if (['vote', 'delete-submission', 'moderate-submission'].includes(action) && !UUID_RE.test(submissionId)) {
+    if (['vote', 'comment', 'delete-submission', 'moderate-submission'].includes(action) && !UUID_RE.test(submissionId)) {
       return jsonError('A valid submission ID is required.');
     }
 
@@ -376,6 +402,35 @@ export async function POST(request) {
       }).select('*').single();
       if (error) throw error;
       return NextResponse.json({ ok: true, submission: data, message: 'Your entry was submitted for review.' }, { status: 201 });
+    }
+
+    if (action === 'comment') {
+      const commentBody = String(body.comment || '').trim();
+      if (!commentBody || commentBody.length > 1000) return jsonError('Comment must be between 1 and 1000 characters.');
+      const { data: submission, error: submissionError } = await db.from('challenge_submissions')
+        .select('id,challenge_id,status').eq('id', submissionId).maybeSingle();
+      if (submissionError) throw submissionError;
+      if (!submission || submission.status !== 'approved') return jsonError('Only approved submissions can receive comments.', 404);
+      const { data: challenge, error: challengeError } = await db.from('challenges').select('*').eq('id', submission.challenge_id).maybeSingle();
+      if (challengeError) throw challengeError;
+      if (!challenge || !visibleTo(challenge, user, profile)) return jsonError('This challenge is not available to you.', 403);
+      const { data: comment, error } = await db.from('challenge_submission_comments').insert({
+        submission_id: submissionId, user_id: user.id, body: commentBody,
+      }).select('*').single();
+      if (error) throw error;
+      const { count, error: countError } = await db.from('challenge_submission_comments')
+        .select('id', { count: 'exact', head: true }).eq('submission_id', submissionId);
+      if (countError) throw countError;
+      const { error: updateError } = await db.from('challenge_submissions').update({ comment_count: count || 0 }).eq('id', submissionId);
+      if (updateError) throw updateError;
+      return NextResponse.json({
+        ok: true,
+        comment: {
+          ...comment,
+          author: { id: user.id, name: profile?.display_name || 'Shammah member', avatar: profile?.avatar_url || null },
+        },
+        comment_count: count || 0,
+      }, { status: 201 });
     }
 
     if (action === 'vote') {
