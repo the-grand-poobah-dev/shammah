@@ -48,7 +48,7 @@ begin
       and not tgisinternal
   ) then
     create trigger bible_verses_set_fts_trigger
-      before insert or update of text on public.bible_verses
+      before insert or update on public.bible_verses
       for each row execute function public.bible_verses_set_fts();
   end if;
 end;
