@@ -178,6 +178,14 @@ export default function FundraiserAdminModal({ isOpen, onClose, onActionComplete
                     {camp.story_md?.slice(0, 160)}...
                   </p>
 
+                  {camp.verification_doc_signed_url && (
+                    <p style={{ margin: '0 0 12px 0', fontSize: '12px' }}>
+                      <a href={camp.verification_doc_signed_url} target="_blank" rel="noreferrer" style={{ color: 'var(--teal)', textDecoration: 'underline' }}>
+                        View private verification document (temporary link)
+                      </a>
+                    </p>
+                  )}
+
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                     <button
                       type="button"
