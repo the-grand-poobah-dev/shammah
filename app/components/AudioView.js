@@ -145,6 +145,7 @@ export default function AudioView({ session, currentUser, openAuth }) {
   const [savingTrack, setSavingTrack] = useState(false);
 
   const debounceTimerRef = useRef(null);
+  const catalogRequestRef = useRef(0);
 
   function triggerToast(msg) {
     setToastMessage(msg);
@@ -210,6 +211,7 @@ export default function AudioView({ session, currentUser, openAuth }) {
       setHasMoreCatalog(true);
     }
 
+    const requestId = ++catalogRequestRef.current;
     setLoadingCatalog(true);
     try {
       const res = await listMedia({
@@ -221,6 +223,7 @@ export default function AudioView({ session, currentUser, openAuth }) {
         offset,
       });
 
+      if (requestId !== catalogRequestRef.current) return;
       const newItems = res.data || [];
       if (reset) {
         setCatalogItems(newItems);
@@ -231,9 +234,11 @@ export default function AudioView({ session, currentUser, openAuth }) {
       setCatalogOffset(offset + newItems.length);
       setHasMoreCatalog(newItems.length >= 12);
     } catch (err) {
-      console.warn('[AudioView] fetchCatalog error:', err);
+      if (requestId === catalogRequestRef.current) {
+        console.warn('[AudioView] fetchCatalog error:', err);
+      }
     } finally {
-      setLoadingCatalog(false);
+      if (requestId === catalogRequestRef.current) setLoadingCatalog(false);
     }
   }, [activeCategory, debouncedQuery, activeSort, catalogOffset]);
 
