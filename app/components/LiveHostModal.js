@@ -233,9 +233,9 @@ export default function LiveHostModal({ isOpen, onClose, session, profile }) {
       roomRef.current = room;
       await room.connect(started.url, started.token);
       for (const track of tracksRef.current) {
-        if ((track.kind === 'audio' && micEnabled) || (track.kind === 'video' && cameraEnabled)) {
-          await room.localParticipant.publishTrack(track);
-        }
+        if (track.kind === 'audio' && !micEnabled) track.mute();
+        if (track.kind === 'video' && !cameraEnabled) track.mute();
+        await room.localParticipant.publishTrack(track);
       }
       startedAtRef.current = Date.now();
       setElapsed(0);
