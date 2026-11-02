@@ -59,6 +59,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const [isChapterOffline, setIsChapterOffline] = useState(false);
   const [testamentFilter, setTestamentFilter] = useState('ALL'); // ALL, OT, NT
   const [searchQuery, setSearchQuery] = useState('');
+  const [scriptureSearchQuery, setScriptureSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
@@ -277,7 +278,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   }
 
   useEffect(() => {
-    const query = searchQuery.trim();
+    const query = scriptureSearchQuery.trim();
     if (query.length < 2) {
       setSearchResults([]);
       setSearchError('');
@@ -299,7 +300,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       }
     }, 300);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [searchQuery, translation]);
+  }, [scriptureSearchQuery, translation]);
 
   const filteredBooks = useMemo(() => {
     return BIBLE_BOOKS.filter((b) => {
@@ -580,15 +581,15 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         <label htmlFor="bible-scripture-search" style={{ display: 'block', fontWeight: 600, marginBottom: '7px' }}>Search Scripture or enter a reference</label>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <Search size={17} aria-hidden="true" />
-          <input id="bible-scripture-search" type="search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="e.g. John 3:16 or faith" aria-label="Search Bible text or reference" style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }} />
-          {searchQuery && <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setSearchQuery('')} aria-label="Clear Bible search">Clear</button>}
+          <input id="bible-scripture-search" type="search" value={scriptureSearchQuery} onChange={(e) => setScriptureSearchQuery(e.target.value)} placeholder="e.g. John 3:16 or faith" aria-label="Search Bible text or reference" style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }} />
+          {scriptureSearchQuery && <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setScriptureSearchQuery('')} aria-label="Clear Bible search">Clear</button>}
         </div>
-        {searchQuery.trim().length >= 2 && (
+        {scriptureSearchQuery.trim().length >= 2 && (
           <div style={{ marginTop: '10px' }} aria-live="polite">
-            {searching ? <p>Searching Scripture…</p> : searchError ? <p role="alert">{searchError} <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setSearchQuery((q) => q + ' ')}>Retry</button></p> : searchResults.length ? (
+            {searching ? <p>Searching Scripture…</p> : searchError ? <p role="alert">{searchError} <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setScriptureSearchQuery((q) => q + ' ')}>Retry</button></p> : searchResults.length ? (
               <div style={{ display: 'grid', gap: '6px' }}>
                 {searchResults.slice(0, 12).map((result) => (
-                  <button key={`${result.book_id}-${result.chapter}-${result.verse}`} type="button" onClick={() => { setSelectedBookId(result.book_id); setSelectedChapter(result.chapter); setSearchQuery(''); setChapterRetry((n) => n + 1); }} style={{ textAlign: 'left', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)', cursor: 'pointer' }}>
+                  <button key={`${result.book_id}-${result.chapter}-${result.verse}`} type="button" onClick={() => { setSelectedBookId(result.book_id); setSelectedChapter(result.chapter); setScriptureSearchQuery(''); setChapterRetry((n) => n + 1); }} style={{ textAlign: 'left', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)', cursor: 'pointer' }}>
                     <strong>{result.reference}</strong><span style={{ display: 'block', marginTop: '3px', color: 'var(--ink-muted)' }}>{result.verse_text}</span>
                   </button>
                 ))}
