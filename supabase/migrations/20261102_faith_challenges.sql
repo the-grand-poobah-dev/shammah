@@ -12,6 +12,13 @@ ALTER TABLE public.challenges
 ALTER TABLE public.challenges
   ADD CONSTRAINT challenges_category_check CHECK (category IN ('Prayer','Fasting','Scripture memory','Service','Worship','Generosity'));
 
+ALTER TABLE public.challenge_checkins
+  ADD COLUMN IF NOT EXISTS points_awarded integer NOT NULL DEFAULT 10;
+ALTER TABLE public.challenge_checkins
+  ADD COLUMN IF NOT EXISTS checkin_date date DEFAULT CURRENT_DATE;
+ALTER TABLE public.challenge_checkins
+  ADD COLUMN IF NOT EXISTS reflection text;
+
 ALTER TABLE public.challenge_submissions
   ADD COLUMN IF NOT EXISTS media_type text NOT NULL DEFAULT 'image';
 ALTER TABLE public.challenge_submissions
