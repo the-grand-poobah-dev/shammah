@@ -77,7 +77,7 @@ alter table public.live_bans enable row level security;
 
 drop policy if exists live_streams_read_visible on public.live_streams;
 create policy live_streams_read_visible on public.live_streams
-for select to authenticated, anon
+for select to authenticated
 using (
   visibility = 'public'
   or host_id = auth.uid()
@@ -109,7 +109,7 @@ using (host_id = auth.uid());
 
 drop policy if exists live_chat_read_visible on public.live_chat_messages;
 create policy live_chat_read_visible on public.live_chat_messages
-for select to authenticated, anon
+for select to authenticated
 using (
   exists (
     select 1 from public.live_streams s
@@ -274,7 +274,7 @@ begin
 end $$;
 
 -- Explicit grants are still subject to the policies above.
-grant select on public.live_streams, public.live_chat_messages to anon, authenticated;
+grant select on public.live_streams, public.live_chat_messages to authenticated;
 grant insert on public.live_chat_messages to authenticated;
 grant update on public.live_chat_messages to authenticated;
 grant select, insert, update, delete on public.live_moderators, public.live_bans to authenticated;
