@@ -63,6 +63,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [readingPlans, setReadingPlans] = useState([]);
+  const [readingPlanDays, setReadingPlanDays] = useState([]);
   const [readingPlanProgress, setReadingPlanProgress] = useState([]);
   const [readingPlansLoading, setReadingPlansLoading] = useState(true);
   const [readingPlansError, setReadingPlansError] = useState('');
@@ -237,7 +238,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         const response = await fetch('/api/bible/plans', { headers });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload?.error || 'Could not load reading plans.');
-        if (!cancelled) { setReadingPlans(payload.plans || []); setReadingPlanProgress(payload.progress || []); }
+        if (!cancelled) { setReadingPlans(payload.plans || []); setReadingPlanDays(payload.planDays || []); setReadingPlanProgress(payload.progress || []); }
       } catch (error) {
         if (!cancelled) setReadingPlansError(error?.message || 'Could not load reading plans.');
       } finally {
@@ -556,6 +557,8 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             {readingPlans.map((plan) => {
               const done = readingPlanProgress.filter((item) => item.plan_id === plan.id).length;
               const isActive = activePlanId === plan.id;
+              const nextDay = Math.min(done + 1, plan.days);
+              const nextRefs = readingPlanDays.find((item) => item.plan_id === plan.id && item.day === nextDay)?.refs || [];
               return <article key={plan.id} style={{ border: '1px solid var(--border)', borderTop: `3px solid ${plan.accent || '#0d9488'}`, borderRadius: '12px', padding: '12px', background: 'var(--bg)' }}>
                 <h4 style={{ margin: '0 0 5px' }}>{plan.title}</h4>
                 <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', margin: '0 0 8px' }}>{plan.description}</p>
@@ -565,7 +568,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
                   <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setActivePlanId(isActive ? '' : plan.id)}>{isActive ? 'Hide plan' : 'View plan'}</button>
                   {done < plan.days && <button type="button" className="cx-btn cx-btn-primary" disabled={savingPlanProgress} onClick={() => markReadingPlanDay(plan)}>{savingPlanProgress ? 'Saving…' : 'Complete next day'}</button>}
                 </div>
-                {isActive && <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}><strong>Next reading</strong><p style={{ margin: '5px 0 0', color: 'var(--ink-muted)', fontSize: '0.9rem' }}>Day {Math.min(done + 1, plan.days)} of {plan.days}. Mark the day complete after you finish the listed reading in your Bible.</p></div>}
+                {isActive && <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}><strong>Next reading</strong><p style={{ margin: '5px 0 0', color: 'var(--ink-muted)', fontSize: '0.9rem' }}>Day {nextDay} of {plan.days}</p><ul style={{ margin: '6px 0 0', paddingLeft: '18px', color: 'var(--ink-muted)', fontSize: '0.9rem' }}>{nextRefs.map((ref, index) => <li key={index}>{String(ref).replace(/^\"|\"$/g, '')}</li>)}</ul></div>}
               </article>;
             })}
           </div>
