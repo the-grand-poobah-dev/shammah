@@ -42,8 +42,8 @@ export default function MediaToolbar({
   return (
     <>
       <div className="sh-media-toolbar" data-context={context} data-wide={wide ? 'true' : 'false'}>
-        <input ref={inputRef} type="file" accept="image/*,video/*" className="sh-media-hidden-input" disabled={disabled} onChange={(event) => { pickFile(event.target.files?.[0]); event.target.value = ''; }} />
-        <ToolButton label="Photo/Video" title="Choose a photo or video" onClick={() => inputRef.current?.click()} disabled={disabled}><ImagePlus size={19} /></ToolButton>
+        <input ref={inputRef} type="file" accept="image/*,video/*,audio/*" className="sh-media-hidden-input" disabled={disabled} onChange={(event) => { pickFile(event.target.files?.[0]); event.target.value = ''; }} />
+        <ToolButton label="Media" title="Choose a photo, video or audio file" onClick={() => inputRef.current?.click()} disabled={disabled}><ImagePlus size={19} /></ToolButton>
         <ToolButton label="Camera" title="Take a photo or record video" onClick={() => onCamera ? onCamera() : setCameraOpen(true)} disabled={disabled}><Camera size={19} /></ToolButton>
         {onVoice && <ToolButton label={voiceOpen || voiceActive ? 'Voice' : 'Voice'} title="Record a voice note" onClick={() => setVoiceOpen(true)} disabled={disabled} className={voiceOpen || voiceActive ? 'active' : ''}><Mic size={19} /></ToolButton>}
         {onGif && <ToolButton label="GIF" title="Search or upload a GIF" onClick={onGif} disabled={disabled}><span className="sh-gif-glyph">GIF</span></ToolButton>}
