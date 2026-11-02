@@ -424,7 +424,7 @@ export default function ChallengeDetailModal({
                     </div>
                     {!hasCheckedInToday && (
                       <button
-                        onClick={() => onOpenCheckin && onOpenCheckin(challenge)}
+                        onClick={() => onOpenCheckin && onOpenCheckin({ ...challenge, has_checked_in_today: hasCheckedInToday, currentStreak: streak })}
                         className="px-3.5 py-2 rounded-xl text-xs font-bold text-white shadow-md bg-emerald-600 hover:bg-emerald-500 transition-all"
                       >
                         Check-in Now
