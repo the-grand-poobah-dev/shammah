@@ -137,6 +137,30 @@ export default function LiveHostModal({ isOpen, onClose, session, profile }) {
   }, [isOpen, configured, session?.access_token]);
 
   useEffect(() => {
+    if (!stream?.id || !session?.access_token) return undefined;
+    let sent = false;
+    const endOnPageExit = () => {
+      if (sent) return;
+      sent = true;
+      fetch('/api/live/end', {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ streamId: stream.id }),
+      }).catch(() => {});
+      if (roomRef.current) roomRef.current.disconnect().catch(() => {});
+      tracksRef.current.forEach((track) => { try { track.stop(); } catch {} });
+      tracksRef.current = [];
+    };
+    window.addEventListener('pagehide', endOnPageExit);
+    window.addEventListener('beforeunload', endOnPageExit);
+    return () => {
+      window.removeEventListener('pagehide', endOnPageExit);
+      window.removeEventListener('beforeunload', endOnPageExit);
+    };
+  }, [stream?.id, session?.access_token]);
+
+  useEffect(() => {
     if (!stream?.id) return undefined;
     let cancelled = false;
     async function loadChat() {
