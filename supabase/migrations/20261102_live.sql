@@ -108,6 +108,15 @@ for delete to authenticated
 using (host_id = auth.uid());
 
 drop policy if exists live_chat_read_visible on public.live_chat_messages;
+-- Remove legacy permissive chat policies before installing the scoped policies below.
+drop policy if exists "Stream viewers can read chat messages" on public.live_chat_messages;
+drop policy if exists "Non-banned authenticated users can insert chat messages" on public.live_chat_messages;
+drop policy if exists "Hosts and moderators can update chat messages" on public.live_chat_messages;
+drop policy if exists "Hosts and moderators can delete chat messages" on public.live_chat_messages;
+revoke select, insert, update, delete, truncate, references, trigger
+  on table public.live_chat_messages from public, anon, authenticated;
+grant select, insert on table public.live_chat_messages to authenticated;
+
 create policy live_chat_read_visible on public.live_chat_messages
 for select to authenticated
 using (
