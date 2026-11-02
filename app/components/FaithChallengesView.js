@@ -570,7 +570,7 @@ export default function FaithChallengesView({ session, profile }) {
                             });
                             setPlayingVideoId(sub.id);
                           }}
-                          onPause={() => { if (playingVideoId === sub.id) setPlayingVideoId(null); }}
+                          onPause={() => setPlayingVideoId((current) => current === sub.id ? null : current)}
                           onEnded={() => setPlayingVideoId(null)}
                           className="w-full h-full object-contain"
                         />
