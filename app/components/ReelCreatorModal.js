@@ -20,7 +20,7 @@ import {
 import PopupSheet from './PopupSheet';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
-import { uploadPostMedia } from '../lib/mediaUpload';
+import { uploadPostMedia, detectMediaType } from '../lib/mediaUpload';
 import { supabase } from '../../lib/supabaseClient';
 import { playSound } from '../lib/soundEffects';
 import { cleanDisplayName } from '../lib/postDisplay';
@@ -79,7 +79,7 @@ export default function ReelCreatorModal({
     if (!file) return;
     setError('');
 
-    if (!file.type.startsWith('video/')) {
+    if (detectMediaType(file) !== 'video') {
       setError('Please select a video file (MP4, WebM, or QuickTime MOV).');
       return;
     }
@@ -317,7 +317,7 @@ export default function ReelCreatorModal({
             <input
               ref={fileInputRef}
               type="file"
-              accept="video/mp4,video/webm,video/quicktime"
+              accept="video/*,.mp4,.webm,.mov,.m4v"
               hidden
               onChange={(e) => {
                 const f = e.target.files?.[0];
