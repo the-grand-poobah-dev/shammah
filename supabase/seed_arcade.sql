@@ -214,7 +214,7 @@ insert into public.arcade_questions(category,testament,book,question,options,cor
 ('Epistles', 'NT', 'James', 'What should a person who lacks wisdom ask God for?', '["Wealth","Fame","Power over others","Wisdom"]'::jsonb, 3, 'James 1:5'),
 ('Epistles', 'NT', 'Ephesians', 'What is the shield in the armour of God called?', '["The shield of kings","The shield of silence","The shield of faith","The shield of gold"]'::jsonb, 2, 'Ephesians 6:16'),
 ('Epistles', 'NT', 'Philippians', 'What should believers do instead of being anxious?', '["Hide from everyone","Pray with thanksgiving","Give up","Blame others"]'::jsonb, 1, 'Philippians 4:6'),
-('Epistles', 'NT', '1 John', 'How should we love, according to 1 John 3:18?', '["In deed and in truth","Only in words","Only in private","Only when rewarded"]'::jsonb, 0, '1 John 3:18'),
+('Epistles', 'NT', '1 John', 'How should we love, according to 1 John 3:18?', '["In deed and in truth","Only in words","Only in private","Only when rewarded"]'::jsonb, 0, '1 John 3:18')
 on conflict do nothing;
 
 
