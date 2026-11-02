@@ -45,10 +45,8 @@ export async function POST(request) {
   if (type === 'bible_highlights') {
     const highlightRef = { ...ref, book: String(body.book || body.book_id) };
     const color = ['gold','blue','green','pink','purple'].includes(body.color) ? body.color : 'gold';
-    const { data: existing, error: findError } = await auth.client.from(type).select('id').match(highlightRef).maybeSingle();
-    if (findError) return NextResponse.json({ error: 'Could not check your highlight.' }, { status: 500 });
     if (body.action === 'remove') {
-      const { error } = await auth.client.from(type).delete().match(highlightRef);
+      const { error } = await auth.client.from(type).delete().match({ user_id: auth.user.id, book: highlightRef.book, chapter: ref.chapter, verse: ref.verse });
       if (error) return NextResponse.json({ error: 'Could not remove highlight.' }, { status: 500 });
       return NextResponse.json({ saved: false });
     }
