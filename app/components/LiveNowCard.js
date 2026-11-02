@@ -8,12 +8,13 @@ import { supabase } from '../lib/supabaseClient';
 export default function LiveNowCard() {
   const [streams, setStreams] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [available, setAvailable] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
       const response = await fetch('/api/live', { cache: 'no-store' });
       const payload = await response.json().catch(() => ({}));
-      if (response.ok) setStreams(payload.streams || []);
+      if (response.ok) { setAvailable(true); setStreams(payload.streams || []); }
     } catch {}
     finally { setLoaded(true); }
   }, []);
@@ -31,7 +32,7 @@ export default function LiveNowCard() {
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('shammah:open-live'));
   }
 
-  if (!loaded) return null;
+  if (!loaded || !available) return null;
   return (
     <section className="sh-live-now-card" aria-label="Live broadcasts">
       <header><div><span className="sh-live-now-mark"><Radio size={17} /></span><div><h2>Live Now</h2><p>Gather with the community in real time</p></div></div><span className="sh-live-now-total">{streams.length} live</span></header>
