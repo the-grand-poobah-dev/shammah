@@ -23,14 +23,15 @@ export default function LiveNowCard() {
     const channel = supabase.channel('shammah-live-now')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_streams' }, refresh)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const timer = setInterval(refresh, 20000);
+    return () => { clearInterval(timer); supabase.removeChannel(channel); };
   }, [refresh]);
 
   function openLiveComposer() {
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('shammah:open-live'));
   }
 
-  if (!loaded || (!streams.length && !loaded)) return null;
+  if (!loaded) return null;
   return (
     <section className="sh-live-now-card" aria-label="Live broadcasts">
       <header><div><span className="sh-live-now-mark"><Radio size={17} /></span><div><h2>Live Now</h2><p>Gather with the community in real time</p></div></div><span className="sh-live-now-total">{streams.length} live</span></header>
