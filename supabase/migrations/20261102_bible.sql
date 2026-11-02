@@ -34,39 +34,8 @@ alter table public.bible_verses add column if not exists book_name text;
 alter table public.bible_verses add column if not exists fts tsvector;
 create index if not exists bible_verses_search_idx on public.bible_verses using gin (fts);
 create index if not exists bible_verses_ref_idx on public.bible_verses (translation, book_id, chapter, verse);
--- Some existing installations define fts as a GENERATED column. PostgreSQL
--- computes those values itself, so only install a trigger for ordinary columns.
-do $$
-declare
-  fts_is_generated boolean;
-begin
-  select (is_generated = 'ALWAYS')
-    into fts_is_generated
-  from information_schema.columns
-  where table_schema = 'public'
-    and table_name = 'bible_verses'
-    and column_name = 'fts';
-
-  if not coalesce(fts_is_generated, false) then
-    execute $fn$
-      create or replace function public.bible_verses_set_fts() returns trigger
-      language plpgsql
-      set search_path = public
-      as $body$
-      begin
-        new.fts := to_tsvector('english', coalesce(new.text, ''));
-        return new;
-      end;
-      $body$
-    $fn$;
-
-    execute 'drop trigger if exists bible_verses_set_fts_trigger on public.bible_verses';
-    execute 'create trigger bible_verses_set_fts_trigger
-      before insert or update on public.bible_verses
-      for each row execute function public.bible_verses_set_fts()';
-  end if;
-end;
-$$;
+-- The existing bible_verses.fts column is GENERATED ALWAYS on this project.
+-- PostgreSQL maintains it from heading and text; do not write to it or add a trigger.
 alter table public.bible_verses enable row level security;
 -- Remove legacy public write policies; indexed verse text must stay server-side.
 drop policy if exists "Allow insert to bible verses" on public.bible_verses;
