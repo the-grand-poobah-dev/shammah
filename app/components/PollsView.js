@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   BarChart3,
   CheckCircle2,
@@ -646,7 +646,9 @@ export default function PollsView({
     );
   }, [currentUser]);
 
+  const pollRequestRef = useRef(0);
   const fetchAllData = useCallback(async (silent = false) => {
+    const requestId = ++pollRequestRef.current;
     if (!silent) {
       setLoading(true);
       setError('');
@@ -656,14 +658,15 @@ export default function PollsView({
         listPolls({ userId: session?.user?.id || null }),
         getQuizLeaderboard(8),
       ]);
+      if (requestId !== pollRequestRef.current) return;
       setPolls(pollsList);
       setLeaderboard(lbList);
     } catch (err) {
-      if (!silent) {
+      if (requestId === pollRequestRef.current && !silent) {
         setError(err.message || 'Unable to load community polls');
       }
     } finally {
-      if (!silent) setLoading(false);
+      if (requestId === pollRequestRef.current && !silent) setLoading(false);
     }
   }, [session?.user?.id]);
 
