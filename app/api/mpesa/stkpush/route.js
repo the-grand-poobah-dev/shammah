@@ -14,7 +14,9 @@ import { PLANS, PERIODS, priceKes, toMpesaPhone } from '../../../lib/pricing';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const DARJA_BASE = 'https://sandbox.safaricom.co.ke';
+const DARJA_BASE = process.env.MPESA_ENVIRONMENT === 'production'
+  ? 'https://api.safaricom.co.ke'
+  : 'https://sandbox.safaricom.co.ke';
 
 function admin() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -167,6 +169,14 @@ export async function POST(req) {
     const body = await req.json();
     if (body?.courseId) return await initiateCoursePayment(req, body);
     const { phone: rawPhone, churchId, planId, periodId, userId } = body || {};
+
+    if (process.env.MPESA_ENVIRONMENT === 'production' && !process.env.MPESA_CALLBACK_SECRET) {
+      return NextResponse.json({ error: 'Secure M-Pesa callbacks are not configured.' }, { status: 503 });
+    }
+    if (!process.env.MPESA_CONSUMER_KEY || !process.env.MPESA_CONSUMER_SECRET ||
+        !process.env.MPESA_SHORTCODE || !process.env.MPESA_PASSKEY || !process.env.MPESA_CALLBACK_URL) {
+      return NextResponse.json({ error: 'M-Pesa payments are not configured yet.' }, { status: 503 });
+    }
 
     if (!churchId || !userId) {
       return NextResponse.json({ error: 'Missing church or user.' }, { status: 400 });
