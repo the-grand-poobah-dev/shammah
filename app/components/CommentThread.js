@@ -595,7 +595,7 @@ export default function CommentThread({
 
               {comment.media_url && (
                 <div className="comment-media-container" style={{ marginTop: comment.text_content ? 6 : 2 }}>
-                  {comment.media_type === 'image' && (
+                  {(comment.media_type === 'image' || comment.media_type === 'gif') && (
                     <img
                       src={comment.media_url}
                       alt="Attachment"
@@ -603,7 +603,7 @@ export default function CommentThread({
                         maxHeight: 240,
                         maxWidth: '100%',
                         borderRadius: 10,
-                        objectFit: 'cover',
+                        objectFit: 'contain',
                         display: 'block',
                       }}
                       loading="lazy"
@@ -993,7 +993,7 @@ export default function CommentThread({
                 marginBottom: 8,
               }}
             >
-              {commentMediaPreview.type === 'image' && (
+              {(commentMediaPreview.type === 'image' || commentMediaPreview.type === 'gif') && (
                 <img
                   src={commentMediaPreview.url}
                   alt="Preview"
@@ -1027,7 +1027,7 @@ export default function CommentThread({
                   {commentMediaPreview.name || (commentMediaPreview.type === 'audio' ? 'Voice Note' : 'Attached Media')}
                 </strong>
                 <span style={{ color: 'var(--ink-muted)', fontSize: 11 }}>
-                  {commentMediaPreview.type === 'image' ? 'Photo' : commentMediaPreview.type === 'video' ? 'Video' : 'Audio Note'} ready to send
+                  {commentMediaPreview.type === 'gif' ? 'GIF' : commentMediaPreview.type === 'image' ? 'Photo' : commentMediaPreview.type === 'video' ? 'Video' : 'Audio Note'} ready to send
                 </span>
               </div>
               <button
@@ -1150,7 +1150,7 @@ export default function CommentThread({
                     {text.trim()
                       ? `“${text.trim().length > 50 ? text.trim().slice(0, 47) + '…' : text.trim()}”`
                       : commentMediaPreview
-                      ? `“[${commentMediaPreview.type === 'audio' ? 'Voice Note' : commentMediaPreview.type === 'video' ? 'Video' : 'Photo'}]”`
+                      ? `“[${commentMediaPreview.type === 'audio' ? 'Voice Note' : commentMediaPreview.type === 'video' ? 'Video' : commentMediaPreview.type === 'gif' ? 'GIF' : 'Photo'}]”`
                       : '“Your comment text…”'}
                   </span>
                 </div>
