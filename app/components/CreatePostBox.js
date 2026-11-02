@@ -460,6 +460,7 @@ export default function CreatePostBox({
   const CurrentVisIcon = VIS_ICONS[visibility] || Globe;
 
   return (
+    <>
     <form className="compose compose-genz" onSubmit={handleFormSubmit}>
       {/* Top Header: Avatar + Author + Privacy Selector + Admin Pin Toggle */}
       <div className="compose-header">
@@ -1691,6 +1692,7 @@ export default function CreatePostBox({
           </div>
         </div>
       </PopupSheet>
+    </form>
     <ReelCreatorModal
       isOpen={showReelCreator}
       onClose={() => setShowReelCreator(false)}
@@ -1707,6 +1709,6 @@ export default function CreatePostBox({
       session={session}
       profile={profile}
     />
-    </form>
+    </>
   );
 }
