@@ -263,17 +263,26 @@ export default function ProfileSettings({ session }) {
     if (!canSave) return;
     setSaving(true);
     try {
-      const privateFields = {};
-      if (dobChanged) privateFields.date_of_birth = dob;
+      const privateFields = {
+        date_of_birth: dobChanged ? dob : (profile.date_of_birth || dobOrig || null),
+        location_place_id: profile.location_place_id || null,
+        location_lat: profile.location_lat ?? null,
+        location_lng: profile.location_lng ?? null,
+      };
+      const privateUpdate = { id: uid };
+      if (dobChanged) privateUpdate.date_of_birth = dob;
       if (locChanged) {
         privateFields.location_place_id = location?.placeId || null;
         privateFields.location_lat = location?.lat ?? null;
         privateFields.location_lng = location?.lng ?? null;
+        privateUpdate.location_place_id = privateFields.location_place_id;
+        privateUpdate.location_lat = privateFields.location_lat;
+        privateUpdate.location_lng = privateFields.location_lng;
       }
       if (dobChanged || locChanged) {
         const { error } = await supabase
           .from('profile_private')
-          .upsert({ id: uid, ...privateFields }, { onConflict: 'id' });
+          .upsert(privateUpdate, { onConflict: 'id' });
         if (error) throw new Error(error.message);
         if (dobChanged) setDobOrig(dob);
       }
