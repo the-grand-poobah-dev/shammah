@@ -823,16 +823,20 @@ export default function FaithChallengesView({ session, profile }) {
                         <span className="text-xs text-slate-400 font-semibold">
                           {participantCount} joined
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triggerCheckin(ch);
-                          }}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow-sm"
-                          style={{ background: accent }}
-                        >
-                          Check In
-                        </button>
+                        {ch.status === 'active' ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerCheckin(ch);
+                            }}
+                            className="min-h-11 px-3 rounded-lg text-xs font-bold text-white shadow-sm"
+                            style={{ background: accent }}
+                          >
+                            Check In
+                          </button>
+                        ) : (
+                          <span className="text-xs font-semibold text-slate-400">Completed</span>
+                        )}
                       </div>
                     </div>
                   );
@@ -897,16 +901,20 @@ export default function FaithChallengesView({ session, profile }) {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triggerCheckin(ch);
-                          }}
-                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-md transition-transform active:scale-95"
-                          style={{ background: accent }}
-                        >
-                          Check In
-                        </button>
+                        {ch.status === 'active' ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerCheckin(ch);
+                            }}
+                            className="min-h-11 px-3.5 rounded-xl text-xs font-bold text-white shadow-md transition-transform active:scale-95"
+                            style={{ background: accent }}
+                          >
+                            Check In
+                          </button>
+                        ) : (
+                          <span className="text-xs font-semibold text-slate-400">Completed</span>
+                        )}
                       </div>
                     </div>
                   </AccentCard>
