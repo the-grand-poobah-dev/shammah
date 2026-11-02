@@ -249,8 +249,8 @@ export default function CreatePostBox({
     setMediaLibraryError('');
     try {
       const [videos, audio] = await Promise.all([
-        listMedia({ kind: 'video', sort: 'recent', limit: 30 }),
-        listMedia({ kind: 'audio', sort: 'recent', limit: 30 }),
+        listMedia({ kind: 'video', authorId: session.user.id, sort: 'recent', limit: 30 }),
+        listMedia({ kind: 'audio', authorId: session.user.id, sort: 'recent', limit: 30 }),
       ]);
       if (videos.error) throw videos.error;
       if (audio.error) throw audio.error;
