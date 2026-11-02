@@ -37,6 +37,14 @@ SET location_place_id = COALESCE(EXCLUDED.location_place_id, profile_private.loc
     who_can_tag_me = COALESCE(profile_private.who_can_tag_me, EXCLUDED.who_can_tag_me),
     review_tags = COALESCE(profile_private.review_tags, EXCLUDED.review_tags);
 
+-- Fill defaults for older private rows whose legacy profile setting was NULL.
+UPDATE public.profile_private AS pp
+SET inbox_permission = COALESCE(pp.inbox_permission, p.inbox_permission, 'everyone'),
+    who_can_tag_me = COALESCE(pp.who_can_tag_me, p.who_can_tag_me, 'everyone'),
+    review_tags = COALESCE(pp.review_tags, p.review_tags, false)
+FROM public.profiles AS p
+WHERE p.id = pp.id;
+
 ALTER TABLE public.profile_private
   ALTER COLUMN inbox_permission SET DEFAULT 'everyone',
   ALTER COLUMN inbox_permission SET NOT NULL,
