@@ -4,7 +4,6 @@ import React, { useState, useRef } from 'react';
 import {
   X,
   UploadCloud,
-  Film,
   Camera,
   Music,
   BookOpen,
@@ -17,13 +16,6 @@ import { playSound } from '../../lib/soundEffects';
 import { uploadPostMedia } from '../../lib/mediaUpload';
 import { submitChallengeEntry } from '../../lib/data/challengesApi';
 
-const PRESET_SAMPLE_MEDIA = [
-  { url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600', label: 'Worship / CU Youth' },
-  { url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600', label: 'Acoustic Guitar' },
-  { url: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=600', label: 'Acts of Kindness' },
-  { url: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=600', label: 'Sunday Fit & Praise' },
-];
-
 export default function ChallengeSubmitModal({
   isOpen,
   onClose,
@@ -32,6 +24,7 @@ export default function ChallengeSubmitModal({
   onSubmitted,
 }) {
   const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaType, setMediaType] = useState('image');
   const [caption, setCaption] = useState('');
   const [scripture, setScripture] = useState('');
   const [hashtag, setHashtag] = useState(challenge?.tag || '#FaithChallenge');
@@ -51,22 +44,28 @@ export default function ChallengeSubmitModal({
     if (!file) return;
 
     setErrorMsg('');
+    if (!currentUser?.id) {
+      setErrorMsg('Please sign in before uploading a challenge entry.');
+      return;
+    }
     setUploading(true);
     setUploadProgress(20);
 
     try {
-      const res = await uploadPostMedia(file, currentUser?.id || 'guest-user');
+      const res = await uploadPostMedia(file, currentUser.id);
       setUploadProgress(100);
       if (res?.url) {
         setMediaUrl(res.url);
+        setMediaType(res.type === 'video' ? 'video' : 'image');
+      } else {
+        throw new Error('The upload did not return a public media URL.');
       }
       playSound('reaction');
     } catch (err) {
-      // In local preview where storage bucket might not be active, generate preview object URL
-      const localUrl = URL.createObjectURL(file);
-      setMediaUrl(localUrl);
+      setErrorMsg(err.message || 'Upload failed. Please try another file.');
     } finally {
       setUploading(false);
+      e.target.value = '';
     }
   }
 
@@ -90,6 +89,7 @@ export default function ChallengeSubmitModal({
       const res = await submitChallengeEntry({
         challengeId: challenge.id,
         mediaUrl: mediaUrl.trim(),
+        mediaType,
         caption: caption.trim(),
         hashtag: hashtag.trim(),
         scripture: scripture.trim() || null,
@@ -181,11 +181,29 @@ export default function ChallengeSubmitModal({
                     border: '1px solid var(--border)',
                   }}
                 >
-                  <img
-                    src={mediaUrl}
-                    alt="Preview"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute', inset: 0, backgroundImage: mediaType === 'image' ? 'url("' + mediaUrl + '")' : 'none',
+                      backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(24px)', opacity: 0.45, transform: 'scale(1.12)',
+                    }}
                   />
+                  {mediaType === 'video' ? (
+                    <video
+                      src={mediaUrl}
+                      muted
+                      playsInline
+                      controls
+                      preload="metadata"
+                      style={{ position: 'relative', width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  ) : (
+                    <img
+                      src={mediaUrl}
+                      alt="Challenge media preview"
+                      style={{ position: 'relative', width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  )}
                   <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', background: 'rgba(0,0,0,0.7)', color: '#fff' }}>
                       {scripture || 'Scripture Verified'}
@@ -226,7 +244,7 @@ export default function ChallengeSubmitModal({
                     {uploading ? 'Processing file...' : 'Upload Video or Photo'}
                   </span>
                   <span style={{ fontSize: '11px', color: 'var(--ink-muted)', marginTop: '4px', display: 'block' }}>
-                    MP4, WebM, JPG, PNG or GIF up to 50MB
+                    Video up to 100MB; images up to 15MB (MP4, WebM, JPG, PNG, WebP or GIF)
                   </span>
                   <input
                     ref={fileInputRef}
@@ -238,42 +256,6 @@ export default function ChallengeSubmitModal({
                 </div>
               )}
 
-              {/* Sample preset picker */}
-              {!mediaUrl && (
-                <div style={{ marginTop: '10px' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--ink-muted)', display: 'block', marginBottom: '6px' }}>
-                    Or test with a sample faith clip:
-                  </span>
-                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                    {PRESET_SAMPLE_MEDIA.map((item, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setMediaUrl(item.url);
-                          playSound('reaction');
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '6px 10px',
-                          borderRadius: '8px',
-                          border: '1px solid var(--border)',
-                          background: 'var(--surface)',
-                          color: 'var(--ink)',
-                          fontSize: '11px',
-                          whiteSpace: 'nowrap',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Film size={12} />
-                        <span>{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Caption */}
