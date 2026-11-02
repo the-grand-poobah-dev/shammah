@@ -215,6 +215,8 @@ grant execute on function public.arcade_leaderboard(text,text) to authenticated,
 revoke all on function public.arcade_daily_seed(text) from public, anon;
 grant execute on function public.arcade_daily_seed(text) to authenticated, service_role;
 
-grant select on public.arcade_games, public.arcade_daily, public.arcade_verses, public.arcade_questions to anon, authenticated;
+grant select on public.arcade_games, public.arcade_daily, public.arcade_verses to anon, authenticated;
+-- Keep answer keys server-only; trivia questions are served through /api/arcade with correct_index removed.
+revoke select on public.arcade_questions from anon, authenticated;
 grant select on public.arcade_progress, public.arcade_achievements to authenticated;
 revoke select on public.arcade_scores from anon, authenticated;
