@@ -114,6 +114,7 @@ alter table public.bible_notes add column if not exists book text;
 alter table public.bible_notes add column if not exists book_id text;
 alter table public.bible_notes add column if not exists verse_start integer;
 alter table public.bible_notes add column if not exists verse_end integer;
+alter table public.bible_notes add column if not exists verse integer;
 alter table public.bible_notes add column if not exists title text;
 alter table public.bible_notes add column if not exists content text not null default '';
 alter table public.bible_notes add column if not exists speaker text;
