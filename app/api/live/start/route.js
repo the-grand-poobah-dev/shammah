@@ -22,9 +22,11 @@ export async function POST(request) {
   const service = getLiveServiceClient();
   if (!service) return liveJsonError('Live server configuration is incomplete.', 503);
 
+  let roomName = null;
+  let createdStreamId = null;
   try {
     const [{ data: profile }, { count: recentStarts, error: countError }] = await Promise.all([
-      service.from('profiles').select('id, badge_verified, role, church_id').eq('id', user.id).maybeSingle(),
+      service.from('profiles').select('id, display_name, badge_verified, role, church_id').eq('id', user.id).maybeSingle(),
       service.from('live_streams').select('id', { count: 'exact', head: true })
         .eq('host_id', user.id).gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()),
     ]);
@@ -43,7 +45,7 @@ export async function POST(request) {
       return liveJsonError('You can only start a church-only stream for your own church.', 403);
     }
 
-    const roomName = 'shammah-' + user.id.slice(0, 8) + '-' + randomUUID();
+    roomName = 'shammah-' + user.id.slice(0, 8) + '-' + randomUUID();
     const room = await createLiveRoom(roomName);
     const { data: stream, error: insertError } = await service.from('live_streams').insert({
       host_id: user.id,
@@ -61,6 +63,7 @@ export async function POST(request) {
       try { await (await import('../../../lib/live/provider')).deleteLiveRoom(roomName); } catch {}
       throw insertError || new Error('Could not create live stream record.');
     }
+    createdStreamId = stream.id;
 
     const { token, url } = await createLiveToken({
       identity: user.id,
@@ -72,6 +75,12 @@ export async function POST(request) {
 
     return Response.json({ stream, token, url });
   } catch (error) {
+    if (roomName) {
+      try { await (await import('../../../lib/live/provider')).deleteLiveRoom(roomName); } catch {}
+    }
+    if (createdStreamId) {
+      try { await service.from('live_streams').delete().eq('id', createdStreamId); } catch {}
+    }
     console.error('[api/live/start]', error?.message || error);
     return liveJsonError('Could not start the live broadcast. Please try again.', 500);
   }
