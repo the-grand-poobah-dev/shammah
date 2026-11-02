@@ -31,7 +31,7 @@ export const ALLOWED_MIME = {
 export function detectMediaType(file) {
   if (!file) return null;
   const mime = (file.type || '').split(';')[0].trim().toLowerCase();
-  if (mime === 'image/gif' || /\\.gif$/i.test(file.name || '')) return 'gif';
+  if (mime === 'image/gif' || /\.gif$/i.test(file.name || '')) return 'gif';
   if (ALLOWED_MIME.image.includes(mime) || mime.startsWith('image/')) return 'image';
   if (ALLOWED_MIME.video.includes(mime) || mime.startsWith('video/')) return 'video';
   if (ALLOWED_MIME.audio.includes(mime) || mime.startsWith('audio/')) return 'audio';
