@@ -59,13 +59,14 @@ export async function POST(req) {
     // Also check if this callback corresponds to a paid course enrollment transaction
     const { data: tx } = await supabase
       .from('mpesa_transactions')
-      .select('id, project_id, user_id, plan_id, amount_kes, status')
+      .select('id, project_id, user_id, plan_id, interval_id, amount_kes, status')
       .eq('checkout_request_id', checkoutId)
       .maybeSingle();
 
     const isCoursePayment = Boolean(
       tx &&
       tx.project_id &&
+      tx.interval_id === 'course' &&
       tx.plan_id === tx.project_id &&
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(tx.project_id))
     );
