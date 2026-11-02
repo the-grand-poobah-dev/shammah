@@ -22,7 +22,10 @@ export async function POST(request) {
     if (stream.host_id !== user.id && !['platform_admin', 'admin'].includes(profile?.role)) {
       return liveJsonError('Only the host or a platform administrator can end this broadcast.', 403);
     }
-    if (stream.status === 'ended') return Response.json({ stream, alreadyEnded: true });
+    if (stream.status === 'ended') {
+      if (isLiveConfigured()) await deleteLiveRoom(stream.room_name);
+      return Response.json({ stream, alreadyEnded: true });
+    }
 
     const participants = isLiveConfigured() ? await countLiveParticipants(stream.room_name) : 0;
     const now = new Date().toISOString();
