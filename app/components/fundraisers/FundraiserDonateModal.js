@@ -17,7 +17,6 @@ import {
   AlertCircle,
   Share2,
   RotateCcw,
-  BellRing,
 } from 'lucide-react';
 import { playSound } from '../../lib/soundEffects';
 import { donateToFundraiser, checkDonationStatus } from '../../lib/data/fundraisersApi';
@@ -36,8 +35,6 @@ export default function FundraiserDonateModal({
   const [phone, setPhone] = useState(currentUser?.phone || '');
   const [message, setMessage] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [enableReminder, setEnableReminder] = useState(false);
-  const [sandboxInstant, setSandboxInstant] = useState(true);
 
   const [status, setStatus] = useState('idle'); // idle | initiating | waiting_pin | succeeded | failed
   const [errorMsg, setErrorMsg] = useState('');
@@ -65,7 +62,7 @@ export default function FundraiserDonateModal({
   // Polling for STK Push confirmation if not instant
   useEffect(() => {
     let timer = null;
-    if (status === 'waiting_pin' && receiptData?.checkoutRequestId && !sandboxInstant) {
+    if (status === 'waiting_pin' && receiptData?.checkoutRequestId) {
       timer = setInterval(async () => {
         try {
           const res = await checkDonationStatus({
@@ -99,7 +96,7 @@ export default function FundraiserDonateModal({
       }, 3000);
     }
     return () => clearInterval(timer);
-  }, [status, receiptData, sandboxInstant, fundraiser, onSuccess]);
+  }, [status, receiptData, fundraiser, onSuccess]);
 
   async function handleInitiate(e) {
     if (e) e.preventDefault();
@@ -128,12 +125,11 @@ export default function FundraiserDonateModal({
         anonymous: isAnonymous,
         message: message.trim() || null,
         userId: currentUser?.id || null,
-        simulateConfirmation: sandboxInstant,
       });
 
       setReceiptData(res);
 
-      if (sandboxInstant || res.status === 'succeeded') {
+      if (res.status === 'succeeded') {
         setStatus('succeeded');
         playSound('postPublished');
         if (onSuccess) onSuccess(res.fundraiser || fundraiser);
@@ -395,28 +391,6 @@ export default function FundraiserDonateModal({
                   <span>Give anonymously (hide my name on public donor wall)</span>
                 </label>
 
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', color: 'var(--ink)' }}>
-                  <input
-                    type="checkbox"
-                    checked={enableReminder}
-                    onChange={(e) => setEnableReminder(e.target.checked)}
-                    style={{ accentColor: '#10b981' }}
-                  />
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <BellRing size={12} style={{ color: 'var(--teal)' }} />
-                    <span>Send me a monthly reminder notification to support this cause</span>
-                  </span>
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '11px', color: 'var(--ink-muted)', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px', border: '1px dashed var(--border)' }}>
-                  <input
-                    type="checkbox"
-                    checked={sandboxInstant}
-                    onChange={(e) => setSandboxInstant(e.target.checked)}
-                    style={{ accentColor: '#10b981' }}
-                  />
-                  <span>Sandbox instant simulation (verifies totals immediately for testing)</span>
-                </label>
               </div>
 
               {errorMsg && (
