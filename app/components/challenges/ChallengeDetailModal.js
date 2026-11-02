@@ -26,7 +26,7 @@ import {
 import Avatar from '../Avatar';
 import MemberName from '../MemberName';
 import { playSound } from '../../lib/soundEffects';
-import { getChallengeDetail, joinChallenge, leaveChallenge, closeChallenge, voteChallengeSubmission, moderateChallengeSubmission, deleteChallengeSubmission } from '../../lib/data/challengesApi';
+import { getChallengeDetail, joinChallenge, leaveChallenge, closeChallenge, voteChallengeSubmission, addChallengeComment, moderateChallengeSubmission, deleteChallengeSubmission } from '../../lib/data/challengesApi';
 
 export default function ChallengeDetailModal({
   isOpen,
@@ -46,6 +46,9 @@ export default function ChallengeDetailModal({
   const [copiedLink, setCopiedLink] = useState(false);
   const [votingMap, setVotingMap] = useState({});
   const [playingSubmissionId, setPlayingSubmissionId] = useState(null);
+  const [commentingSubmissionId, setCommentingSubmissionId] = useState(null);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !challengeId) return;
@@ -142,6 +145,35 @@ export default function ChallengeDetailModal({
     } catch (err) {
       console.error('Vote failed:', err);
       setVotingMap((prev) => ({ ...prev, [subId]: !prev[subId] }));
+    }
+  }
+
+  async function handleAddComment(submissionId) {
+    const body = commentDraft.trim();
+    if (!currentUser?.id) {
+      alert('Please sign in to comment.');
+      return;
+    }
+    if (!body || body.length > 1000 || commentSubmitting) return;
+    setCommentSubmitting(true);
+    try {
+      const result = await addChallengeComment(submissionId, body);
+      setChallengeData((prev) => ({
+        ...prev,
+        submissions: (prev.submissions || []).map((item) => item.id === submissionId
+          ? {
+              ...item,
+              comments: [...(item.comments || []), result.comment],
+              comment_count: result.comment_count,
+            }
+          : item),
+      }));
+      setCommentDraft('');
+      setCommentingSubmissionId(submissionId);
+    } catch (err) {
+      alert(err.message || 'Could not add your comment.');
+    } finally {
+      setCommentSubmitting(false);
     }
   }
 
@@ -626,6 +658,55 @@ export default function ChallengeDetailModal({
                           <div className="px-2.5 py-1.5 bg-black/40 border-t border-white/5 flex items-center gap-1.5 text-[10px] text-slate-400 truncate">
                             <Music className="w-3 h-3 text-amber-300 flex-shrink-0" />
                             <span className="truncate">{sub.audioTitle}</span>
+                          </div>
+                        )}
+                        {sub.status === 'approved' && (
+                          <div className="border-t border-white/10 p-2.5 bg-black/20">
+                            <button
+                              type="button"
+                              onClick={() => setCommentingSubmissionId((current) => current === sub.id ? null : sub.id)}
+                              aria-expanded={commentingSubmissionId === sub.id}
+                              className="min-h-11 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              {Number(sub.comment_count || sub.comments?.length || 0)} comments
+                            </button>
+                            {commentingSubmissionId === sub.id && (
+                              <div className="space-y-3 pt-2">
+                                <div className="max-h-40 overflow-y-auto space-y-2">
+                                  {(sub.comments || []).map((comment) => (
+                                    <div key={comment.id} className="flex items-start gap-2">
+                                      <Avatar src={comment.author?.avatar} name={comment.author?.name || 'Member'} size={24} />
+                                      <div className="min-w-0 flex-1 rounded-lg bg-white/5 px-2.5 py-2">
+                                        <p className="text-[11px] font-bold text-white">{comment.author?.name || 'Member'}</p>
+                                        <p className="text-xs text-slate-300 whitespace-pre-wrap break-words">{comment.body}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {(!sub.comments || sub.comments.length === 0) && (
+                                    <p className="text-xs text-slate-400">No comments yet. Encourage this member with a kind word.</p>
+                                  )}
+                                </div>
+                                {currentUser?.id ? (
+                                  <form onSubmit={(event) => { event.preventDefault(); handleAddComment(sub.id); }} className="space-y-2">
+                                    <textarea
+                                      value={commentDraft}
+                                      onChange={(event) => setCommentDraft(event.target.value)}
+                                      maxLength={1000}
+                                      rows={2}
+                                      placeholder="Write an encouraging comment…"
+                                      className="w-full rounded-lg border bg-black/20 p-2.5 text-xs text-white placeholder:text-slate-500"
+                                      style={{ borderColor: 'var(--border)' }}
+                                    />
+                                    <button type="submit" disabled={commentSubmitting || !commentDraft.trim()} className="min-h-11 rounded-lg bg-amber-500 px-3 text-xs font-bold text-black disabled:opacity-50">
+                                      {commentSubmitting ? 'Posting…' : 'Post comment'}
+                                    </button>
+                                  </form>
+                                ) : (
+                                  <p className="text-xs text-slate-400">Sign in to add a comment.</p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                         {(canModerate || sub.user_id === currentUser?.id) && (
