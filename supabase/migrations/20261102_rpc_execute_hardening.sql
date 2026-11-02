@@ -22,6 +22,17 @@ revoke all on function public.submit_arcade_score(uuid, text, integer, integer, 
 grant execute on function public.submit_arcade_score(uuid, text, integer, integer, jsonb)
   to service_role;
 
+-- Legacy rate-limit and stream-like RPCs accept caller-chosen keys/stream IDs and
+-- are not used by the current API routes. Keep these mutations server-only.
+revoke all on function public.check_rate_limit(text, integer, integer, numeric)
+  from public, anon, authenticated;
+grant execute on function public.check_rate_limit(text, integer, integer, numeric)
+  to service_role;
+
+revoke all on function public.increment_stream_like(uuid)
+  from public, anon, authenticated;
+grant execute on function public.increment_stream_like(uuid) to service_role;
+
 -- A public call could otherwise end every stream whose updated_at is older than six hours.
 revoke all on function public.sweep_stale_live_streams()
   from public, anon, authenticated;
