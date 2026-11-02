@@ -1090,6 +1090,7 @@ export default function CreatePostBox({
             context="post"
             onPickFile={handleFileSelected}
             onVoice={() => isRecordingVoice ? handleStopVoiceNote() : handleStartVoiceNote()}
+            voiceActive={isRecordingVoice}
             onGif={() => setShowGifPicker(true)}
             onReel={() => setShowReelCreator(true)}
             onLive={() => setShowLiveModal(true)}
