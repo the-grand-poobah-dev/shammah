@@ -44,7 +44,7 @@ export async function POST(request) {
   const ref = { user_id: auth.user.id, translation: String(body.translation).toUpperCase(), book_id: String(body.book_id), chapter: Number(body.chapter), verse: Number(body.verse) };
   if (type === 'bible_highlights') {
     const highlightRef = { ...ref, book: String(body.book || body.book_id) };
-    const color = ['gold','blue','green','pink','purple'].includes(body.color) ? body.color : 'gold';
+    const color = ['gold','aqua','emerald','rose','blue','green','pink','purple'].includes(body.color) ? body.color : 'gold';
     if (body.action === 'remove') {
       const { error } = await auth.client.from(type).delete().match({ user_id: auth.user.id, book: highlightRef.book, chapter: ref.chapter, verse: ref.verse });
       if (error) return NextResponse.json({ error: 'Could not remove highlight.' }, { status: 500 });
