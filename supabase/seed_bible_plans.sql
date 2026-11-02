@@ -30,8 +30,8 @@ from public.reading_plans p
 cross join lateral generate_series(1, p.days) as d(day)
 on conflict (plan_id, day) do update set refs = excluded.refs;
 
-insert into public.verse_of_day (day, ref, translation)
-values (current_date, 'Psalm 23:1', 'KJV')
+insert into public.verse_of_day (day, ref, translation, text)
+values (current_date, 'Psalm 23:1', 'KJV', 'The LORD is my shepherd; I shall not want.')
 on conflict (day) do nothing;
 
 commit;
