@@ -139,6 +139,17 @@ REVOKE SELECT (
   who_can_tag_me, review_tags
 ) ON TABLE public.profiles FROM PUBLIC, anon, authenticated;
 
+-- Column-level REFERENCES grants survive a table-level REVOKE. Remove them
+-- explicitly so only the intended public SELECT columns remain exposed.
+REVOKE REFERENCES (
+  id, display_name, role, church_id, created_at, badge, badge_verified,
+  avatar_url, cover_url, about, location_label, location_place_id,
+  location_lat, location_lng, display_name_changed_at, onboarding_completed_at,
+  date_of_birth, location_name, onboarded_at, badge_set_at, is_locked,
+  inbox_permission, church_name, theme_preference, allow_status_reshare,
+  who_can_tag_me, review_tags
+) ON TABLE public.profiles FROM PUBLIC, anon, authenticated;
+
 GRANT SELECT (
   id, display_name, role, church_id, created_at, badge, badge_verified,
   avatar_url, cover_url, about, location_label, display_name_changed_at,
