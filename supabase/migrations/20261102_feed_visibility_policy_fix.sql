@@ -5,6 +5,7 @@ drop policy if exists "posts are publicly readable" on public.posts;
 
 drop policy if exists "comments are publicly readable" on public.comments;
 drop policy if exists "Read comments for visible media" on public.comments;
+drop policy if exists "comments_read_visible_parent" on public.comments;
 
 create policy "comments_read_visible_parent"
 on public.comments for select to anon, authenticated
