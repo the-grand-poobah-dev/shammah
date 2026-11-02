@@ -361,7 +361,7 @@ export default function CoursesView({ session = null, userProfile = null }) {
 
             <div className="course-hub-card-rating">
               <Star size={13} fill="#fbbf24" color="#fbbf24" />
-              <strong>{course.rating_avg || 4.9}</strong>
+              <strong>{Number(course.rating_avg ?? 0).toFixed(2)}</strong>
               <span>({Number(course.enrolled_count || 0).toLocaleString()})</span>
             </div>
           </div>
