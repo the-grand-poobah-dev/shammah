@@ -122,6 +122,10 @@ using (
           select 1 from public.profiles p where p.id = auth.uid() and p.church_id = s.church_id
         )))
   )
+  and not exists (
+    select 1 from public.live_bans b
+    where b.stream_id = live_chat_messages.stream_id and b.user_id = auth.uid()
+  )
 );
 
 drop policy if exists live_chat_insert_eligible on public.live_chat_messages;
