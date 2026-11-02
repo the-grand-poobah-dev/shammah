@@ -189,3 +189,28 @@
 @media(prefers-reduced-motion:reduce){.sh-live-now-item{transition:none}}
 .sh-media-tool.active{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.1);color:#ef4444}
 .sh-live-share{display:inline-flex;width:25px;height:25px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.22);border-radius:50%;background:rgba(255,255,255,.08);color:#fff;cursor:pointer}
+
+/* Shared voice recorder and review */
+.sh-voice-backdrop{position:fixed;inset:0;z-index:1260;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,8,15,.72);backdrop-filter:blur(10px)}
+.sh-voice-recorder{display:flex;width:min(480px,100%);flex-direction:column;gap:16px;border:1px solid var(--border);border-radius:20px;padding:18px;background:var(--surface);color:var(--ink);box-shadow:0 24px 90px rgba(0,0,0,.38)}
+.sh-voice-recorder>header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sh-voice-recorder>header>div{display:flex;align-items:center;gap:10px}
+.sh-voice-recorder>header>div>div{display:flex;flex-direction:column;gap:3px}
+.sh-voice-recorder>header small{color:var(--ink-muted);font-size:11px;line-height:1.4}
+.sh-voice-recorder>header button{display:flex;min-width:44px;min-height:44px;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--ink)}
+.sh-voice-mic{display:flex;width:42px;height:42px;align-items:center;justify-content:center;border-radius:14px;background:rgba(13,148,136,.13);color:var(--teal,#0d9488)}
+.sh-voice-waveform{display:flex;min-height:80px;align-items:center;justify-content:center;gap:4px;border:1px solid var(--border);border-radius:14px;padding:12px;background:var(--bg)}
+.sh-voice-waveform span{width:5px;max-height:48px;border-radius:999px;background:var(--teal,#0d9488);transition:height .16s ease,opacity .16s ease}
+.sh-voice-waveform.is-paused span{opacity:.3}
+.sh-voice-timer{text-align:center;font-variant-numeric:tabular-nums;font-size:28px;font-weight:800;letter-spacing:-.04em}
+.sh-voice-timer span{color:var(--ink-muted);font-size:14px;font-weight:500}
+.sh-voice-actions{display:flex;gap:8px}
+.sh-voice-secondary,.sh-voice-primary{display:inline-flex;min-height:44px;flex:1;align-items:center;justify-content:center;gap:8px;border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px;font-weight:750;cursor:pointer}
+.sh-voice-primary{border-color:var(--teal,#0d9488);background:var(--teal,#0d9488);color:#fff}
+.sh-voice-secondary:focus-visible,.sh-voice-primary:focus-visible,.sh-voice-recorder>header button:focus-visible{outline:2px solid var(--sec-color,#2dd4bf);outline-offset:3px}
+.sh-voice-secondary:disabled,.sh-voice-primary:disabled{opacity:.5;cursor:not-allowed}
+.sh-voice-review audio{width:100%;margin:8px 0 14px}
+.sh-voice-hint{margin:0;color:var(--ink-muted);font-size:11px;line-height:1.5;text-align:center}
+.sh-voice-error{margin:0;border:1px solid rgba(239,68,68,.4);border-radius:10px;padding:10px;color:#ef4444;font-size:12px}
+@media(max-width:520px){.sh-voice-backdrop{align-items:flex-end;padding:0}.sh-voice-recorder{width:100%;border-radius:20px 20px 0 0;padding:18px 14px max(16px,env(safe-area-inset-bottom))}}
+@media(prefers-reduced-motion:reduce){.sh-voice-waveform span{transition:none}}
