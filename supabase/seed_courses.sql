@@ -6,7 +6,7 @@
 -- Safe to run multiple times (100% idempotent via ON CONFLICT DO UPDATE).
 -- =============================================================================
 
-DO $$
+DO $course_seed$
 DECLARE
   v_author_id uuid;
   v_church_id uuid;
@@ -556,4 +556,4 @@ BEGIN
   );
 
 END;
-$;
+$course_seed$;
