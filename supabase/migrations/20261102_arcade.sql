@@ -72,6 +72,8 @@ create table if not exists public.arcade_questions (
   check (correct_index < jsonb_array_length(options))
 );
 
+create unique index if not exists arcade_questions_book_question_uidx on public.arcade_questions(book, question);
+
 alter table public.arcade_games enable row level security;
 alter table public.arcade_scores enable row level security;
 alter table public.arcade_daily enable row level security;
