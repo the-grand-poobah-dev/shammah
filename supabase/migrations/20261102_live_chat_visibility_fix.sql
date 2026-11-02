@@ -18,6 +18,7 @@ revoke insert, update, delete, truncate, references, trigger
   on table public.live_streams from anon, authenticated;
 revoke insert, update, delete, truncate, references, trigger
   on table public.live_viewers from anon, authenticated;
+grant all privileges on table public.live_viewers to service_role;
 
 -- Enforce the same visibility rules for direct Supabase chat inserts as the app API.
 drop policy if exists live_chat_insert_eligible on public.live_chat_messages;
