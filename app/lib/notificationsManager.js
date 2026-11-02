@@ -482,14 +482,42 @@ export async function requestFirebasePushPermission() {
   try {
     const permission = await Notification.requestPermission();
     const current = getFirebasePushConfig();
+    let fcmToken = permission === 'granted' ? current.fcmToken : null;
+    let pushSetup = 'browser-only';
+
+    if (permission === 'granted' && 'serviceWorker' in navigator) {
+      const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+      if (vapidKey) {
+        try {
+          const [{ getMessaging, getToken, isSupported }, { default: firebaseApp }] = await Promise.all([
+            import('firebase/messaging'),
+            import('./firebaseClient'),
+          ]);
+          if (await isSupported()) {
+            const serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+            const messaging = getMessaging(firebaseApp);
+            fcmToken = await getToken(messaging, { vapidKey, serviceWorkerRegistration });
+            pushSetup = 'fcm';
+          } else {
+            pushSetup = 'browser-only';
+          }
+        } catch (pushError) {
+          console.warn('FCM token setup failed; browser notifications remain available:', pushError?.message || pushError);
+          pushSetup = 'browser-only';
+        }
+      } else {
+        pushSetup = 'vapid-key-missing';
+      }
+    }
+
     const updated = {
       ...current,
       enabled: permission === 'granted',
       pushPermission: permission,
-      fcmToken: permission === 'granted' ? current.fcmToken : null,
+      fcmToken,
     };
     saveFirebasePushConfig(updated);
-    return { success: permission === 'granted', permission };
+    return { success: permission === 'granted', permission, fcmToken, pushSetup };
   } catch (err) {
     console.error('Notification permission request error:', err);
     return { success: false, permission: 'denied' };
