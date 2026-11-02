@@ -25,7 +25,7 @@ import {
   setDefaultStatusAudience,
   STATUS_AUDIENCE_OPTIONS,
 } from '../lib/statusManager';
-import { uploadPostMedia } from '../lib/mediaUpload';
+import { uploadPostMedia, getImageSize, getVideoMeta } from '../lib/mediaUpload';
 import MediaToolbar from './media/MediaToolbar';
 import GifPicker from './media/GifPicker';
 import { supabase } from '../../lib/supabaseClient';
@@ -191,6 +191,19 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
         continue;
       }
 
+      let mediaMeta = detected === 'gif' ? { provider: 'upload', gif_id: null } : {};
+      try {
+        if (detected === 'video') {
+          mediaMeta = { ...await getVideoMeta(file), duration: durCheck.duration || 0 };
+        } else if (detected === 'image' || detected === 'gif') {
+          mediaMeta = { ...await getImageSize(file), ...(detected === 'gif' ? { provider: 'upload', gif_id: null } : {}) };
+        } else if (detected === 'audio') {
+          mediaMeta = { duration: durCheck.duration || null };
+        }
+      } catch {
+        // Metadata is optional; media upload can still proceed.
+      }
+
       const localObjUrl = URL.createObjectURL(file);
       const slideId = `slide-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`;
 
@@ -200,7 +213,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
         previewUrl: localObjUrl,
         mediaUrl: localObjUrl, // fallback until cloud upload completes
         mediaType: detected,
-        mediaMeta: detected === 'gif' ? { provider: 'upload', gif_id: null, width: null, height: null } : {},
+        mediaMeta,
         fileName: file.name,
         caption: '',
         scriptureTag: '',
