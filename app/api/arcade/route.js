@@ -137,7 +137,7 @@ export async function POST(request) {
       if (!Array.isArray(body.answers) || body.answers.length < 1 || body.answers.length > 100) {
         return NextResponse.json({ error: 'Submit the answers for this quiz to be graded.' }, { status: 400 });
       }
-      const ids = [...new Set(body.answers.map((answer) => String(answer.id ?? '').trim()).filter((id) => /^[1-9]\\d{0,17}$/.test(id)))];
+      const ids = [...new Set(body.answers.map((answer) => String(answer.id ?? '').trim()).filter((id) => /^[1-9]\d{0,17}$/.test(id)))];
       if (ids.length !== body.answers.length) return NextResponse.json({ error: 'Invalid quiz answer list.' }, { status: 400 });
       const { data: questions, error: questionError } = await service.from('arcade_questions')
         .select('id,correct_index,explanation,question,options').in('id', ids);
