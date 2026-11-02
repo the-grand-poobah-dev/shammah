@@ -72,6 +72,7 @@ export default function FundraiserDonateModal({
           });
 
           if (res?.status === 'succeeded' || res?.status === 'completed') {
+            setReceiptData((previous) => ({ ...previous, ...res }));
             setStatus('succeeded');
             playSound('postPublished');
             if (onSuccess) onSuccess(res.fundraiser || fundraiser);
