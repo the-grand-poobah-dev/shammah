@@ -18,7 +18,6 @@ import {
   Plus,
   Trash2,
   ChevronDown,
-  Camera,
   Mic,
 } from 'lucide-react';
 import {
@@ -207,6 +206,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
         previewUrl: localObjUrl,
         mediaUrl: localObjUrl, // fallback until cloud upload completes
         mediaType: detected,
+        mediaMeta: detected === 'gif' ? { provider: 'upload', gif_id: null, width: null, height: null } : {},
         fileName: file.name,
         caption: '',
         scriptureTag: '',
@@ -541,6 +541,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
                     controls
                     playsInline
                     className="status-preview-media-video"
+                    style={{ objectFit: 'contain' }}
                   />
                 ) : currentSlide.mediaType === 'audio' ? (
                   <div className="status-preview-media-audio-card">
