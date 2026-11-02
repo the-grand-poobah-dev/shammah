@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Clapperboard, FileAudio, ImagePlus, Mic, Radio } from 'lucide-react';
+import { Camera, Clapperboard, ImagePlus, Mic, Radio } from 'lucide-react';
 import CameraCaptureModal from './CameraCaptureModal';
 import VoiceRecorderBar from './VoiceRecorderBar';
 
