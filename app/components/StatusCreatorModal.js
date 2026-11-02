@@ -28,6 +28,8 @@ import {
   STATUS_AUDIENCE_OPTIONS,
 } from '../lib/statusManager';
 import { uploadPostMedia } from '../lib/mediaUpload';
+import MediaToolbar from './media/MediaToolbar';
+import GifPicker from './media/GifPicker';
 import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
 import { supabase } from '../../lib/supabaseClient';
 import { cleanDisplayName } from '../lib/postDisplay';
