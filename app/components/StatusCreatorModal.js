@@ -53,7 +53,7 @@ const STATUS_MEDIA_LIMITS = {
 
 function getMediaType(file) {
   if (!file) return null;
-  if (file.type === 'image/gif' || /\\.gif$/i.test(file.name || '')) return 'gif';
+  if (file.type === 'image/gif' || /\.gif$/i.test(file.name || '')) return 'gif';
   if (file.type?.startsWith('image/')) return 'image';
   if (file.type?.startsWith('video/')) return 'video';
   if (file.type?.startsWith('audio/')) return 'audio';
