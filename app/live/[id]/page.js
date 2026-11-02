@@ -27,6 +27,7 @@ export default function LiveViewerPage() {
   const [stream, setStream] = useState(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [roomConnected, setRoomConnected] = useState(false);
   const [error, setError] = useState('');
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
@@ -121,6 +122,7 @@ export default function LiveViewerPage() {
         room.on(RoomEvent.Reconnected, updateCount);
         await room.connect(result.url, result.token);
         if (cancelled) { await room.disconnect(); return; }
+        setRoomConnected(true);
         for (const participant of room.remoteParticipants.values()) {
           for (const publication of participant.trackPublications.values()) {
             if (publication.track) {
@@ -144,11 +146,30 @@ export default function LiveViewerPage() {
     joinRoom();
     return () => {
       cancelled = true;
+      setRoomConnected(false);
       const room = roomRef.current;
       roomRef.current = null;
       if (room) room.disconnect().catch(() => {});
     };
   }, [stream?.id, stream?.status, session?.access_token]);
+
+  useEffect(() => {
+    if (!stream?.id || stream.status !== 'live' || !roomConnected || !session?.access_token) return undefined;
+    let cancelled = false;
+    let timer = null;
+    const leave = () => livePost('/api/live/presence', session, { streamId: stream.id, action: 'leave' }).catch(() => {});
+    livePost('/api/live/presence', session, { streamId: stream.id, action: 'join' }).then(() => {
+      if (cancelled) { leave(); return; }
+      timer = setInterval(() => {
+        livePost('/api/live/presence', session, { streamId: stream.id, action: 'heartbeat' }).catch(() => {});
+      }, 15000);
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+      leave();
+    };
+  }, [stream?.id, stream?.status, roomConnected, session?.access_token]);
 
   useEffect(() => {
     if (!stream?.id || stream.status !== 'live') return undefined;
