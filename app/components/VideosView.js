@@ -110,6 +110,8 @@ export default function VideosView({ session, currentUser, openAuth }) {
   const [toastMessage, setToastMessage] = useState('');
 
   const isMountedRef = useRef(true);
+  const curatedRequestRef = useRef(0);
+  const catalogRequestRef = useRef(0);
 
   const showToast = useCallback((msg) => {
     setToastMessage(msg);
@@ -126,6 +128,7 @@ export default function VideosView({ session, currentUser, openAuth }) {
 
   // Load curated blocks on mount or when category changes
   const loadCuratedBlocks = useCallback(async () => {
+    const requestId = ++curatedRequestRef.current;
     setFetchError(null);
     try {
       const [contRes, trendRes, seriesRes, reelsRes] = await Promise.all([
@@ -135,6 +138,7 @@ export default function VideosView({ session, currentUser, openAuth }) {
         listReels({ limit: 12 }),
       ]);
 
+      if (requestId !== curatedRequestRef.current) return;
       if (contRes.data) setContinueWatching(contRes.data);
       if (seriesRes.data) setSeriesList(seriesRes.data);
       if (reelsRes.data) setReelsList(reelsRes.data);
@@ -152,7 +156,7 @@ export default function VideosView({ session, currentUser, openAuth }) {
         category: activeCategory !== 'All' ? activeCategory : undefined,
       });
 
-      if (churchRes.data) {
+      if (requestId === curatedRequestRef.current && churchRes.data) {
         setChurchVideos(churchRes.data.slice(0, 4));
       }
     } catch (err) {
@@ -162,6 +166,7 @@ export default function VideosView({ session, currentUser, openAuth }) {
 
   // Load primary catalog (All Videos)
   const loadPrimaryCatalog = useCallback(async (isReset = false) => {
+    const requestId = ++catalogRequestRef.current;
     if (isReset) {
       setLoadingInitial(true);
       setPageOffset(0);
@@ -181,6 +186,7 @@ export default function VideosView({ session, currentUser, openAuth }) {
         offset: currentOffset,
       });
 
+      if (requestId !== catalogRequestRef.current) return;
       if (error && (!data || data.length === 0)) {
         if (isReset) setFetchError(error.message || 'Failed to load videos.');
       } else {
@@ -190,10 +196,12 @@ export default function VideosView({ session, currentUser, openAuth }) {
         setPageOffset(currentOffset + nextItems.length);
       }
     } catch (err) {
-      if (isReset) setFetchError(err.message || 'Network error loading videos.');
+      if (requestId === catalogRequestRef.current && isReset) setFetchError(err.message || 'Network error loading videos.');
     } finally {
-      setLoadingInitial(false);
-      setLoadingMore(false);
+      if (requestId === catalogRequestRef.current) {
+        setLoadingInitial(false);
+        setLoadingMore(false);
+      }
     }
   }, [activeCategory, debouncedQuery, activeSort, pageOffset]);
 
