@@ -558,6 +558,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
                     src={currentSlide.previewUrl}
                     alt="Status media preview"
                     className="status-preview-media-image"
+                    style={{ objectFit: 'contain' }}
                   />
                 )}
 
