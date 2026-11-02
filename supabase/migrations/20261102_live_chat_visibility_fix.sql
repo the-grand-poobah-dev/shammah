@@ -37,3 +37,23 @@ with check (
       and b.user_id = (select auth.uid())
   )
 );
+
+-- Clients must not forge timestamps or moderation flags to bypass rate limits
+-- or make their own messages appear pinned/deleted.
+create or replace function public.guard_live_chat_insert()
+returns trigger
+language plpgsql
+set search_path = public
+as $guard_live_chat$
+begin
+  new.created_at := now();
+  new.is_pinned := false;
+  new.is_deleted := false;
+  return new;
+end;
+$guard_live_chat$;
+
+drop trigger if exists live_chat_insert_guard_trigger on public.live_chat_messages;
+create trigger live_chat_insert_guard_trigger
+before insert on public.live_chat_messages
+for each row execute function public.guard_live_chat_insert();
