@@ -64,9 +64,6 @@ begin
     execute 'create trigger bible_verses_set_fts_trigger
       before insert or update on public.bible_verses
       for each row execute function public.bible_verses_set_fts()';
-    update public.bible_verses
-      set fts = to_tsvector('english', coalesce(text, ''))
-      where fts is null;
   end if;
 end;
 $$;
