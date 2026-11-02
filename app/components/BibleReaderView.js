@@ -153,6 +153,26 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const verses = chapterVerses;
 
   useEffect(() => {
+    if (!session?.access_token) return undefined;
+    let cancelled = false;
+    async function loadHighlights() {
+      try {
+        const response = await fetch(`/api/bible/study?type=highlights&translation=${encodeURIComponent(translation)}&book_id=${encodeURIComponent(currentBook.id)}&chapter=${selectedChapter}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const payload = await response.json();
+        if (!response.ok) return;
+        const bookName = currentBook.name;
+        if (!cancelled) setHighlights((previous) => {
+          const next = { ...previous };
+          (payload.items || []).forEach((item) => { next[`${bookName}-${item.chapter}-${item.verse}`] = item.color || 'gold'; });
+          return next;
+        });
+      } catch {}
+    }
+    loadHighlights();
+    return () => { cancelled = true; };
+  }, [session?.access_token, currentBook.id, currentBook.name, selectedChapter, translation]);
+
+  useEffect(() => {
     let cancelled = false;
     async function loadBookmarks() {
       const localKey = 'shammah_bible_bookmarks_v1';
@@ -314,7 +334,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     const key = 'shammah_bible_bookmarks_v1';
     let local = [];
     try { local = JSON.parse(window.localStorage.getItem(key) || '[]'); } catch {}
-    const exists = local.some((entry) => entry.translation === item.translation && entry.book_id === item.book_id && Number(entry.chapter) === item.chapter && Number(entry.verse) === item.verse);
+    const exists = bookmarkedVerseKeys.includes(String(vNum)) || local.some((entry) => entry.translation === item.translation && entry.book_id === item.book_id && Number(entry.chapter) === item.chapter && Number(entry.verse) === item.verse);
     const next = exists ? local.filter((entry) => !(entry.translation === item.translation && entry.book_id === item.book_id && Number(entry.chapter) === item.chapter && Number(entry.verse) === item.verse)) : [...local, item];
     try { window.localStorage.setItem(key, JSON.stringify(next)); } catch {}
     setBookmarkedVerseKeys((items) => exists ? items.filter((value) => value !== String(vNum)) : [...new Set([...items, String(vNum)])]);
