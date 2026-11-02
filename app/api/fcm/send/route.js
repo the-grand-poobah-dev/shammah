@@ -118,27 +118,18 @@ export async function POST(request) {
 
   try {
     const accessToken = await getGoogleAccessToken(credentials);
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
-      ? process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
-      : process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : null;
-    const notification = {
-      title,
-      body: messageBody,
-      icon: '/favicon.ico',
-      tag: 'faith-challenge-streak-risk',
-    };
     const message = {
       token,
-      notification: { title, body: messageBody },
-      webpush: {
-        notification,
-        ...(baseUrl ? { fcmOptions: { link: baseUrl + link } } : {}),
-      },
+      // Data-only payload: the service worker displays one notification and handles its click.
       data: {
         kind: 'faith_challenge_streak_risk',
         link,
         userId: user.id,
+        title,
+        body: messageBody,
+        icon: '/favicon.ico',
       },
+      webpush: { headers: { Urgency: 'high' } },
     };
     const response = await fetch(
       'https://fcm.googleapis.com/v1/projects/' + encodeURIComponent(credentials.projectId) + '/messages:send',
