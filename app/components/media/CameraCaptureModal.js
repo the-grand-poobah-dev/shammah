@@ -71,6 +71,7 @@ export default function CameraCaptureModal({ mode = 'both', maxVideoSeconds = 90
       }
       setStreamReady(true);
     } catch (err) {
+      if (!mountedRef.current) return;
       setFallback(true);
       setError(err?.name === 'NotAllowedError'
         ? 'Camera permission was denied. Allow camera access or choose a file instead.'
@@ -147,6 +148,7 @@ export default function CameraCaptureModal({ mode = 'both', maxVideoSeconds = 90
       recorder.ondataavailable = (event) => { if (event.data?.size) chunksRef.current.push(event.data); };
       recorder.onerror = () => setError('Recording was interrupted. Please try again.');
       recorder.onstop = () => {
+        if (!mountedRef.current) return;
         const type = recorder.mimeType || mimeType || 'video/webm';
         const blob = new Blob(chunksRef.current, { type });
         if (!blob.size) { setError('The recording was empty. Please try again.'); return; }
