@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, CameraOff, Check, FlipHorizontal, Loader2, Pause, Play, RotateCcw, StopCircle, Video, X, Zap, ZapOff } from 'lucide-react';
+import { Camera, CameraOff, Check, FlipHorizontal, Pause, Play, RotateCcw, StopCircle, Video, X, Zap, ZapOff } from 'lucide-react';
 
 function chooseVideoMime() {
   if (typeof MediaRecorder === 'undefined') return '';
