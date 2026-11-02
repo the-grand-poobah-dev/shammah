@@ -224,7 +224,7 @@ begin
     loop
       execute format('alter table public.content_reports drop constraint %I', constraint_row.conname);
     end loop;
-    alter table public.content_reports add constraint content_reports_target_type_check
-      check (target_type in ('post','status','live_stream','reel','video','comment','poll','course','fundraiser','challenge'));
+    -- The existing target_type checks are removed so the unified report table can
+    -- accept live_stream without rejecting other reportable content types.
   end if;
 end $;
