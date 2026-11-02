@@ -45,23 +45,23 @@ export async function POST(request) {
     const color = ['gold','blue','green','pink','purple'].includes(body.color) ? body.color : 'gold';
     const { data: existing, error: findError } = await auth.client.from(type).select('id').match(ref).maybeSingle();
     if (findError) return NextResponse.json({ error: 'Could not check your highlight.' }, { status: 500 });
-    if (body.action === 'remove' || existing) {
+    if (body.action === 'remove') {
       const { error } = await auth.client.from(type).delete().match(ref);
       if (error) return NextResponse.json({ error: 'Could not remove highlight.' }, { status: 500 });
       return NextResponse.json({ saved: false });
     }
-    const { error } = await auth.client.from(type).insert({ ...ref, color });
+    const { error } = await auth.client.from(type).upsert({ ...ref, color }, { onConflict: 'user_id,translation,book_id,chapter,verse' });
     if (error) return NextResponse.json({ error: 'Could not save highlight.' }, { status: 500 });
     return NextResponse.json({ saved: true });
   }
   const { data: existing, error: findError } = await auth.client.from(type).select('id').match(ref).maybeSingle();
   if (findError) return NextResponse.json({ error: 'Could not check your bookmark.' }, { status: 500 });
-  if (body.action === 'remove' || existing) {
+  if (body.action === 'remove') {
     const { error } = await auth.client.from(type).delete().match(ref);
     if (error) return NextResponse.json({ error: 'Could not remove bookmark.' }, { status: 500 });
     return NextResponse.json({ saved: false });
   }
-  const { error } = await auth.client.from(type).insert(ref);
+  const { error } = await auth.client.from(type).upsert(ref, { onConflict: 'user_id,translation,book_id,chapter,verse' });
   if (error) return NextResponse.json({ error: 'Could not save bookmark.' }, { status: 500 });
   return NextResponse.json({ saved: true });
 }
