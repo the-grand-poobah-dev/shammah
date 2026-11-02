@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 import ArcadeOnlineHub from './ArcadeOnlineHub';
+import ArcadeHtml5Games from './ArcadeHtml5Games';
 import { supabase } from '../lib/supabaseClient';
 
 const TRIVIA_QUESTIONS = [
@@ -709,6 +710,7 @@ export default function FaithArcadeGamesView() {
         </div>
       )}
       <ArcadeOnlineHub />
+      <ArcadeHtml5Games />
     </div>
   );
 }
