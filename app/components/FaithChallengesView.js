@@ -740,9 +740,10 @@ export default function FaithChallengesView({ session, profile }) {
                   onChange={(val) => setSort(val)}
                 />
                 <LayoutSwitcher
-                  layouts={['magazine-flat', 'compact', 'tiles']}
+                  options={['magazine-flat', 'compact', 'tiles']}
                   value={layout}
                   onChange={(val) => setLayout(val)}
+                  storageKey="faith-challenges"
                 />
               </div>
             </div>
