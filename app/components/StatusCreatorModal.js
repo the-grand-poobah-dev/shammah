@@ -562,7 +562,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
                   title={`Slide ${idx + 1}${s.caption ? `: "${s.caption.slice(0, 30)}..."` : ''}`}
                 >
                   {hasMedia ? (
-                    s.mediaType === 'image' ? (
+                    (s.mediaType === 'image' || s.mediaType === 'gif') ? (
                       <img src={s.previewUrl} alt="" className="status-bulk-thumb-img" />
                     ) : s.mediaType === 'video' ? (
                       <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
