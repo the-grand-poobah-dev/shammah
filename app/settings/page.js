@@ -57,7 +57,7 @@ export default function SettingsPage() {
 
         supabase
           .from('profiles')
-          .select('*')
+          .select('id, display_name, role, church_id, created_at, badge, badge_verified, avatar_url, cover_url, about, location_label, display_name_changed_at, onboarding_completed_at, onboarded_at, badge_set_at, is_locked, inbox_permission, church_name, theme_preference, allow_status_reshare, who_can_tag_me, review_tags')
           .eq('id', uid)
           .maybeSingle()
           .then(({ data: prof }) => {
