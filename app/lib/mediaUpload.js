@@ -41,6 +41,24 @@ export function detectMediaType(file) {
   return null;
 }
 
+function inferMediaMime(file, type) {
+  const supplied = (file?.type || '').split(';')[0].trim().toLowerCase();
+  if (supplied && supplied !== 'application/octet-stream') return supplied;
+
+  const name = (file?.name || '').toLowerCase();
+  const extensionTypes = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+    gif: 'image/gif', avif: 'image/avif',
+    mp4: 'video/mp4', webm: type === 'video' ? 'video/webm' : 'audio/webm',
+    mov: 'video/quicktime', m4v: 'video/x-m4v',
+    mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
+    m4a: 'audio/mp4', aac: 'audio/aac', flac: 'audio/flac',
+  };
+  const extension = name.includes('.') ? name.split('.').pop() : '';
+  if (extensionTypes[extension]) return extensionTypes[extension];
+  return type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'audio/mpeg';
+}
+
 /**
  * Upload a single file to post-media bucket (backwards-compatible with posts & comments).
  */
@@ -64,7 +82,7 @@ export async function uploadPostMedia(file, userId) {
     .slice(0, 80);
 
   const path = `${userId}/${Date.now()}-${createUploadNonce()}-${safeName}`;
-  const cleanContentType = (file.type || '').split(';')[0] || (type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'audio/webm');
+  const cleanContentType = inferMediaMime(file, type);
 
   const { error } = await supabase.storage.from('post-media').upload(path, file, {
     cacheControl: '3600',
@@ -120,7 +138,7 @@ export async function uploadMediaItem(file, userId, options = {}) {
     .slice(0, 80);
 
   const path = `${userId}/${Date.now()}-${createUploadNonce()}-${safeName}`;
-  const contentType = (file.type || '').split(';')[0] || (detectedKind === 'video' ? 'video/mp4' : detectedKind === 'audio' ? 'audio/mpeg' : 'image/jpeg');
+  const contentType = inferMediaMime(file, detectedKind);
 
   onProgress(10);
 
