@@ -41,18 +41,18 @@ export async function GET(request) {
       const bookId = resolveBook(reference[1]);
       const chapter = Number(reference[2]);
       if (bookId) {
-        let query = db.from('bible_verses').select('translation,book_id,book_name,chapter,verse,verse_text').eq('translation', translation).eq('book_id', bookId).eq('chapter', chapter).order('verse').limit(80);
+        let query = db.from('bible_verses').select('translation,book_id,book_name,chapter,verse,text').eq('translation', translation).eq('book_id', bookId).eq('chapter', chapter).order('verse').limit(80);
         if (reference[3]) query = query.gte('verse', Number(reference[3])).lte('verse', Number(reference[4] || reference[3]));
         const { data, error } = await query;
         if (error) throw error;
-        return NextResponse.json({ results: (data || []).map(v => ({ ...v, reference: `${v.book_name} ${v.chapter}:${v.verse}` })), mode: 'reference' });
+        return NextResponse.json({ results: (data || []).map(v => ({ ...v, verse_text: v.text, book_name: v.book_name || BOOKS[v.book_id] || v.book_id, reference: `${v.book_name || BOOKS[v.book_id] || v.book_id} ${v.chapter}:${v.verse}` })), mode: 'reference' });
       }
     }
-    const { data, error } = await db.from('bible_verses').select('translation,book_id,book_name,chapter,verse,verse_text').eq('translation', translation).textSearch('search_vector', q, { type: 'websearch', config: 'english' }).limit(30);
+    const { data, error } = await db.from('bible_verses').select('translation,book_id,book_name,chapter,verse,verse_text').eq('translation', translation).textSearch('fts', q, { type: 'websearch', config: 'english' }).limit(30);
     if (error) throw error;
     const rows = data || [];
     if (rows.length) return NextResponse.json({ results: rows.map(v => ({ ...v, reference: `${v.book_name} ${v.chapter}:${v.verse}` })), mode: 'text' });
-    const { data: fallback, error: fallbackError } = await db.from('bible_verses').select('translation,book_id,book_name,chapter,verse,verse_text').eq('translation', translation).ilike('verse_text', `%${q.replace(/[%_]/g, '')}%`).limit(20);
+    const { data: fallback, error: fallbackError } = await db.from('bible_verses').select('translation,book_id,book_name,chapter,verse,verse_text').eq('translation', translation).ilike('text', `%${q.replace(/[%_]/g, '')}%`).limit(20);
     if (fallbackError) throw fallbackError;
     return NextResponse.json({ results: (fallback || []).map(v => ({ ...v, reference: `${v.book_name} ${v.chapter}:${v.verse}` })), mode: 'text' });
   } catch (error) {
