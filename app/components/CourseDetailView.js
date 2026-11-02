@@ -31,6 +31,7 @@ import CourseCertificateModal from './CourseCertificateModal';
 import {
   enrollInCourse,
   submitCourseReview,
+  getCourseDetail,
   issueCourseCertificate,
   formatDurationMinutes,
   formatDurationSeconds
