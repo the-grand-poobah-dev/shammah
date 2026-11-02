@@ -52,14 +52,22 @@ CREATE POLICY "challenge_comments_read" ON public.challenge_submission_comments
   FOR SELECT TO anon, authenticated USING (
     EXISTS (
       SELECT 1 FROM public.challenge_submissions s
+      JOIN public.challenges c ON c.id = s.challenge_id
       WHERE s.id = challenge_submission_comments.submission_id
         AND (
-          s.status = 'approved'
-          OR s.user_id = auth.uid()
-          OR EXISTS (SELECT 1 FROM public.challenges c WHERE c.id = s.challenge_id AND c.creator_id = auth.uid())
+          s.user_id = auth.uid()
+          OR c.creator_id = auth.uid()
+          OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','platform_admin','moderator'))
+          OR (
+            s.status = 'approved'
+            AND c.status IN ('active','completed')
+            AND (
+              c.visibility = 'public'
+              OR (c.visibility = 'church' AND c.church_id = (SELECT church_id FROM public.profiles WHERE id = auth.uid()))
+            )
+          )
         )
     )
-    OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','platform_admin','moderator'))
   );
 
 CREATE TABLE IF NOT EXISTS public.challenge_badge_awards (
@@ -117,7 +125,18 @@ DROP POLICY IF EXISTS "Public can view challenge participants" ON public.challen
 DROP POLICY IF EXISTS "Users can manage own participation" ON public.challenge_participants;
 DROP POLICY IF EXISTS "challenge_participants_read" ON public.challenge_participants;
 CREATE POLICY "challenge_participants_read" ON public.challenge_participants
-  FOR SELECT TO anon, authenticated USING (true);
+  FOR SELECT TO anon, authenticated USING (
+    EXISTS (
+      SELECT 1 FROM public.challenges c
+      WHERE c.id = challenge_participants.challenge_id
+        AND (
+          (c.status IN ('active','completed') AND c.visibility = 'public')
+          OR c.creator_id = auth.uid()
+          OR (c.visibility = 'church' AND c.church_id = (SELECT church_id FROM public.profiles WHERE id = auth.uid()))
+          OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','platform_admin','moderator'))
+        )
+    )
+  );
 
 DROP POLICY IF EXISTS "Challenge checkins readable by all" ON public.challenge_checkins;
 DROP POLICY IF EXISTS "Public can view checkins" ON public.challenge_checkins;
@@ -139,10 +158,23 @@ DROP POLICY IF EXISTS "challenge_submissions_read" ON public.challenge_submissio
 DROP POLICY IF EXISTS "challenge_submissions_delete" ON public.challenge_submissions;
 CREATE POLICY "challenge_submissions_read" ON public.challenge_submissions
   FOR SELECT TO anon, authenticated USING (
-    status = 'approved'
-    OR user_id = auth.uid()
-    OR EXISTS (SELECT 1 FROM public.challenges c WHERE c.id = challenge_submissions.challenge_id AND c.creator_id = auth.uid())
-    OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','platform_admin','moderator'))
+    user_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM public.challenges c
+      WHERE c.id = challenge_submissions.challenge_id
+        AND (
+          c.creator_id = auth.uid()
+          OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','platform_admin','moderator'))
+          OR (
+            challenge_submissions.status = 'approved'
+            AND c.status IN ('active','completed')
+            AND (
+              c.visibility = 'public'
+              OR (c.visibility = 'church' AND c.church_id = (SELECT church_id FROM public.profiles WHERE id = auth.uid()))
+            )
+          )
+        )
+    )
   );
 CREATE POLICY "challenge_submissions_delete" ON public.challenge_submissions
   FOR DELETE TO authenticated USING (
