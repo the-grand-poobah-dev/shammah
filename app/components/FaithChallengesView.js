@@ -29,6 +29,7 @@ import {
 import Avatar from './Avatar';
 import MemberName from './MemberName';
 import { playSound } from '../lib/soundEffects';
+import { getNotifications, saveNotifications, getFirebasePushConfig } from '../lib/notificationsManager';
 import {
   ContentLayout,
   AccentCard,
@@ -48,6 +49,7 @@ import {
   listChallenges,
   voteChallengeSubmission,
   joinChallenge,
+  sendChallengePushReminder,
 } from '../lib/data/challengesApi';
 import ChallengeCheckinModal from './challenges/ChallengeCheckinModal';
 import ChallengeSubmitModal from './challenges/ChallengeSubmitModal';
@@ -192,6 +194,50 @@ export default function FaithChallengesView({ session, profile }) {
   useEffect(() => {
     fetchData(false, 1, false);
   }, [fetchData]);
+
+  // Add one in-app nudge per day when a streak from yesterday is at risk.
+  useEffect(() => {
+    if (!currentUser?.id || loading || !myActive.length) return;
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const yesterday = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+    const atRisk = myActive.find((item) =>
+      Number(item.streak_current || 0) > 0 &&
+      !item.has_checked_in_today &&
+      String(item.last_checkin_on || '').slice(0, 10) === yesterday
+    );
+    if (!atRisk) return;
+
+    const notificationId = 'faith-challenge-streak-risk:' + currentUser.id + ':' + today;
+    const stored = getNotifications();
+    if (stored.some((item) => item.id === notificationId)) return;
+
+    const title = 'Keep your faith streak alive';
+    const body = 'Your ' + atRisk.streak_current + '-day streak in "' + atRisk.title + '" is at risk. Check in today to keep it going.';
+    const notification = {
+      id: notificationId,
+      type: 'church',
+      category: 'church',
+      title,
+      body,
+      timestamp: now.toISOString(),
+      isRead: false,
+      actorName: 'Faith Challenges',
+      targetLink: '/?tab=faith-challenges',
+      icon: '🔥',
+    };
+    saveNotifications([notification, ...stored].slice(0, 200));
+
+    const pushConfig = getFirebasePushConfig();
+    if (pushConfig.enabled && pushConfig.pushPermission === 'granted' && pushConfig.fcmToken) {
+      sendChallengePushReminder({
+        token: pushConfig.fcmToken,
+        title,
+        body,
+        link: '/?tab=faith-challenges',
+      }).catch((err) => console.warn('Faith Challenge push reminder was not sent:', err.message));
+    }
+  }, [currentUser?.id, loading, myActive]);
 
   // Handle Cheer / Like submission
   async function handleVoteSubmission(subId) {
