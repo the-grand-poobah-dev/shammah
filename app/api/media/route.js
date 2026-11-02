@@ -52,6 +52,9 @@ export async function GET(request) {
     const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0);
     const cursor = searchParams.get('cursor') || '';
     const itemId = searchParams.get('id') || undefined;
+    const authorId = searchParams.get('authorId') || undefined;
+    const seriesId = searchParams.get('seriesId') || undefined;
+    const churchId = searchParams.get('churchId') || undefined;
 
     const supabase = getSupabasePublicClient();
     if (!supabase) {
@@ -130,6 +133,9 @@ export async function GET(request) {
       .eq('visibility', 'public');
 
     if (kind === 'video' || kind === 'audio') q = q.eq('kind', kind);
+    if (authorId) q = q.eq('author_id', authorId);
+    if (seriesId) q = q.eq('series_id', seriesId);
+    if (churchId) q = q.eq('church_id', churchId);
 
     const cats = expandCategories(category);
     if (cats?.length) q = q.in('category', cats);
