@@ -10,7 +10,7 @@ import Link from 'next/link';
 import Avatar from './components/Avatar';
 import MemberName from './components/MemberName';
 import OnboardingWizard from './components/OnboardingWizard';
-import { uploadPostMedia } from './lib/mediaUpload';
+import { uploadPostMedia, detectMediaType, getImageSize, getVideoMeta } from './lib/mediaUpload';
 import {
   sortPostsWithPinned,
   isUserAdmin,
@@ -1025,6 +1025,28 @@ export default function Feed() {
       setMediaUploading(false);
     }
 
+    let media_meta = {};
+    if (selectedLibraryMedia && !mediaFile) {
+      media_meta = {
+        provider: selectedLibraryMedia.provider || 'media-library',
+        gif_id: selectedLibraryMedia.kind === 'gif' ? selectedLibraryMedia.id || null : null,
+        width: selectedLibraryMedia.width || null,
+        height: selectedLibraryMedia.height || null,
+        duration: selectedLibraryMedia.duration_seconds || null,
+        aspect: selectedLibraryMedia.width && selectedLibraryMedia.height
+          ? selectedLibraryMedia.width / selectedLibraryMedia.height
+          : null,
+        thumbnail_url: selectedLibraryMedia.thumb_url || null,
+      };
+    } else if (mediaFile) {
+      try {
+        if (media_type === 'video') media_meta = await getVideoMeta(mediaFile);
+        else if (media_type === 'image' || media_type === 'gif') media_meta = await getImageSize(mediaFile);
+      } catch {
+        // Metadata is optional; a valid upload should still be allowed.
+      }
+    }
+
     const isPinnedToSave = isAdmin ? isPinnedAnnouncement : false;
     const pinnedAtToSave = isPinnedToSave ? new Date().toISOString() : null;
     const pollDurationToSave = identityMeta?.pollDuration || '24h';
@@ -1056,12 +1078,7 @@ export default function Feed() {
         text_content: text || null,
         media_url,
         media_type,
-        media_meta: media_type === 'gif' ? {
-          provider: selectedLibraryMedia?.provider || 'upload',
-          gif_id: selectedLibraryMedia?.id || null,
-          width: selectedLibraryMedia?.width || null,
-          height: selectedLibraryMedia?.height || null,
-        } : {},
+        media_meta,
         visibility: validVisibility,
         poll_expires_at: pollExpiresAtToSave,
         location_label: locationLabelToSave,
@@ -1096,6 +1113,7 @@ export default function Feed() {
       text_content: text || null,
       media_url,
       media_type,
+      media_meta,
       created_at: new Date().toISOString(),
       category_id: composeCategory,
       church_id: profile?.church_id ?? null,
