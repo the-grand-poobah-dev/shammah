@@ -82,7 +82,7 @@ END;
 $$;
 
 -- Expose only a messaging allow/deny decision; never expose another
--- member's private inbox preference. Enforce the selected audience server-side.
+-- member's private inbox preference. The send path must still enforce this decision.
 CREATE OR REPLACE FUNCTION public.can_receive_direct_message(p_recipient_id uuid)
 RETURNS boolean
 LANGUAGE sql
