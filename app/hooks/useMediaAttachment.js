@@ -27,12 +27,12 @@ export function useMediaAttachment() {
 
   const selectFile = useCallback((selectedFile) => {
     if (!selectedFile) return;
-    const requestId = ++requestRef.current;
     const detected = detectMediaType(selectedFile);
     if (!detected) {
       setError('Unsupported media type.');
       return;
     }
+    const requestId = ++requestRef.current;
     const url = URL.createObjectURL(selectedFile);
     setFile(selectedFile);
     setGifRef(null);
