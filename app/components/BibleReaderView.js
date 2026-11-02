@@ -56,6 +56,12 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [readingPlans, setReadingPlans] = useState([]);
+  const [readingPlanProgress, setReadingPlanProgress] = useState([]);
+  const [readingPlansLoading, setReadingPlansLoading] = useState(true);
+  const [readingPlansError, setReadingPlansError] = useState('');
+  const [activePlanId, setActivePlanId] = useState('');
+  const [savingPlanProgress, setSavingPlanProgress] = useState(false);
   const [highlights, setHighlights] = useState({});
   const [selectedHighlightColor, setSelectedHighlightColor] = useState('gold');
   const [toastMsg, setToastMsg] = useState('');
@@ -144,6 +150,54 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   }, [currentBook.id, currentBook.chapters, selectedChapter, translation]);
 
   const verses = chapterVerses;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPlans() {
+      setReadingPlansLoading(true);
+      setReadingPlansError('');
+      try {
+        const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+        const response = await fetch('/api/bible/plans', { headers });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Could not load reading plans.');
+        if (!cancelled) { setReadingPlans(payload.plans || []); setReadingPlanProgress(payload.progress || []); }
+      } catch (error) {
+        if (!cancelled) setReadingPlansError(error?.message || 'Could not load reading plans.');
+      } finally {
+        if (!cancelled) setReadingPlansLoading(false);
+      }
+    }
+    loadPlans();
+    return () => { cancelled = true; };
+  }, [session?.access_token]);
+
+  async function markReadingPlanDay(plan) {
+    if (!session?.access_token) {
+      showToast('Sign in to save your reading plan progress.');
+      if (typeof openAuth === 'function') openAuth();
+      return;
+    }
+    const completed = readingPlanProgress.filter((item) => item.plan_id === plan.id).length;
+    const day = Math.min(plan.days, completed + 1);
+    if (readingPlanProgress.some((item) => item.plan_id === plan.id && item.day === day)) return;
+    setSavingPlanProgress(true);
+    try {
+      const response = await fetch('/api/bible/plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ planId: plan.id, day })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || 'Could not save reading progress.');
+      setReadingPlanProgress((items) => [...items.filter((item) => !(item.plan_id === plan.id && item.day === day)), { plan_id: plan.id, day, completed_on: new Date().toISOString().slice(0, 10) }]);
+      showToast(`Day ${day} marked complete!`);
+    } catch (error) {
+      showToast(error?.message || 'Could not save reading progress.');
+    } finally {
+      setSavingPlanProgress(false);
+    }
+  }
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -347,6 +401,33 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       </div>
 
       {toastMsg && <div className="video-toast-pill">{toastMsg}</div>}
+
+      {/* Reading plans */}
+      <section className="bible-reading-plans" style={{ margin: '0 0 16px', padding: '14px', border: '1px solid var(--border)', borderRadius: '16px', background: 'var(--surface)' }} aria-labelledby="bible-reading-plans-title">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+          <div><h3 id="bible-reading-plans-title" style={{ margin: 0 }}>Reading Plans</h3><p style={{ margin: '4px 0 0', color: 'var(--ink-muted)', fontSize: '0.9rem' }}>Build a steady rhythm in Scripture.</p></div>
+          <span style={{ color: 'var(--ink-muted)', fontSize: '0.85rem' }}>{readingPlans.length} plans</span>
+        </div>
+        {readingPlansLoading ? <p role="status">Loading reading plans…</p> : readingPlansError ? <p role="alert">{readingPlansError} <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setReadingPlansLoading(true) || fetch('/api/bible/plans').then(r => r.json()).then(p => { setReadingPlans(p.plans || []); setReadingPlansError(''); }).catch(() => setReadingPlansError('Could not load reading plans.')).finally(() => setReadingPlansLoading(false))}>Retry</button></p> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '10px' }}>
+            {readingPlans.map((plan) => {
+              const done = readingPlanProgress.filter((item) => item.plan_id === plan.id).length;
+              const isActive = activePlanId === plan.id;
+              return <article key={plan.id} style={{ border: '1px solid var(--border)', borderTop: `3px solid ${plan.accent || '#0d9488'}`, borderRadius: '12px', padding: '12px', background: 'var(--bg)' }}>
+                <h4 style={{ margin: '0 0 5px' }}>{plan.title}</h4>
+                <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', margin: '0 0 8px' }}>{plan.description}</p>
+                <p style={{ fontSize: '0.84rem', margin: '0 0 9px' }}>{done} / {plan.days} days complete</p>
+                <div style={{ height: '5px', background: 'var(--border)', borderRadius: '99px', overflow: 'hidden', marginBottom: '10px' }}><div style={{ width: `${Math.min(100, (done / plan.days) * 100)}%`, height: '100%', background: plan.accent || '#0d9488' }} /></div>
+                <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
+                  <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setActivePlanId(isActive ? '' : plan.id)}>{isActive ? 'Hide plan' : 'View plan'}</button>
+                  {done < plan.days && <button type="button" className="cx-btn cx-btn-primary" disabled={savingPlanProgress} onClick={() => markReadingPlanDay(plan)}>{savingPlanProgress ? 'Saving…' : 'Complete next day'}</button>}
+                </div>
+                {isActive && <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}><strong>Next reading</strong><p style={{ margin: '5px 0 0', color: 'var(--ink-muted)', fontSize: '0.9rem' }}>Day {Math.min(done + 1, plan.days)} of {plan.days}. Mark the day complete after you finish the listed reading in your Bible.</p></div>}
+              </article>;
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Search references and cached scripture text */}
       <div className="bible-search-panel" style={{ margin: '0 0 14px', padding: '12px', border: '1px solid var(--border)', borderRadius: '14px', background: 'var(--surface)' }}>
