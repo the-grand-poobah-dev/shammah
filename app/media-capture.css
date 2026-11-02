@@ -188,3 +188,4 @@
 @media(max-width:520px){.sh-live-now-list{grid-template-columns:1fr}.sh-live-now-empty{align-items:flex-start;flex-wrap:wrap}.sh-live-now-empty span{min-width:180px}}
 @media(prefers-reduced-motion:reduce){.sh-live-now-item{transition:none}}
 .sh-media-tool.active{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.1);color:#ef4444}
+.sh-live-share{display:inline-flex;width:25px;height:25px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.22);border-radius:50%;background:rgba(255,255,255,.08);color:#fff;cursor:pointer}
