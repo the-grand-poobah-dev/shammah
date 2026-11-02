@@ -715,6 +715,9 @@ export default function CourseLearnPlayer({
                               onClick={() => {
                                 setQuizSubmitted(false);
                                 setQuizAnswers({});
+                                setQuizResults({});
+                                setQuizScore(null);
+                                setQuizError('');
                               }}
                             >
                               Retry Quiz
