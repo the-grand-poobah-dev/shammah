@@ -40,11 +40,36 @@ export default function ArcadeHtml5Games() {
   const [playing, setPlaying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('Choose a game and press Start round.');
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardMessage, setLeaderboardMessage] = useState('Sign in to view the weekly leaderboard.');
   const [filter, setFilter] = useState('All ages');
   const timerRef = useRef(null);
   const startedAt = useRef(0);
   const scoreRef = useRef(0);
   const playingRef = useRef(false);
+
+  const refreshLeaderboard = useCallback(async (gameSlug = active.slug) => {
+    try {
+      const token = await tokenFromSession();
+      if (!token) {
+        setLeaderboard([]);
+        setLeaderboardMessage('Sign in to view the weekly leaderboard.');
+        return;
+      }
+      const response = await fetch(`/api/arcade?action=leaderboard&game=${encodeURIComponent(gameSlug)}&scope=weekly`, {
+        headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Leaderboard is unavailable.');
+      setLeaderboard(data.leaderboard || []);
+      setLeaderboardMessage(data.leaderboard?.length ? '' : 'No scores yet this week. Be the first!');
+    } catch (error) {
+      setLeaderboard([]);
+      setLeaderboardMessage(error.message || 'Leaderboard is unavailable.');
+    }
+  }, [active.slug]);
+
+  useEffect(() => { refreshLeaderboard(active.slug); }, [active.slug, refreshLeaderboard]);
 
   const finish = useCallback(async (finalScore = scoreRef.current) => {
     if (!playingRef.current) return;
@@ -72,12 +97,13 @@ export default function ArcadeHtml5Games() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Score could not be saved.');
       setFeedback(`Score saved! ${Math.max(0, finalScore)} points added to your Arcade profile.`);
+      await refreshLeaderboard(active.slug);
     } catch (error) {
       setFeedback(`Round finished. ${error.message || 'Score could not be saved.'}`);
     } finally {
       setSaving(false);
     }
-  }, [active]);
+  }, [active, refreshLeaderboard]);
 
   useEffect(() => {
     if (!playing) return undefined;
@@ -149,6 +175,11 @@ export default function ArcadeHtml5Games() {
           <div className="arcade-html5-controls"><p role="status">{saving && <LoaderCircle size={15} className="arcade-spin" />}{feedback}</p><button type="button" onClick={() => start(active)} disabled={saving}><RefreshCw size={16} /> {playing ? 'Restart round' : 'Start round'}</button></div>
           <small className="arcade-html5-hint">Good target: {active.good.join(' ')} · Avoid: {active.bad.join(' ')}</small>
         </div>
+      </div>
+      <div className="arcade-html5-leaderboard">
+        <div><h3><Trophy size={17} /> Weekly leaderboard</h3><button type="button" onClick={() => refreshLeaderboard(active.slug)}><RefreshCw size={14} /> Refresh</button></div>
+        {leaderboardMessage && <p>{leaderboardMessage}</p>}
+        {leaderboard.length > 0 && <ol>{leaderboard.slice(0, 5).map((row, index) => <li key={row.user_id}><span>{index + 1}</span><strong>{row.display_name || 'Faithful player'}</strong><b>{row.score}</b></li>)}</ol>}
       </div>
       <div className="arcade-html5-footer"><Heart size={17} /><span>Designed for joyful, age-appropriate play. Be kind, take turns and enjoy learning together.</span><Users size={17} /></div>
     </section>
