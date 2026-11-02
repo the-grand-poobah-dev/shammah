@@ -134,8 +134,7 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
 
   const isAdmin = Boolean(
     currentUser?.role === 'platform_admin' ||
-    currentUser?.role === 'admin' ||
-    currentUser?.badge === 'pastor'
+    currentUser?.role === 'admin'
   );
 
   const fetchData = useCallback(async (isRefresh = false) => {
@@ -177,7 +176,7 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
       { label: 'Active Causes', value: fundraisers.length, accent: '#10b981' },
       { label: 'Total Raised (KES)', value: `KES ${totalRaised.toLocaleString()}`, accent: '#06b6d4' },
       { label: 'Generous Believers', value: totalDonors.toLocaleString(), accent: '#f59e0b' },
-      { label: 'Vetted Verification', value: '100% Direct', accent: '#8b5cf6' },
+      { label: 'Verified Campaigns', value: fundraisers.filter((item) => item.verified).length, accent: '#8b5cf6' },
     ];
   }, [fundraisers]);
 
