@@ -711,6 +711,7 @@ export async function createStatusUpdate({
   text,
   mediaUrl = null,
   mediaType = null,
+  mediaMeta = {},
   bgStyle = 'emerald',
   scriptureTag = null,
   visibility = 'public',
@@ -762,6 +763,7 @@ export async function createStatusUpdate({
           bg_style: bgStyle || 'emerald',
           media_url: mediaUrl || null,
           media_type: resolvedMediaType || null,
+          media_meta: mediaMeta && typeof mediaMeta === 'object' ? mediaMeta : {},
           expires_at: expiresAt.toISOString(),
         })
         .select('id, created_at, expires_at')
