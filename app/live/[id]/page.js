@@ -22,7 +22,7 @@ async function livePost(path, session, body) {
 export default function LiveViewerPage() {
   const params = useParams();
   const router = useRouter();
-  const { session, profile, loading: sessionLoading } = useSession();
+  const { session, loading: sessionLoading } = useSession();
   const streamId = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const [stream, setStream] = useState(null);
   const [loading, setLoading] = useState(true);
