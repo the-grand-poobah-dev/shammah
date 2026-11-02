@@ -36,11 +36,11 @@ export async function GET(request) {
 
     const { data: tx, error } = await supabase
       .from('mpesa_transactions')
-      .select('id, project_id, plan_id, status, receipt_code, amount_kes')
+      .select('id, project_id, plan_id, interval_id, status, receipt_code, amount_kes')
       .eq('checkout_request_id', checkoutRequestId)
       .eq('user_id', authData.user.id)
       .maybeSingle();
-    if (error || !tx || tx.plan_id !== tx.project_id) {
+    if (error || !tx || tx.interval_id !== 'course' || tx.plan_id !== tx.project_id) {
       return NextResponse.json({ error: 'Course payment was not found.' }, { status: 404 });
     }
     if (tx.status === 'completed') {
