@@ -283,11 +283,23 @@ export async function GET(request) {
       earnedBadges = (awards || []).map((award) => ({ ...award, earned: true, unlocked: true }));
     }
 
-    const { data: submissionRows, error: subsError } = await db.from('challenge_submissions').select('*')
-      .eq('status', 'approved').order('like_count', { ascending: false }).order('created_at', { ascending: false }).limit(8);
+    const { data: candidateSubmissions, error: subsError } = await db.from('challenge_submissions').select('*')
+      .eq('status', 'approved').order('like_count', { ascending: false }).order('created_at', { ascending: false }).limit(100);
     if (subsError) throw subsError;
-    const authors = await profileMap(db, (submissionRows || []).map((row) => row.user_id));
-    const submissions = (submissionRows || []).map((row) => normalizeSubmission(row, authors));
+    const challengeIds = [...new Set((candidateSubmissions || []).map((row) => row.challenge_id).filter(Boolean))];
+    let submissionChallenges = [];
+    if (challengeIds.length) {
+      const { data, error: challengeError } = await db.from('challenges').select('*').in('id', challengeIds);
+      if (challengeError) throw challengeError;
+      submissionChallenges = data || [];
+    }
+    const challengeById = new Map(submissionChallenges.map((row) => [row.id, row]));
+    const submissionRows = (candidateSubmissions || []).filter((row) => {
+      const parent = challengeById.get(row.challenge_id);
+      return Boolean(parent && ['active', 'completed'].includes(parent.status) && visibleTo(parent, user, profile));
+    }).slice(0, 8);
+    const authors = await profileMap(db, submissionRows.map((row) => row.user_id));
+    const submissions = submissionRows.map((row) => normalizeSubmission(row, authors));
 
     const { data: participantRows, error: leaderboardError } = await db.from('challenge_participants').select('user_id, points, streak_current, streak_best')
       .order('points', { ascending: false }).order('streak_best', { ascending: false }).limit(12);
