@@ -103,8 +103,10 @@ export default function VoiceRecorderBar({ onDone, onCancel, maxSeconds = 60 }) 
     if (!review?.file) return;
     const result = review;
     recorderRef.current = null;
+    const previewUrl = previewUrlRef.current;
     previewUrlRef.current = '';
     onDone?.(result.file, { duration: result.duration, type: result.file.type });
+    if (previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
   }
 
   function cancel() {
