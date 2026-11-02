@@ -56,14 +56,15 @@ function isValidUuid(id) {
  * Infers whether a status media URL is 'image', 'video', or 'audio'.
  */
 export function inferMediaType(url, explicitType = null) {
-  if (explicitType && ['image', 'video', 'audio'].includes(explicitType)) {
+  if (explicitType && ['image', 'video', 'audio', 'gif'].includes(explicitType)) {
     return explicitType;
   }
   if (!url || typeof url !== 'string') return null;
   const clean = url.split('?')[0].toLowerCase();
   if (/\.(mp4|webm|mov|m4v|ogg)$/.test(clean)) return 'video';
   if (/\.(mp3|wav|m4a|aac|flac)$/.test(clean)) return 'audio';
-  if (/\.(jpg|jpeg|png|webp|gif|svg|bmp|avif)$/.test(clean)) return 'image';
+  if (/\.gif$/.test(clean)) return 'gif';
+  if (/\.(jpg|jpeg|png|webp|svg|bmp|avif)$/.test(clean)) return 'image';
   return 'image';
 }
 
