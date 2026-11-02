@@ -350,11 +350,12 @@ export async function POST(request) {
       const text = String(body.body || '').trim().slice(0, 5000);
       const mediaUrl = safeUrl(body.mediaUrl);
       if (!fundraiserId || text.length < 3) return NextResponse.json({ error: 'Campaign and update text are required.' }, { status: 400 });
-      const { data: row, error: rowError } = await supabase.from('fundraisers').select('id, owner_id, creator_id')
+      const { data: row, error: rowError } = await supabase.from('fundraisers').select('id, owner_id, creator_id, status')
         .eq('id', fundraiserId).maybeSingle();
       if (rowError) throw rowError;
       if (!row) return NextResponse.json({ error: 'Fundraiser not found.' }, { status: 404 });
-      if ((row.owner_id || row.creator_id) !== user.id && !isAdmin(userProfile)) return NextResponse.json({ error: 'Only the campaign owner can post updates.' }, { status: 403 });
+      if ((row.owner_id || row.creator_id) !== user.id) return NextResponse.json({ error: 'Only the campaign owner can post updates.' }, { status: 403 });
+      if (!['active', 'completed', 'paused'].includes(row.status)) return NextResponse.json({ error: 'Updates are not available for this campaign status.' }, { status: 409 });
       const { data, error } = await supabase.from('fundraiser_updates').insert({
         fundraiser_id: fundraiserId, author_id: user.id, body: text, media_url: mediaUrl,
       }).select('*').single();
@@ -368,11 +369,12 @@ export async function POST(request) {
       const digits = String(body.mpesaPhone || '').replace(/\D/g, '');
       const phone = digits.startsWith('254') && digits.length === 12 ? digits : (digits.startsWith('0') && digits.length === 10 ? '254' + digits.slice(1) : null);
       if (!fundraiserId || !Number.isSafeInteger(amount) || amount < 100 || !phone) return NextResponse.json({ error: 'Enter a valid withdrawal amount and M-Pesa number.' }, { status: 400 });
-      const { data: row, error: rowError } = await supabase.from('fundraisers').select('id, owner_id, creator_id, raised_kes, raised_amount')
+      const { data: row, error: rowError } = await supabase.from('fundraisers').select('id, owner_id, creator_id, raised_kes, raised_amount, status')
         .eq('id', fundraiserId).maybeSingle();
       if (rowError) throw rowError;
       if (!row) return NextResponse.json({ error: 'Fundraiser not found.' }, { status: 404 });
-      if ((row.owner_id || row.creator_id) !== user.id && !isAdmin(userProfile)) return NextResponse.json({ error: 'Only the campaign owner can request a withdrawal.' }, { status: 403 });
+      if ((row.owner_id || row.creator_id) !== user.id) return NextResponse.json({ error: 'Only the campaign owner can request a withdrawal.' }, { status: 403 });
+      if (!['active', 'completed'].includes(row.status)) return NextResponse.json({ error: 'Withdrawals are not available for this campaign status.' }, { status: 409 });
       const { data: existing, error: existingError } = await supabase.from('fundraiser_withdrawals')
         .select('amount_kes, status').eq('fundraiser_id', fundraiserId).in('status', ['pending', 'approved', 'disbursed']);
       if (existingError) throw existingError;
