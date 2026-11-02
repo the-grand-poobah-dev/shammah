@@ -66,7 +66,7 @@ insert into public.arcade_questions(category,testament,book,question,options,cor
 ('Epistles', 'NT', 'Philippians', 'Who gives strength according to Philippians 4:13?', '["Christ","Moses","An angel","A king"]'::jsonb, 0, 'Philippians 4:13'),
 ('Epistles', 'NT', 'Hebrews', 'What is faith according to Hebrews 11:1?', '["A kind of sacrifice","A temple ritual","A family name","Substance of things hoped for"]'::jsonb, 3, 'Hebrews 11:1'),
 ('Gospels', 'NT', 'John', 'Who denied Jesus three times?', '["Judas","James","Peter","John"]'::jsonb, 2, 'Matthew 26:69-75'),
-('Gospels', 'NT', 'Luke', 'Which parable features a traveller helped by a Samaritan?', '["The Talents","The Good Samaritan","The Lost Sheep","The Sower"]'::jsonb, 1, 'Luke 10:25-37'),
+('Gospels', 'NT', 'Luke', 'Which parable features a traveller helped by a Samaritan?', '["The Talents","The Good Samaritan","The Lost Sheep","The Sower"]'::jsonb, 1, 'Luke 10:25-37')
 on conflict (book,question) do nothing;
 
 
