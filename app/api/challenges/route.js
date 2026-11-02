@@ -301,14 +301,34 @@ export async function GET(request) {
     const authors = await profileMap(db, submissionRows.map((row) => row.user_id));
     const submissions = submissionRows.map((row) => normalizeSubmission(row, authors));
 
-    const { data: participantRows, error: leaderboardError } = await db.from('challenge_participants').select('user_id, points, streak_current, streak_best')
-      .order('points', { ascending: false }).order('streak_best', { ascending: false }).limit(12);
-    if (leaderboardError) throw leaderboardError;
-    const leaderProfiles = await profileMap(db, (participantRows || []).map((row) => row.user_id));
-    const leaderboard = (participantRows || []).map((row) => ({
-      ...row, display_name: leaderProfiles[row.user_id]?.display_name || 'Shammah member',
-      avatar_url: leaderProfiles[row.user_id]?.avatar_url || null, badge: leaderProfiles[row.user_id]?.badge || null,
-    }));
+    const visibleChallengeIds = visibleRows.map((row) => row.id);
+    let participantRows = [];
+    if (visibleChallengeIds.length) {
+      const { data, error: leaderboardError } = await db.from('challenge_participants')
+        .select('challenge_id, user_id, points, streak_current, streak_best')
+        .in('challenge_id', visibleChallengeIds)
+        .order('points', { ascending: false }).limit(500);
+      if (leaderboardError) throw leaderboardError;
+      participantRows = data || [];
+    }
+    const leaderProfiles = await profileMap(db, participantRows.map((row) => row.user_id));
+    const leaderTotals = new Map();
+    participantRows.forEach((row) => {
+      const previous = leaderTotals.get(row.user_id) || { user_id: row.user_id, points: 0, streak_current: 0, streak_best: 0 };
+      previous.points += Number(row.points || 0);
+      previous.streak_current = Math.max(previous.streak_current, Number(row.streak_current || 0));
+      previous.streak_best = Math.max(previous.streak_best, Number(row.streak_best || 0));
+      leaderTotals.set(row.user_id, previous);
+    });
+    const leaderboard = [...leaderTotals.values()]
+      .sort((a, b) => b.points - a.points || b.streak_best - a.streak_best)
+      .slice(0, 12)
+      .map((row) => ({
+        ...row,
+        display_name: leaderProfiles[row.user_id]?.display_name || 'Shammah member',
+        avatar_url: leaderProfiles[row.user_id]?.avatar_url || null,
+        badge: leaderProfiles[row.user_id]?.badge || null,
+      }));
 
     if (user?.id && submissions.length) {
       const { data: votes, error: votesError } = await db.from('challenge_votes').select('submission_id').eq('user_id', user.id)
