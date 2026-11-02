@@ -115,7 +115,11 @@ export default function ReelCreatorModal({
   }
 
   async function handleOpenMediaLibrary() {
-    setShowMediaLibrary((visible) => !visible);
+    if (showMediaLibrary) {
+      setShowMediaLibrary(false);
+      return;
+    }
+    setShowMediaLibrary(true);
     if (libraryVideos.length || loadingLibrary) return;
     setLoadingLibrary(true);
     setError('');
