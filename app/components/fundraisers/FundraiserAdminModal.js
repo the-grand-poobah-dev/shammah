@@ -288,7 +288,7 @@ export default function FundraiserAdminModal({ isOpen, onClose, onActionComplete
                       }}
                     >
                       <Coins size={13} />
-                      <span>Mark Disbursed</span>
+                      <span>Approve Request</span>
                     </button>
                   </div>
                 </div>
