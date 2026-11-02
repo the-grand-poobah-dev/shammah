@@ -54,8 +54,6 @@ export async function POST(request) {
     if (error) return NextResponse.json({ error: 'Could not save highlight.' }, { status: 500 });
     return NextResponse.json({ saved: true });
   }
-  const { data: existing, error: findError } = await auth.client.from(type).select('id').match(ref).maybeSingle();
-  if (findError) return NextResponse.json({ error: 'Could not check your bookmark.' }, { status: 500 });
   if (body.action === 'remove') {
     const { error } = await auth.client.from(type).delete().match(ref);
     if (error) return NextResponse.json({ error: 'Could not remove bookmark.' }, { status: 500 });
