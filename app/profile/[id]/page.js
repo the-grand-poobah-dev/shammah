@@ -47,7 +47,7 @@ export default function MemberProfilePage({ params }) {
       if (s?.user?.id) {
         const { data: prof } = await supabase
           .from('profiles')
-          .select('id, display_name, role, church_id, created_at, badge, badge_verified, avatar_url, cover_url, about, location_label, display_name_changed_at, onboarding_completed_at, onboarded_at, badge_set_at, is_locked, inbox_permission, church_name, theme_preference, allow_status_reshare, who_can_tag_me, review_tags')
+          .select('id, display_name, role, church_id, created_at, badge, badge_verified, avatar_url, cover_url, about, location_label, display_name_changed_at, onboarding_completed_at, onboarded_at, badge_set_at, is_locked, church_name')
           .eq('id', s.user.id)
           .maybeSingle();
         if (prof) setViewerProfile(prof);
@@ -63,7 +63,7 @@ export default function MemberProfilePage({ params }) {
     async function loadMemberData() {
       const { data: prof } = await supabase
         .from('profiles')
-        .select('id, display_name, role, church_id, created_at, badge, badge_verified, avatar_url, cover_url, about, location_label, display_name_changed_at, onboarding_completed_at, onboarded_at, badge_set_at, is_locked, inbox_permission, church_name, theme_preference, allow_status_reshare, who_can_tag_me, review_tags')
+        .select('id, display_name, role, church_id, created_at, badge, badge_verified, avatar_url, cover_url, about, location_label, display_name_changed_at, onboarding_completed_at, onboarded_at, badge_set_at, is_locked, church_name')
         .eq('id', memberId)
         .maybeSingle();
 
