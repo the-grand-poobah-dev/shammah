@@ -5,19 +5,45 @@
 ALTER TABLE public.profile_private
   ADD COLUMN IF NOT EXISTS location_place_id text,
   ADD COLUMN IF NOT EXISTS location_lat double precision,
-  ADD COLUMN IF NOT EXISTS location_lng double precision;
+  ADD COLUMN IF NOT EXISTS location_lng double precision,
+  ADD COLUMN IF NOT EXISTS inbox_permission text,
+  ADD COLUMN IF NOT EXISTS theme_preference text,
+  ADD COLUMN IF NOT EXISTS who_can_tag_me text,
+  ADD COLUMN IF NOT EXISTS review_tags boolean;
 
--- Preserve any existing location values while keeping DOB untouched.
-INSERT INTO public.profile_private (id, location_place_id, location_lat, location_lng)
-SELECT id, location_place_id, location_lat, location_lng
+-- Migrate legacy private preferences only when the new private-table value is
+-- still NULL, so re-running this migration never overwrites a saved preference.
+INSERT INTO public.profile_private (
+  id, location_place_id, location_lat, location_lng,
+  inbox_permission, theme_preference, who_can_tag_me, review_tags
+)
+SELECT
+  id, location_place_id, location_lat, location_lng,
+  inbox_permission, theme_preference, who_can_tag_me, review_tags
 FROM public.profiles
 WHERE location_place_id IS NOT NULL
    OR location_lat IS NOT NULL
    OR location_lng IS NOT NULL
+   OR inbox_permission IS NOT NULL
+   OR theme_preference IS NOT NULL
+   OR who_can_tag_me IS NOT NULL
+   OR review_tags IS NOT NULL
 ON CONFLICT (id) DO UPDATE
 SET location_place_id = COALESCE(EXCLUDED.location_place_id, profile_private.location_place_id),
     location_lat = COALESCE(EXCLUDED.location_lat, profile_private.location_lat),
-    location_lng = COALESCE(EXCLUDED.location_lng, profile_private.location_lng);
+    location_lng = COALESCE(EXCLUDED.location_lng, profile_private.location_lng),
+    inbox_permission = COALESCE(profile_private.inbox_permission, EXCLUDED.inbox_permission),
+    theme_preference = COALESCE(profile_private.theme_preference, EXCLUDED.theme_preference),
+    who_can_tag_me = COALESCE(profile_private.who_can_tag_me, EXCLUDED.who_can_tag_me),
+    review_tags = COALESCE(profile_private.review_tags, EXCLUDED.review_tags);
+
+ALTER TABLE public.profile_private
+  ALTER COLUMN inbox_permission SET DEFAULT 'everyone',
+  ALTER COLUMN inbox_permission SET NOT NULL,
+  ALTER COLUMN who_can_tag_me SET DEFAULT 'everyone',
+  ALTER COLUMN who_can_tag_me SET NOT NULL,
+  ALTER COLUMN review_tags SET DEFAULT false,
+  ALTER COLUMN review_tags SET NOT NULL;
 
 -- Keep DOB validation and round precise coordinates before they are stored.
 CREATE OR REPLACE FUNCTION public.check_dob()
@@ -63,8 +89,7 @@ GRANT SELECT (
   id, display_name, role, church_id, created_at, badge, badge_verified,
   avatar_url, cover_url, about, location_label, display_name_changed_at,
   onboarding_completed_at, onboarded_at, badge_set_at, is_locked,
-  inbox_permission, church_name, theme_preference, allow_status_reshare,
-  who_can_tag_me, review_tags
+  church_name, allow_status_reshare
 ) ON TABLE public.profiles TO anon, authenticated;
 
 -- Private table remains owner-only under its existing RLS policies.
