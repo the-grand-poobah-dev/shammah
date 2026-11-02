@@ -92,6 +92,11 @@ export async function moderateChallengeSubmission(submissionId, decision) {
 
 export async function sendChallengePushReminder({ token, title, body, link = '/?tab=faith-challenges' }) {
   const headers = await getAuthHeaders();
+  await requestJson('/api/fcm/register', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ token, platform: 'web' }),
+  });
   return requestJson('/api/fcm/send', {
     method: 'POST',
     headers,
