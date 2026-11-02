@@ -70,7 +70,7 @@ export async function uploadPostMedia(file, userId) {
 
   const type = detectMediaType(file);
   if (!type) {
-    throw new Error('Unsupported file type. Please use JPG, PNG, WebP, GIF, MP4, WebM, MP3 or WAV.');
+    throw new Error('Unsupported file type. Please use JPG, PNG, WebP, GIF (up to 10 MB), MP4, WebM, MP3 or WAV.');
   }
 
   const max = MAX_BYTES[type];
