@@ -121,15 +121,43 @@ export async function POST(request) {
 
     const body = await request.json();
     const gameSlug = String(body.gameSlug || '').trim().slice(0, 80);
-    const score = Number(body.score);
     const durationMs = Number(body.durationMs);
     const meta = body.meta && typeof body.meta === 'object' && !Array.isArray(body.meta) ? body.meta : {};
-    if (!/^[a-z0-9-]{2,80}$/.test(gameSlug) || !Number.isSafeInteger(score) || score < 0 ||
+    if (!/^[a-z0-9-]{2,80}$/.test(gameSlug) ||
         !Number.isSafeInteger(durationMs) || durationMs < 1000 || durationMs > 7200000) {
       return NextResponse.json({ error: 'Invalid game result.' }, { status: 400 });
     }
     const service = makeClient(process.env.SUPABASE_SERVICE_ROLE_KEY);
     if (!service) return NextResponse.json({ error: 'Score saving is not configured yet.' }, { status: 503 });
+
+    let score = Number(body.score);
+    let gradeResults = null;
+    let questionsAnswered = 0;
+    if (gameSlug === 'bible-trivia') {
+      if (!Array.isArray(body.answers) || body.answers.length < 1 || body.answers.length > 100) {
+        return NextResponse.json({ error: 'Submit the answers for this quiz to be graded.' }, { status: 400 });
+      }
+      const ids = [...new Set(body.answers.map((answer) => Number(answer.id)).filter(Number.isSafeInteger))];
+      if (ids.length !== body.answers.length) return NextResponse.json({ error: 'Invalid quiz answer list.' }, { status: 400 });
+      const { data: questions, error: questionError } = await service.from('arcade_questions')
+        .select('id,correct_index,explanation,question,options').in('id', ids);
+      if (questionError) throw questionError;
+      if (!questions || questions.length !== ids.length) return NextResponse.json({ error: 'One or more quiz questions are unavailable.' }, { status: 400 });
+      const byId = new Map(questions.map((question) => [Number(question.id), question]));
+      gradeResults = body.answers.map((answer) => {
+        const question = byId.get(Number(answer.id));
+        const selected = Number(answer.selectedIndex);
+        const valid = Number.isInteger(selected) && selected >= 0 && selected < question.options.length;
+        const correct = valid && selected === Number(question.correct_index);
+        return { id: Number(answer.id), selectedIndex: valid ? selected : -1, correct, correctIndex: Number(question.correct_index), explanation: question.explanation || '' };
+      });
+      questionsAnswered = gradeResults.length;
+      const correctCount = gradeResults.filter((result) => result.correct).length;
+      score = Math.round((correctCount / gradeResults.length) * 1000);
+      meta.perfect = correctCount === gradeResults.length;
+    }
+    if (!Number.isSafeInteger(score) || score < 0) return NextResponse.json({ error: 'Invalid score.' }, { status: 400 });
+
     const { data, error } = await service.rpc('submit_arcade_score', {
       p_user_id: user.id,
       p_game_slug: gameSlug,
@@ -138,15 +166,15 @@ export async function POST(request) {
       p_meta: {
         perfect: meta.perfect === true,
         completed: meta.completed === true,
-        questionsAnswered: Number.isFinite(Number(meta.questionsAnswered))
-          ? Math.max(0, Math.min(200, Math.trunc(Number(meta.questionsAnswered)))) : 0
+        questionsAnswered: questionsAnswered || (Number.isFinite(Number(meta.questionsAnswered))
+          ? Math.max(0, Math.min(200, Math.trunc(Number(meta.questionsAnswered)))) : 0)
       }
     });
     if (error) {
       const status = /limit|invalid|unavailable|duration/i.test(error.message || '') ? 400 : 500;
       return NextResponse.json({ error: error.message || 'Could not save score.' }, { status });
     }
-    return NextResponse.json({ ok: true, result: data });
+    return NextResponse.json({ ok: true, score, result: data, gradeResults });
   } catch (error) {
     return NextResponse.json({ error: error?.message || 'Could not save Arcade score.' }, { status: 500 });
   }
