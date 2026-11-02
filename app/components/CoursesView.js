@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   BookOpen,
   PlayCircle,
@@ -130,17 +130,20 @@ export default function CoursesView({ session = null, userProfile = null }) {
     return () => clearTimeout(t);
   }, [searchInput]);
 
+  const catalogueRequestRef = useRef(0);
   const loadCatalogue = useCallback(async () => {
+    const requestId = ++catalogueRequestRef.current;
     setLoading(true);
     setError('');
     try {
       await migrateLegacyCourseProgress(userId, userName);
+      if (requestId !== catalogueRequestRef.current) return;
       const list = await listCourses(userId);
-      setCourses(list);
+      if (requestId === catalogueRequestRef.current) setCourses(list);
     } catch (err) {
-      setError(err?.message || 'Unable to load courses right now.');
+      if (requestId === catalogueRequestRef.current) setError(err?.message || 'Unable to load courses right now.');
     } finally {
-      setLoading(false);
+      if (requestId === catalogueRequestRef.current) setLoading(false);
     }
   }, [userId, userName]);
 
