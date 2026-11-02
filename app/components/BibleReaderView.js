@@ -45,6 +45,8 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const now = useRelativeTimeTick();
   const [selectedBookId, setSelectedBookId] = useState('PSA');
   const [selectedChapter, setSelectedChapter] = useState(23);
+  const [jumpVerse, setJumpVerse] = useState('');
+  const [pendingVerseJump, setPendingVerseJump] = useState(null);
   const [translation, setTranslation] = useState('KJV');
   const [chapterVerses, setChapterVerses] = useState([]);
   const [chapterLoading, setChapterLoading] = useState(true);
@@ -332,6 +334,21 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     () => BIBLE_BOOKS.filter((book) => testamentFilter === 'ALL' || book.testament === testamentFilter),
     [testamentFilter]
   );
+
+  function jumpToPassage() {
+    const verseNumber = Number.parseInt(jumpVerse, 10);
+    setPendingVerseJump(Number.isInteger(verseNumber) && verseNumber > 0 ? verseNumber : null);
+    setChapterRetry((n) => n + 1);
+    document.getElementById('bible-chapter-reader')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  useEffect(() => {
+    if (chapterLoading || pendingVerseJump == null) return;
+    const target = document.getElementById(`bible-verse-${pendingVerseJump}`);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    else showToast(`Verse ${pendingVerseJump} was not found in this chapter.`);
+    setPendingVerseJump(null);
+  }, [chapterLoading, pendingVerseJump, chapterVerses]);
 
   function showToast(msg) {
     setToastMsg(msg);
@@ -717,46 +734,27 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
           </div>
         </div>
 
-        {/* Book Selector Bar */}
-        <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll books left" rightLabel="Scroll books right">
-          <div className="bible-books-scroll no-scrollbar">
-            {filteredBooks.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                className={`bible-book-pill${selectedBookId === b.id ? ' active' : ''}`}
-                onClick={() => {
-                  setSelectedBookId(b.id);
-                  setSelectedChapter(1);
-                  playSound('reaction');
-                }}
-              >
-                <span>{b.name}</span>
-              </button>
-            ))}
+        {/* Direct passage navigator: book, chapter, and optional verse */}
+        <div className="bible-direct-navigator" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: '10px', padding: '12px 0 4px' }} aria-label="Jump to a Bible passage">
+          <label style={{ display: 'grid', gap: '5px', fontSize: '0.88rem', color: 'var(--ink-muted)' }}>
+            Book
+            <select className="bible-select" value={selectedBookId} onChange={(e) => { setSelectedBookId(e.target.value); setSelectedChapter(1); setJumpVerse(''); setPendingVerseJump(null); }} aria-label="Choose Bible book">
+              {filteredBooks.map((book) => <option key={book.id} value={book.id}>{book.name}</option>)}
+            </select>
+          </label>
+          <label style={{ display: 'grid', gap: '5px', fontSize: '0.88rem', color: 'var(--ink-muted)' }}>
+            Chapter
+            <select className="bible-select" value={selectedChapter} onChange={(e) => { setSelectedChapter(Number(e.target.value)); setJumpVerse(''); setPendingVerseJump(null); }} aria-label="Choose chapter">
+              {Array.from({ length: currentBook.chapters }, (_, i) => i + 1).map((chapter) => <option key={chapter} value={chapter}>{chapter}</option>)}
+            </select>
+          </label>
+          <label style={{ display: 'grid', gap: '5px', fontSize: '0.88rem', color: 'var(--ink-muted)' }}>
+            Verse (optional)
+            <input className="bible-select" type="number" min="1" max="200" inputMode="numeric" value={jumpVerse} onChange={(e) => setJumpVerse(e.target.value)} placeholder="e.g. 16" aria-label="Optional verse number" />
+          </label>
+          <div style={{ display: 'flex', alignItems: 'end' }}>
+            <button type="button" className="cx-btn cx-btn-primary" onClick={jumpToPassage} style={{ width: '100%', minHeight: '42px' }}>Go to passage</button>
           </div>
-        </ScrollAffordanceWrapper>
-
-        {/* Chapter numbers row */}
-        <div className="bible-chapters-wrapper">
-          <span className="bible-chapters-label">Chapter:</span>
-          <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll chapters left" rightLabel="Scroll chapters right">
-            <div className="bible-chapters-scroll no-scrollbar">
-              {Array.from({ length: currentBook.chapters }, (_, i) => i + 1).map((ch) => (
-                <button
-                  key={ch}
-                  type="button"
-                  className={`bible-ch-btn${selectedChapter === ch ? ' active' : ''}`}
-                  onClick={() => {
-                    setSelectedChapter(ch);
-                    playSound('reaction');
-                  }}
-                >
-                  {ch}
-                </button>
-              ))}
-            </div>
-          </ScrollAffordanceWrapper>
         </div>
       </div>
 
