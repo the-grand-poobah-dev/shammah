@@ -23,7 +23,7 @@ function client() {
 }
 function resolveBook(input) {
   const value = String(input || '').trim().replace(/\./g, '').replace(/\s+/g, ' ').toLowerCase();
-  const alias = ALIASES[value] || value;
+  const alias = String(ALIASES[value] || value).toLowerCase();
   return Object.entries(BOOKS).find(([id, name]) => id.toLowerCase() === alias || name.toLowerCase() === alias)?.[0] || null;
 }
 
