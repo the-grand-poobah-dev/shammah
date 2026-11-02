@@ -184,7 +184,7 @@ export async function POST(req) {
     }
 
     const authHeader = req.headers.get('authorization') || '';
-    const bearerToken = authHeader.replace(/^Bearer\\s+/i, '').trim();
+    const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!bearerToken || !supabaseUrl || !anonKey) {
