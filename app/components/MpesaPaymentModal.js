@@ -1,20 +1,13 @@
 'use client';
 import { useState } from 'react';
 import {
-  Heart,
   Phone,
   ShieldCheck,
-  Check,
   X,
-  Sparkles,
-  ArrowRight,
-  Clock,
   Coins,
   Loader2,
   Lock,
-  Gift,
   AlertCircle,
-  Share2,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 
