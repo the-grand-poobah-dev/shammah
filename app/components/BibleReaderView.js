@@ -54,6 +54,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const [parallelVerses, setParallelVerses] = useState([]);
   const [parallelLoading, setParallelLoading] = useState(false);
   const [parallelError, setParallelError] = useState('');
+  const [parallelRetry, setParallelRetry] = useState(0);
   const [isChapterOffline, setIsChapterOffline] = useState(false);
   const [testamentFilter, setTestamentFilter] = useState('ALL'); // ALL, OT, NT
   const [searchQuery, setSearchQuery] = useState('');
@@ -171,7 +172,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     }
     loadParallel();
     return () => { cancelled = true; controller.abort(); };
-  }, [parallelEnabled, parallelTranslation, currentBook.id, selectedChapter]);
+  }, [parallelEnabled, parallelTranslation, currentBook.id, selectedChapter, parallelRetry]);
 
   // Warm the next chapter in the server cache without blocking the current reading.
   useEffect(() => {
@@ -806,7 +807,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         </section>
         {parallelEnabled && <section aria-label={`${parallelTranslation} parallel scripture`}>
           <h4 style={{ margin: '0 0 8px', color: 'var(--ink-muted)' }}>{parallelTranslation}</h4>
-          {parallelLoading ? <div role="status" className="bible-verses-list"><p>Loading parallel translation…</p></div> : parallelError ? <div role="alert" className="bible-verses-list"><p>{parallelError}</p><button type="button" className="cx-btn cx-btn-ghost" onClick={() => setParallelEnabled(false) || setParallelEnabled(true)}>Retry parallel view</button></div> : <div className="bible-verses-list">{parallelVerses.map((v) => <div className="bible-verse-row" key={v.num}><span className="verse-number-btn" aria-hidden="true">{v.num}</span><p className="verse-text">{v.text}</p></div>)}</div>}
+          {parallelLoading ? <div role="status" className="bible-verses-list"><p>Loading parallel translation…</p></div> : parallelError ? <div role="alert" className="bible-verses-list"><p>{parallelError}</p><button type="button" className="cx-btn cx-btn-ghost" onClick={() => setParallelRetry((n) => n + 1)}>Retry parallel view</button></div> : <div className="bible-verses-list">{parallelVerses.map((v) => <div className="bible-verse-row" key={v.num}><span className="verse-number-btn" aria-hidden="true">{v.num}</span><p className="verse-text">{v.text}</p></div>)}</div>}
         </section>}
         </div>
         )}
