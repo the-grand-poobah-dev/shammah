@@ -125,6 +125,12 @@ export default function CreatePostBox({
   const [showGifPicker, setShowGifPicker] = useState(false);
 
   useEffect(() => {
+    const openLive = () => setShowLiveModal(true);
+    window.addEventListener('shammah:open-live', openLive);
+    return () => window.removeEventListener('shammah:open-live', openLive);
+  }, []);
+
+  useEffect(() => {
     const previewUrl = mediaPreview?.url;
     return () => {
       if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
