@@ -312,7 +312,12 @@ export default function CourseLearnPlayer({
       setQuizResults(byId);
       setQuizScore(Number(result.score || 0));
       setQuizSubmitted(true);
-      await handleMarkComplete(Number(result.score || 0));
+      if (result.passed) {
+        setQuizError('');
+        await handleMarkComplete(Number(result.score || 0));
+      } else {
+        setQuizError(`You scored ${Number(result.score || 0)}%. You need at least ${Number(result.passingScore || 70)}% to pass. Review the explanations and try again.`);
+      }
     } catch (error) {
       setQuizError(error?.message || 'Could not submit this quiz. Please try again.');
     }
