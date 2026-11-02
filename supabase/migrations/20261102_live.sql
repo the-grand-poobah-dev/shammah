@@ -184,6 +184,13 @@ with check (
   or exists (select 1 from public.live_moderators m where m.stream_id = live_bans.stream_id and m.user_id = auth.uid())
 );
 
+-- Stream creation and lifecycle changes are server-only so /api/live/start
+-- can enforce trust, account-age and rate limits before creating a room.
+revoke insert, update, delete, truncate, references, trigger
+  on table public.live_streams from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger
+  on table public.live_viewers from anon, authenticated;
+
 -- Enforce chat rate limits even if a client attempts direct Supabase inserts.
 create or replace function public.enforce_live_chat_rate_limit()
 returns trigger
