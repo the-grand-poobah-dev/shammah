@@ -137,19 +137,19 @@ export async function POST(request) {
       if (!Array.isArray(body.answers) || body.answers.length < 1 || body.answers.length > 100) {
         return NextResponse.json({ error: 'Submit the answers for this quiz to be graded.' }, { status: 400 });
       }
-      const ids = [...new Set(body.answers.map((answer) => Number(answer.id)).filter(Number.isSafeInteger))];
+      const ids = [...new Set(body.answers.map((answer) => String(answer.id ?? '').trim()).filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)))];
       if (ids.length !== body.answers.length) return NextResponse.json({ error: 'Invalid quiz answer list.' }, { status: 400 });
       const { data: questions, error: questionError } = await service.from('arcade_questions')
         .select('id,correct_index,explanation,question,options').in('id', ids);
       if (questionError) throw questionError;
       if (!questions || questions.length !== ids.length) return NextResponse.json({ error: 'One or more quiz questions are unavailable.' }, { status: 400 });
-      const byId = new Map(questions.map((question) => [Number(question.id), question]));
+      const byId = new Map(questions.map((question) => [String(question.id), question]));
       gradeResults = body.answers.map((answer) => {
-        const question = byId.get(Number(answer.id));
+        const question = byId.get(String(answer.id));
         const selected = Number(answer.selectedIndex);
         const valid = Number.isInteger(selected) && selected >= 0 && selected < question.options.length;
         const correct = valid && selected === Number(question.correct_index);
-        return { id: Number(answer.id), selectedIndex: valid ? selected : -1, correct, correctIndex: Number(question.correct_index), explanation: question.explanation || '' };
+        return { id: String(answer.id), selectedIndex: valid ? selected : -1, correct, correctIndex: Number(question.correct_index), explanation: question.explanation || '' };
       });
       questionsAnswered = gradeResults.length;
       const correctCount = gradeResults.filter((result) => result.correct).length;
