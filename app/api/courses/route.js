@@ -155,6 +155,7 @@ async function fetchCoursesFromDb(supabase, userId) {
       lessonsRes,
       questionsRes,
       reviewsRes,
+      enrollmentCountsRes,
       enrollRes,
       progressRes,
       certRes
@@ -163,6 +164,7 @@ async function fetchCoursesFromDb(supabase, userId) {
       supabase.from('course_lessons').select('*').in('course_id', courseIds).order('position', { ascending: true }),
       supabase.from('course_quiz_questions').select('*').order('position', { ascending: true }),
       supabase.from('course_reviews').select('*').in('course_id', courseIds).order('created_at', { ascending: false }),
+      supabase.from('course_enrollments').select('course_id').in('course_id', courseIds),
       userId
         ? supabase.from('course_enrollments').select('*').eq('user_id', userId)
         : Promise.resolve({ data: [], error: null }),
@@ -181,6 +183,7 @@ async function fetchCoursesFromDb(supabase, userId) {
       ['lessons', lessonsRes],
       ['quiz questions', questionsRes],
       ['reviews', reviewsRes],
+      ['enrollment counts', enrollmentCountsRes],
       ['enrollments', enrollRes],
       ['lesson progress', progressRes],
       ['certificates', certRes]
@@ -195,6 +198,10 @@ async function fetchCoursesFromDb(supabase, userId) {
     const lessons = lessonsRes.data || [];
     const questions = questionsRes.data || [];
     const reviews = reviewsRes.data || [];
+    const enrollmentCountsByCourse = {};
+    for (const enrollment of enrollmentCountsRes.data || []) {
+      enrollmentCountsByCourse[enrollment.course_id] = (enrollmentCountsByCourse[enrollment.course_id] || 0) + 1;
+    }
 
     const questionsByLesson = {};
     for (const q of questions || []) {
@@ -255,16 +262,24 @@ async function fetchCoursesFromDb(supabase, userId) {
       }
       const enroll = enrollByCourse[c.id] || null;
       const percent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+      const courseReviews = reviewsByCourse[c.id] || [];
+      const actualReviewCount = courseReviews.length;
+      const actualRatingAverage = actualReviewCount
+        ? Number((courseReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / actualReviewCount).toFixed(2))
+        : 0;
 
       return {
         ...c,
+        rating_avg: actualRatingAverage,
+        rating_count: actualReviewCount,
+        enrolled_count: enrollmentCountsByCourse[c.id] || 0,
         instructor_name: c.instructor_name || c.instructor || null,
         instructor_role: c.instructor_role || c.instructor_title || c.instructor_badge || null,
         cover_url: c.cover_url || c.cover_image_url || c.thumbnail_url || null,
         duration_minutes: Number(c.duration_minutes || (Number(c.estimated_hours || 0) * 60) || 60),
         level: c.level || c.difficulty || 'Foundational',
         modules: cModules,
-        reviews: reviewsByCourse[c.id] || [],
+        reviews: courseReviews,
         total_lessons: totalLessons,
         completed_lessons: completedLessons,
         progress_percent: percent,
@@ -671,7 +686,27 @@ export async function POST(request) {
         .select('*')
         .single();
       if (error) return NextResponse.json({ error: error.message || 'Could not submit review.' }, { status: 500 });
-      return NextResponse.json({ ok: true, review: savedReview });
+      const { data: ratingRows, error: ratingError } = await supabase
+        .from('course_reviews').select('rating').eq('course_id', courseId);
+      if (ratingError) {
+        console.error('Course review summary query failed:', ratingError.message);
+        return NextResponse.json({ ok: true, review: savedReview });
+      }
+      const ratingCount = (ratingRows || []).length;
+      const ratingAverage = ratingCount
+        ? Number(((ratingRows || []).reduce((sum, row) => sum + Number(row.rating || 0), 0) / ratingCount).toFixed(2))
+        : 0;
+      const { error: summaryError } = await supabase.from('courses').update({
+        rating_avg: ratingAverage,
+        rating_count: ratingCount
+      }).eq('id', courseId);
+      if (summaryError) console.error('Course review summary update failed:', summaryError.message);
+      return NextResponse.json({
+        ok: true,
+        review: savedReview,
+        rating_avg: ratingAverage,
+        rating_count: ratingCount
+      });
     }
 
     if (action === 'migrate_legacy_progress') {
