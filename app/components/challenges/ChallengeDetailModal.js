@@ -189,15 +189,14 @@ export default function ChallengeDetailModal({
     }
   }
 
-  // Generate 28-day calendar heatmap grid
+  // Generate a real rolling 28-day check-in calendar using calendar dates.
   const daysInGrid = Array.from({ length: 28 }, (_, i) => {
-    const dayNumber = i + 1;
-    // Check if this day is checked in
-    const isChecked = recentCheckins.some((c) => {
-      const date = new Date(c.day);
-      return date.getDate() === dayNumber;
-    });
-    return { dayNumber, isChecked };
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() - (27 - i));
+    const dateKey = date.toISOString().slice(0, 10);
+    const isChecked = recentCheckins.some((item) => String(item.day || '').slice(0, 10) === dateKey);
+    return { dateKey, label: date.getDate(), date, isChecked };
   });
 
   return (
@@ -446,15 +445,15 @@ export default function ChallengeDetailModal({
                 <div className="grid grid-cols-7 sm:grid-cols-14 gap-1.5 p-3 rounded-xl bg-black/20 border border-white/5">
                   {daysInGrid.map((day) => (
                     <div
-                      key={day.dayNumber}
+                      key={day.dateKey}
                       className={`h-7 rounded-md flex flex-col items-center justify-center text-[10px] font-mono transition-all ${
                         day.isChecked
                           ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 font-bold shadow-sm'
                           : 'bg-white/5 text-slate-500'
                       }`}
-                      title={day.isChecked ? `Day ${day.dayNumber}: Checked-in` : `Day ${day.dayNumber}: No record`}
+                      title={day.isChecked ? day.date.toLocaleDateString() + ': Checked in' : day.date.toLocaleDateString() + ': No check-in'}
                     >
-                      {day.isChecked ? <Check className="w-3 h-3 stroke-[3]" /> : day.dayNumber}
+                      {day.isChecked ? <Check className="w-3 h-3 stroke-[3]" /> : day.label}
                     </div>
                   ))}
                 </div>
