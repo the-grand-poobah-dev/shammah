@@ -203,7 +203,8 @@ export async function GET(request) {
     const { data: rows, error } = await db.from('challenges').select('*')
       .in('status', ['active', 'completed']).order('created_at', { ascending: false }).limit(500);
     if (error) throw error;
-    let allChallenges = (rows || []).filter((row) => visibleTo(row, user, profile));
+    const visibleRows = (rows || []).filter((row) => visibleTo(row, user, profile));
+    let allChallenges = [...visibleRows];
     if (category !== 'All') allChallenges = allChallenges.filter((row) => row.category?.toLowerCase() === category.toLowerCase());
     if (search) allChallenges = allChallenges.filter((row) =>
       [row.title, row.description, row.rules_md, row.category].some((value) => String(value || '').toLowerCase().includes(search))
@@ -226,7 +227,7 @@ export async function GET(request) {
     if (user?.id) {
       const { data: parts, error: partError } = await db.from('challenge_participants').select('*').eq('user_id', user.id);
       if (partError) throw partError;
-      const byId = new Map(allChallenges.map((row) => [row.id, row]));
+      const byId = new Map(visibleRows.map((row) => [row.id, row]));
       myActive = (parts || []).map((part) => {
         const challenge = byId.get(part.challenge_id);
         return challenge ? { ...normalizeChallenge(challenge), ...part, user_points: part.points, has_checked_in_today: part.last_checkin_on === new Date().toISOString().slice(0, 10) } : null;
@@ -272,7 +273,7 @@ export async function GET(request) {
       page,
       pageSize,
       hasMore: page * pageSize < totalCount,
-      participantsTotal: allChallenges.reduce((sum, row) => sum + Number(row.participants_count || 0), 0),
+      participantsTotal: visibleRows.reduce((sum, row) => sum + Number(row.participants_count || 0), 0),
       // Existing compatibility keys.
       todayChallenge,
       myActiveChallenges: myActive,
