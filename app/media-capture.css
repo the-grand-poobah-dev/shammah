@@ -54,3 +54,32 @@
 @keyframes sh-live-pulse{50%{opacity:.45;transform:scale(.82)}}
 @media(max-width:720px){.sh-live-backdrop,.sh-capture-backdrop{padding:0;align-items:stretch}.sh-live-shell{width:100%;max-height:100dvh;border-radius:0;border:0}.sh-live-content{grid-template-columns:1fr;gap:14px;padding:12px}.sh-live-stage{min-height:220px;aspect-ratio:4/3}.sh-live-controls{padding-bottom:max(12px,env(safe-area-inset-bottom))}.sh-live-messages{max-height:24dvh}.sh-live-state,.sh-live-summary{min-height:calc(100dvh - 80px)}}
 @media(prefers-reduced-motion:reduce){.sh-live-icon-btn,.sh-live-secondary,.sh-live-primary,.sh-live-end{transition:none}.sh-spin,.sh-live-badge span{animation:none}}
+
+.sh-live-viewer{min-height:100dvh;padding:16px clamp(10px,2vw,28px) 40px;background:var(--bg);color:var(--ink)}
+.sh-live-viewer-header{display:flex;align-items:center;justify-content:space-between;gap:14px;max-width:1440px;margin:0 auto 18px}
+.sh-live-viewer-header>a,.sh-live-viewer-header>div,.sh-live-viewer-header>button{display:inline-flex;align-items:center;gap:8px;color:var(--ink);text-decoration:none;font-weight:700}
+.sh-live-viewer-header>button{min-width:44px;min-height:44px;justify-content:center;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.sh-live-viewer-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,360px);gap:18px;max-width:1440px;margin:0 auto}
+.sh-live-viewer-main{min-width:0}
+.sh-live-viewer-player{position:relative;display:flex;align-items:center;justify-content:center;min-height:240px;aspect-ratio:16/9;overflow:hidden;border:1px solid var(--border);border-radius:20px;background:#05080d}
+.sh-live-viewer-video{width:100%;height:100%;max-height:calc(100dvh - 180px);object-fit:contain;background:#05080d}
+.sh-live-audio-tracks{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.sh-live-player-message{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,8,15,.7);color:#fff;text-align:center;padding:20px}
+.sh-live-player-message span{font-size:13px;color:#cbd5e1}
+.sh-live-viewer-badge,.sh-live-viewer-count{position:absolute;top:14px;display:flex;align-items:center;gap:7px;border-radius:999px;padding:8px 11px;background:rgba(8,13,20,.82);color:#fff;font-size:12px;font-weight:750}
+.sh-live-viewer-badge{left:14px;color:#ff6868}.sh-live-viewer-badge i{width:8px;height:8px;border-radius:50%;background:#ef4444;animation:sh-live-pulse 1.3s infinite}
+.sh-live-viewer-count{right:14px}
+.sh-live-viewer-details{padding:18px 2px}
+.sh-live-viewer-details h1{margin:0 0 8px;font-size:clamp(21px,3vw,32px);letter-spacing:-.035em}
+.sh-live-viewer-details>p{margin:0;color:var(--ink-muted);line-height:1.55}
+.sh-live-viewer-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.sh-live-viewer-actions button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;border:1px solid var(--border);border-radius:12px;padding:9px 12px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:650}
+.sh-live-viewer-actions button:focus-visible,.sh-live-viewer-header button:focus-visible{outline:2px solid var(--sec-color,#2dd4bf);outline-offset:3px}
+.sh-live-viewer-error{margin-top:12px;color:#ef4444;font-size:13px}
+.sh-live-viewer-chat{display:flex;min-height:340px;max-height:calc(100dvh - 130px);flex-direction:column;gap:12px;border:1px solid var(--border);border-radius:18px;padding:14px;background:var(--surface)}
+.sh-live-viewer-chat .sh-live-messages{flex:1;max-height:none;min-height:220px}
+.sh-live-page-state{display:flex;min-height:65dvh;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;color:var(--ink);text-align:center}
+.sh-live-page-state p{max-width:460px;color:var(--ink-muted)}
+.sh-live-page-state a,.sh-live-page-state button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;border:1px solid var(--border);border-radius:12px;padding:10px 16px;background:var(--surface);color:var(--ink);text-decoration:none}
+@media(max-width:820px){.sh-live-viewer-grid{grid-template-columns:1fr}.sh-live-viewer-chat{max-height:none;min-height:340px}.sh-live-viewer-chat .sh-live-messages{max-height:38dvh}.sh-live-viewer-player{aspect-ratio:4/3}.sh-live-viewer-video{max-height:58dvh}}
+@media(prefers-reduced-motion:reduce){.sh-live-viewer-badge i{animation:none}}
