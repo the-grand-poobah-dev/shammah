@@ -182,6 +182,25 @@ export async function POST(req) {
     if (!churchId || !userId) {
       return NextResponse.json({ error: 'Missing church or user.' }, { status: 400 });
     }
+
+    const authHeader = req.headers.get('authorization') || '';
+    const bearerToken = authHeader.replace(/^Bearer\\s+/i, '').trim();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!bearerToken || !supabaseUrl || !anonKey) {
+      return NextResponse.json({ error: 'Please sign in before managing a church subscription.' }, { status: 401 });
+    }
+    const authClient = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: authData, error: authError } = await authClient.auth.getUser(bearerToken);
+    if (authError || !authData?.user) {
+      return NextResponse.json({ error: 'Your sign-in session expired. Please sign in again.' }, { status: 401 });
+    }
+    if (authData.user.id !== userId) {
+      return NextResponse.json({ error: 'You can only manage a subscription for your own account.' }, { status: 403 });
+    }
+
     if (!PLANS[planId] || !PERIODS[periodId]) {
       return NextResponse.json({ error: 'Invalid plan or period.' }, { status: 400 });
     }
@@ -199,7 +218,23 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Invalid amount.' }, { status: 400 });
     }
 
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({ error: 'Subscription storage is not configured.' }, { status: 503 });
+    }
     const supabase = admin();
+    const [{ data: profile }, { data: church, error: churchError }] = await Promise.all([
+      supabase.from('profiles').select('id, role, church_id').eq('id', authData.user.id).maybeSingle(),
+      supabase.from('churches').select('id, created_by').eq('id', churchId).maybeSingle(),
+    ]);
+    if (churchError || !church) {
+      return NextResponse.json({ error: 'Church not found or subscription access could not be verified.' }, { status: 404 });
+    }
+    const privilegedRole = ['admin', 'platform_admin'].includes(profile?.role);
+    const churchManagerRole = ['church_admin', 'pastor'].includes(profile?.role) && profile?.church_id === churchId;
+    const isCreator = church.created_by === authData.user.id;
+    if (!privilegedRole && !churchManagerRole && !isCreator) {
+      return NextResponse.json({ error: 'Only the church owner or an authorized church administrator can manage this subscription.' }, { status: 403 });
+    }
 
     // Record pending payment first
     const { data: sub, error: subErr } = await supabase
