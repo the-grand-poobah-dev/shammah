@@ -27,6 +27,12 @@ REVOKE ALL PRIVILEGES ON TABLE public.course_quiz_attempts FROM anon, authentica
 GRANT SELECT ON TABLE public.course_quiz_attempts TO authenticated;
 GRANT ALL PRIVILEGES ON TABLE public.course_quiz_attempts TO service_role;
 
+-- Lesson progress must be written through the server API or the validated completion RPC;
+-- direct client writes would otherwise let a learner bypass quiz completion checks.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON TABLE public.lesson_progress FROM anon, authenticated;
+GRANT SELECT ON TABLE public.lesson_progress TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.complete_lesson(p_lesson_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
