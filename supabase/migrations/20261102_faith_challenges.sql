@@ -60,16 +60,6 @@ CREATE POLICY "challenge_public_read" ON public.challenges
     )
     OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','platform_admin','moderator'))
   );
-CREATE POLICY "challenge_owner_update" ON public.challenges
-  FOR UPDATE TO authenticated
-  USING (
-    creator_id = auth.uid()
-    OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','platform_admin','moderator'))
-  )
-  WITH CHECK (
-    creator_id = auth.uid()
-    OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','platform_admin','moderator'))
-  );
 
 DROP POLICY IF EXISTS "Public can view challenge participants" ON public.challenge_participants;
 DROP POLICY IF EXISTS "Users can manage own participation" ON public.challenge_participants;
@@ -387,6 +377,7 @@ GRANT EXECUTE ON FUNCTION public.vote_submission(uuid) TO authenticated, service
 GRANT EXECUTE ON FUNCTION public.challenge_leaderboard(uuid,text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.award_points(uuid,uuid,integer,text) TO authenticated, service_role;
 
+REVOKE INSERT, UPDATE, DELETE ON public.challenges FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.challenge_participants FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.challenge_checkins FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.challenge_submissions FROM anon, authenticated;
