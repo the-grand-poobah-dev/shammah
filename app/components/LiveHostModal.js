@@ -134,7 +134,7 @@ export default function LiveHostModal({ isOpen, onClose, session, profile }) {
       tracksRef.current.forEach((track) => { try { track.stop(); } catch {} });
       tracksRef.current = [];
     };
-  }, [isOpen, configured, stream, endedSummary, session?.access_token]);
+  }, [isOpen, configured, session?.access_token]);
 
   useEffect(() => {
     if (!stream?.id) return undefined;
