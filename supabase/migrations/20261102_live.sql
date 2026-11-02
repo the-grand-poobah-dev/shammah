@@ -83,7 +83,7 @@ using (
   or host_id = auth.uid()
   or (visibility = 'followers' and exists (
     select 1 from public.follows f
-    where f.follower_id = auth.uid() and f.following_id = host_id
+    where f.follower_id = auth.uid() and f.followed_id = host_id
   ))
   or (visibility = 'church' and church_id is not null and exists (
     select 1 from public.profiles p
@@ -116,7 +116,7 @@ using (
     where s.id = live_chat_messages.stream_id
       and (s.visibility = 'public' or s.host_id = auth.uid()
         or (s.visibility = 'followers' and exists (
-          select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = s.host_id
+          select 1 from public.follows f where f.follower_id = auth.uid() and f.followed_id = s.host_id
         ))
         or (s.visibility = 'church' and s.church_id is not null and exists (
           select 1 from public.profiles p where p.id = auth.uid() and p.church_id = s.church_id
