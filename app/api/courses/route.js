@@ -479,7 +479,7 @@ export async function POST(request) {
 
     if (action === 'enroll') {
       const courseId = String(body.courseId || '');
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(courseId)) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)) {
         return NextResponse.json({ error: 'A valid course ID is required.' }, { status: 400 });
       }
       const userClient = getSupabaseUserClient(request);
@@ -500,7 +500,7 @@ export async function POST(request) {
     if (action === 'submit_quiz') {
       const lessonId = String(body.lessonId || '');
       const answers = body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers) ? body.answers : {};
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(lessonId)) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lessonId)) {
         return NextResponse.json({ error: 'A valid lesson ID is required.' }, { status: 400 });
       }
       if (Object.keys(answers).length > 100) {
@@ -556,7 +556,7 @@ export async function POST(request) {
 
     if (action === 'complete_lesson') {
       const lessonId = String(body.lessonId || '');
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(lessonId)) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lessonId)) {
         return NextResponse.json({ error: 'A valid lesson ID is required.' }, { status: 400 });
       }
       const userClient = getSupabaseUserClient(request);
@@ -642,7 +642,7 @@ export async function POST(request) {
 
     if (action === 'issue_certificate') {
       const courseId = String(body.courseId || '');
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(courseId)) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)) {
         return NextResponse.json({ error: 'A valid course ID is required.' }, { status: 400 });
       }
       const userClient = getSupabaseUserClient(request);
