@@ -3,7 +3,7 @@
 //
 // Env (server only):
 //   MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE, MPESA_PASSKEY
-//   MPESA_CALLBACK_URL  (e.g. https://your-app.vercel.app/api/mpesa/callback)
+//   MPESA_CALLBACK_URL  (production URL must include ?secret=<MPESA_CALLBACK_SECRET>)
 //   NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from '@supabase/supabase-js';
