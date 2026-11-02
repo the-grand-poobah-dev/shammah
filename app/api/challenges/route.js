@@ -324,6 +324,7 @@ export async function POST(request) {
 
     if (action === 'submit') {
       const mediaUrl = safeUrl(body.mediaUrl);
+      const mediaType = body.mediaType === 'video' ? 'video' : 'image';
       const caption = String(body.caption || '').trim().slice(0, 500);
       const hashtag = String(body.hashtag || '').trim().slice(0, 80);
       const scripture = String(body.scripture || '').trim().slice(0, 160);
@@ -343,8 +344,8 @@ export async function POST(request) {
       if (participantError) throw participantError;
       if (!participant) return jsonError('Join the challenge before submitting an entry.', 409);
       const { data, error } = await db.from('challenge_submissions').insert({
-        challenge_id: challengeId, user_id: user.id, media_url: mediaUrl, video_url: mediaUrl,
-        thumb_url: thumbUrl, caption, hashtag: hashtag || null, scripture: scripture || null,
+        challenge_id: challengeId, user_id: user.id, media_url: mediaUrl, video_url: mediaType === 'video' ? mediaUrl : null,
+        media_type: mediaType, thumb_url: thumbUrl, caption, hashtag: hashtag || null, scripture: scripture || null,
         verse_ref: scripture || null, audio_title: audioTitle || null, like_count: 0, votes_count: 0,
         comment_count: 0, status: 'pending_review',
       }).select('*').single();
