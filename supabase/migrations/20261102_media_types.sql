@@ -36,6 +36,3 @@ begin
     end if;
   end loop;
 end $$;
-
-comment on column public.posts.media_meta is
-  'Optional media metadata: provider, gif_id, width, height, duration, aspect.';
