@@ -742,6 +742,7 @@ export async function createStatusUpdate({
     text: cleanText,
     mediaUrl,
     mediaType: resolvedMediaType,
+    mediaMeta: mediaMeta && typeof mediaMeta === 'object' ? mediaMeta : {},
     bgStyle: bgStyle || 'emerald',
     scriptureTag: scriptureTag || null,
     visibility: visibility || 'public',
