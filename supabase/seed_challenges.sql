@@ -55,3 +55,17 @@ WHERE c.id IN (
   'c1000000-0000-4000-a000-000000000005',
   'c1000000-0000-4000-a000-000000000006'
 );
+
+-- Remove any seeded vanity engagement totals; real votes and comments determine the counts.
+UPDATE public.challenge_submissions s
+SET like_count = (SELECT count(*)::integer FROM public.challenge_votes v WHERE v.submission_id = s.id),
+    votes_count = (SELECT count(*)::integer FROM public.challenge_votes v WHERE v.submission_id = s.id),
+    comment_count = (SELECT count(*)::integer FROM public.challenge_submission_comments c WHERE c.submission_id = s.id)
+WHERE s.challenge_id IN (
+  'c1000000-0000-4000-a000-000000000001',
+  'c1000000-0000-4000-a000-000000000002',
+  'c1000000-0000-4000-a000-000000000003',
+  'c1000000-0000-4000-a000-000000000004',
+  'c1000000-0000-4000-a000-000000000005',
+  'c1000000-0000-4000-a000-000000000006'
+);
