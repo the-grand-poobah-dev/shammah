@@ -81,8 +81,9 @@ BEGIN
 END;
 $$;
 
--- Remove broad table-level and any prior column-level SELECT grants. Then
--- allow only the profile fields the public UI is designed to display.
+-- Remove non-application table privileges and all broad SELECT grants.
+-- Public profile reads are re-granted below on an explicit safe column list.
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLE public.profiles FROM PUBLIC, anon, authenticated;
 REVOKE SELECT ON TABLE public.profiles FROM PUBLIC, anon, authenticated;
 REVOKE SELECT (
   id, display_name, role, church_id, created_at, badge, badge_verified,
