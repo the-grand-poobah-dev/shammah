@@ -208,7 +208,19 @@ export async function GET(request) {
       if (campaignsError) throw campaignsError;
       if (withdrawalsError) throw withdrawalsError;
       const owners = await ownerProfiles(supabase, campaigns || []);
-      const pendingCampaigns = (campaigns || []).map((row) => normalized(row, owners[row.owner_id || row.creator_id], true));
+      const pendingCampaigns = await Promise.all((campaigns || []).map(async (row) => {
+        let verificationDocSignedUrl = null;
+        const ownerId = row.owner_id || row.creator_id;
+        const path = String(row.verification_doc_url || '');
+        if (path && ownerId && path.startsWith(ownerId + '/') && !path.includes('..')) {
+          const { data: signed } = await supabase.storage.from('fundraiser-verification').createSignedUrl(path, 300);
+          verificationDocSignedUrl = signed?.signedUrl || null;
+        }
+        return {
+          ...normalized(row, owners[ownerId], true),
+          verification_doc_signed_url: verificationDocSignedUrl,
+        };
+      }));
       const ids = [...new Set((withdrawals || []).map((w) => w.fundraiser_id).filter(Boolean))];
       const { data: related, error: relatedError } = ids.length
         ? await supabase.from('fundraisers').select('id, title').in('id', ids)
@@ -297,7 +309,10 @@ export async function POST(request) {
       const location = String(body.location || '').trim().slice(0, 200);
       const cover = safeUrl(body.coverUrl || body.cover_url) || 'https://images.unsplash.com/photo-1541252260730-0412e8e2108e?w=1200&auto=format&fit=crop&q=80';
       const gallery = Array.isArray(body.gallery) ? body.gallery.slice(0, 10).map(safeUrl).filter(Boolean) : [cover];
-      const verificationDocUrl = safeUrl(body.verificationDocUrl || body.verification_doc_url);
+      const verificationDocPath = String(body.verificationDocPath || '').trim();
+      const verificationDocUrl = verificationDocPath.startsWith(user.id + '/') && !verificationDocPath.includes('..')
+        ? verificationDocPath
+        : null;
       const milestones = Array.isArray(body.milestones) ? body.milestones.slice(0, 20) : [];
       if (title.length < 5) return NextResponse.json({ error: 'Campaign title must be at least 5 characters.' }, { status: 400 });
       if (story.length < 25) return NextResponse.json({ error: 'Campaign story must be at least 25 characters.' }, { status: 400 });
