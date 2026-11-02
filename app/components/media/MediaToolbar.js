@@ -13,6 +13,7 @@ export default function MediaToolbar({
   onPickFile,
   onCamera,
   onVoice,
+  voiceActive = false,
   onGif,
   onReel,
   onLive,
@@ -41,7 +42,7 @@ export default function MediaToolbar({
         <input ref={inputRef} type="file" accept="image/*,video/*" className="sh-media-hidden-input" disabled={disabled} onChange={(event) => { pickFile(event.target.files?.[0]); event.target.value = ''; }} />
         <ToolButton label="Photo/Video" title="Choose a photo or video" onClick={() => inputRef.current?.click()} disabled={disabled}><ImagePlus size={19} /></ToolButton>
         <ToolButton label="Camera" title="Take a photo or record video" onClick={() => onCamera ? onCamera() : setCameraOpen(true)} disabled={disabled}><Camera size={19} /></ToolButton>
-        {onVoice && <ToolButton label="Voice" title="Record a voice note" onClick={onVoice} disabled={disabled}><Mic size={19} /></ToolButton>}
+        {onVoice && <ToolButton label={voiceActive ? 'Stop voice' : 'Voice'} title={voiceActive ? 'Stop voice recording' : 'Record a voice note'} onClick={onVoice} disabled={disabled} className={voiceActive ? 'active' : ''}><Mic size={19} /></ToolButton>}
         {onGif && <ToolButton label="GIF" title="Search or upload a GIF" onClick={onGif} disabled={disabled}><span className="sh-gif-glyph">GIF</span></ToolButton>}
         {context === 'post' && onReel && <ToolButton label="Reel" title="Create a Reel" onClick={onReel} disabled={disabled}><Clapperboard size={19} /></ToolButton>}
         {context === 'post' && onLive && <ToolButton label="Live" title="Start a live broadcast" onClick={onLive} disabled={disabled}><span className="sh-live-toolbar-icon"><Radio size={19} /><i /></span></ToolButton>}
