@@ -138,10 +138,10 @@ BEGIN
   END IF;
 
   SELECT church_id INTO v_church FROM public.profiles WHERE id = v_uid;
-  IF v_challenge.visibility = 'private' AND v_challenge.creator_id <> v_uid THEN
+  IF v_challenge.visibility = 'private' AND v_challenge.creator_id IS DISTINCT FROM v_uid THEN
     RETURN jsonb_build_object('success', false, 'error', 'This challenge is private.');
   END IF;
-  IF v_challenge.visibility = 'church' AND v_challenge.creator_id <> v_uid
+  IF v_challenge.visibility = 'church' AND v_challenge.creator_id IS DISTINCT FROM v_uid
      AND (v_challenge.church_id IS NULL OR v_challenge.church_id IS DISTINCT FROM v_church) THEN
     RETURN jsonb_build_object('success', false, 'error', 'This challenge is only available to its church community.');
   END IF;
@@ -199,10 +199,10 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'This challenge is not currently accepting check-ins.');
   END IF;
   SELECT church_id INTO v_church FROM public.profiles WHERE id = v_uid;
-  IF v_challenge.visibility = 'private' AND v_challenge.creator_id <> v_uid THEN
+  IF v_challenge.visibility = 'private' AND v_challenge.creator_id IS DISTINCT FROM v_uid THEN
     RETURN jsonb_build_object('success', false, 'error', 'This challenge is private.');
   END IF;
-  IF v_challenge.visibility = 'church' AND v_challenge.creator_id <> v_uid
+  IF v_challenge.visibility = 'church' AND v_challenge.creator_id IS DISTINCT FROM v_uid
      AND (v_challenge.church_id IS NULL OR v_challenge.church_id IS DISTINCT FROM v_church) THEN
     RETURN jsonb_build_object('success', false, 'error', 'This challenge is only available to its church community.');
   END IF;
@@ -293,6 +293,18 @@ BEGIN
   IF v_submission.user_id = v_uid THEN
     RETURN jsonb_build_object('success', false, 'error', 'You cannot vote for your own submission.');
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.challenges c
+    WHERE c.id = v_submission.challenge_id
+      AND (
+        (c.status IN ('active','completed') AND c.visibility = 'public')
+        OR c.creator_id = v_uid
+        OR (c.visibility = 'church' AND c.church_id = (SELECT church_id FROM public.profiles WHERE id = v_uid))
+        OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = v_uid AND p.role IN ('admin','platform_admin','moderator'))
+      )
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'You cannot vote in this challenge.');
+  END IF;
 
   IF EXISTS (SELECT 1 FROM public.challenge_votes WHERE submission_id = p_submission_id AND user_id = v_uid) THEN
     DELETE FROM public.challenge_votes WHERE submission_id = p_submission_id AND user_id = v_uid;
@@ -329,6 +341,16 @@ AS $function$
   LEFT JOIN public.challenge_checkins cc
     ON cc.challenge_id = cp.challenge_id AND cc.user_id = cp.user_id
   WHERE cp.challenge_id = p_challenge_id
+    AND EXISTS (
+      SELECT 1 FROM public.challenges c
+      WHERE c.id = cp.challenge_id
+        AND (
+          (c.status IN ('active','completed') AND c.visibility = 'public')
+          OR c.creator_id = auth.uid()
+          OR (c.visibility = 'church' AND c.church_id = (SELECT church_id FROM public.profiles WHERE id = auth.uid()))
+          OR EXISTS (SELECT 1 FROM public.profiles viewer WHERE viewer.id = auth.uid() AND viewer.role IN ('admin','platform_admin','moderator'))
+        )
+    )
     AND (
       lower(coalesce(p_scope,'all')) <> 'church'
       OR p.church_id = (SELECT church_id FROM public.profiles WHERE id = auth.uid())
