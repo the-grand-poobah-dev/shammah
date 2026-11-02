@@ -167,7 +167,7 @@ export default function MediaUploadModal({
       const dur = await getMediaDuration(selectedFile);
       if (selectionToken === selectionTokenRef.current) setDuration(dur);
     } catch {
-      setDuration(0);
+      if (selectionToken === selectionTokenRef.current) setDuration(0);
     }
 
     // If video, auto generate thumbnail
