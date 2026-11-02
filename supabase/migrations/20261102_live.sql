@@ -219,6 +219,26 @@ begin
   end if;
 end $$;
 
+
+-- Allow the existing unified report flow to cover live broadcasts.
+do $
+declare
+  constraint_row record;
+begin
+  if to_regclass('public.content_reports') is not null then
+    for constraint_row in
+      select conname from pg_constraint
+      where conrelid = 'public.content_reports'::regclass
+        and contype = 'c'
+        and pg_get_constraintdef(oid) ilike '%target_type%'
+    loop
+      execute format('alter table public.content_reports drop constraint %I', constraint_row.conname);
+    end loop;
+    alter table public.content_reports add constraint content_reports_target_type_check
+      check (target_type in ('post','status','live_stream','reel','video','comment','poll','course','fundraiser','challenge'));
+  end if;
+end $;
+
 -- These columns are optional for deployments where comments/statuses already exist.
 do $$
 declare
