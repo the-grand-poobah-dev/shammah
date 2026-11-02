@@ -152,7 +152,8 @@ export default function OnboardingWizard({ session, profile = {}, onDone, onSign
           }, { onConflict: 'id' });
         if (privateError) throw privateError;
       } catch (dobErr) {
-        console.warn('DOB store warning:', dobErr);
+        console.warn('Private profile store failed:', dobErr);
+        throw dobErr;
       }
 
       const update = {
