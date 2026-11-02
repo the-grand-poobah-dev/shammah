@@ -1,5 +1,12 @@
 begin;
 
+-- Stream lifecycle and viewer-count mutations must go through authenticated server routes.
+-- Direct inserts would bypass the host trust/age/rate-limit checks in /api/live/start.
+revoke insert, update, delete, truncate, references, trigger
+  on table public.live_streams from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger
+  on table public.live_viewers from anon, authenticated;
+
 -- Enforce the same visibility rules for direct Supabase chat inserts as the app API.
 drop policy if exists live_chat_insert_eligible on public.live_chat_messages;
 
