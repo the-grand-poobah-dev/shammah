@@ -92,6 +92,7 @@ export default function MediaUploadModal({
   const fileInputRef = useRef(null);
   const customThumbInputRef = useRef(null);
   const transcriptInputRef = useRef(null);
+  const selectionTokenRef = useRef(0);
 
   useEffect(() => {
     setMounted(true);
@@ -143,8 +144,12 @@ export default function MediaUploadModal({
       return;
     }
 
+    const selectionToken = ++selectionTokenRef.current;
     setKind(detected);
     setFile(selectedFile);
+    setThumbBlob(null);
+    setThumbPreviewUrl('');
+    setDuration(0);
 
     // Default title from filename if empty
     if (!title) {
@@ -158,7 +163,7 @@ export default function MediaUploadModal({
     // Auto extract duration
     try {
       const dur = await getMediaDuration(selectedFile);
-      setDuration(dur);
+      if (selectionToken === selectionTokenRef.current) setDuration(dur);
     } catch {
       setDuration(0);
     }
@@ -167,7 +172,7 @@ export default function MediaUploadModal({
     if (detected === 'video') {
       try {
         const blob = await generateVideoThumbnail(selectedFile);
-        if (blob) {
+        if (blob && selectionToken === selectionTokenRef.current) {
           setThumbBlob(blob);
           const preview = URL.createObjectURL(blob);
           setThumbPreviewUrl(preview);
