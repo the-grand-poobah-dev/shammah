@@ -148,7 +148,7 @@ async function initiateFundraiserDonation(request, body, fundraiserId, phone, am
         BusinessShortCode: process.env.MPESA_SHORTCODE, Password: password, Timestamp: timestamp,
         TransactionType: 'CustomerPayBillOnline', Amount: amountKes, PartyA: phone,
         PartyB: process.env.MPESA_SHORTCODE, PhoneNumber: phone, CallBackURL: process.env.MPESA_CALLBACK_URL,
-        AccountReference: 'SHM-' + fundraiserId.slice(0, 8), TransactionDesc: 'Shammah fundraiser donation',
+        AccountReference: 'SHM-' + fundraiserId.slice(0, 8), TransactionDesc: 'Shammah Gift',
       }),
       cache: 'no-store',
     });
