@@ -1090,6 +1090,7 @@ export default function CommentThread({
                 maxVideoSeconds={60}
                 onPickFile={handleCommentFileSelected}
                 onVoice={() => isRecordingVoice ? handleStopCommentVoiceNote() : handleStartCommentVoiceNote()}
+                voiceActive={isRecordingVoice}
                 onGif={() => setShowGifPicker(true)}
                 disabled={busy || mediaUploading}
               />
