@@ -11,6 +11,7 @@ const TABS = ['Trending', 'Search', 'Recent', 'Upload'];
 export default function GifPicker({ onSelect, onClose }) {
   const [tab, setTab] = useState('Trending');
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [gifs, setGifs] = useState([]);
   const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -23,15 +24,20 @@ export default function GifPicker({ onSelect, onClose }) {
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
     if (tab !== 'Trending' && tab !== 'Search') return;
-    if (tab === 'Search' && !query.trim()) { setGifs([]); setError('Search for a reaction or moment.'); return; }
+    if (tab === 'Search' && !debouncedQuery.trim()) { setGifs([]); setError('Search for a reaction or moment.'); return; }
     let cancelled = false;
     const controller = new AbortController();
     async function load() {
       setLoading(true);
       setError('');
       try {
-        const endpoint = tab === 'Trending' ? '/api/gifs/trending?limit=24' : '/api/gifs/search?q=' + encodeURIComponent(query.trim()) + '&limit=24';
+        const endpoint = tab === 'Trending' ? '/api/gifs/trending?limit=24' : '/api/gifs/search?q=' + encodeURIComponent(debouncedQuery.trim()) + '&limit=24';
         const response = await fetch(endpoint, { signal: controller.signal });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -47,7 +53,7 @@ export default function GifPicker({ onSelect, onClose }) {
     }
     load();
     return () => { cancelled = true; controller.abort(); };
-  }, [tab, query]);
+  }, [tab, debouncedQuery]);
 
   useEffect(() => {
     if (!configured && tab !== 'Upload') setTab('Upload');
