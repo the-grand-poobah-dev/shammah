@@ -725,90 +725,13 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
 
           {/* Media Capture & Import Options Group */}
           <div className="status-media-options-group" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-            {/* Live Camera & Voice Note Capture Chips */}
-            <div
-              className="status-live-capture-row"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 8,
-              }}
-            >
-              <button
-                type="button"
-                className="status-capture-chip"
-                onClick={() => cameraPhotoInputRef.current?.click()}
-                title="Take a photo with your camera"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '10px 8px',
-                  borderRadius: 12,
-                  background: 'var(--surface-sunken)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--ink)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  minHeight: 40,
-                }}
-              >
-                <Camera size={16} className="text-emerald-400 shrink-0" />
-                <span>Take Photo</span>
-              </button>
-
-              <button
-                type="button"
-                className="status-capture-chip"
-                onClick={() => cameraVideoInputRef.current?.click()}
-                title="Record a video with your camera (up to 60s)"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '10px 8px',
-                  borderRadius: 12,
-                  background: 'var(--surface-sunken)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--ink)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  minHeight: 40,
-                }}
-              >
-                <Video size={16} className="text-amber-400 shrink-0" />
-                <span>Record Video</span>
-              </button>
-
-              <button
-                type="button"
-                className="status-capture-chip"
-                onClick={handleStartVoiceNote}
-                title="Record an audio voice note or prayer (up to 60s)"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '10px 8px',
-                  borderRadius: 12,
-                  background: isRecordingVoice ? 'rgba(239, 68, 68, 0.15)' : 'var(--surface-sunken)',
-                  border: isRecordingVoice ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border)',
-                  color: isRecordingVoice ? '#fca5a5' : 'var(--ink)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  minHeight: 40,
-                }}
-              >
-                <Mic size={16} className="text-cyan-400 shrink-0" />
-                <span>Voice Note</span>
-              </button>
-            </div>
+            <MediaToolbar
+              context="status"
+              onPickFile={(file) => processFiles([file])}
+              onVoice={() => isRecordingVoice ? handleStopVoiceNote() : handleStartVoiceNote()}
+              onGif={() => setShowGifPicker(true)}
+              disabled={submitting}
+            />
 
             {/* Active Live Voice Recording Status Bar */}
             {isRecordingVoice && (
