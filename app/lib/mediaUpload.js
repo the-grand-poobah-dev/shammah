@@ -62,6 +62,62 @@ function inferMediaMime(file, type) {
 }
 
 /**
+ * Read image dimensions without retaining a temporary object URL.
+ * Returns { width, height, aspect } where aspect is width / height.
+ */
+export async function getImageSize(file) {
+  if (!file) throw new Error('No image file provided.');
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const result = { width: bitmap.width, height: bitmap.height, aspect: bitmap.height ? bitmap.width / bitmap.height : null };
+      bitmap.close?.();
+      return result;
+    } catch {}
+  }
+  if (typeof Image === 'undefined' || typeof URL === 'undefined') throw new Error('Image metadata is unavailable in this environment.');
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    const dimensions = await new Promise((resolve, reject) => {
+      image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => reject(new Error('Could not read image dimensions.'));
+      image.src = url;
+    });
+    return { ...dimensions, aspect: dimensions.height ? dimensions.width / dimensions.height : null };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
+ * Read video duration and dimensions for cover/aspect metadata.
+ * The temporary object URL is always revoked, including error paths.
+ */
+export async function getVideoMeta(file) {
+  if (!file) throw new Error('No video file provided.');
+  if (typeof document === 'undefined' || typeof URL === 'undefined') throw new Error('Video metadata is unavailable in this environment.');
+  const url = URL.createObjectURL(file);
+  try {
+    const meta = await new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => resolve({
+        duration: Number.isFinite(video.duration) ? video.duration : 0,
+        width: video.videoWidth || 0,
+        height: video.videoHeight || 0,
+      });
+      video.onerror = () => reject(new Error('Could not read video metadata.'));
+      video.src = url;
+      video.load();
+    });
+    return { ...meta, aspect: meta.height ? meta.width / meta.height : null };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
  * Upload a single file to post-media bucket (backwards-compatible with posts & comments).
  */
 export async function uploadPostMedia(file, userId) {
