@@ -26,7 +26,7 @@ import {
 import Avatar from '../Avatar';
 import MemberName from '../MemberName';
 import { playSound } from '../../lib/soundEffects';
-import { getChallengeDetail, joinChallenge, voteChallengeSubmission } from '../../lib/data/challengesApi';
+import { getChallengeDetail, joinChallenge, leaveChallenge, voteChallengeSubmission } from '../../lib/data/challengesApi';
 
 export default function ChallengeDetailModal({
   isOpen,
@@ -41,6 +41,8 @@ export default function ChallengeDetailModal({
   const [challengeData, setChallengeData] = useState(initialChallenge);
   const [loading, setLoading] = useState(!initialChallenge);
   const [joining, setJoining] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [leaderboardScope, setLeaderboardScope] = useState('all');
   const [copiedLink, setCopiedLink] = useState(false);
   const [votingMap, setVotingMap] = useState({});
 
@@ -51,7 +53,7 @@ export default function ChallengeDetailModal({
     async function loadDetail() {
       try {
         setLoading(true);
-        const data = await getChallengeDetail(challengeId);
+        const data = await getChallengeDetail(challengeId, leaderboardScope);
         if (isMounted) {
           setChallengeData(data);
         }
@@ -66,7 +68,7 @@ export default function ChallengeDetailModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, challengeId]);
+  }, [isOpen, challengeId, leaderboardScope]);
 
   if (!isOpen) return null;
 
@@ -107,6 +109,23 @@ export default function ChallengeDetailModal({
       alert(err.message || 'Could not join challenge.');
     } finally {
       setJoining(false);
+    }
+  }
+
+  async function handleLeave() {
+    if (leaving || !challenge?.id) return;
+    setLeaving(true);
+    try {
+      await leaveChallenge(challenge.id);
+      setChallengeData((prev) => ({
+        ...prev,
+        participant: null,
+        challenge: { ...challenge, participants_count: Math.max(0, Number(challenge.participants_count || 0) - 1) },
+      }));
+    } catch (err) {
+      alert(err.message || 'Could not leave challenge.');
+    } finally {
+      setLeaving(false);
     }
   }
 
@@ -255,6 +274,17 @@ export default function ChallengeDetailModal({
 
           {/* Quick CTA */}
           <div className="flex items-center gap-2">
+            {isJoined && (
+              <button
+                type="button"
+                onClick={handleLeave}
+                disabled={leaving}
+                className="min-h-11 px-3 rounded-xl text-xs font-semibold border disabled:opacity-60"
+                style={{ borderColor: 'var(--border)', color: 'var(--ink-muted)' }}
+              >
+                {leaving ? 'Leaving…' : 'Leave'}
+              </button>
+            )}
             {!isJoined ? (
               <button
                 onClick={handleJoin}
@@ -526,8 +556,30 @@ export default function ChallengeDetailModal({
                   <span>Challenge Devotion Leaderboard</span>
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Believers with the longest ongoing streaks and devotion points
+                  Believers ranked by earned devotion points and streaks
                 </p>
+              </div>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Leaderboard scope">
+                {[
+                  { id: 'all', label: 'All time' },
+                  { id: 'week', label: 'This week' },
+                  { id: 'church', label: 'My church' },
+                ].map((scope) => (
+                  <button
+                    key={scope.id}
+                    type="button"
+                    aria-pressed={leaderboardScope === scope.id}
+                    onClick={() => setLeaderboardScope(scope.id)}
+                    className="min-h-11 px-3 rounded-xl border text-xs font-semibold transition-colors"
+                    style={{
+                      borderColor: leaderboardScope === scope.id ? accent : 'var(--border)',
+                      background: leaderboardScope === scope.id ? accent + '22' : 'var(--surface)',
+                      color: 'var(--ink)',
+                    }}
+                  >
+                    {scope.label}
+                  </button>
+                ))}
               </div>
 
               {leaderboard.length === 0 ? (
