@@ -102,7 +102,7 @@ export async function GET(request) {
       if (error) throw error;
       // Do not expose answer keys through the public questions endpoint.
       if (action === 'questions') {
-        return NextResponse.json({ questions: (data || []).map(({ correct_index, ...q }) => q) });
+        return NextResponse.json({ questions: (data || []).map(({ correct_index, explanation, ...q }) => q) });
       }
       return NextResponse.json({ verses: data || [] });
     }
