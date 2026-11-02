@@ -46,6 +46,7 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60, onLevel
   let analyser = null;
   let levelData = null;
   let hasStopped = false;
+  let stopPromise = null;
   let cancelled = false;
 
   function stopTimer() {
@@ -108,11 +109,11 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60, onLevel
   };
 
   function stopRecording() {
-    if (hasStopped) return Promise.resolve(null);
+    if (hasStopped) return stopPromise || Promise.resolve(null);
     hasStopped = true;
     stopTimer();
     stopAudioContext();
-    return new Promise((resolveStop) => {
+    stopPromise = new Promise((resolveStop) => {
       recorder.onstop = () => {
         stream.getTracks().forEach((track) => track.stop());
         if (cancelled) { resolveStop(null); return; }
@@ -129,6 +130,7 @@ export async function startAudioRecording({ onTimeTick, maxSeconds = 60, onLevel
         resolveStop(null);
       }
     });
+    return stopPromise;
   }
 
   function pauseRecording() {
