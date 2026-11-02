@@ -586,7 +586,7 @@ export async function fetchActiveStatuses() {
     const { data, error } = await supabase
       .from('statuses')
       .select(
-        'id, user_id, text_content, scripture_tag, bg_style, media_url, media_type, created_at, expires_at, profiles(id, display_name, avatar_url, badge, badge_verified, role, allow_status_reshare)'
+        'id, user_id, text_content, scripture_tag, bg_style, media_url, media_type, media_meta, created_at, expires_at, profiles(id, display_name, avatar_url, badge, badge_verified, role, allow_status_reshare)'
       )
       .gt('expires_at', nowIso)
       .order('created_at', { ascending: false })
@@ -614,6 +614,7 @@ export async function fetchActiveStatuses() {
         bgStyle: row.bg_style || 'emerald',
         mediaUrl: row.media_url || null,
         mediaType: resolvedMediaType,
+        mediaMeta: row.media_meta || {},
         createdAt: row.created_at,
         expiresAt: row.expires_at,
         isPublic: true,
