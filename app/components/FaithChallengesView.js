@@ -82,6 +82,7 @@ export default function FaithChallengesView({ session, profile }) {
         avatar: profile.avatar_url,
         badge: profile.badge,
         church: profile.church_name,
+        role: profile.role,
       };
     }
     if (session?.user?.id) {
@@ -245,9 +246,12 @@ export default function FaithChallengesView({ session, profile }) {
 
   // Media toggle (ensures only 1 plays at a time)
   function togglePlayVideo(subId) {
+    const current = document.querySelector('[data-faith-challenge-video][data-submission-id="' + subId + '"]');
     if (playingVideoId === subId) {
+      if (current) current.pause();
       setPlayingVideoId(null);
     } else {
+      document.querySelectorAll('[data-faith-challenge-video]').forEach((video) => video.pause());
       playSound('click');
       setPlayingVideoId(subId);
     }
@@ -255,11 +259,19 @@ export default function FaithChallengesView({ session, profile }) {
 
   // Modals open triggers
   function triggerCheckin(ch) {
+    if (!currentUser?.id) {
+      alert('Please sign in to check in to a Faith Challenge.');
+      return;
+    }
     setSelectedCheckinChallenge(ch);
     setCheckinModalOpen(true);
   }
 
   function triggerSubmit(ch) {
+    if (!currentUser?.id) {
+      alert('Please sign in to submit a Faith Challenge entry.');
+      return;
+    }
     setSelectedSubmitChallenge(ch);
     setSubmitModalOpen(true);
   }
@@ -543,6 +555,8 @@ export default function FaithChallengesView({ session, profile }) {
                     <div className="absolute inset-0 bg-black">
                       {sub.media_type === 'video' ? (
                         <video
+                          data-faith-challenge-video
+                          data-submission-id={sub.id}
                           src={sub.media_url || sub.videoUrl}
                           poster={sub.thumb_url || undefined}
                           muted
@@ -550,6 +564,13 @@ export default function FaithChallengesView({ session, profile }) {
                           preload="metadata"
                           autoPlay={isPlaying}
                           controls={isPlaying}
+                          onPlay={(event) => {
+                            document.querySelectorAll('[data-faith-challenge-video]').forEach((video) => {
+                              if (video !== event.currentTarget) video.pause();
+                            });
+                            setPlayingVideoId(sub.id);
+                          }}
+                          onPause={() => { if (playingVideoId === sub.id) setPlayingVideoId(null); }}
                           onEnded={() => setPlayingVideoId(null)}
                           className="w-full h-full object-contain"
                         />
