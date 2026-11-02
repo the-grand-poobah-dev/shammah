@@ -215,7 +215,7 @@ export async function POST(request) {
     const targetFundraiserId = fundraiserId || (String(projectId || '').startsWith('fundraiser:') ? String(projectId).replace('fundraiser:', '') : null);
 
     if (targetFundraiserId) {
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(targetFundraiserId))) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetFundraiserId))) {
         return NextResponse.json({ error: 'A valid fundraiser ID is required.' }, { status: 400 });
       }
       if (!Number.isSafeInteger(numAmount) || numAmount < 10 || numAmount > 1000000) {
