@@ -3506,3 +3506,91 @@
   outline: 2px solid var(--sec-color, var(--audio-accent, #5eead4));
   outline-offset: 2px;
 }
+
+
+/* Faith Arcade - persistent games and score panels */
+.arcade-online-hub {
+  margin: 28px 0 12px;
+  padding: clamp(16px, 3vw, 28px);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--ink);
+  container-type: inline-size;
+}
+.arcade-online-heading, .arcade-online-game-title, .arcade-online-game-title > div,
+.arcade-online-leaderboard-head, .arcade-online-achievements {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.arcade-online-heading { margin-bottom: 20px; }
+.arcade-online-heading h2 { margin: 6px 0; font-size: clamp(1.35rem, 3cqw, 1.9rem); }
+.arcade-online-heading p, .arcade-online-game-title p, .arcade-online-achievements p {
+  margin: 4px 0 0; color: var(--ink-muted); font-size: .9rem;
+}
+.arcade-online-eyebrow { display: inline-flex; align-items: center; gap: 7px; color: var(--teal); font-size: .72rem; font-weight: 800; letter-spacing: .11em; }
+.arcade-online-trophy { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; font-size: .8rem; font-weight: 700; }
+.arcade-online-game-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.arcade-online-game-tabs button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px; border: 1px solid var(--border); border-radius: 13px; background: transparent; color: var(--ink); font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; transition: border-color .2s, background .2s, transform .2s; }
+.arcade-online-game-tabs button:hover, .arcade-online-game-tabs button:focus-visible, .arcade-online-game-tabs button.active { border-color: var(--arcade-accent); background: color-mix(in srgb, var(--arcade-accent) 12%, var(--surface)); outline: 2px solid color-mix(in srgb, var(--arcade-accent) 30%, transparent); outline-offset: 1px; }
+.arcade-online-game-tabs button:active { transform: scale(.99); }
+.arcade-online-game { padding: clamp(14px, 2.5cqw, 24px); border: 1px solid color-mix(in srgb, var(--arcade-accent) 40%, var(--border)); border-radius: 18px; background: color-mix(in srgb, var(--arcade-accent) 5%, var(--surface)); }
+.arcade-online-game-title { margin-bottom: 18px; }
+.arcade-online-icon { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; border-radius: 13px; color: var(--arcade-accent); background: color-mix(in srgb, var(--arcade-accent) 13%, var(--surface)); }
+.arcade-online-game-title h3 { margin: 0; font-size: 1.08rem; }
+.arcade-online-reset, .arcade-online-load-leaderboard { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: .8rem; cursor: pointer; }
+.arcade-online-prompt { color: var(--ink-muted); }
+.arcade-word-cloud { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px; margin: 12px 0; border: 1px dashed var(--border); border-radius: 14px; background: var(--surface); }
+.arcade-word-cloud span { padding: 7px 10px; border-radius: 9px; background: color-mix(in srgb, var(--arcade-accent) 12%, var(--surface)); font-size: .86rem; font-weight: 650; }
+.arcade-scramble-form { display: grid; gap: 10px; }
+.arcade-scramble-form label { font-size: .86rem; font-weight: 700; }
+.arcade-scramble-form textarea { width: 100%; resize: vertical; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); color: var(--ink); font: inherit; }
+.arcade-scramble-form > button, .arcade-online-result button { justify-self: start; min-height: 44px; padding: 10px 16px; border: 0; border-radius: 12px; background: var(--arcade-accent); color: #fff; font: inherit; font-weight: 750; cursor: pointer; }
+.arcade-scramble-form > button:disabled { opacity: .5; cursor: not-allowed; }
+.arcade-scramble-form small { color: var(--ink-muted); }
+.arcade-memory-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.arcade-memory-card { min-height: 96px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--ink); overflow-wrap: anywhere; font: inherit; font-size: .8rem; cursor: pointer; }
+.arcade-memory-card.revealed { border-color: var(--arcade-accent); background: color-mix(in srgb, var(--arcade-accent) 12%, var(--surface)); }
+.arcade-memory-card.matched { border-color: #10b981; background: color-mix(in srgb, #10b981 12%, var(--surface)); }
+.arcade-memory-board p { grid-column: 1 / -1; color: var(--ink-muted); font-size: .85rem; }
+.arcade-trivia-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-muted); font-size: .8rem; }
+.arcade-trivia-panel h4 { font-size: 1.15rem; line-height: 1.5; }
+.arcade-trivia-options { display: grid; gap: 8px; }
+.arcade-trivia-options button { min-height: 48px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.arcade-trivia-options button:hover, .arcade-trivia-options button:focus-visible { border-color: var(--arcade-accent); outline: 2px solid color-mix(in srgb, var(--arcade-accent) 25%, transparent); }
+.arcade-trivia-options button:disabled { opacity: .65; cursor: default; }
+.arcade-online-result { display: grid; justify-items: start; gap: 6px; padding: 22px; border-radius: 14px; background: var(--surface); }
+.arcade-online-result > svg { color: var(--arcade-accent); }
+.arcade-online-result h4, .arcade-online-result p { margin: 4px 0; }
+.arcade-online-message { color: var(--ink-muted); font-size: .86rem; }
+.arcade-online-error, .arcade-online-state.is-error { color: #b91c1c; }
+.arcade-online-error button { margin-left: 8px; }
+.arcade-online-bottom { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 14px; margin-top: 14px; }
+.arcade-online-achievements, .arcade-online-leaderboard { align-items: flex-start; padding: 16px; border: 1px solid var(--border); border-radius: 15px; }
+.arcade-online-achievements > svg { flex: 0 0 auto; color: #f59e0b; }
+.arcade-online-achievements strong { font-size: .9rem; }
+.arcade-online-leaderboard-head h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: .95rem; }
+.arcade-online-leaderboard-head select { max-width: 125px; padding: 7px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg); color: var(--ink); }
+.arcade-online-load-leaderboard { margin-top: 12px; }
+.arcade-online-leaderboard ol { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.arcade-online-leaderboard li { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .84rem; }
+.arcade-rank { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 8px; background: color-mix(in srgb, var(--teal) 12%, var(--surface)); font-weight: 800; }
+.arcade-online-state { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; min-height: 120px; color: var(--ink-muted); }
+.arcade-online-state button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.arcade-spin { animation: arcade-spin 1s linear infinite; }
+@keyframes arcade-spin { to { transform: rotate(360deg); } }
+@container (max-width: 560px) {
+  .arcade-online-heading { align-items: flex-start; }
+  .arcade-online-trophy { display: none; }
+  .arcade-online-game-tabs { grid-template-columns: 1fr; }
+  .arcade-online-game-tabs button { justify-content: flex-start; }
+  .arcade-online-bottom { grid-template-columns: 1fr; }
+  .arcade-memory-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .arcade-memory-card { min-height: 82px; }
+  .arcade-online-game-title { align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arcade-online-hub *, .arcade-online-hub *::before, .arcade-online-hub *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
