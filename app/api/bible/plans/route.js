@@ -23,13 +23,14 @@ export async function GET(request) {
   if (!db) return NextResponse.json({ error: 'Reading plans are not configured yet.' }, { status: 503 });
   const { data: plans, error } = await db.from('reading_plans').select('id,title,description,days,kind,accent').order('days');
   if (error) return NextResponse.json({ error: 'Could not load reading plans.' }, { status: 500 });
+  const { data: planDays } = await db.from('reading_plan_days').select('plan_id,day,refs').order('day');
   const user = await userFromRequest(request);
   let progress = [];
   if (user) {
     const { data } = await db.from('reading_plan_progress').select('plan_id,day,completed_on').eq('user_id', user.id);
     progress = data || [];
   }
-  return NextResponse.json({ plans: plans || [], progress });
+  return NextResponse.json({ plans: plans || [], planDays: planDays || [], progress });
 }
 
 export async function POST(request) {
