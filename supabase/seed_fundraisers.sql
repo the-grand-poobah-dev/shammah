@@ -109,11 +109,8 @@ BEGIN
     cover_url = EXCLUDED.cover_url,
     category = EXCLUDED.category,
     goal_kes = EXCLUDED.goal_kes,
-    raised_kes = EXCLUDED.raised_kes,
-    donors_count = EXCLUDED.donors_count,
     deadline = EXCLUDED.deadline,
     beneficiary_name = EXCLUDED.beneficiary_name,
-    verified = EXCLUDED.verified,
     accent = EXCLUDED.accent,
     location = EXCLUDED.location;
 
