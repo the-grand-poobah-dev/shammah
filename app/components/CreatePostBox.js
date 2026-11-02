@@ -1,13 +1,8 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import {
-  Image as ImageIcon,
-  Video as VideoIcon,
   Mic as MicIcon,
-  Camera,
   Film,
-  Clapperboard,
-  Radio,
   FileAudio,
   BarChart3,
   Pin,
