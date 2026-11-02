@@ -80,7 +80,6 @@ export default function CameraCaptureModal({ mode = 'both', maxVideoSeconds = 90
 
   useEffect(() => {
     mountedRef.current = true;
-    requestCamera();
     return () => {
       mountedRef.current = false;
       if (countdownRef.current) clearInterval(countdownRef.current);
@@ -88,9 +87,8 @@ export default function CameraCaptureModal({ mode = 'both', maxVideoSeconds = 90
         try { recorderRef.current.stop(); } catch {}
       }
       stopCamera();
-      if (reviewUrl.startsWith('blob:')) URL.revokeObjectURL(reviewUrl);
     };
-    // Initial camera request only; mode changes explicitly restart it below.
+    // Camera requests are started by the mode/facing effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -98,6 +96,12 @@ export default function CameraCaptureModal({ mode = 'both', maxVideoSeconds = 90
     if (!mountedRef.current || recording || reviewUrl) return;
     requestCamera(facingMode);
   }, [cameraMode, facingMode]);
+
+  useEffect(() => {
+    return () => {
+      if (reviewUrl.startsWith('blob:')) URL.revokeObjectURL(reviewUrl);
+    };
+  }, [reviewUrl]);
 
   useEffect(() => {
     if (!recording || paused) return undefined;
