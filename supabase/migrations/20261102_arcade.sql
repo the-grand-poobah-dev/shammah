@@ -82,8 +82,6 @@ alter table public.arcade_questions enable row level security;
 
 drop policy if exists arcade_games_read_active on public.arcade_games;
 create policy arcade_games_read_active on public.arcade_games for select to anon, authenticated using (is_active = true);
-drop policy if exists arcade_scores_read_leaderboards on public.arcade_scores;
-create policy arcade_scores_read_leaderboards on public.arcade_scores for select to authenticated using (true);
 drop policy if exists arcade_progress_read_own on public.arcade_progress;
 create policy arcade_progress_read_own on public.arcade_progress for select to authenticated using (auth.uid() = user_id);
 drop policy if exists arcade_achievements_read_own on public.arcade_achievements;
@@ -201,7 +199,7 @@ declare v_day date := (now() at time zone 'utc')::date; v_seed text;
 begin
   if not exists (select 1 from public.arcade_games where slug=p_game_slug and is_active) then raise exception 'Game unavailable'; end if;
   insert into public.arcade_daily(game_slug,day,seed)
-  values (p_game_slug,v_day,encode(digest(p_game_slug || ':' || v_day::text,'sha256'),'hex'))
+  values (p_game_slug,v_day,md5(p_game_slug || ':' || v_day::text))
   on conflict (game_slug,day) do nothing;
   select seed into v_seed from public.arcade_daily where game_slug=p_game_slug and day=v_day;
   return v_seed;
@@ -216,4 +214,5 @@ revoke all on function public.arcade_daily_seed(text) from public, anon;
 grant execute on function public.arcade_daily_seed(text) to authenticated, service_role;
 
 grant select on public.arcade_games, public.arcade_daily, public.arcade_verses, public.arcade_questions to anon, authenticated;
-grant select on public.arcade_scores, public.arcade_progress, public.arcade_achievements to authenticated;
+grant select on public.arcade_progress, public.arcade_achievements to authenticated;
+revoke select on public.arcade_scores from anon, authenticated;
