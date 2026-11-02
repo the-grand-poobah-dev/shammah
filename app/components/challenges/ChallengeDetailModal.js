@@ -26,7 +26,7 @@ import {
 import Avatar from '../Avatar';
 import MemberName from '../MemberName';
 import { playSound } from '../../lib/soundEffects';
-import { getChallengeDetail, joinChallenge, leaveChallenge, voteChallengeSubmission } from '../../lib/data/challengesApi';
+import { getChallengeDetail, joinChallenge, leaveChallenge, voteChallengeSubmission, moderateChallengeSubmission, deleteChallengeSubmission } from '../../lib/data/challengesApi';
 
 export default function ChallengeDetailModal({
   isOpen,
@@ -45,6 +45,7 @@ export default function ChallengeDetailModal({
   const [leaderboardScope, setLeaderboardScope] = useState('all');
   const [copiedLink, setCopiedLink] = useState(false);
   const [votingMap, setVotingMap] = useState({});
+  const [playingSubmissionId, setPlayingSubmissionId] = useState(null);
 
   useEffect(() => {
     if (!isOpen || !challengeId) return;
@@ -139,6 +140,43 @@ export default function ChallengeDetailModal({
       console.error('Vote failed:', err);
       setVotingMap((prev) => ({ ...prev, [subId]: !prev[subId] }));
     }
+  }
+
+  const canModerate = Boolean(
+    currentUser?.id && (
+      currentUser.id === challenge.creator_id ||
+      ['admin', 'platform_admin', 'moderator'].includes(currentUser.role)
+    )
+  );
+
+  async function handleModerateSubmission(submissionId, decision) {
+    try {
+      await moderateChallengeSubmission(submissionId, decision);
+      setChallengeData((prev) => ({
+        ...prev,
+        submissions: decision === 'approve'
+          ? (prev.submissions || []).map((item) => item.id === submissionId ? { ...item, status: 'approved' } : item)
+          : (prev.submissions || []).filter((item) => item.id !== submissionId),
+      }));
+    } catch (err) {
+      alert(err.message || 'Could not review this submission.');
+    }
+  }
+
+  async function handleDeleteSubmission(submissionId) {
+    try {
+      await deleteChallengeSubmission(submissionId);
+      setChallengeData((prev) => ({ ...prev, submissions: (prev.submissions || []).filter((item) => item.id !== submissionId) }));
+    } catch (err) {
+      alert(err.message || 'Could not remove this submission.');
+    }
+  }
+
+  function handleSubmissionPlay(event, submissionId) {
+    document.querySelectorAll('[data-faith-challenge-video]').forEach((video) => {
+      if (video !== event.currentTarget) video.pause();
+    });
+    setPlayingSubmissionId(submissionId);
   }
 
   function handleShare() {
@@ -489,11 +527,27 @@ export default function ChallengeDetailModal({
                       >
                         {/* Media Preview (9:16 aspect) */}
                         <div className="relative aspect-[9/14] bg-black overflow-hidden">
-                          <img
-                            src={sub.thumb_url || sub.media_url || sub.videoUrl}
-                            alt={sub.caption || sub.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
+                          {sub.media_type === 'video' ? (
+                            <video
+                              data-faith-challenge-video
+                              data-submission-id={sub.id}
+                              src={sub.media_url || sub.videoUrl}
+                              poster={sub.thumb_url || undefined}
+                              controls
+                              playsInline
+                              preload="metadata"
+                              onPlay={(event) => handleSubmissionPlay(event, sub.id)}
+                              onPause={() => { if (playingSubmissionId === sub.id) setPlayingSubmissionId(null); }}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <img
+                              src={sub.thumb_url || sub.media_url || sub.videoUrl}
+                              alt={sub.caption || sub.title || 'Challenge submission'}
+                              loading="lazy"
+                              className="w-full h-full object-contain"
+                            />
+                          )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
 
                           {/* Scripture Tag */}
@@ -539,6 +593,18 @@ export default function ChallengeDetailModal({
                           <div className="px-2.5 py-1.5 bg-black/40 border-t border-white/5 flex items-center gap-1.5 text-[10px] text-slate-400 truncate">
                             <Music className="w-3 h-3 text-amber-300 flex-shrink-0" />
                             <span className="truncate">{sub.audioTitle}</span>
+                          </div>
+                        )}
+                        {(canModerate || sub.user_id === currentUser?.id) && (
+                          <div className="flex flex-wrap items-center gap-2 p-2 border-t border-white/10 bg-black/30">
+                            {sub.status === 'pending_review' && canModerate && (
+                              <>
+                                <button type="button" onClick={() => handleModerateSubmission(sub.id, 'approve')} className="min-h-11 flex-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white">Approve</button>
+                                <button type="button" onClick={() => handleModerateSubmission(sub.id, 'reject')} className="min-h-11 flex-1 rounded-lg bg-red-600/80 px-2 text-xs font-bold text-white">Reject</button>
+                              </>
+                            )}
+                            <button type="button" onClick={() => handleDeleteSubmission(sub.id)} className="min-h-11 rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-300">Remove</button>
+                            {sub.status === 'pending_review' && <span className="text-[10px] text-amber-300">Awaiting review</span>}
                           </div>
                         )}
                       </div>
