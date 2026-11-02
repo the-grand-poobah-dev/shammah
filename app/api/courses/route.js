@@ -679,14 +679,22 @@ export async function POST(request) {
       if (!courseId || !Number.isFinite(cleanRating)) {
         return NextResponse.json({ error: 'Course and valid rating are required.' }, { status: 400 });
       }
-      const { data: enrollment } = await supabase
-        .from('course_enrollments')
-        .select('paid')
-        .eq('user_id', userId)
-        .eq('course_id', courseId)
-        .maybeSingle();
-      if (!enrollment) {
-        return NextResponse.json({ error: 'You must enroll in this course before reviewing it.' }, { status: 403 });
+      const [{ data: enrollment }, { data: reviewedCourse }] = await Promise.all([
+        supabase
+          .from('course_enrollments')
+          .select('paid')
+          .eq('user_id', userId)
+          .eq('course_id', courseId)
+          .maybeSingle(),
+        supabase
+          .from('courses')
+          .select('id, price_kes, status')
+          .eq('id', courseId)
+          .maybeSingle()
+      ]);
+      if (!enrollment || !reviewedCourse || reviewedCourse.status !== 'published' ||
+          (Number(reviewedCourse.price_kes || 0) > 0 && enrollment.paid !== true)) {
+        return NextResponse.json({ error: 'You must have valid course access before reviewing this course.' }, { status: 403 });
       }
       const { data: savedReview, error } = await supabase
         .from('course_reviews')
