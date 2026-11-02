@@ -3598,3 +3598,60 @@
 .arcade-legacy-save-message { margin: 10px 0; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--ink-muted); font-size: .84rem; }
 
 .arcade-daily-challenge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--border)); border-radius: 999px; color: var(--ink); font-size: .78rem !important; font-weight: 700; }
+
+
+/* HTML5 browser arcade collection */
+.arcade-html5 { margin: 28px 0; padding: clamp(16px, 3vw, 28px); border: 1px solid var(--border); border-radius: 22px; background: var(--surface); color: var(--ink); }
+.arcade-html5-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 18px; }
+.arcade-html5-heading h2 { margin: 7px 0 5px; font-size: clamp(1.35rem, 3vw, 1.85rem); }
+.arcade-html5-heading p { margin: 0; max-width: 650px; color: var(--ink-muted); font-size: .9rem; line-height: 1.6; }
+.arcade-html5-timer { display: grid; grid-template-columns: auto auto; align-items: center; gap: 4px 8px; padding: 12px 15px; border: 1px solid var(--border); border-radius: 14px; }
+.arcade-html5-timer svg { grid-row: span 2; color: #f59e0b; }
+.arcade-html5-timer strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.arcade-html5-timer span { color: var(--ink-muted); font-size: .75rem; }
+.arcade-html5-filters { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+.arcade-html5-filters button { padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--ink); font: inherit; font-size: .82rem; cursor: pointer; }
+.arcade-html5-filters button.active { border-color: var(--teal); background: color-mix(in srgb, var(--teal) 12%, var(--surface)); font-weight: 750; }
+.arcade-html5-layout { display: grid; grid-template-columns: minmax(210px, .72fr) minmax(0, 1.5fr); gap: 14px; align-items: stretch; }
+.arcade-html5-library { display: grid; align-content: start; gap: 7px; }
+.arcade-html5-library > button { display: flex; align-items: center; gap: 11px; width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 13px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.arcade-html5-library > button.active { border-color: var(--arcade-accent); background: color-mix(in srgb, var(--arcade-accent) 10%, var(--surface)); }
+.arcade-html5-game-icon { display: grid; place-items: center; flex: 0 0 40px; height: 40px; border-radius: 12px; color: var(--arcade-accent); background: color-mix(in srgb, var(--arcade-accent) 14%, var(--surface)); }
+.arcade-html5-game-copy { display: grid; gap: 4px; min-width: 0; }
+.arcade-html5-game-copy strong { font-size: .86rem; }
+.arcade-html5-game-copy small { color: var(--ink-muted); font-size: .74rem; }
+.arcade-html5-stage { min-width: 0; padding: clamp(13px, 2.5vw, 22px); border: 1px solid color-mix(in srgb, var(--arcade-accent) 40%, var(--border)); border-radius: 18px; background: color-mix(in srgb, var(--arcade-accent) 5%, var(--surface)); }
+.arcade-html5-stage-head { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.arcade-html5-stage-head h3 { margin: 0 0 6px; font-size: 1.08rem; }
+.arcade-html5-stage-head p { max-width: 470px; margin: 0; color: var(--ink-muted); font-size: .82rem; line-height: 1.5; }
+.arcade-html5-stage-head > div:last-child { display: grid; align-content: start; text-align: right; font-variant-numeric: tabular-nums; }
+.arcade-html5-stage-head > div:last-child strong { font-size: 1.35rem; }
+.arcade-html5-stage-head > div:last-child small { color: var(--ink-muted); font-size: .7rem; }
+.arcade-html5-stage-head .urgent strong { color: #dc2626; }
+.arcade-html5-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-width: 500px; margin: 0 auto; }
+.arcade-html5-board button { display: grid; place-items: center; aspect-ratio: 1.2; min-width: 0; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); color: var(--ink); font-size: clamp(1.2rem, 4vw, 2rem); transition: transform .12s, border-color .12s, background .12s; }
+.arcade-html5-board.is-playing button { cursor: pointer; touch-action: manipulation; }
+.arcade-html5-board.is-playing button:hover, .arcade-html5-board.is-playing button:focus-visible { transform: translateY(-2px); border-color: var(--arcade-accent); background: color-mix(in srgb, var(--arcade-accent) 10%, var(--surface)); outline: 2px solid color-mix(in srgb, var(--arcade-accent) 24%, transparent); }
+.arcade-html5-board button:disabled { cursor: default; }
+.arcade-html5-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.arcade-html5-controls p { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--ink-muted); font-size: .82rem; }
+.arcade-html5-controls > button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 10px 14px; border: 0; border-radius: 11px; background: var(--arcade-accent); color: white; font: inherit; font-size: .82rem; font-weight: 750; cursor: pointer; white-space: nowrap; }
+.arcade-html5-controls > button:disabled { opacity: .6; cursor: wait; }
+.arcade-html5-hint { display: block; margin-top: 12px; color: var(--ink-muted); font-size: .74rem; }
+.arcade-html5-footer { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 16px; padding: 12px; border-top: 1px solid var(--border); color: var(--ink-muted); font-size: .78rem; text-align: center; }
+.arcade-html5-footer svg:first-child { color: #ec4899; flex-shrink: 0; }
+.arcade-html5-footer svg:last-child { flex-shrink: 0; }
+@media (max-width: 760px) {
+  .arcade-html5-layout { grid-template-columns: 1fr; }
+  .arcade-html5-library { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .arcade-html5-library > button { align-items: flex-start; padding: 10px; }
+  .arcade-html5-game-icon { flex-basis: 34px; height: 34px; }
+}
+@media (max-width: 480px) {
+  .arcade-html5-heading { align-items: flex-start; }
+  .arcade-html5-timer { padding: 8px; }
+  .arcade-html5-library { grid-template-columns: 1fr; }
+  .arcade-html5-controls { align-items: flex-start; flex-direction: column; }
+  .arcade-html5-controls > button { width: 100%; }
+  .arcade-html5-board { gap: 6px; }
+}
