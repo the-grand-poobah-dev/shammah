@@ -263,30 +263,33 @@ export default function ProfileSettings({ session }) {
     if (!canSave) return;
     setSaving(true);
     try {
+      const privateFields = {};
+      if (dobChanged) privateFields.date_of_birth = dob;
+      if (locChanged) {
+        privateFields.location_place_id = location?.placeId || null;
+        privateFields.location_lat = location?.lat ?? null;
+        privateFields.location_lng = location?.lng ?? null;
+      }
       if (dobChanged || locChanged) {
-        const privateUpdate = { id: uid };
-        if (dobChanged) privateUpdate.date_of_birth = dob;
-        if (locChanged) {
-          privateUpdate.location_place_id = location?.placeId || null;
-          privateUpdate.location_lat = location?.lat ?? null;
-          privateUpdate.location_lng = location?.lng ?? null;
-        }
-        const { error } = await supabase.from('profile_private').upsert(privateUpdate, { onConflict: 'id' });
+        const { error } = await supabase
+          .from('profile_private')
+          .upsert({ id: uid, ...privateFields }, { onConflict: 'id' });
         if (error) throw new Error(error.message);
         if (dobChanged) setDobOrig(dob);
       }
       const upd = {};
       if (nameChanged) upd.display_name = nameTrim;
       if (aboutChanged) upd.about = about.trim() || null;
-      if (locChanged) {
-        upd.location_label = location?.label || null;
-      }
+      if (locChanged) upd.location_label = location?.label || null;
+
+      let nextProfile = { ...profile, ...privateFields };
       if (Object.keys(upd).length) {
         const { data, error } = await supabase.from('profiles').update(upd).eq('id', uid).select(COLS).single();
         if (error) throw new Error(error.message);
-        applyProfile(data);
+        nextProfile = { ...data, ...privateFields };
       }
-      notify('success', 'Your profile has been updated.');
+      if (Object.keys(upd).length || dobChanged || locChanged) applyProfile(nextProfile);
+      notify('success', 'Your profile has been updated.' );
     } catch (e) {
       notify('error', e.message || 'Could not save. Please try again.');
     }
