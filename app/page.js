@@ -1055,6 +1055,12 @@ export default function Feed() {
         text_content: text || null,
         media_url,
         media_type,
+        media_meta: media_type === 'gif' ? {
+          provider: selectedLibraryMedia?.provider || 'upload',
+          gif_id: selectedLibraryMedia?.id || null,
+          width: selectedLibraryMedia?.width || null,
+          height: selectedLibraryMedia?.height || null,
+        } : {},
         visibility: validVisibility,
         poll_expires_at: pollExpiresAtToSave,
         location_label: locationLabelToSave,
