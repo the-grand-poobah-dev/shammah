@@ -84,10 +84,9 @@ export default function FundraiserDonateModal({
           } else {
             setPollCount((prev) => {
               if (prev >= 20) {
-                // Timeout after 60 seconds
+                // Stop polling, but do not label a possibly delayed callback as a failed payment.
                 clearInterval(timer);
-                setStatus('failed');
-                setErrorMsg('M-Pesa prompt timed out. Please check your connection and retry.');
+                setErrorMsg('Confirmation is still pending. Check your M-Pesa messages before attempting another donation.');
                 return prev;
               }
               return prev + 1;
