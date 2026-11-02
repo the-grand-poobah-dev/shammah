@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   HeartHandshake,
@@ -150,7 +150,9 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
     setCurrentPage(1);
   }, [activeCategory, sortBy, debouncedSearchQuery]);
 
+  const fundraiserRequestRef = useRef(0);
   const fetchData = useCallback(async (isRefresh = false) => {
+    const requestId = ++fundraiserRequestRef.current;
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -163,6 +165,7 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
         userId: currentUser?.id || null,
       });
 
+      if (requestId !== fundraiserRequestRef.current) return;
       setFundraisers(data.fundraisers || []);
       setUrgent(data.urgent || []);
       setFeatured(data.featured || null);
@@ -170,10 +173,12 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
       setNearYou(data.nearYou || []);
       setMyCampaigns(data.myCampaigns || []);
     } catch (err) {
-      setError(err.message || 'Unable to load Kingdom Fundraisers.');
+      if (requestId === fundraiserRequestRef.current) setError(err.message || 'Unable to load Kingdom Fundraisers.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === fundraiserRequestRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [activeCategory, sortBy, debouncedSearchQuery, currentUser?.id]);
 
