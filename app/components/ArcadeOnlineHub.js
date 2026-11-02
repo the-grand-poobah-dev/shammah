@@ -61,24 +61,29 @@ export default function ArcadeOnlineHub() {
   const startedAt = useRef(Date.now());
   const submitted = useRef(false);
   const matchTimer = useRef(null);
+  const loadRequestRef = useRef(0);
+  const leaderboardRequestRef = useRef(0);
 
   const loadData = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setError('');
     try {
       const currentToken = await getToken();
+      if (requestId !== loadRequestRef.current) return;
       setToken(currentToken);
       setSignedIn(Boolean(currentToken));
       const [verseData, questionData] = await Promise.all([
         apiGet({ action: 'verses' }, currentToken),
         apiGet({ action: 'questions' }, currentToken),
       ]);
+      if (requestId !== loadRequestRef.current) return;
       setVerses(verseData.verses || []);
       setQuestions(questionData.questions || []);
     } catch (e) {
-      setError(e.message || 'Could not load the games.');
+      if (requestId === loadRequestRef.current) setError(e.message || 'Could not load the games.');
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, []);
 
@@ -163,14 +168,17 @@ export default function ArcadeOnlineHub() {
   }, [token, leaderScope]);
 
   const loadLeaderboard = useCallback(async (game = activeGame, scope = leaderScope, currentToken = token) => {
+    const requestId = ++leaderboardRequestRef.current;
     try {
       const authToken = currentToken || await getToken();
-      if (!authToken) { setLeaderboard([]); return; }
+      if (!authToken) { if (requestId === leaderboardRequestRef.current) setLeaderboard([]); return; }
       const data = await apiGet({ action: 'leaderboard', game, scope }, authToken);
-      setLeaderboard(data.leaderboard || []);
+      if (requestId === leaderboardRequestRef.current) setLeaderboard(data.leaderboard || []);
     } catch (e) {
-      setLeaderboard([]);
-      if (e.message && !/sign in/i.test(e.message)) setError(e.message);
+      if (requestId === leaderboardRequestRef.current) {
+        setLeaderboard([]);
+        if (e.message && !/sign in/i.test(e.message)) setError(e.message);
+      }
     }
   }, [activeGame, leaderScope, token]);
 
