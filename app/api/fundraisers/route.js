@@ -163,7 +163,7 @@ export async function GET(request) {
       const checkoutId = params.get('checkoutRequestId');
       const donationId = params.get('donationId');
       if (!checkoutId && !donationId) return NextResponse.json({ error: 'Donation reference is required.' }, { status: 400 });
-      let query = supabase.from('fundraiser_donations').select('id, fundraiser_id, status, amount_kes, checkout_request_id');
+      let query = supabase.from('fundraiser_donations').select('id, fundraiser_id, status, amount_kes, checkout_request_id, mpesa_transaction_id');
       if (checkoutId) query = query.eq('checkout_request_id', checkoutId);
       if (donationId) query = query.eq('id', donationId);
       const { data: donation, error } = await query.maybeSingle();
@@ -180,6 +180,7 @@ export async function GET(request) {
         status: donation.status === 'completed' ? 'succeeded' : donation.status,
         donationId: donation.id,
         checkoutRequestId: donation.checkout_request_id,
+        receiptCode: ['succeeded', 'completed'].includes(donation.status) ? donation.mpesa_transaction_id : null,
         fundraiser: row ? normalized(row) : null,
       });
     }
