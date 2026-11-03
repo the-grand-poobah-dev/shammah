@@ -185,9 +185,26 @@ async function initiateFundraiserDonation(request, body, fundraiserId, phone, am
       return NextResponse.json({ error: 'M-Pesa started the prompt, but its reference could not be saved. Please contact support before retrying.' }, { status: 500 });
     }
 
+    // A very fast Safaricom callback may have been queued before registration completed.
+    // Reconcile it now that the donation and checkout reference are visible.
+    const { error: reconciliationError } = await supabase.rpc('process_fundraiser_callback_inbox', {
+      p_checkout_request_id: stk.CheckoutRequestID,
+    });
+    if (reconciliationError) {
+      console.error('Fundraiser callback inbox reconciliation failed:', reconciliationError.message);
+    }
+
+    const { data: latestDonation } = await supabase.from('fundraiser_donations')
+      .select('status, mpesa_transaction_id')
+      .eq('id', donation.id)
+      .maybeSingle();
+
     return NextResponse.json({
-      ok: true, status: 'pending', donationId: donation.id, fundraiserId,
+      ok: true,
+      status: latestDonation?.status || 'pending',
+      donationId: donation.id, fundraiserId,
       checkoutRequestId: stk.CheckoutRequestID, amount: amountKes, phone,
+      receiptCode: latestDonation?.mpesa_transaction_id || null,
       customerMessage: stk.CustomerMessage || 'Check your phone and enter your M-Pesa PIN to confirm the donation.',
     });
   } catch (error) {
