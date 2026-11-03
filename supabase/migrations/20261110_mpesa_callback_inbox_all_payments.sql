@@ -118,7 +118,8 @@ BEGIN
        OR round(v_event.amount_kes) <> v_tx.amount_kes
        OR v_event.receipt_code IS NULL OR length(btrim(v_event.receipt_code)) < 4
        OR v_tx.user_id IS NULL OR v_tx.project_id IS NULL
-       OR v_tx.project_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}      UPDATE public.fundraiser_callback_inbox
+       OR v_tx.project_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+      UPDATE public.fundraiser_callback_inbox
       SET processing_error = 'Course callback amount, receipt, or enrollment identity did not validate.'
       WHERE checkout_request_id = p_checkout_request_id;
       RETURN jsonb_build_object('success', false, 'error', 'Course callback validation failed.');
