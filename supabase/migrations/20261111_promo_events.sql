@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.promo_events (
 ALTER TABLE public.promo_events ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.promo_events FROM PUBLIC, anon, authenticated;
 GRANT INSERT ON public.promo_events TO anon, authenticated;
+GRANT SELECT ON public.promo_events TO authenticated;
 DROP POLICY IF EXISTS promo_events_insert_any ON public.promo_events;
 CREATE POLICY promo_events_insert_any ON public.promo_events
   FOR INSERT TO anon, authenticated
