@@ -298,7 +298,8 @@ export async function POST(request) {
               message: message || null,
               phone: cleanPhone,
               checkout_request_id: checkoutRequestId,
-              status: simulateConfirmation ? 'succeeded' : 'pending',
+              // Keep the row pending so credit_donation performs the single atomic credit.
+              status: 'pending',
               mpesa_transaction_id: simulateConfirmation ? receiptCode : null,
             })
             .select('id')
