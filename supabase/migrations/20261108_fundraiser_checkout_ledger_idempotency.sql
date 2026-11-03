@@ -13,6 +13,7 @@ DECLARE
   v_donation public.fundraiser_donations%ROWTYPE;
   v_fundraiser public.fundraisers%ROWTYPE;
   v_existing_id uuid;
+  v_ledger_id uuid;
 BEGIN
   IF p_donation_id IS NULL OR p_checkout_request_id IS NULL
      OR length(btrim(p_checkout_request_id)) < 4
@@ -60,17 +61,38 @@ BEGIN
   WHERE id = p_donation_id;
 
   -- The donation reference and pending ledger entry become visible atomically.
-  INSERT INTO public.mpesa_transactions
-    (user_id, donor_name, phone, amount_kes, receipt_code, checkout_request_id,
-     project_id, project_name, plan_id, status)
-  VALUES
-    (v_donation.donor_id,
-     CASE WHEN COALESCE(v_donation.anonymous, v_donation.is_anonymous, false)
-       THEN 'Anonymous donor' ELSE v_donation.display_name END,
-     COALESCE(v_donation.phone, '254700000000'),
-     v_donation.amount_kes, 'PENDING-' || p_checkout_request_id,
-     p_checkout_request_id, 'fundraiser:' || v_fundraiser.id::text,
-     v_fundraiser.title, 'fundraiser_donation', 'pending');
+  -- Reuse a pre-existing row if an earlier attempt already wrote this checkout.
+  SELECT id INTO v_ledger_id
+  FROM public.mpesa_transactions
+  WHERE checkout_request_id = p_checkout_request_id
+  ORDER BY id
+  LIMIT 1;
+
+  IF v_ledger_id IS NULL THEN
+    INSERT INTO public.mpesa_transactions
+      (user_id, donor_name, phone, amount_kes, receipt_code, checkout_request_id,
+       project_id, project_name, plan_id, status)
+    VALUES
+      (v_donation.donor_id,
+       CASE WHEN COALESCE(v_donation.anonymous, v_donation.is_anonymous, false)
+         THEN 'Anonymous donor' ELSE v_donation.display_name END,
+       COALESCE(v_donation.phone, '254700000000'),
+       v_donation.amount_kes, 'PENDING-' || p_checkout_request_id,
+       p_checkout_request_id, 'fundraiser:' || v_fundraiser.id::text,
+       v_fundraiser.title, 'fundraiser_donation', 'pending');
+  ELSE
+    UPDATE public.mpesa_transactions
+    SET user_id = v_donation.donor_id,
+        donor_name = CASE WHEN COALESCE(v_donation.anonymous, v_donation.is_anonymous, false)
+          THEN 'Anonymous donor' ELSE v_donation.display_name END,
+        phone = COALESCE(v_donation.phone, phone, '254700000000'),
+        amount_kes = v_donation.amount_kes,
+        project_id = 'fundraiser:' || v_fundraiser.id::text,
+        project_name = v_fundraiser.title,
+        plan_id = 'fundraiser_donation',
+        status = CASE WHEN status = 'completed' THEN status ELSE 'pending' END
+    WHERE id = v_ledger_id;
+  END IF;
 
   RETURN jsonb_build_object('success', true, 'donation_id', p_donation_id,
     'checkout_request_id', p_checkout_request_id);
