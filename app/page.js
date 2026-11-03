@@ -1939,16 +1939,8 @@ export default function Feed() {
           visiblePosts.map((p, i) => {
             // Intermittent shelf insertion algorithm:
             // Appears after every 3-5 posts even if user scrolls deep downwards.
-            // i=1 (slot 0) -> Reels & Testimonies
-            // i=4 (slot 1) -> Polls
-            // i=8 (slot 2) -> Audio Sermons & Worship
-            // i=12 (slot 3) -> Daily Verse of the Day
-            // i=16 (slot 4) -> Courses & Discipleship Academy
-            // i=20 (slot 5) -> Kingdom Causes & Fundraisers
-            // i=24 (slot 6) -> Faith Challenges & Streaks
-            // i=28 (slot 7) -> Faith Arcade Games
-            // i=32 (slot 8) -> People to Follow
-            // i=36 (slot 9) -> Cycles through again seamlessly!
+            // A dedicated ReelsRail sits above the feed. Rotate section shelves
+            // through the existing slots and add a dismissible promo every six posts.
             let interleavedWidget = null;
             if (!searchTerm) {
               if (i > 0 && i % 6 === 0) {
