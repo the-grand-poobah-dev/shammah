@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Activity, BookOpen, GraduationCap, HeartHandshake, Headphones, Radio, Vote, Gamepad2, X } from 'lucide-react';
 import { fetchPromoCandidates, rankPromoCandidates, recordPromoEvent } from '../../lib/promoData';
 
@@ -22,10 +23,11 @@ const META = {
 
 function getText(item) {
   const d = item?.data || {};
-  return d.title || d.reference || d.text_content || d.description || (item?.type === 'live' ? 'Join your community live' : 'Discover something meaningful today');
+  return d.title || d.reference || d.text_content || d.game_slug || d.description || (item?.type === 'live' ? 'Join your community live' : 'Discover something meaningful today');
 }
 
 export default function PromoSlot({ onSelectSection }) {
+  const router = useRouter();
   const [candidates, setCandidates] = useState([]);
   const [dismissed, setDismissed] = useState([]);
   const [seen, setSeen] = useState([]);
@@ -89,7 +91,8 @@ export default function PromoSlot({ onSelectSection }) {
   }
 
   function openPromo() {
-    recordPromoEvent({ promoType: current.type, promoId: current.data?.id, eventType: 'click' });
+    recordPromoEvent({ promoType: current.type, promoId: current.data?.id || current.data?.game_slug, eventType: 'click' });
+    if (current.type === 'live' && current.data?.id) { router.push(`/live/${current.data.id}`); return; }
     if (onSelectSection) onSelectSection(meta.section);
     else if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('shammah:set-section', { detail: meta.section }));
   }
