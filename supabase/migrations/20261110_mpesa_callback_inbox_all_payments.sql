@@ -118,7 +118,111 @@ BEGIN
        OR round(v_event.amount_kes) <> v_tx.amount_kes
        OR v_event.receipt_code IS NULL OR length(btrim(v_event.receipt_code)) < 4
        OR v_tx.user_id IS NULL OR v_tx.project_id IS NULL
-       OR v_tx.project_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+       OR v_tx.project_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}      UPDATE public.fundraiser_callback_inbox
+      SET processing_error = 'Course callback amount, receipt, or enrollment identity did not validate.'
+      WHERE checkout_request_id = p_checkout_request_id;
+      RETURN jsonb_build_object('success', false, 'error', 'Course callback validation failed.');
+    END IF;
+
+    INSERT INTO public.course_enrollments
+      (user_id, course_id, paid, mpesa_receipt, amount_paid_kes, enrolled_at)
+    VALUES
+      (v_tx.user_id, v_tx.project_id::uuid, true, v_event.receipt_code,
+       round(v_event.amount_kes)::integer, now())
+    ON CONFLICT (user_id, course_id) DO UPDATE
+      SET paid = true,
+          mpesa_receipt = EXCLUDED.mpesa_receipt,
+          amount_paid_kes = EXCLUDED.amount_paid_kes,
+          enrolled_at = EXCLUDED.enrolled_at;
+
+    UPDATE public.mpesa_transactions
+    SET status = 'completed', receipt_code = v_event.receipt_code,
+        amount_kes = round(v_event.amount_kes)::integer
+    WHERE id = v_tx.id AND status = 'pending';
+
+    UPDATE public.fundraiser_callback_inbox
+    SET processed_at = now(), processing_error = NULL
+    WHERE checkout_request_id = p_checkout_request_id;
+    RETURN jsonb_build_object('success', true, 'status', 'completed', 'payment_type', 'course');
+  END IF;
+
+  -- 3. Church subscriptions
+  SELECT * INTO v_subscription
+  FROM public.subscriptions
+  WHERE checkout_request_id = p_checkout_request_id
+  ORDER BY id
+  LIMIT 1
+  FOR UPDATE;
+
+  IF FOUND THEN
+    IF v_subscription.status IS DISTINCT FROM 'pending' THEN
+      UPDATE public.fundraiser_callback_inbox
+      SET processed_at = now(), processing_error = NULL
+      WHERE checkout_request_id = p_checkout_request_id;
+      RETURN jsonb_build_object('success', true, 'status', v_subscription.status, 'payment_type', 'subscription');
+    END IF;
+
+    IF v_event.result_code <> '0' THEN
+      UPDATE public.subscriptions SET status = 'failed'
+      WHERE id = v_subscription.id AND status = 'pending';
+      UPDATE public.fundraiser_callback_inbox
+      SET processed_at = now(), processing_error = NULL
+      WHERE checkout_request_id = p_checkout_request_id;
+      RETURN jsonb_build_object('success', true, 'status', 'failed', 'payment_type', 'subscription');
+    END IF;
+
+    IF v_event.amount_kes IS NULL OR v_event.amount_kes <= 0
+       OR round(v_event.amount_kes) <> v_subscription.amount_kes
+       OR v_event.receipt_code IS NULL OR length(btrim(v_event.receipt_code)) < 4 THEN
+      UPDATE public.fundraiser_callback_inbox
+      SET processing_error = 'Subscription callback amount or receipt did not validate.'
+      WHERE checkout_request_id = p_checkout_request_id;
+      RETURN jsonb_build_object('success', false, 'error', 'Subscription callback validation failed.');
+    END IF;
+
+    v_months := CASE v_subscription.period_id
+      WHEN 'monthly' THEN 1
+      WHEN 'quarterly' THEN 3
+      WHEN 'biannual' THEN 6
+      WHEN 'annual' THEN 12
+      ELSE NULL
+    END;
+
+    IF v_months IS NULL THEN
+      UPDATE public.fundraiser_callback_inbox
+      SET processing_error = 'Subscription has an unknown billing period.'
+      WHERE checkout_request_id = p_checkout_request_id;
+      RETURN jsonb_build_object('success', false, 'error', 'Unknown subscription billing period.');
+    END IF;
+
+    UPDATE public.subscriptions
+    SET status = 'confirmed',
+        mpesa_receipt = v_event.receipt_code,
+        phone = COALESCE(v_event.phone, phone),
+        amount_kes = round(v_event.amount_kes)::integer,
+        paid_at = now(),
+        period_ends_at = now() + make_interval(months => v_months)
+    WHERE id = v_subscription.id AND status = 'pending';
+
+    UPDATE public.churches
+    SET subscription_status = 'active'
+    WHERE id = v_subscription.church_id;
+
+    UPDATE public.fundraiser_callback_inbox
+    SET processed_at = now(), processing_error = NULL
+    WHERE checkout_request_id = p_checkout_request_id;
+    RETURN jsonb_build_object('success', true, 'status', 'confirmed', 'payment_type', 'subscription');
+  END IF;
+
+  -- Registration may still be in flight. Keep the event for the initiating route to retry.
+  RETURN jsonb_build_object('success', false, 'pending', true, 'error', 'Payment checkout is not registered yet.');
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.process_fundraiser_callback_inbox(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.process_fundraiser_callback_inbox(text) TO service_role;
+NOTIFY pgrst, 'reload schema';
+ THEN
       UPDATE public.fundraiser_callback_inbox
       SET processing_error = 'Course callback amount, receipt, or enrollment identity did not validate.'
       WHERE checkout_request_id = p_checkout_request_id;
