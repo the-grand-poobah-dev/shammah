@@ -128,7 +128,7 @@ BEGIN
       (user_id, course_id, paid, mpesa_receipt, amount_paid_kes, enrolled_at)
     VALUES
       (v_tx.user_id, v_tx.project_id::uuid, true, v_event.receipt_code,
-       round(v_event.amount_kes)::bigint, now())
+       round(v_event.amount_kes)::integer, now())
     ON CONFLICT (user_id, course_id) DO UPDATE
       SET paid = true,
           mpesa_receipt = EXCLUDED.mpesa_receipt,
@@ -137,7 +137,7 @@ BEGIN
 
     UPDATE public.mpesa_transactions
     SET status = 'completed', receipt_code = v_event.receipt_code,
-        amount_kes = round(v_event.amount_kes)::bigint
+        amount_kes = round(v_event.amount_kes)::integer
     WHERE id = v_tx.id AND status = 'pending';
 
     UPDATE public.fundraiser_callback_inbox
