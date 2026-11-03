@@ -292,8 +292,11 @@ export async function POST(request) {
       if (!fundraiserId) return NextResponse.json({ error: 'Campaign is required.' }, { status: 400 });
 
       // Shared database-backed fixed-window limit works across serverless instances.
-      const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '';
-      const clientIp = forwarded || request.headers.get('x-real-ip') || 'unknown';
+      // Prefer the platform-supplied client IP header. If only the proxy chain is
+      // present, use its last hop rather than a client-supplied leading value.
+      const realIp = request.headers.get('x-real-ip')?.trim() || '';
+      const forwarded = request.headers.get('x-forwarded-for')?.split(',').map((value) => value.trim()).filter(Boolean) || [];
+      const clientIp = realIp || forwarded.at(-1) || 'unknown';
       const rateKey = createHash('sha256').update(`fundraiser-report:v1:${user?.id || 'anonymous'}:${clientIp}`).digest('hex');
       const { data: allowed, error: rateError } = await supabase.rpc('consume_fundraiser_report_rate_limit', {
         p_bucket_key: rateKey, p_max_requests: 5, p_window_seconds: 3600,
