@@ -204,7 +204,7 @@ export async function GET(request) {
       if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
       const [{ data: campaigns, error: campaignsError }, { data: withdrawals, error: withdrawalsError }] = await Promise.all([
         supabase.from('fundraisers').select('*').eq('status', 'pending_review').order('created_at', { ascending: true }),
-        supabase.from('fundraiser_withdrawals').select('*').eq('status', 'pending').order('created_at', { ascending: true }),
+        supabase.from('fundraiser_withdrawals').select('*').in('status', ['pending', 'approved']).order('created_at', { ascending: true }),
       ]);
       if (campaignsError) throw campaignsError;
       if (withdrawalsError) throw withdrawalsError;
@@ -423,12 +423,40 @@ export async function POST(request) {
         return NextResponse.json({ ok: true, fundraiser: normalized(data, null, true) });
       }
       if (targetType === 'withdrawal') {
-        const { data, error } = await supabase.from('fundraiser_withdrawals').update({
-          status: decision === 'approve' ? 'approved' : 'rejected', admin_note: adminNote, updated_at: new Date().toISOString(),
-        }).eq('id', targetId).eq('status', 'pending').select('*').maybeSingle();
-        if (error) throw error;
-        if (!data) return NextResponse.json({ error: 'Withdrawal is no longer awaiting review.' }, { status: 409 });
-        return NextResponse.json({ ok: true, withdrawal: data });
+        if (['approve', 'reject'].includes(decision)) {
+          const { data, error } = await supabase.from('fundraiser_withdrawals').update({
+            status: decision === 'approve' ? 'approved' : 'rejected',
+            admin_note: adminNote, updated_at: new Date().toISOString(),
+          }).eq('id', targetId).eq('status', 'pending').select('*').maybeSingle();
+          if (error) throw error;
+          if (!data) return NextResponse.json({ error: 'Withdrawal is no longer awaiting review.' }, { status: 409 });
+          return NextResponse.json({ ok: true, withdrawal: data });
+        }
+
+        if (decision === 'disbursed') {
+          const payoutReceipt = String(body.payoutReceipt || '').trim().slice(0, 120);
+          if (payoutReceipt.length < 4) return NextResponse.json({ error: 'Enter the M-Pesa payout receipt before confirming disbursement.' }, { status: 400 });
+          const { data, error } = await supabase.from('fundraiser_withdrawals').update({
+            status: 'disbursed', payout_receipt: payoutReceipt,
+            payout_confirmed_by: user.id, payout_confirmed_at: new Date().toISOString(),
+            admin_note: adminNote, updated_at: new Date().toISOString(),
+          }).eq('id', targetId).eq('status', 'approved').select('*').maybeSingle();
+          if (error) throw error;
+          if (!data) return NextResponse.json({ error: 'Only an approved withdrawal can be marked disbursed.' }, { status: 409 });
+          return NextResponse.json({ ok: true, withdrawal: data });
+        }
+
+        if (decision === 'failed') {
+          if (!adminNote || adminNote.length < 5) return NextResponse.json({ error: 'Add a short note explaining the failed payout.' }, { status: 400 });
+          const { data, error } = await supabase.from('fundraiser_withdrawals').update({
+            status: 'failed', admin_note: adminNote,
+            payout_confirmed_by: user.id, payout_confirmed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq('id', targetId).eq('status', 'approved').select('*').maybeSingle();
+          if (error) throw error;
+          if (!data) return NextResponse.json({ error: 'Only an approved withdrawal can be marked failed.' }, { status: 409 });
+          return NextResponse.json({ ok: true, withdrawal: data });
+        }
       }
       return NextResponse.json({ error: 'Unsupported review target.' }, { status: 400 });
     }
