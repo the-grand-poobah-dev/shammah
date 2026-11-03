@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, BookOpen, Clock, GraduationCap, HeartHandshake, Headphones, Radio, X } from 'lucide-react';
+import { Activity, BookOpen, GraduationCap, HeartHandshake, Headphones, Radio, Vote, Gamepad2, X } from 'lucide-react';
 import { fetchPromoCandidates, rankPromoCandidates, recordPromoEvent } from '../../lib/promoData';
 
 const DISMISS_KEY = 'shammah:promo-dismissed:v1';
@@ -15,11 +15,13 @@ const META = {
   challenge: { icon: Activity, title: 'Faith challenge', action: 'Join the challenge', accent: '#f59e0b', section: 'challenges' },
   verse: { icon: BookOpen, title: 'Verse of the day', action: 'Open Bible', accent: '#06b6d4', section: 'bible' },
   audio: { icon: Headphones, title: 'Listen and grow', action: 'Explore audio', accent: '#ec4899', section: 'podcasts' },
+  poll: { icon: Vote, title: 'Join the conversation', action: 'Vote in a poll', accent: '#0ea5e9', section: 'polls' },
+  arcade: { icon: Gamepad2, title: 'Faith Arcade', action: 'Play a Bible game', accent: '#f97316', section: 'arcade' },
 };
 
 function getText(item) {
   const d = item?.data || {};
-  return d.title || d.reference || d.description || (item?.type === 'live' ? 'Join your community live' : 'Discover something meaningful today');
+  return d.title || d.reference || d.text_content || d.description || (item?.type === 'live' ? 'Join your community live' : 'Discover something meaningful today');
 }
 
 export default function PromoSlot({ onSelectSection }) {
@@ -65,7 +67,7 @@ export default function PromoSlot({ onSelectSection }) {
   if (!current || !meta) return null;
 
   const Icon = meta.icon;
-  const body = current.type === 'verse' ? current.data.text : (current.data.description || current.data.title || '');
+  const body = current.type === 'verse' ? current.data.text : (current.data.description || current.data.text_content || current.data.title || '');
   const title = current.type === 'verse' ? current.data.reference : getText(current);
 
   function dismiss() {
