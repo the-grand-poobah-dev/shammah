@@ -22,6 +22,7 @@ export default function FundraiserAdminModal({ isOpen, onClose, onActionComplete
   const [pendingCampaigns, setPendingCampaigns] = useState([]);
   const [pendingWithdrawals, setPendingWithdrawals] = useState([]);
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [payoutReceipts, setPayoutReceipts] = useState({});
 
   const loadPending = async () => {
     setLoading(true);
@@ -42,10 +43,10 @@ export default function FundraiserAdminModal({ isOpen, onClose, onActionComplete
     }
   }, [isOpen]);
 
-  async function handleDecision(targetType, targetId, decision) {
+  async function handleDecision(targetType, targetId, decision, extra = {}) {
     setActionLoadingId(targetId);
     try {
-      await reviewFundraiser({ targetType, targetId, decision });
+      await reviewFundraiser({ targetType, targetId, decision, ...extra });
       playSound(decision === 'approve' ? 'postPublished' : 'reaction');
       loadPending();
       if (onActionCompleted) onActionCompleted();
@@ -260,45 +261,65 @@ export default function FundraiserAdminModal({ isOpen, onClose, onActionComplete
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                    <button
-                      type="button"
-                      disabled={actionLoadingId === wth.id}
-                      onClick={() => handleDecision('withdrawal', wth.id, 'reject')}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid var(--border)',
-                        background: 'transparent',
-                        color: '#ef4444',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Reject
-                    </button>
-                    <button
-                      type="button"
-                      disabled={actionLoadingId === wth.id}
-                      onClick={() => handleDecision('withdrawal', wth.id, 'approve')}
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: '8px',
-                        border: 'none',
-                        background: '#10b981',
-                        color: '#fff',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                      }}
-                    >
-                      <Coins size={13} />
-                      <span>Approve Request</span>
-                    </button>
-                  </div>
+                  {wth.status === 'approved' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <p style={{ margin: 0, fontSize: '12px', color: '#d97706' }}>
+                        Approved — payout must be sent manually through M-Pesa. Do not mark paid until you have a successful M-Pesa receipt.
+                      </p>
+                      <input
+                        value={payoutReceipts[wth.id] || ''}
+                        onChange={(e) => setPayoutReceipts((current) => ({ ...current, [wth.id]: e.target.value }))}
+                        placeholder="Successful M-Pesa payout receipt"
+                        aria-label="M-Pesa payout receipt"
+                        style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: '12px' }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          disabled={actionLoadingId === wth.id}
+                          onClick={() => {
+                            const note = window.prompt('Explain why this payout failed (minimum 5 characters):');
+                            if (note && note.trim().length >= 5) handleDecision('withdrawal', wth.id, 'failed', { adminNote: note.trim() });
+                          }}
+                          style={{ padding: '7px 10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: '#ef4444', fontSize: '12px', cursor: 'pointer' }}
+                        >
+                          Record Failed Payout
+                        </button>
+                        <button
+                          type="button"
+                          disabled={actionLoadingId === wth.id || (payoutReceipts[wth.id] || '').trim().length < 4}
+                          onClick={() => handleDecision('withdrawal', wth.id, 'disbursed', { payoutReceipt: payoutReceipts[wth.id].trim() })}
+                          style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', background: '#10b981', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <CheckCircle2 size={13} />
+                          <span>Confirm Paid</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                      <button
+                        type="button"
+                        disabled={actionLoadingId === wth.id}
+                        onClick={() => {
+                          const note = window.prompt('Optional note for rejecting this withdrawal:');
+                          handleDecision('withdrawal', wth.id, 'reject', { adminNote: note?.trim() || null });
+                        }}
+                        style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: '#ef4444', fontSize: '12px', cursor: 'pointer' }}
+                      >
+                        Reject
+                      </button>
+                      <button
+                        type="button"
+                        disabled={actionLoadingId === wth.id}
+                        onClick={() => handleDecision('withdrawal', wth.id, 'approve')}
+                        style={{ padding: '6px 14px', borderRadius: '8px', border: 'none', background: '#10b981', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <Coins size={13} />
+                        <span>Approve Request</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
 
