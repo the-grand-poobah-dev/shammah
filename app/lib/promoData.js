@@ -132,7 +132,7 @@ export async function fetchTrendingPoll() {
 export async function fetchArcadeDaily() {
   try {
     const result = await supabase.from('arcade_daily')
-      .select('id,game_slug,title,challenge_date')
+      .select('game_slug,day,seed')
       .order('challenge_date', { ascending: false }).limit(1);
     return safeResult(result)?.[0] || null;
   } catch { return null; }
