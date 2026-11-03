@@ -68,6 +68,9 @@ alter table public.arcade_achievements enable row level security;
 alter table public.arcade_questions enable row level security;
 alter table public.arcade_verses enable row level security;
 
+-- Remove the legacy permissive policy too: permissive policies are OR-combined,
+-- so leaving it behind can expose correct answers despite the service_role policy.
+drop policy if exists "Public can view arcade questions" on public.arcade_questions;
 drop policy if exists arcade_questions_read on public.arcade_questions;
 drop policy if exists arcade_questions_read_server_only on public.arcade_questions;
 create policy arcade_questions_read_server_only on public.arcade_questions
@@ -78,8 +81,9 @@ create policy arcade_verses_read on public.arcade_verses
   for select to anon, authenticated using (true);
 
 grant select on public.arcade_games, public.arcade_daily, public.arcade_verses to anon, authenticated;
+-- Questions include correct answers and must only be readable by trusted server code.
+revoke all privileges on table public.arcade_questions from public, anon, authenticated;
 grant select on public.arcade_questions to service_role;
-revoke select on public.arcade_questions from anon, authenticated;
 revoke insert, update, delete on public.arcade_scores, public.arcade_progress,
   public.arcade_achievements, public.arcade_daily, public.arcade_verses,
   public.arcade_questions from anon, authenticated;
