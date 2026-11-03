@@ -416,7 +416,7 @@ export async function POST(request) {
       const targetId = String(body.targetId || '');
       const decision = String(body.decision || '');
       const adminNote = String(body.adminNote || '').trim().slice(0, 2000) || null;
-      if (!targetId || !['approve', 'reject'].includes(decision)) return NextResponse.json({ error: 'Choose a valid review decision.' }, { status: 400 });
+      if (!targetId || !['approve', 'reject', 'disbursed', 'failed'].includes(decision)) return NextResponse.json({ error: 'Choose a valid review decision.' }, { status: 400 });
       if (targetType === 'campaign') {
         const { data, error } = await supabase.from('fundraisers').update({
           status: decision === 'approve' ? 'active' : 'rejected', verified: decision === 'approve', updated_at: new Date().toISOString(),
