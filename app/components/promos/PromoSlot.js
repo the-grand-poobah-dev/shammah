@@ -6,6 +6,7 @@ import { fetchPromoCandidates, rankPromoCandidates, recordPromoEvent } from '../
 
 const DISMISS_KEY = 'shammah:promo-dismissed:v1';
 const SEEN_KEY = 'shammah:promo-seen:v1';
+const SESSION_COUNT_KEY = 'shammah:promo-count:v1';
 const DISMISS_MS = 7 * 24 * 60 * 60 * 1000;
 
 const META = {
@@ -16,7 +17,7 @@ const META = {
   verse: { icon: BookOpen, title: 'Verse of the day', action: 'Open Bible', accent: '#06b6d4', section: 'bible' },
   audio: { icon: Headphones, title: 'Listen and grow', action: 'Explore audio', accent: '#ec4899', section: 'podcasts' },
   poll: { icon: Vote, title: 'Join the conversation', action: 'Vote in a poll', accent: '#0ea5e9', section: 'polls' },
-  arcade: { icon: Gamepad2, title: 'Faith Arcade', action: 'Play a Bible game', accent: '#f97316', section: 'arcade' },
+  arcade: { icon: Gamepad2, title: 'Faith Arcade', action: 'Play a Bible game', accent: '#f97316', section: 'games' },
 };
 
 function getText(item) {
@@ -55,6 +56,11 @@ export default function PromoSlot({ onSelectSection }) {
 
   useEffect(() => {
     if (!current || loading) return;
+    try {
+      const count = Number(sessionStorage.getItem(SESSION_COUNT_KEY) || 0);
+      if (count >= 5) { setCandidates([]); setActiveType(null); return; }
+      sessionStorage.setItem(SESSION_COUNT_KEY, String(count + 1));
+    } catch {}
     recordPromoEvent({ promoType: current.type, promoId: current.data?.id, eventType: 'impression' });
     const next = [...new Set([...seen, current.type])];
     setSeen(next);
