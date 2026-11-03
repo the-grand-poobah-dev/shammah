@@ -3,6 +3,7 @@ import './globals.css';
 import './cx.css';
 import './media-capture.css';
 import './section-pages.css';
+import './promos.css';
 import './desktop-layout.css';
 import AppClientInit from './components/AppClientInit';
 import BottomNav from './components/BottomNav';
