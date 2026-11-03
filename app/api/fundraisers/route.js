@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
@@ -284,9 +285,25 @@ export async function POST(request) {
 
     if (action === 'report') {
       const fundraiserId = String(body.fundraiserId || '');
-      const reason = String(body.reason || 'other').trim().slice(0, 80);
+      const allowedReasons = new Set(['fraud', 'misleading', 'duplicate', 'inappropriate', 'other']);
+      const rawReason = String(body.reason || 'other').trim().toLowerCase();
+      const reason = allowedReasons.has(rawReason) ? rawReason : 'other';
       const details = String(body.details || '').trim().slice(0, 2000);
-      if (!fundraiserId || !reason) return NextResponse.json({ error: 'Campaign and report reason are required.' }, { status: 400 });
+      if (!fundraiserId) return NextResponse.json({ error: 'Campaign is required.' }, { status: 400 });
+
+      // Shared database-backed fixed-window limit works across serverless instances.
+      const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '';
+      const clientIp = forwarded || request.headers.get('x-real-ip') || 'unknown';
+      const rateKey = createHash('sha256').update(`fundraiser-report:v1:${user?.id || 'anonymous'}:${clientIp}`).digest('hex');
+      const { data: allowed, error: rateError } = await supabase.rpc('consume_fundraiser_report_rate_limit', {
+        p_bucket_key: rateKey, p_max_requests: 5, p_window_seconds: 3600,
+      });
+      if (rateError) {
+        console.error('Fundraiser report rate limit failed:', rateError.message);
+        return NextResponse.json({ error: 'Reporting is temporarily unavailable. Please try again later.' }, { status: 503 });
+      }
+      if (allowed !== true) return NextResponse.json({ error: 'Report limit reached. Please try again later.' }, { status: 429 });
+
       const { data: row, error: rowError } = await supabase.from('fundraisers').select('id').eq('id', fundraiserId).maybeSingle();
       if (rowError) throw rowError;
       if (!row) return NextResponse.json({ error: 'Fundraiser not found.' }, { status: 404 });
@@ -366,26 +383,27 @@ export async function POST(request) {
     if (action === 'withdrawal') {
       const fundraiserId = String(body.fundraiserId || '');
       const amount = Math.round(Number(body.amountKes || 0));
-      const digits = String(body.mpesaPhone || '').replace(/\D/g, '');
+      const digits = String(body.mpesaPhone || '').replace(/\\D/g, '');
       const phone = digits.startsWith('254') && digits.length === 12 ? digits : (digits.startsWith('0') && digits.length === 10 ? '254' + digits.slice(1) : null);
       if (!fundraiserId || !Number.isSafeInteger(amount) || amount < 100 || !phone) return NextResponse.json({ error: 'Enter a valid withdrawal amount and M-Pesa number.' }, { status: 400 });
-      const { data: row, error: rowError } = await supabase.from('fundraisers').select('id, owner_id, creator_id, raised_kes, raised_amount, status')
-        .eq('id', fundraiserId).maybeSingle();
-      if (rowError) throw rowError;
-      if (!row) return NextResponse.json({ error: 'Fundraiser not found.' }, { status: 404 });
-      if ((row.owner_id || row.creator_id) !== user.id) return NextResponse.json({ error: 'Only the campaign owner can request a withdrawal.' }, { status: 403 });
-      if (!['active', 'completed'].includes(row.status)) return NextResponse.json({ error: 'Withdrawals are not available for this campaign status.' }, { status: 409 });
-      const { data: existing, error: existingError } = await supabase.from('fundraiser_withdrawals')
-        .select('amount_kes, status').eq('fundraiser_id', fundraiserId).in('status', ['pending', 'approved', 'disbursed']);
-      if (existingError) throw existingError;
-      const committed = (existing || []).reduce((sum, item) => sum + Number(item.amount_kes || 0), 0);
-      const available = Math.max(0, Number(row.raised_kes ?? row.raised_amount ?? 0) - committed);
-      if (amount > available) return NextResponse.json({ error: 'Withdrawal exceeds the available balance.' }, { status: 400 });
-      const { data, error } = await supabase.from('fundraiser_withdrawals').insert({
-        fundraiser_id: fundraiserId, amount_kes: amount, requested_by: user.id, mpesa_payout_phone: phone, status: 'pending',
-      }).select('*').single();
-      if (error) throw error;
-      return NextResponse.json({ ok: true, withdrawal: data }, { status: 201 });
+      const { data: result, error } = await supabase.rpc('reserve_fundraiser_withdrawal', {
+        p_fundraiser_id: fundraiserId,
+        p_user_id: user.id,
+        p_amount_kes: amount,
+        p_mpesa_phone: phone,
+      });
+      if (error) {
+        console.error('Atomic fundraiser withdrawal reservation failed:', error.message);
+        return NextResponse.json({ error: 'Unable to reserve this withdrawal right now.' }, { status: 503 });
+      }
+      if (!result?.success) {
+        const status = result?.error === 'Fundraiser not found.' ? 404
+          : result?.error === 'Only the campaign owner can request a withdrawal.' ? 403
+          : result?.error === 'Withdrawals are not available for this campaign status.' ? 409
+          : 400;
+        return NextResponse.json({ error: result?.error || 'Unable to request withdrawal.' }, { status });
+      }
+      return NextResponse.json({ ok: true, withdrawal: result.withdrawal, availableAfterKes: result.available_after_kes }, { status: 201 });
     }
 
     if (action === 'admin-review') {
