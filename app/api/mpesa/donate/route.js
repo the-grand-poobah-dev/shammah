@@ -317,6 +317,7 @@ export async function POST(request) {
             if (rpcErr) {
               console.error('Donation credit failed during simulation:', rpcErr.message);
               throw new Error('Donation credit failed during simulation. No fallback credit was applied.');
+            }
           }
         }
 
