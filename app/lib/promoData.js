@@ -1,5 +1,16 @@
 import { supabase } from '../../lib/supabaseClient';
 
+const PROMO_CACHE = new Map();
+const PROMO_CACHE_MS = 60_000;
+
+async function cached(key, loader) {
+  const current = PROMO_CACHE.get(key);
+  if (current && current.expiresAt > Date.now()) return current.value;
+  const value = await loader();
+  PROMO_CACHE.set(key, { value, expiresAt: Date.now() + PROMO_CACHE_MS });
+  return value;
+}
+
 const KJV_VERSES = [
   { reference: 'Psalm 23:1', text: 'The LORD is my shepherd; I shall not want.' },
   { reference: 'Proverbs 3:5', text: 'Trust in the LORD with all thine heart; and lean not unto thine own understanding.' },
@@ -39,6 +50,7 @@ function safeResult(result) {
 }
 
 export async function fetchPromoReels(limit = 8) {
+  return cached('reels', async () => {
   try {
     const result = await supabase.from('posts')
       .select('id,text_content,media_url,created_at,profiles(display_name,avatar_url)')
@@ -46,14 +58,16 @@ export async function fetchPromoReels(limit = 8) {
       .order('created_at', { ascending: false }).limit(limit);
     return safeResult(result) || [];
   } catch { return []; }
+  });
 }
 
 export async function fetchFeaturedCourse() {
   try {
-    const result = await supabase.from('courses')
-      .select('id,title,description,thumbnail_url,category,level')
-      .limit(1).order('created_at', { ascending: false });
-    return safeResult(result)?.[0] || null;
+    const response = await fetch('/api/courses?action=list', { cache: 'no-store' });
+    if (!response.ok) return null;
+    const result = await response.json();
+    const course = (result.courses || []).find(item => item.status === 'published') || result.courses?.[0];
+    return course || null;
   } catch { return null; }
 }
 
@@ -61,7 +75,7 @@ export async function fetchActiveFundraiser() {
   try {
     const result = await supabase.from('fundraisers')
       .select('id,title,description,goal_kes,raised_kes,status')
-      .eq('status', 'active').order('created_at', { ascending: false }).limit(1);
+      .in('status', ['active', 'open']).order('created_at', { ascending: false }).limit(1);
     return safeResult(result)?.[0] || null;
   } catch { return null; }
 }
@@ -106,7 +120,26 @@ export async function fetchDailyVerse() {
   return KJV_VERSES[((day % KJV_VERSES.length) + KJV_VERSES.length) % KJV_VERSES.length];
 }
 
+export async function fetchTrendingPoll() {
+  try {
+    const result = await supabase.from('posts')
+      .select('id,text_content,created_at')
+      .eq('media_type', 'poll').order('created_at', { ascending: false }).limit(1);
+    return safeResult(result)?.[0] || null;
+  } catch { return null; }
+}
+
+export async function fetchArcadeDaily() {
+  try {
+    const result = await supabase.from('arcade_daily')
+      .select('id,game_slug,title,challenge_date')
+      .order('challenge_date', { ascending: false }).limit(1);
+    return safeResult(result)?.[0] || null;
+  } catch { return null; }
+}
+
 export async function fetchPromoCandidates() {
+  return cached('candidates', async () => {
   const types = [
     ['live', fetchLiveNow],
     ['course', fetchFeaturedCourse],
@@ -114,9 +147,12 @@ export async function fetchPromoCandidates() {
     ['challenge', fetchActiveChallenge],
     ['verse', fetchDailyVerse],
     ['audio', fetchFeaturedAudio],
+    ['poll', fetchTrendingPoll],
+    ['arcade', fetchArcadeDaily],
   ];
   const settled = await Promise.all(types.map(async ([type, fetcher]) => ({ type, data: await fetcher() })));
   return settled.filter(item => item.data);
+  });
 }
 
 export async function recordPromoEvent({ promoType, promoId = null, eventType }) {
