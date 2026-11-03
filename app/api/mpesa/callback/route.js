@@ -167,6 +167,27 @@ export async function POST(req) {
           console.error('Fundraiser callback amount/receipt mismatch for checkout:', checkoutId);
         }
       }
+    } else if (!donation && !sub && !isCoursePayment) {
+      // The callback may beat register_fundraiser_donation_checkout to the database.
+      // Persist the event, then try processing it; if registration is still in flight,
+      // the donation route will retry reconciliation immediately after registration.
+      const { error: inboxError } = await supabase.from('fundraiser_callback_inbox').insert({
+        checkout_request_id: String(checkoutId),
+        result_code: String(resultCode ?? ''),
+        result_desc: String(resultDesc).slice(0, 500),
+        amount_kes: amount != null && Number.isFinite(amount) ? amount : null,
+        receipt_code: receipt ? String(receipt).slice(0, 80) : null,
+        phone: phone ? String(phone).slice(0, 32) : null,
+      });
+      if (inboxError && inboxError.code !== '23505') {
+        console.error('Could not queue early M-Pesa callback:', inboxError.message);
+      }
+      const { error: inboxProcessError } = await supabase.rpc('process_fundraiser_callback_inbox', {
+        p_checkout_request_id: String(checkoutId),
+      });
+      if (inboxProcessError) {
+        console.error('Could not process queued fundraiser callback:', inboxProcessError.message);
+      }
     }
 
     if (!sub) {
