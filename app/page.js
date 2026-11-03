@@ -5,6 +5,8 @@ import { CATEGORY_STYLES, categoryStyle, initials, cleanDisplayName } from './li
 import { useLayoutMode } from './lib/useLayoutMode';
 import PostCard from './components/PostCard';
 import CreatePostBox from './components/CreatePostBox';
+import ReelsRail from './components/promos/ReelsRail';
+import PromoSlot from './components/promos/PromoSlot';
 import CreatePostModal from './components/CreatePostModal';
 import Link from 'next/link';
 import Avatar from './components/Avatar';
@@ -1886,6 +1888,8 @@ export default function Feed() {
           />
         )}
 
+        {tab === 'home' && section === 'all' && !searchTerm && <ReelsRail />}
+
         {/* Dynamic Homefeed Widgets: Churches to follow & Channels Explore */}
         {tab === 'home' && section === 'all' && !searchTerm && (
           <>
@@ -1947,8 +1951,8 @@ export default function Feed() {
             // i=36 (slot 9) -> Cycles through again seamlessly!
             let interleavedWidget = null;
             if (!searchTerm) {
-              if (i === 1) {
-                interleavedWidget = <TrendingReelsCard onSelectSection={(secId) => setSection(secId)} />;
+              if (i > 0 && i % 6 === 0) {
+                interleavedWidget = <PromoSlot onSelectSection={(secId) => setSection(secId)} />;
               } else if (i === 4) {
                 interleavedWidget = <PollsShelfWidget onSelectSection={(secId) => setSection(secId)} />;
               } else if (i > 4 && (i - 4) % 4 === 0) {
