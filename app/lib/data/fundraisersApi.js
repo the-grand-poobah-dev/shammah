@@ -136,12 +136,12 @@ export async function getAdminPendingFundraisers() {
   return data;
 }
 
-export async function reviewFundraiser({ targetType, targetId, decision, adminNote = null }) {
+export async function reviewFundraiser({ targetType, targetId, decision, adminNote = null, payoutReceipt = null }) {
   const headers = await getAuthHeaders();
   const res = await fetch('/api/fundraisers', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ action: 'admin-review', targetType, targetId, decision, adminNote }),
+    body: JSON.stringify({ action: 'admin-review', targetType, targetId, decision, adminNote, payoutReceipt }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to execute review decision.');
