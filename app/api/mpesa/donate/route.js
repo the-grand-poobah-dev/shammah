@@ -114,7 +114,10 @@ async function initiateFundraiserDonation(request, body, fundraiserId, phone, am
     });
   }
 
-  const ip = String(request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown').split(',')[0].trim().slice(0, 80);
+  const realIp = request.headers.get('x-real-ip')?.trim() || '';
+  const forwardedHops = request.headers.get('x-forwarded-for')?.split(',').map((value) => value.trim()).filter(Boolean) || [];
+  // Do not trust the left-most forwarded value, which may be supplied by the caller.
+  const ip = (realIp || forwardedHops.at(-1) || 'unknown').slice(0, 80);
   const rateKey = createHash('sha256').update(phone + ':' + ip).digest('hex');
   const { data: allowed, error: rateError } = await supabase.rpc('reserve_fundraiser_donation_attempt', {
     p_rate_key: rateKey, p_max_attempts: 5, p_window_seconds: 900,
