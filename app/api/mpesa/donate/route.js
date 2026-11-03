@@ -174,17 +174,16 @@ async function initiateFundraiserDonation(request, body, fundraiserId, phone, am
       await supabase.from('fundraiser_donations').update({ status: 'failed' }).eq('id', donation.id).eq('status', 'pending');
       return NextResponse.json({ error: stk.errorMessage || stk.ResponseDescription || 'M-Pesa could not start the payment prompt.' }, { status: 400 });
     }
-    const { error: updateError } = await supabase.from('fundraiser_donations').update({
-      checkout_request_id: stk.CheckoutRequestID, merchant_request_id: stk.MerchantRequestID || null,
-    }).eq('id', donation.id).eq('status', 'pending');
-    if (updateError) return NextResponse.json({ error: 'M-Pesa started the prompt, but its reference could not be saved. Please contact support before retrying.' }, { status: 500 });
-
-    await supabase.from('mpesa_transactions').insert({
-      phone, amount_kes: amountKes, receipt_code: 'PENDING-' + stk.CheckoutRequestID, checkout_request_id: stk.CheckoutRequestID,
-      project_id: 'fundraiser:' + fundraiserId, project_name: fundraiser.title,
-      plan_id: 'fundraiser_donation', user_id: donorId,
-      donor_name: body.anonymous === true ? 'Anonymous donor' : donorName, status: 'pending',
+    // Persist the checkout reference and pending ledger row in one database transaction.
+    const { data: registration, error: registrationError } = await supabase.rpc('register_fundraiser_donation_checkout', {
+      p_donation_id: donation.id,
+      p_checkout_request_id: stk.CheckoutRequestID,
+      p_merchant_request_id: stk.MerchantRequestID || null,
     });
+    if (registrationError || !registration?.success) {
+      console.error('Fundraiser checkout registration failed:', registrationError?.message || registration?.error || 'Unknown registration error');
+      return NextResponse.json({ error: 'M-Pesa started the prompt, but its reference could not be saved. Please contact support before retrying.' }, { status: 500 });
+    }
 
     return NextResponse.json({
       ok: true, status: 'pending', donationId: donation.id, fundraiserId,
