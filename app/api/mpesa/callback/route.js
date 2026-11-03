@@ -167,7 +167,7 @@ export async function POST(req) {
           console.error('Fundraiser callback amount/receipt mismatch for checkout:', checkoutId);
         }
       }
-    } else if (!donation && !sub && !isCoursePayment && resultCode != null) {
+    } else if (!donation && !sub && !isCoursePayment && resultCode != null && String(resultCode).trim() !== '') {
       // The callback may beat register_fundraiser_donation_checkout to the database.
       // Persist the event, then try processing it; if registration is still in flight,
       // the donation route will retry reconciliation immediately after registration.
