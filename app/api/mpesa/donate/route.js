@@ -315,35 +315,8 @@ export async function POST(request) {
             });
 
             if (rpcErr) {
-              const { data: fr } = await supabase
-                .from('fundraisers')
-                .select('raised_kes, donors_count, goal_kes, status')
-                .eq('id', targetFundraiserId)
-                .single();
-
-              if (fr) {
-                const newRaised = (Number(fr.raised_kes) || 0) + numAmount;
-                const newDonors = (Number(fr.donors_count) || 0) + 1;
-                const isCompleted = newRaised >= fr.goal_kes;
-
-                await supabase
-                  .from('fundraisers')
-                  .update({
-                    raised_kes: newRaised,
-                    donors_count: newDonors,
-                    status: isCompleted && fr.status === 'active' ? 'completed' : fr.status,
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq('id', targetFundraiserId);
-
-                await supabase
-                  .from('fundraiser_milestones')
-                  .update({ reached_at: new Date().toISOString() })
-                  .eq('fundraiser_id', targetFundraiserId)
-                  .lte('amount_kes', newRaised)
-                  .is('reached_at', null);
-              }
-            }
+              console.error('Donation credit failed during simulation:', rpcErr.message);
+              throw new Error('Donation credit failed during simulation. No fallback credit was applied.');
           }
         }
 
