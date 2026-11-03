@@ -11,6 +11,12 @@ CREATE TABLE IF NOT EXISTS public.promo_events (
 -- Reconcile the earlier promo_events shape if it already exists in this project.
 ALTER TABLE public.promo_events ADD COLUMN IF NOT EXISTS promo_id text;
 ALTER TABLE public.promo_events ADD COLUMN IF NOT EXISTS meta jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE public.promo_events DROP CONSTRAINT IF EXISTS promo_events_promo_type_check;
+ALTER TABLE public.promo_events ADD CONSTRAINT promo_events_promo_type_check
+  CHECK (promo_type IN ('live','course','fundraiser','challenge','verse','audio','poll','arcade','reel'));
+ALTER TABLE public.promo_events DROP CONSTRAINT IF EXISTS promo_events_event_type_check;
+ALTER TABLE public.promo_events ADD CONSTRAINT promo_events_event_type_check
+  CHECK (event_type IN ('impression','click','dismiss'));
 ALTER TABLE public.promo_events ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.promo_events FROM PUBLIC, anon, authenticated;
 GRANT INSERT ON public.promo_events TO anon, authenticated;
