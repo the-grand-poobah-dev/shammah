@@ -165,6 +165,17 @@ async function initiateCoursePayment(req, body) {
       await supabase.from('mpesa_transactions').update({ status: 'failed' }).eq('id', tx.id);
       return NextResponse.json({ error: stk.errorMessage || stk.ResponseDescription || 'M-Pesa STK push failed.' }, { status: 400 });
     }
+
+    // Reconcile a callback that arrived before the checkout reference was saved.
+    if (stk.CheckoutRequestID) {
+      const { error: reconciliationError } = await supabase.rpc('process_fundraiser_callback_inbox', {
+        p_checkout_request_id: stk.CheckoutRequestID,
+      });
+      if (reconciliationError) {
+        console.error('Course callback inbox reconciliation failed:', reconciliationError.message);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       transactionId: tx.id,
@@ -324,6 +335,16 @@ export async function POST(req) {
         },
         { status: 400 }
       );
+    }
+
+    // Reconcile a callback that arrived before the subscription checkout reference was saved.
+    if (stk.CheckoutRequestID) {
+      const { error: reconciliationError } = await supabase.rpc('process_fundraiser_callback_inbox', {
+        p_checkout_request_id: stk.CheckoutRequestID,
+      });
+      if (reconciliationError) {
+        console.error('Subscription callback inbox reconciliation failed:', reconciliationError.message);
+      }
     }
 
     return NextResponse.json({
