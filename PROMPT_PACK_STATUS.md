@@ -31,7 +31,7 @@ Rule: a file existing is not proof that the feature is complete. "Needs verifica
 - The user confirmed the latest `20261110_mpesa_callback_inbox_all_payments.sql` migration ran successfully in Supabase.
 - Read-only verification confirms `process_fundraiser_callback_inbox(text)` exists as SECURITY DEFINER, is executable by `service_role`, and is not executable by `anon` or `authenticated`.
 - Do not rerun that migration. If further changes are required, add a new migration.
-- Vercel's daily deployment limit is currently lifted. Preview build for commit `9800489` reached READY; after the query fix at `6c02bda`, wait for and inspect the new preview build before release.
+- Vercel's daily deployment limit is currently lifted. Preview build at `ceaea96` reached READY and GitHub Actions passed. Live route smoke testing then found `/api/courses` returns HTTP 500 because anonymous course-lesson RLS evaluates a private `course_enrollments` subquery. Added `20261104_course_lesson_rls_anon_preview_split.sql` to separate anon preview-only access from authenticated enrolled access, and updated `app/api/courses/route.js` to skip private enrollment-count aggregation when no service-role key is configured. Both fixes are on the release branch; apply the new SQL manually and wait for the new preview build before release.
 - Keep changes on `work/section-pages-prompt-pack` until the release PR is reviewed. The user has requested preparation to merge to `main` and production after verification; do not deploy untested code.
 
 ## Working rules
