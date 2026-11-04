@@ -18,6 +18,8 @@ WITH expected(table_name) AS (
     ('arcade_scores'),
     ('arcade_achievements'),
     ('promo_events'),
+    ('content_reports'),
+    ('rate_limits'),
     ('direct_messages'),
     ('live_streams'),
     ('challenges')
@@ -64,7 +66,9 @@ FROM (VALUES
   ('fundraiser_donations'),
   ('arcade_scores'),
   ('arcade_achievements'),
-  ('promo_events')
+  ('promo_events'),
+  ('content_reports'),
+  ('rate_limits')
 ) AS t(table_name)
 WHERE to_regclass(format('public.%I', t.table_name)) IS NOT NULL
 ORDER BY t.table_name;

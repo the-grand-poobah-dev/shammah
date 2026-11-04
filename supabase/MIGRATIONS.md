@@ -1,7 +1,7 @@
 # Supabase migration inventory and release procedure
 
 Branch: `work/section-pages-prompt-pack`  
-Inventory generated from `supabase/migrations/` on 2026-11-04. **66 SQL migration files found.**
+Inventory generated from `supabase/migrations/` on 2026-11-04. **66 active SQL migration files found.** Archived production-lineage migrations are listed separately below and are not part of the active migration set.
 
 ## Important: inventory is not an applied-migration ledger
 
@@ -132,3 +132,15 @@ The current script hardcodes `supabase/migrations/20261008_production_readiness.
 - Use `supabase/tests/rls_checks.sql` for read-only RLS/policy and privilege observations. It does not write data and does not simulate every authenticated-user scenario.
 - Verify critical RPC permissions, payment/callback idempotency, and seed dependencies separately.
 - There is no universal automatic rollback for these migrations. Before any production DDL, take a database backup or confirm the project's recovery point. For mistakes, prefer a reviewed compensating migration that preserves user data; restore from backup only when the impact warrants it. Do not drop tables or delete rows as a generic rollback.
+
+
+## Archived production-lineage SQL (reference only — do not run directly)
+
+The current release branch is reconciled with deployed production commit `8cef64502c15f0c52cf9285e7a07640c71634508`. These older files are retained under `supabase/migrations/archive/legacy_production/` for traceability, not as active migrations:
+
+- `20261031_section_pages_schema.sql` — legacy schema uses a text primary key for `media_items.id`; current database uses UUID and later feature-specific migrations.
+- `20261102_fix_media_follows_rls.sql` — grants table-level SELECT on `profiles`, which conflicts with the current column-level profile privacy grants. Do not run.
+- `20261102_security_rate_limits_and_reports.sql` — legacy setup for `rate_limits`, `content_reports` and related RPCs. Read-only checks confirm both tables currently exist in the connected database. Do not rerun; inspect the current function/policy state first.
+- `supabase/seeds/archive/seed_section_content.sql` — legacy seed uses non-UUID course identifiers and does not match the current courses schema. Do not run.
+
+These archived files are not counted among the 66 active migrations. The active migration set and fresh-project bootstrap still require a separate dependency review before using them to initialize a brand-new database.

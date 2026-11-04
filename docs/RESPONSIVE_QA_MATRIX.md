@@ -12,7 +12,9 @@ This is the release checklist for Prompt 16. The branch includes container-query
 | Typical phone | 390 × 844 | media previews, composer toolbar, reels rail, promo card and text wrapping |
 | Large phone | 430 × 932 | card width and responsive spacing; portrait video controls remain reachable |
 | Tablet portrait | 768 × 1024 | desktop frame transition; side rails do not squeeze center content |
+| Tablet portrait (narrow) | 820 × 1180 | container-query breakpoints, card density and panel widths |
 | Tablet landscape / small laptop | 1024 × 768 | navigation, columns, modals and dense toolbars |
+| Desktop (small) | 1280 × 800 | two/three-column transition, sidebar collisions and sticky regions |
 | Desktop | 1440 × 900 | three-column layout, readable line lengths, sticky regions and cards |
 | Wide desktop | 1920 × 1080 | content max-width, centered layout, no stretched media or oversized whitespace |
 
@@ -44,4 +46,4 @@ Run every viewport in **dark and light themes**. Use browser zoom at 100%; then 
 
 ## Release gate
 
-Do not mark Prompt 16 complete until the preview is manually checked at minimum at 360px, 768px, 1440px and 1920px in both themes, and the media/device flows have been tested on a supported device. A successful Next.js build alone does not prove responsive behavior.
+Do not mark Prompt 16 complete until the preview is manually checked at minimum at 360px, 768px, 820px, 1280px, 1440px and 1920px in both themes, and the media/device flows have been tested on a supported device. A successful Next.js build alone does not prove responsive behavior.

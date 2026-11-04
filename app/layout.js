@@ -11,6 +11,7 @@ import ScrollProgressIndicator from './components/ScrollProgressIndicator';
 import AppHeader from './components/AppHeader';
 import AppFrame from './components/AppFrame';
 import AudioPlayerExperience from './components/AudioPlayerExperience';
+import ErrorBoundary from './components/ErrorBoundary';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,7 @@ export default function RootLayout({ children }) {
           <AppClientInit />
           <ScrollProgressIndicator />
           <AppHeader />
-          <AppFrame>{children}</AppFrame>
+          <ErrorBoundary sectionName="page"><AppFrame>{children}</AppFrame></ErrorBoundary>
           <BottomNav />
         </AudioPlayerExperience>
       </body>

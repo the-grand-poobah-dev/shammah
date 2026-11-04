@@ -17,6 +17,11 @@ Run against the latest **preview** deployment before merging PR #1. Do not use r
 - [ ] Click and dismiss events insert without blocking the feed; anon cannot SELECT promo analytics.
 - [ ] Live promotion opens the corresponding `/live/[id]` route.
 
+## Moderation and reporting
+- [ ] Report a post with a reason and optional details; the user sees confirmation without seeing other users' reports.
+- [ ] A regular user cannot view the admin reports queue or action reports; an authorized moderator can filter the queue and perform an allowed moderation action.
+- [ ] The admin queue only works if the current `content_reports` RLS policies and grants permit the intended staff role.
+
 ## Feature smoke tests
 - [ ] Posts, comments, status stories and media uploads work with a small image and a short video.
 - [ ] Camera and microphone permissions granted/denied each produce a useful state; test on a real supported device.
