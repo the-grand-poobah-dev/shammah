@@ -38,6 +38,7 @@ export default function SettingsPage() {
   const [soundOn, setSoundOn] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     setSoundOn(isSoundEnabled());
@@ -105,11 +106,13 @@ export default function SettingsPage() {
     e.preventDefault();
     if (!session?.user) return;
     setSaving(true);
+    setSaveError('');
+    setSavedSuccess(false);
     try {
       const uid = session.user.id;
       await updateProfileSettings(uid, { isLocked, inboxPermission });
 
-      await supabase
+      const { error: profileUpdateError } = await supabase
         .from('profiles')
         .update({
           display_name: displayName.trim(),
@@ -119,6 +122,7 @@ export default function SettingsPage() {
           is_locked: isLocked,
         })
         .eq('id', uid);
+      if (profileUpdateError) throw profileUpdateError;
 
       const { error: privateSettingsError } = await supabase
         .from('profile_private')
@@ -126,10 +130,12 @@ export default function SettingsPage() {
       if (privateSettingsError) throw privateSettingsError;
 
       setSavedSuccess(true);
+      setSaveError('');
       playSound('success');
       setTimeout(() => setSavedSuccess(false), 2500);
     } catch (err) {
       console.error('Error updating settings:', err);
+      setSaveError(err?.message || 'Your settings could not be saved. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -163,6 +169,22 @@ export default function SettingsPage() {
       </div>
 
       <div className="cx-page" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {saveError && (
+          <div
+            role="alert"
+            style={{
+              padding: '12px 16px',
+              borderRadius: 12,
+              background: 'rgba(244, 63, 94, 0.12)',
+              border: '1px solid rgba(244, 63, 94, 0.3)',
+              color: 'var(--rose)',
+              fontSize: 13,
+            }}
+          >
+            {saveError}
+          </div>
+        )}
+
         {savedSuccess && (
           <div
             style={{
