@@ -44,8 +44,9 @@ LEFT JOIN pg_policies p ON p.schemaname = 'public'
 GROUP BY e.table_name, c.oid, c.relrowsecurity, c.relforcerowsecurity
 ORDER BY e.table_name;
 
--- 2) Effective client SELECT/INSERT/UPDATE/DELETE privileges on sensitive tables.
--- These are observations, not automatic failures: expected access differs by feature.
+-- 2) Table-level client privileges on sensitive tables.
+-- NOTE: PostgreSQL column-level grants are separate; a false table-level SELECT result
+-- does not imply that a role cannot select individually granted columns. Section 3 reports those.
 SELECT
   t.table_name,
   has_table_privilege('anon', format('public.%I', t.table_name), 'SELECT') AS anon_select,
@@ -68,7 +69,22 @@ FROM (VALUES
 WHERE to_regclass(format('public.%I', t.table_name)) IS NOT NULL
 ORDER BY t.table_name;
 
--- 3) Confirm that the M-Pesa callback inbox processor is not executable by client roles.
+-- 3) Column-level privileges for the most important public/profile data surfaces.
+-- This is especially important for profiles, where public-card columns are granted
+-- individually while private fields remain unavailable to browser roles.
+SELECT
+  grantee,
+  table_name,
+  privilege_type,
+  string_agg(column_name, ', ' ORDER BY column_name) AS granted_columns
+FROM information_schema.column_privileges
+WHERE table_schema = 'public'
+  AND grantee IN ('anon', 'authenticated')
+  AND table_name IN ('profiles', 'promo_events', 'arcade_scores', 'arcade_achievements')
+GROUP BY grantee, table_name, privilege_type
+ORDER BY table_name, grantee, privilege_type;
+
+-- 4) Confirm that the M-Pesa callback inbox processor is not executable by client roles.
 -- Expected from prior verification: service_role may execute; anon/authenticated may not.
 SELECT
   to_regprocedure('public.process_fundraiser_callback_inbox(text)') IS NOT NULL AS function_exists,
@@ -82,7 +98,7 @@ SELECT
     THEN has_function_privilege('service_role', to_regprocedure('public.process_fundraiser_callback_inbox(text)'), 'EXECUTE')
     ELSE NULL END AS service_role_can_execute;
 
--- 4) Analytics visibility check: anonymous SELECT must remain false for promo_events.
+-- 5) Analytics visibility check: anonymous SELECT must remain false for promo_events.
 SELECT
   to_regclass('public.promo_events') IS NOT NULL AS promo_events_exists,
   CASE WHEN to_regclass('public.promo_events') IS NOT NULL
