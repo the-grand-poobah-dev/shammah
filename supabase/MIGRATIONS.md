@@ -34,6 +34,8 @@ Confirmed by the user or read-only checks in the current project:
 
 Pending preview validation: `20261104_profile_lock_owner_update.sql` is a new additive migration for the settings-page profile-lock toggle. Do not run it until the development preview containing the matching UI fix is READY; then verify that authenticated users can update only their own `is_locked` field and cannot change role/badge fields. The migration has not been applied merely by adding it to Git.
 
+Arcade preview follow-up: `20261104_arcade_owner_progress_read.sql` grants authenticated members SELECT access to only their own Arcade progress and achievements under RLS. `app/api/arcade/route.js` now forwards the signed-in user's JWT when no service-role key is configured. Apply the migration manually only after the matching preview is READY; score writes remain server-side.
+
 ## All migration files
 
 - `supabase/migrations/001_onboarding.sql`
@@ -93,6 +95,7 @@ Pending preview validation: `20261104_profile_lock_owner_update.sql` is a new ad
 - `supabase/migrations/20261103_payment_and_arcade_client_privileges.sql`
 - `supabase/migrations/20261103_profile_privilege_escalation_hardening.sql`
 - `supabase/migrations/20261104_profile_lock_owner_update.sql`
+- `supabase/migrations/20261104_arcade_owner_progress_read.sql`
 - `supabase/migrations/20261103_security_privilege_hardening.sql`
 - `supabase/migrations/20261104_course_lesson_rls_anon_preview_split.sql`
 - `supabase/migrations/20261104_fundraisers.sql`
