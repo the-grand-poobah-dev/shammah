@@ -164,7 +164,11 @@ async function fetchCoursesFromDb(supabase, userId) {
       supabase.from('course_lessons').select('*').in('course_id', courseIds).order('position', { ascending: true }),
       supabase.from('course_quiz_questions').select('*').order('position', { ascending: true }),
       supabase.from('course_reviews').select('*').in('course_id', courseIds).order('created_at', { ascending: false }),
-      supabase.from('course_enrollments').select('course_id, paid').in('course_id', courseIds),
+      // Aggregate enrollment counts require a trusted server key. Never grant
+      // anon SELECT on private enrollment rows just to show public course counts.
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+        ? supabase.from('course_enrollments').select('course_id, paid').in('course_id', courseIds)
+        : Promise.resolve({ data: [], error: null }),
       userId
         ? supabase.from('course_enrollments').select('*').eq('user_id', userId)
         : Promise.resolve({ data: [], error: null }),
