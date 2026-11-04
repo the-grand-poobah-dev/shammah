@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   BookOpen,
   PlayCircle,
@@ -29,7 +29,7 @@ import {
   SortMenu,
   StatStrip,
   ProgressBar,
-  SkeletonGrid
+  SkeletonLayout
 } from './layoutkit';
 import CourseDetailView from './CourseDetailView';
 import CourseLearnPlayer from './CourseLearnPlayer';
@@ -130,17 +130,20 @@ export default function CoursesView({ session = null, userProfile = null }) {
     return () => clearTimeout(t);
   }, [searchInput]);
 
+  const catalogueRequestRef = useRef(0);
   const loadCatalogue = useCallback(async () => {
+    const requestId = ++catalogueRequestRef.current;
     setLoading(true);
     setError('');
     try {
       await migrateLegacyCourseProgress(userId, userName);
+      if (requestId !== catalogueRequestRef.current) return;
       const list = await listCourses(userId);
-      setCourses(list);
+      if (requestId === catalogueRequestRef.current) setCourses(list);
     } catch (err) {
-      setError(err?.message || 'Unable to load courses right now.');
+      if (requestId === catalogueRequestRef.current) setError(err?.message || 'Unable to load courses right now.');
     } finally {
-      setLoading(false);
+      if (requestId === catalogueRequestRef.current) setLoading(false);
     }
   }, [userId, userName]);
 
@@ -361,7 +364,7 @@ export default function CoursesView({ session = null, userProfile = null }) {
 
             <div className="course-hub-card-rating">
               <Star size={13} fill="#fbbf24" color="#fbbf24" />
-              <strong>{course.rating_avg || 4.9}</strong>
+              <strong>{Number(course.rating_avg ?? 0).toFixed(2)}</strong>
               <span>({Number(course.enrolled_count || 0).toLocaleString()})</span>
             </div>
           </div>
@@ -538,7 +541,7 @@ export default function CoursesView({ session = null, userProfile = null }) {
 
       {loading ? (
         <div style={{ padding: '16px 0' }}>
-          <SkeletonGrid count={4} />
+          <SkeletonLayout layout="tiles" count={4} />
         </div>
       ) : error ? (
         <div className="courses-hub-error-card">

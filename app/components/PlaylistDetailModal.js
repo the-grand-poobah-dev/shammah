@@ -9,11 +9,13 @@ import {
   Headphones,
   Music,
   Trash2,
+  Pencil,
+  Save,
   Lock,
   Globe,
 } from 'lucide-react';
 import { useAudioPlayer } from '../lib/audioPlayer';
-import { getPlaylist, removePlaylistItem } from '../lib/data/mediaApi';
+import { getPlaylist, removePlaylistItem, updatePlaylist, deletePlaylist } from '../lib/data/mediaApi';
 
 function formatDuration(sec) {
   if (!sec) return '0 min';
@@ -30,6 +32,11 @@ export default function PlaylistDetailModal({ playlist, isOpen, onClose, current
   const [mounted, setMounted] = useState(false);
   const [playlistData, setPlaylistData] = useState(playlist);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(playlist?.title || '');
+  const [editDescription, setEditDescription] = useState(playlist?.description || '');
+  const [savingPlaylist, setSavingPlaylist] = useState(false);
+  const [playlistMessage, setPlaylistMessage] = useState('');
 
   const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
 
@@ -41,9 +48,13 @@ export default function PlaylistDetailModal({ playlist, isOpen, onClose, current
     if (!playlist?.id || !isOpen) return;
 
     setLoading(true);
+    setEditTitle(playlist.title || '');
+    setEditDescription(playlist.description || '');
     getPlaylist(playlist.id).then((res) => {
       if (res.data) {
         setPlaylistData(res.data);
+        setEditTitle(res.data.title || '');
+        setEditDescription(res.data.description || '');
       }
       setLoading(false);
     });
@@ -71,6 +82,40 @@ export default function PlaylistDetailModal({ playlist, isOpen, onClose, current
     if (tracks.length > 0) {
       playTrack(tracks[0], tracks);
     }
+  }
+
+  async function handleSavePlaylist(e) {
+    e?.preventDefault?.();
+    setSavingPlaylist(true);
+    const result = await updatePlaylist(playlist.id, { title: editTitle, description: editDescription });
+    setSavingPlaylist(false);
+    if (result.error) {
+      setPlaylistMessage(result.error.message || 'Could not update playlist.');
+      return;
+    }
+    setPlaylistData((prev) => ({ ...prev, ...result.data }));
+    setIsEditing(false);
+    setPlaylistMessage('Playlist updated.');
+  }
+
+  async function handleToggleVisibility() {
+    const result = await updatePlaylist(playlist.id, { isPublic: !playlistData?.is_public });
+    if (result.error) {
+      setPlaylistMessage(result.error.message || 'Could not change playlist visibility.');
+      return;
+    }
+    setPlaylistData((prev) => ({ ...prev, ...result.data }));
+    setPlaylistMessage(result.data.is_public ? 'Playlist is public.' : 'Playlist is private.');
+  }
+
+  async function handleDeletePlaylist() {
+    if (!window.confirm('Delete this playlist? This cannot be undone.')) return;
+    const result = await deletePlaylist(playlist.id);
+    if (result.error) {
+      setPlaylistMessage(result.error.message || 'Could not delete playlist.');
+      return;
+    }
+    onClose();
   }
 
   async function handleRemoveTrack(trackId, e) {
@@ -191,27 +236,22 @@ export default function PlaylistDetailModal({ playlist, isOpen, onClose, current
               )}
             </div>
 
-            <h3
-              style={{
-                fontSize: '18px',
-                fontWeight: 700,
-                lineHeight: 1.3,
-                margin: '4px 0 6px',
-                color: 'var(--ink, #ffffff)',
-              }}
-            >
-              {playlistData?.title}
-            </h3>
-            <p
-              style={{
-                fontSize: '12px',
-                color: 'var(--ink-muted, #94a3b8)',
-                margin: 0,
-                lineHeight: 1.4,
-              }}
-            >
-              {playlistData?.description || 'Curated community listening collection.'}
-            </p>
+            {isEditing && isOwner ? (
+              <form onSubmit={handleSavePlaylist} style={{ display: 'grid', gap: '8px', marginTop: '6px' }}>
+                <input aria-label="Playlist title" required maxLength={120} value={editTitle} onChange={(e) => setEditTitle(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }} />
+                <textarea aria-label="Playlist description" rows={2} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }} />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="submit" disabled={savingPlaylist || !editTitle.trim()} style={{ minHeight: '40px', padding: '0 12px', border: 0, borderRadius: '9px', background: 'var(--teal)', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Save size={15} />{savingPlaylist ? 'Saving…' : 'Save'}</button>
+                  <button type="button" onClick={() => setIsEditing(false)} style={{ minHeight: '40px', padding: '0 12px', border: '1px solid var(--border)', borderRadius: '9px', background: 'transparent', color: 'var(--ink)' }}>Cancel</button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, lineHeight: 1.3, margin: '4px 0 6px', color: 'var(--ink, #ffffff)' }}>{playlistData?.title}</h3>
+                <p style={{ fontSize: '12px', color: 'var(--ink-muted, #94a3b8)', margin: 0, lineHeight: 1.4 }}>{playlistData?.description || 'Curated community listening collection.'}</p>
+              </>
+            )}
+            {playlistMessage && <p role="status" style={{ fontSize: '11px', color: 'var(--ink-muted)', margin: '6px 0 0' }}>{playlistMessage}</p>}
           </div>
         </div>
 
@@ -249,9 +289,16 @@ export default function PlaylistDetailModal({ playlist, isOpen, onClose, current
             <span>Play Playlist ({tracks.length})</span>
           </button>
 
-          <span style={{ fontSize: '12px', color: 'var(--ink-muted, #94a3b8)' }}>
-            Curator: {playlistData?.owner?.display_name || playlistData?.curator || 'Community'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <span style={{ fontSize: '12px', color: 'var(--ink-muted, #94a3b8)' }}>
+              Curator: {playlistData?.owner?.display_name || playlistData?.curator || 'Community'}
+            </span>
+            {isOwner && <>
+              <button type="button" onClick={() => { setEditTitle(playlistData?.title || ''); setEditDescription(playlistData?.description || ''); setIsEditing((v) => !v); }} aria-label="Edit playlist details" title="Edit playlist" style={{ minWidth: '40px', minHeight: '40px', border: '1px solid var(--border)', borderRadius: '10px', background: 'transparent', color: 'var(--ink)' }}><Pencil size={15} /></button>
+              <button type="button" onClick={handleToggleVisibility} aria-label={playlistData?.is_public ? 'Make playlist private' : 'Make playlist public'} title={playlistData?.is_public ? 'Make private' : 'Make public'} style={{ minWidth: '40px', minHeight: '40px', border: '1px solid var(--border)', borderRadius: '10px', background: 'transparent', color: 'var(--ink)' }}>{playlistData?.is_public ? <Lock size={15} /> : <Globe size={15} />}</button>
+              <button type="button" onClick={handleDeletePlaylist} aria-label="Delete playlist" title="Delete playlist" style={{ minWidth: '40px', minHeight: '40px', border: '1px solid rgba(239,68,68,.4)', borderRadius: '10px', background: 'transparent', color: '#ef4444' }}><Trash2 size={15} /></button>
+            </>}
+          </div>
         </div>
 
         {/* Tracks List */}

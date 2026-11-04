@@ -5,12 +5,14 @@ import { CATEGORY_STYLES, categoryStyle, initials, cleanDisplayName } from './li
 import { useLayoutMode } from './lib/useLayoutMode';
 import PostCard from './components/PostCard';
 import CreatePostBox from './components/CreatePostBox';
+import ReelsRail from './components/promos/ReelsRail';
+import PromoSlot from './components/promos/PromoSlot';
 import CreatePostModal from './components/CreatePostModal';
 import Link from 'next/link';
 import Avatar from './components/Avatar';
 import MemberName from './components/MemberName';
 import OnboardingWizard from './components/OnboardingWizard';
-import { uploadPostMedia } from './lib/mediaUpload';
+import { uploadPostMedia, detectMediaType, getImageSize, getVideoMeta } from './lib/mediaUpload';
 import {
   sortPostsWithPinned,
   isUserAdmin,
@@ -26,6 +28,7 @@ import StatusTray from './components/StatusTray';
 import InboxView from './components/InboxView';
 import VideosView from './components/VideosView';
 import ReelsFeed from './components/ReelsFeed';
+import LiveNowCard from './components/LiveNowCard';
 import AudioView from './components/AudioView';
 import PollsView from './components/PollsView';
 import CoursesView from './components/CoursesView';
@@ -122,6 +125,7 @@ export default function Feed() {
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState('');
   const [mediaFile, setMediaFile] = useState(null);
+  const [selectedLibraryMedia, setSelectedLibraryMedia] = useState(null);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [mediaUploading, setMediaUploading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -963,7 +967,7 @@ export default function Feed() {
       return;
     }
     const text = composeText.trim();
-    if ((!text && !mediaFile) || !session) return;
+    if ((!text && !mediaFile && !selectedLibraryMedia) || !session) return;
     const cleanOptions = pollOptions.filter((o) => o.label.trim() || o.file);
     if (isPoll && cleanOptions.length < 2) {
       setPostError('A poll needs at least 2 options.');
@@ -1005,7 +1009,10 @@ export default function Feed() {
     // Real media upload (image / video / audio)
     let media_url = null;
     let media_type = null;
-    if (mediaFile) {
+    if (selectedLibraryMedia && !mediaFile) {
+      media_url = selectedLibraryMedia.media_url;
+      media_type = selectedLibraryMedia.kind;
+    } else if (mediaFile) {
       setMediaUploading(true);
       try {
         const uploaded = await uploadPostMedia(mediaFile, session.user.id);
@@ -1018,6 +1025,28 @@ export default function Feed() {
         return;
       }
       setMediaUploading(false);
+    }
+
+    let media_meta = {};
+    if (selectedLibraryMedia && !mediaFile) {
+      media_meta = {
+        provider: selectedLibraryMedia.provider || 'media-library',
+        gif_id: selectedLibraryMedia.kind === 'gif' ? selectedLibraryMedia.id || null : null,
+        width: selectedLibraryMedia.width || null,
+        height: selectedLibraryMedia.height || null,
+        duration: selectedLibraryMedia.duration_seconds || null,
+        aspect: selectedLibraryMedia.width && selectedLibraryMedia.height
+          ? selectedLibraryMedia.width / selectedLibraryMedia.height
+          : null,
+        thumbnail_url: selectedLibraryMedia.thumb_url || null,
+      };
+    } else if (mediaFile) {
+      try {
+        if (media_type === 'video') media_meta = await getVideoMeta(mediaFile);
+        else if (media_type === 'image' || media_type === 'gif') media_meta = await getImageSize(mediaFile);
+      } catch {
+        // Metadata is optional; a valid upload should still be allowed.
+      }
     }
 
     const isPinnedToSave = isAdmin ? isPinnedAnnouncement : false;
@@ -1051,6 +1080,7 @@ export default function Feed() {
         text_content: text || null,
         media_url,
         media_type,
+        media_meta,
         visibility: validVisibility,
         poll_expires_at: pollExpiresAtToSave,
         location_label: locationLabelToSave,
@@ -1085,6 +1115,7 @@ export default function Feed() {
       text_content: text || null,
       media_url,
       media_type,
+      media_meta,
       created_at: new Date().toISOString(),
       category_id: composeCategory,
       church_id: profile?.church_id ?? null,
@@ -1195,6 +1226,7 @@ export default function Feed() {
     setIsPinnedAnnouncement(false);
     setPollOptions([{ label: '', file: null, preview: null }, { label: '', file: null, preview: null }]);
     setMediaFile(null);
+    setSelectedLibraryMedia(null);
     setMediaPreview(null);
     setShowCreateModal(false);
     // Show the new post: if a different category is filtered, jump to the one just posted in
@@ -1706,6 +1738,8 @@ export default function Feed() {
               }}
             />
 
+            <LiveNowCard />
+
             {/* Quick Bar: Google Workspace & Church Community Hub */}
             <div className="gws-hero-card my-3 box-border w-full max-w-full overflow-hidden">
               <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1839,6 +1873,8 @@ export default function Feed() {
             setPollOptions={setPollOptions}
             mediaFile={mediaFile}
             setMediaFile={setMediaFile}
+            selectedLibraryMedia={selectedLibraryMedia}
+            setSelectedLibraryMedia={setSelectedLibraryMedia}
             mediaPreview={mediaPreview}
             setMediaPreview={setMediaPreview}
             mediaUploading={mediaUploading}
@@ -1851,6 +1887,8 @@ export default function Feed() {
             openAuth={openAuth}
           />
         )}
+
+        {tab === 'home' && section === 'all' && !searchTerm && <ReelsRail />}
 
         {/* Dynamic Homefeed Widgets: Churches to follow & Channels Explore */}
         {tab === 'home' && section === 'all' && !searchTerm && (
@@ -1901,20 +1939,12 @@ export default function Feed() {
           visiblePosts.map((p, i) => {
             // Intermittent shelf insertion algorithm:
             // Appears after every 3-5 posts even if user scrolls deep downwards.
-            // i=1 (slot 0) -> Reels & Testimonies
-            // i=4 (slot 1) -> Polls
-            // i=8 (slot 2) -> Audio Sermons & Worship
-            // i=12 (slot 3) -> Daily Verse of the Day
-            // i=16 (slot 4) -> Courses & Discipleship Academy
-            // i=20 (slot 5) -> Kingdom Causes & Fundraisers
-            // i=24 (slot 6) -> Faith Challenges & Streaks
-            // i=28 (slot 7) -> Faith Arcade Games
-            // i=32 (slot 8) -> People to Follow
-            // i=36 (slot 9) -> Cycles through again seamlessly!
+            // A dedicated ReelsRail sits above the feed. Rotate section shelves
+            // through the existing slots and add a dismissible promo every six posts.
             let interleavedWidget = null;
             if (!searchTerm) {
-              if (i === 1) {
-                interleavedWidget = <TrendingReelsCard onSelectSection={(secId) => setSection(secId)} />;
+              if (i > 0 && i % 6 === 0) {
+                interleavedWidget = <PromoSlot onSelectSection={(secId) => setSection(secId)} />;
               } else if (i === 4) {
                 interleavedWidget = <PollsShelfWidget onSelectSection={(secId) => setSection(secId)} />;
               } else if (i > 4 && (i - 4) % 4 === 0) {
@@ -2006,6 +2036,8 @@ export default function Feed() {
         setPollOptions={setPollOptions}
         mediaFile={mediaFile}
         setMediaFile={setMediaFile}
+        selectedLibraryMedia={selectedLibraryMedia}
+        setSelectedLibraryMedia={setSelectedLibraryMedia}
         mediaPreview={mediaPreview}
         setMediaPreview={setMediaPreview}
         mediaUploading={mediaUploading}

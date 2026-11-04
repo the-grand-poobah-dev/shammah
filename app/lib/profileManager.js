@@ -49,13 +49,18 @@ export async function updateProfileSettings(userId, { isLocked, inboxPermission 
 
     // Sync to Supabase profiles table if real UUID
     if (userId && isValidUuid(userId)) {
-      const updates = {};
-      if (isLocked !== undefined) updates.is_locked = isLocked;
-      if (inboxPermission !== undefined) updates.inbox_permission = inboxPermission;
-
-      const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
-      if (error) {
-        console.warn('Failed to sync profile settings to Supabase:', error.message);
+      if (isLocked !== undefined) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ is_locked: isLocked })
+          .eq('id', userId);
+        if (error) console.warn('Failed to sync profile lock setting to Supabase:', error.message);
+      }
+      if (inboxPermission !== undefined) {
+        const { error } = await supabase
+          .from('profile_private')
+          .upsert({ id: userId, inbox_permission: inboxPermission }, { onConflict: 'id' });
+        if (error) console.warn('Failed to sync inbox permission to private profile:', error.message);
       }
     }
   } catch (err) {

@@ -25,7 +25,6 @@ import {
 import {
   BIBLE_BOOKS,
   BIBLE_TRANSLATIONS,
-  getChapterVerses,
   getSavedNotes,
   saveNote,
   deleteNote,
@@ -46,10 +45,33 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   const now = useRelativeTimeTick();
   const [selectedBookId, setSelectedBookId] = useState('PSA');
   const [selectedChapter, setSelectedChapter] = useState(23);
-  const [translation, setTranslation] = useState('NIV');
+  const [jumpVerse, setJumpVerse] = useState('');
+  const [pendingVerseJump, setPendingVerseJump] = useState(null);
+  const [translation, setTranslation] = useState('KJV');
+  const [chapterVerses, setChapterVerses] = useState([]);
+  const [chapterLoading, setChapterLoading] = useState(true);
+  const [chapterError, setChapterError] = useState('');
+  const [chapterRetry, setChapterRetry] = useState(0);
+  const [parallelEnabled, setParallelEnabled] = useState(false);
+  const [parallelVerses, setParallelVerses] = useState([]);
+  const [parallelLoading, setParallelLoading] = useState(false);
+  const [parallelError, setParallelError] = useState('');
+  const [parallelRetry, setParallelRetry] = useState(0);
+  const [bookDownloadProgress, setBookDownloadProgress] = useState(null);
   const [isChapterOffline, setIsChapterOffline] = useState(false);
   const [testamentFilter, setTestamentFilter] = useState('ALL'); // ALL, OT, NT
-  const [searchQuery, setSearchQuery] = useState('');
+  const [scriptureSearchQuery, setScriptureSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [readingPlans, setReadingPlans] = useState([]);
+  const [readingPlanDays, setReadingPlanDays] = useState([]);
+  const [readingPlanProgress, setReadingPlanProgress] = useState([]);
+  const [readingPlansLoading, setReadingPlansLoading] = useState(true);
+  const [readingPlansError, setReadingPlansError] = useState('');
+  const [activePlanId, setActivePlanId] = useState('');
+  const [savingPlanProgress, setSavingPlanProgress] = useState(false);
+  const [bookmarkedVerseKeys, setBookmarkedVerseKeys] = useState([]);
   const [highlights, setHighlights] = useState({});
   const [selectedHighlightColor, setSelectedHighlightColor] = useState('gold');
   const [toastMsg, setToastMsg] = useState('');
@@ -75,9 +97,36 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
   useEffect(() => {
     setHighlights(getVerseHighlights());
     setNotes(getSavedNotes());
+    if (session?.access_token) {
+      fetch('/api/bible/notes', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        .then(async (response) => {
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload?.error || 'Could not sync notes.');
+          const cloudNotes = (payload.notes || []).map((note) => ({
+            id: note.id,
+            title: note.title || 'Bible note',
+            speaker: note.speaker || '',
+            church: note.church || '',
+            scripture: note.ref_range || `${note.book || note.book_id || 'Bible'} ${note.chapter}${note.verse ? `:${note.verse}` : ''}`,
+            content: note.content || note.body_md || '',
+            tags: Array.isArray(note.tags) ? note.tags : [],
+            color: note.color || '#0ea5e9',
+            createdAt: note.created_at,
+            updatedAt: note.updated_at
+          }));
+          setNotes((localNotes) => [
+            ...cloudNotes,
+            ...localNotes.filter((localNote) => !cloudNotes.some((cloudNote) => cloudNote.id === localNote.id))
+          ]);
+        })
+        .catch(() => {});
+    }
 
     function onNotesUpdated(e) {
-      if (e.detail) setNotes(e.detail);
+      if (e.detail) setNotes((current) => [
+        ...e.detail,
+        ...current.filter((note) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(note.id)) && !e.detail.some((localNote) => localNote.id === note.id))
+      ]);
     }
     function onHighlightsUpdated(e) {
       if (e.detail) setHighlights(e.detail);
@@ -97,24 +146,209 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       window.removeEventListener('shammah:highlights-updated', onHighlightsUpdated);
       window.removeEventListener('shammah:open-sermon-note', onOpenSermonNote);
     };
-  }, [currentBook?.name, selectedChapter]);
+  }, [currentBook?.name, selectedChapter, session?.access_token]);
 
-  const verses = useMemo(
-    () => getChapterVerses(currentBook.name, selectedChapter, translation),
-    [currentBook.name, selectedChapter, translation]
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    async function loadChapter() {
+      setChapterLoading(true);
+      setChapterError('');
+      try {
+        const response = await fetch(`/api/bible/chapter?translation=${encodeURIComponent(translation)}&book=${encodeURIComponent(currentBook.id)}&chapter=${selectedChapter}`, { signal: controller.signal });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Could not load this chapter.');
+        if (cancelled) return;
+        setChapterVerses(Array.isArray(payload.verses) ? payload.verses : []);
+        saveOfflineBibleChapter(currentBook.id, currentBook.name, selectedChapter, payload.verses || [], translation);
+        setIsChapterOffline(true);
+      } catch (error) {
+        if (cancelled || error?.name === 'AbortError') return;
+        const offlineChapter = getOfflineBibleChapter(currentBook.name, selectedChapter, translation);
+        if (offlineChapter?.verses?.length) {
+          setChapterVerses(offlineChapter.verses);
+          setChapterError('');
+          showToast('You are offline. Showing your saved chapter.');
+        } else {
+          setChapterVerses([]);
+          setChapterError(error?.message || 'Could not load this chapter. Check your connection and retry.');
+        }
+      } finally {
+        if (!cancelled) setChapterLoading(false);
+      }
+    }
+    loadChapter();
+    return () => { cancelled = true; controller.abort(); };
+  }, [currentBook.id, currentBook.name, selectedChapter, translation, chapterRetry]);
+
+  const parallelTranslation = translation === 'KJV' ? 'WEB' : 'KJV';
+
+  useEffect(() => {
+    if (!parallelEnabled) return undefined;
+    let cancelled = false;
+    const controller = new AbortController();
+    async function loadParallel() {
+      setParallelLoading(true);
+      setParallelError('');
+      try {
+        const response = await fetch(`/api/bible/chapter?translation=${parallelTranslation}&book=${encodeURIComponent(currentBook.id)}&chapter=${selectedChapter}`, { signal: controller.signal });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Could not load the parallel translation.');
+        if (!cancelled) setParallelVerses(payload.verses || []);
+      } catch (error) {
+        if (!cancelled && error?.name !== 'AbortError') { setParallelVerses([]); setParallelError(error?.message || 'Could not load the parallel translation.'); }
+      } finally {
+        if (!cancelled) setParallelLoading(false);
+      }
+    }
+    loadParallel();
+    return () => { cancelled = true; controller.abort(); };
+  }, [parallelEnabled, parallelTranslation, currentBook.id, selectedChapter, parallelRetry]);
+
+  // Warm the next chapter in the server cache without blocking the current reading.
+  useEffect(() => {
+    if (selectedChapter >= currentBook.chapters) return;
+    fetch(`/api/bible/chapter?translation=${encodeURIComponent(translation)}&book=${encodeURIComponent(currentBook.id)}&chapter=${selectedChapter + 1}`).catch(() => {});
+  }, [currentBook.id, currentBook.chapters, selectedChapter, translation]);
+
+  const verses = chapterVerses;
+
+  useEffect(() => {
+    if (!session?.access_token) return undefined;
+    let cancelled = false;
+    async function loadHighlights() {
+      try {
+        const response = await fetch(`/api/bible/study?type=highlights&translation=${encodeURIComponent(translation)}&book_id=${encodeURIComponent(currentBook.id)}&book=${encodeURIComponent(currentBook.name)}&chapter=${selectedChapter}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const payload = await response.json();
+        if (!response.ok) return;
+        const bookName = currentBook.name;
+        if (!cancelled) setHighlights((previous) => {
+          const next = { ...previous };
+          (payload.items || []).forEach((item) => { next[`${bookName}-${item.chapter}-${item.verse}`] = item.color || 'gold'; });
+          return next;
+        });
+      } catch {}
+    }
+    loadHighlights();
+    return () => { cancelled = true; };
+  }, [session?.access_token, currentBook.id, currentBook.name, selectedChapter, translation]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadBookmarks() {
+      const localKey = 'shammah_bible_bookmarks_v1';
+      let local = [];
+      try { local = JSON.parse(window.localStorage.getItem(localKey) || '[]'); } catch {}
+      const localMatches = local.filter((item) => item.translation === translation && item.book_id === currentBook.id && Number(item.chapter) === selectedChapter);
+      if (!session?.access_token) {
+        setBookmarkedVerseKeys(localMatches.map((item) => String(item.verse)));
+        return;
+      }
+      try {
+        const response = await fetch(`/api/bible/study?type=bookmarks&translation=${encodeURIComponent(translation)}&book_id=${encodeURIComponent(currentBook.id)}&chapter=${selectedChapter}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Could not load bookmarks.');
+        if (!cancelled) setBookmarkedVerseKeys((payload.items || []).map((item) => String(item.verse)));
+      } catch {
+        if (!cancelled) setBookmarkedVerseKeys(localMatches.map((item) => String(item.verse)));
+      }
+    }
+    loadBookmarks();
+    return () => { cancelled = true; };
+  }, [session?.access_token, currentBook.id, selectedChapter, translation]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPlans() {
+      setReadingPlansLoading(true);
+      setReadingPlansError('');
+      try {
+        const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+        const response = await fetch('/api/bible/plans', { headers });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Could not load reading plans.');
+        if (!cancelled) { setReadingPlans(payload.plans || []); setReadingPlanDays(payload.planDays || []); setReadingPlanProgress(payload.progress || []); }
+      } catch (error) {
+        if (!cancelled) setReadingPlansError(error?.message || 'Could not load reading plans.');
+      } finally {
+        if (!cancelled) setReadingPlansLoading(false);
+      }
+    }
+    loadPlans();
+    return () => { cancelled = true; };
+  }, [session?.access_token]);
+
+  async function markReadingPlanDay(plan) {
+    if (!session?.access_token) {
+      showToast('Sign in to save your reading plan progress.');
+      if (typeof openAuth === 'function') openAuth();
+      return;
+    }
+    const completed = readingPlanProgress.filter((item) => item.plan_id === plan.id).length;
+    const day = Math.min(plan.days, completed + 1);
+    if (readingPlanProgress.some((item) => item.plan_id === plan.id && item.day === day)) return;
+    setSavingPlanProgress(true);
+    try {
+      const response = await fetch('/api/bible/plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ planId: plan.id, day })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || 'Could not save reading progress.');
+      setReadingPlanProgress((items) => [...items.filter((item) => !(item.plan_id === plan.id && item.day === day)), { plan_id: plan.id, day, completed_on: new Date().toISOString().slice(0, 10) }]);
+      showToast(`Day ${day} marked complete!`);
+    } catch (error) {
+      showToast(error?.message || 'Could not save reading progress.');
+    } finally {
+      setSavingPlanProgress(false);
+    }
+  }
+
+  useEffect(() => {
+    const query = scriptureSearchQuery.trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchError('');
+      setSearching(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/bible/search?q=${encodeURIComponent(query)}&translation=${encodeURIComponent(translation)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Search could not be completed.');
+        if (!cancelled) { setSearchResults(payload.results || []); setSearchError(''); }
+      } catch (error) {
+        if (!cancelled) { setSearchResults([]); setSearchError(error?.message || 'Search failed. Retry in a moment.'); }
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [scriptureSearchQuery, translation]);
+
+  const filteredBooks = useMemo(
+    () => BIBLE_BOOKS.filter((book) => testamentFilter === 'ALL' || book.testament === testamentFilter),
+    [testamentFilter]
   );
 
-  const filteredBooks = useMemo(() => {
-    return BIBLE_BOOKS.filter((b) => {
-      if (testamentFilter === 'OT' && b.testament !== 'OT') return false;
-      if (testamentFilter === 'NT' && b.testament !== 'NT') return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        return b.name.toLowerCase().includes(q) || b.genre.toLowerCase().includes(q);
-      }
-      return true;
-    });
-  }, [testamentFilter, searchQuery]);
+  function jumpToPassage() {
+    const verseNumber = Number.parseInt(jumpVerse, 10);
+    setPendingVerseJump(Number.isInteger(verseNumber) && verseNumber > 0 ? verseNumber : null);
+    setChapterRetry((n) => n + 1);
+    document.getElementById('bible-chapter-reader')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  useEffect(() => {
+    if (chapterLoading || pendingVerseJump == null) return;
+    const target = document.getElementById(`bible-verse-${pendingVerseJump}`);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    else showToast(`Verse ${pendingVerseJump} was not found in this chapter.`);
+    setPendingVerseJump(null);
+  }, [chapterLoading, pendingVerseJump, chapterVerses]);
 
   function showToast(msg) {
     setToastMsg(msg);
@@ -148,12 +382,79 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
     }
   }
 
+  async function handleDownloadBookOffline() {
+    if (bookDownloadProgress) return;
+    const total = currentBook.chapters;
+    setBookDownloadProgress({ done: 0, total });
+    try {
+      for (let chapterNumber = 1; chapterNumber <= total; chapterNumber += 1) {
+        let chapterData = chapterNumber === selectedChapter ? verses : null;
+        if (!chapterData?.length) {
+          const response = await fetch(`/api/bible/chapter?translation=${encodeURIComponent(translation)}&book=${encodeURIComponent(currentBook.id)}&chapter=${chapterNumber}`);
+          const payload = await response.json();
+          if (!response.ok || !Array.isArray(payload.verses) || !payload.verses.length) throw new Error(payload?.error || `Could not download chapter ${chapterNumber}.`);
+          chapterData = payload.verses;
+        }
+        saveOfflineBibleChapter(currentBook.id, currentBook.name, chapterNumber, chapterData, translation);
+        setBookDownloadProgress({ done: chapterNumber, total });
+      }
+      let storageMessage = '';
+      try {
+        if (navigator.storage?.estimate) {
+          const estimate = await navigator.storage.estimate();
+          if (Number.isFinite(estimate.usage)) storageMessage = ` Device storage currently uses ${(estimate.usage / (1024 * 1024)).toFixed(1)} MB.`;
+        }
+      } catch {}
+      showToast(`${currentBook.name} saved for offline reading (${total} chapters).${storageMessage}`);
+    } catch (error) {
+      showToast(error?.message || 'The book download stopped. Download again to continue.');
+    } finally {
+      setBookDownloadProgress(null);
+      setIsChapterOffline(isBibleChapterSavedOffline(currentBook.name, selectedChapter, translation));
+    }
+  }
+
   function handleHighlight(vNum) {
     const key = `${currentBook.name}-${selectedChapter}-${vNum}`;
+    const alreadyHighlighted = Boolean(highlights[key]);
     const next = toggleVerseHighlight(key, selectedHighlightColor);
     setHighlights({ ...next });
+    if (session?.access_token) {
+      fetch('/api/bible/study', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ type: 'highlight', action: alreadyHighlighted ? 'remove' : 'save', translation, book: currentBook.name, book_id: currentBook.id, chapter: selectedChapter, verse: vNum, color: selectedHighlightColor })
+      }).then(async (response) => { if (!response.ok) { const payload = await response.json(); throw new Error(payload?.error || 'Could not sync highlight.'); } }).catch((error) => showToast(error?.message || 'Highlight saved on this device only.'));
+    }
     playSound('reaction');
-    showToast('Verse highlighted!');
+    showToast(alreadyHighlighted ? 'Highlight removed.' : 'Verse highlighted!');
+  }
+
+  async function handleBookmarkVerse(vNum) {
+    const item = { translation, book_id: currentBook.id, chapter: selectedChapter, verse: vNum };
+    const key = 'shammah_bible_bookmarks_v1';
+    let local = [];
+    try { local = JSON.parse(window.localStorage.getItem(key) || '[]'); } catch {}
+    const exists = bookmarkedVerseKeys.includes(String(vNum)) || local.some((entry) => entry.translation === item.translation && entry.book_id === item.book_id && Number(entry.chapter) === item.chapter && Number(entry.verse) === item.verse);
+    const next = exists ? local.filter((entry) => !(entry.translation === item.translation && entry.book_id === item.book_id && Number(entry.chapter) === item.chapter && Number(entry.verse) === item.verse)) : [...local, item];
+    try { window.localStorage.setItem(key, JSON.stringify(next)); } catch {}
+    setBookmarkedVerseKeys((items) => exists ? items.filter((value) => value !== String(vNum)) : [...new Set([...items, String(vNum)])]);
+    if (session?.access_token) {
+      try {
+        const response = await fetch('/api/bible/study', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ type: 'bookmark', action: exists ? 'remove' : 'save', ...item })
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Could not sync bookmark.');
+        showToast(exists ? 'Bookmark removed.' : 'Bookmark saved.');
+      } catch (error) {
+        showToast(error?.message || 'Bookmark saved on this device only.');
+      }
+    } else {
+      showToast(exists ? 'Bookmark removed from this device.' : 'Bookmark saved on this device.');
+    }
   }
 
   async function handleShareVerse(v) {
@@ -221,16 +522,67 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       tags: tagsArr,
     });
     setNotes(saved);
+    const localNoteId = activeNote?.id || saved[0]?.id;
     setShowNotesDrawer(false);
     setActiveNote(null);
     showToast('Sermon note saved offline! 📝');
+    if (session?.access_token) {
+      const verseMatch = noteForm.scripture.match(/:(\d+)/);
+      fetch('/api/bible/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          id: localNoteId,
+          title: noteForm.title.trim(),
+          speaker: noteForm.speaker.trim(),
+          church: noteForm.church.trim(),
+          scripture: noteForm.scripture.trim(),
+          content: noteForm.content.trim(),
+          tags: tagsArr,
+          book: currentBook.name,
+          book_id: currentBook.id,
+          chapter: selectedChapter,
+          verse: verseMatch ? Number(verseMatch[1]) : null,
+          translation
+        })
+      }).then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || 'Note sync failed.');
+        const cloud = payload.note;
+        const cloudNote = {
+          id: cloud.id,
+          title: cloud.title || 'Bible note',
+          speaker: cloud.speaker || '',
+          church: cloud.church || '',
+          scripture: cloud.ref_range || noteForm.scripture.trim(),
+          content: cloud.content || cloud.body_md || '',
+          tags: Array.isArray(cloud.tags) ? cloud.tags : tagsArr,
+          color: cloud.color || '#0ea5e9',
+          createdAt: cloud.created_at,
+          updatedAt: cloud.updated_at
+        };
+        const current = getSavedNotes();
+        const synced = current.map((item) => item.id === localNoteId ? cloudNote : item);
+        window.localStorage.setItem('shammah_sermon_notes_v1', JSON.stringify(synced));
+        setNotes([
+          cloudNote,
+          ...notes.filter((item) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(item.id)) && item.id !== localNoteId && item.id !== cloudNote.id),
+          ...synced.filter((item) => item.id !== cloudNote.id)
+        ]);
+      }).catch((error) => showToast(error?.message || 'Note saved locally; cloud sync failed.'));
+    }
     playSound('reaction');
   }
 
   function handleDeleteNote(id) {
     if (window.confirm('Delete this sermon note?')) {
       const remaining = deleteNote(id);
-      setNotes(remaining);
+      setNotes((items) => [...items.filter((item) => item.id !== id), ...remaining.filter((localItem) => !items.some((item) => item.id === localItem.id))]);
+      if (session?.access_token && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id))) {
+        fetch('/api/bible/notes', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ id }) })
+          .then(async (response) => { if (!response.ok) { const payload = await response.json(); throw new Error(payload?.error || 'Cloud delete failed.'); } })
+          .catch((error) => showToast(error?.message || 'Could not sync note deletion.'));
+      }
       if (activeNote?.id === id) {
         setShowNotesDrawer(false);
         setActiveNote(null);
@@ -246,17 +598,17 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         <div className="bible-hero-topline">
           <div className="bible-badge-tag">
             <BookOpen size={16} />
-            <span>Complete Holy Bible · Word of Life</span>
+            <span>Holy Bible · Word of Life</span>
           </div>
-          <span className="bible-offline-chip" title="Complete Bible and notes are fully available offline on this device">
+          <span className="bible-offline-chip" title="Chapters you open can be saved for offline reading">
             <WifiOff size={13} />
-            <span>100% Offline Ready</span>
+            <span>Offline chapters</span>
           </span>
         </div>
 
         <h2 className="bible-title">Thy Word is a Lamp Unto My Feet</h2>
         <p className="bible-subtitle">
-          Read the complete NIV Bible, highlight life-giving verses, and capture sermon & fellowship notes during service.
+          Read Scripture in KJV or WEB, highlight verses, and capture sermon and fellowship notes.
         </p>
 
         {/* Quick Action Ribbon */}
@@ -281,6 +633,58 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
       </div>
 
       {toastMsg && <div className="video-toast-pill">{toastMsg}</div>}
+
+      {/* Reading plans */}
+      <section className="bible-reading-plans" style={{ margin: '0 0 16px', padding: '14px', border: '1px solid var(--border)', borderRadius: '16px', background: 'var(--surface)' }} aria-labelledby="bible-reading-plans-title">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+          <div><h3 id="bible-reading-plans-title" style={{ margin: 0 }}>Reading Plans</h3><p style={{ margin: '4px 0 0', color: 'var(--ink-muted)', fontSize: '0.9rem' }}>Build a steady rhythm in Scripture.</p></div>
+          <span style={{ color: 'var(--ink-muted)', fontSize: '0.85rem' }}>{readingPlans.length} plans</span>
+        </div>
+        {readingPlansLoading ? <p role="status">Loading reading plans…</p> : readingPlansError ? <p role="alert">{readingPlansError} <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setReadingPlansLoading(true) || fetch('/api/bible/plans').then(r => r.json()).then(p => { setReadingPlans(p.plans || []); setReadingPlansError(''); }).catch(() => setReadingPlansError('Could not load reading plans.')).finally(() => setReadingPlansLoading(false))}>Retry</button></p> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '10px' }}>
+            {readingPlans.map((plan) => {
+              const done = readingPlanProgress.filter((item) => item.plan_id === plan.id).length;
+              const isActive = activePlanId === plan.id;
+              const nextDay = Math.min(done + 1, plan.days);
+              const nextRefs = readingPlanDays.find((item) => item.plan_id === plan.id && item.day === nextDay)?.refs || [];
+              return <article key={plan.id} style={{ border: '1px solid var(--border)', borderTop: `3px solid ${plan.accent || '#0d9488'}`, borderRadius: '12px', padding: '12px', background: 'var(--bg)' }}>
+                <h4 style={{ margin: '0 0 5px' }}>{plan.title}</h4>
+                <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', margin: '0 0 8px' }}>{plan.description}</p>
+                <p style={{ fontSize: '0.84rem', margin: '0 0 9px' }}>{done} / {plan.days} days complete</p>
+                <div style={{ height: '5px', background: 'var(--border)', borderRadius: '99px', overflow: 'hidden', marginBottom: '10px' }}><div style={{ width: `${Math.min(100, (done / plan.days) * 100)}%`, height: '100%', background: plan.accent || '#0d9488' }} /></div>
+                <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
+                  <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setActivePlanId(isActive ? '' : plan.id)}>{isActive ? 'Hide plan' : 'View plan'}</button>
+                  {done < plan.days && <button type="button" className="cx-btn cx-btn-primary" disabled={savingPlanProgress} onClick={() => markReadingPlanDay(plan)}>{savingPlanProgress ? 'Saving…' : 'Complete next day'}</button>}
+                </div>
+                {isActive && <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}><strong>Next reading</strong><p style={{ margin: '5px 0 0', color: 'var(--ink-muted)', fontSize: '0.9rem' }}>Day {nextDay} of {plan.days}</p><ul style={{ margin: '6px 0 0', paddingLeft: '18px', color: 'var(--ink-muted)', fontSize: '0.9rem' }}>{nextRefs.map((ref, index) => <li key={index}>{String(ref).replace(/^\"|\"$/g, '')}</li>)}</ul></div>}
+              </article>;
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Search references and cached scripture text */}
+      <div className="bible-search-panel" style={{ margin: '0 0 14px', padding: '12px', border: '1px solid var(--border)', borderRadius: '14px', background: 'var(--surface)' }}>
+        <label htmlFor="bible-scripture-search" style={{ display: 'block', fontWeight: 600, marginBottom: '7px' }}>Search Scripture or enter a reference</label>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <Search size={17} aria-hidden="true" />
+          <input id="bible-scripture-search" type="search" value={scriptureSearchQuery} onChange={(e) => setScriptureSearchQuery(e.target.value)} placeholder="e.g. John 3:16 or faith" aria-label="Search Bible text or reference" style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)' }} />
+          {scriptureSearchQuery && <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setScriptureSearchQuery('')} aria-label="Clear Bible search">Clear</button>}
+        </div>
+        {scriptureSearchQuery.trim().length >= 2 && (
+          <div style={{ marginTop: '10px' }} aria-live="polite">
+            {searching ? <p>Searching Scripture…</p> : searchError ? <p role="alert">{searchError} <button type="button" className="cx-btn cx-btn-ghost" onClick={() => setScriptureSearchQuery((q) => q + ' ')}>Retry</button></p> : searchResults.length ? (
+              <div style={{ display: 'grid', gap: '6px' }}>
+                {searchResults.slice(0, 12).map((result) => (
+                  <button key={`${result.book_id}-${result.chapter}-${result.verse}`} type="button" onClick={() => { setSelectedBookId(result.book_id); setSelectedChapter(result.chapter); setPendingVerseJump(Number(result.verse) || null); setJumpVerse(String(result.verse || '')); setScriptureSearchQuery(''); setChapterRetry((n) => n + 1); }} style={{ textAlign: 'left', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--ink)', cursor: 'pointer' }}>
+                    <strong>{result.reference}</strong><span style={{ display: 'block', marginTop: '3px', color: 'var(--ink-muted)' }}>{result.verse_text}</span>
+                  </button>
+                ))}
+              </div>
+            ) : <p>No matches in chapters cached so far. Open a chapter first, then try again.</p>}
+          </div>
+        )}
+      </div>
 
       {/* Bible Navigation Controls */}
       <div className="bible-controls-card">
@@ -315,7 +719,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             <select
               className="bible-select"
               value={translation}
-              onChange={(e) => setTranslation(e.target.value)}
+              onChange={(e) => { setTranslation(e.target.value); setChapterRetry((n) => n + 1); }}
               aria-label="Bible Translation"
             >
               {BIBLE_TRANSLATIONS.map((t) => (
@@ -324,54 +728,39 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
                 </option>
               ))}
             </select>
+            <button type="button" className={`bible-filter-btn${parallelEnabled ? ' active' : ''}`} onClick={() => setParallelEnabled((enabled) => !enabled)} aria-pressed={parallelEnabled} style={{ marginLeft: '8px' }}>
+              {parallelEnabled ? 'Hide parallel' : 'Parallel view'}
+            </button>
           </div>
         </div>
 
-        {/* Book Selector Bar */}
-        <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll books left" rightLabel="Scroll books right">
-          <div className="bible-books-scroll no-scrollbar">
-            {filteredBooks.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                className={`bible-book-pill${selectedBookId === b.id ? ' active' : ''}`}
-                onClick={() => {
-                  setSelectedBookId(b.id);
-                  setSelectedChapter(1);
-                  playSound('reaction');
-                }}
-              >
-                <span>{b.name}</span>
-              </button>
-            ))}
+        {/* Direct passage navigator: book, chapter, and optional verse */}
+        <div className="bible-direct-navigator" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: '10px', padding: '12px 0 4px' }} aria-label="Jump to a Bible passage">
+          <label style={{ display: 'grid', gap: '5px', fontSize: '0.88rem', color: 'var(--ink-muted)' }}>
+            Book
+            <select className="bible-select" value={selectedBookId} onChange={(e) => { setSelectedBookId(e.target.value); setSelectedChapter(1); setJumpVerse(''); setPendingVerseJump(null); }} aria-label="Choose Bible book">
+              {filteredBooks.map((book) => <option key={book.id} value={book.id}>{book.name}</option>)}
+            </select>
+          </label>
+          <label style={{ display: 'grid', gap: '5px', fontSize: '0.88rem', color: 'var(--ink-muted)' }}>
+            Chapter
+            <select className="bible-select" value={selectedChapter} onChange={(e) => { setSelectedChapter(Number(e.target.value)); setJumpVerse(''); setPendingVerseJump(null); }} aria-label="Choose chapter">
+              {Array.from({ length: currentBook.chapters }, (_, i) => i + 1).map((chapter) => <option key={chapter} value={chapter}>{chapter}</option>)}
+            </select>
+          </label>
+          <label style={{ display: 'grid', gap: '5px', fontSize: '0.88rem', color: 'var(--ink-muted)' }}>
+            Verse (optional)
+            <input className="bible-select" type="number" min="1" max="200" inputMode="numeric" value={jumpVerse} onChange={(e) => setJumpVerse(e.target.value)} placeholder="e.g. 16" aria-label="Optional verse number" />
+          </label>
+          <div style={{ display: 'flex', alignItems: 'end' }}>
+            <button type="button" className="cx-btn cx-btn-primary" onClick={jumpToPassage} style={{ width: '100%', minHeight: '42px' }}>Go to passage</button>
           </div>
-        </ScrollAffordanceWrapper>
-
-        {/* Chapter numbers row */}
-        <div className="bible-chapters-wrapper">
-          <span className="bible-chapters-label">Chapter:</span>
-          <ScrollAffordanceWrapper axis="horizontal" leftLabel="Scroll chapters left" rightLabel="Scroll chapters right">
-            <div className="bible-chapters-scroll no-scrollbar">
-              {Array.from({ length: currentBook.chapters }, (_, i) => i + 1).map((ch) => (
-                <button
-                  key={ch}
-                  type="button"
-                  className={`bible-ch-btn${selectedChapter === ch ? ' active' : ''}`}
-                  onClick={() => {
-                    setSelectedChapter(ch);
-                    playSound('reaction');
-                  }}
-                >
-                  {ch}
-                </button>
-              ))}
-            </div>
-          </ScrollAffordanceWrapper>
         </div>
       </div>
 
       {/* Main Chapter Reader Card */}
       <article
+        id="bible-chapter-reader"
         className="post-card bible-chapter-card article-reading-target"
         data-article-title={`${currentBook.name} ${selectedChapter}`}
       >
@@ -413,6 +802,16 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
                 </>
               )}
             </button>
+            <button
+              type="button"
+              className="chapter-offline-download-btn"
+              onClick={handleDownloadBookOffline}
+              disabled={Boolean(bookDownloadProgress)}
+              title={`Download all ${currentBook.chapters} chapters of ${currentBook.name} for offline reading`}
+            >
+              <DownloadCloud size={13} />
+              <span>{bookDownloadProgress ? `Saving ${bookDownloadProgress.done}/${bookDownloadProgress.total}` : 'Download Book'}</span>
+            </button>
 
             {/* Highlighter Color Picker */}
             <div className="bible-color-picker">
@@ -443,6 +842,23 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
         </div>
 
         {/* Verses List */}
+        {chapterLoading ? (
+          <div className="bible-verses-list" role="status" aria-live="polite">
+            {[1, 2, 3, 4, 5].map((n) => <div className="bible-verse-row" key={n}><span className="verse-number-btn" aria-hidden="true">{n}</span><p className="verse-text" style={{ opacity: 0.35 }}>Loading scripture…</p></div>)}
+          </div>
+        ) : chapterError ? (
+          <div className="bible-verses-list" role="alert">
+            <div className="bible-empty-state">
+              <p>{chapterError}</p>
+              <button type="button" className="cx-btn cx-btn-primary" onClick={() => setChapterRetry((n) => n + 1)}>Retry chapter</button>
+            </div>
+          </div>
+        ) : verses.length === 0 ? (
+          <div className="bible-verses-list" role="status"><p>No verses were returned for this chapter.</p><button type="button" className="cx-btn cx-btn-ghost" onClick={() => setChapterRetry((n) => n + 1)}>Retry</button></div>
+        ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: parallelEnabled ? 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))' : 'minmax(0, 1fr)', gap: '14px', alignItems: 'start' }}>
+        <section aria-label={`${translation} scripture`}>
+          {parallelEnabled && <h4 style={{ margin: '0 0 8px', color: 'var(--ink-muted)' }}>{translation}</h4>}
         <div className="bible-verses-list">
           {verses.map((v) => {
             const vKey = `${currentBook.name}-${selectedChapter}-${v.num}`;
@@ -484,6 +900,15 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
                   </button>
                   <button
                     type="button"
+                    className={`verse-icon-btn${bookmarkedVerseKeys.includes(String(v.num)) ? ' active' : ''}`}
+                    onClick={() => handleBookmarkVerse(v.num)}
+                    title={bookmarkedVerseKeys.includes(String(v.num)) ? 'Remove bookmark' : 'Bookmark verse'}
+                    aria-label={bookmarkedVerseKeys.includes(String(v.num)) ? 'Remove bookmark' : 'Bookmark verse'}
+                  >
+                    <Bookmark size={13} />
+                  </button>
+                  <button
+                    type="button"
                     className="verse-icon-btn"
                     onClick={() => handleOpenNewNote(`${currentBook.name} ${selectedChapter}:${v.num}`)}
                     title="Attach to sermon note"
@@ -495,6 +920,13 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             );
           })}
         </div>
+        </section>
+        {parallelEnabled && <section aria-label={`${parallelTranslation} parallel scripture`}>
+          <h4 style={{ margin: '0 0 8px', color: 'var(--ink-muted)' }}>{parallelTranslation}</h4>
+          {parallelLoading ? <div role="status" className="bible-verses-list"><p>Loading parallel translation…</p></div> : parallelError ? <div role="alert" className="bible-verses-list"><p>{parallelError}</p><button type="button" className="cx-btn cx-btn-ghost" onClick={() => setParallelRetry((n) => n + 1)}>Retry parallel view</button></div> : <div className="bible-verses-list">{parallelVerses.map((v) => <div className="bible-verse-row" key={v.num}><span className="verse-number-btn" aria-hidden="true">{v.num}</span><p className="verse-text">{v.text}</p></div>)}</div>}
+        </section>}
+        </div>
+        )}
 
         {/* Chapter Navigation Buttons */}
         <div className="bible-ch-nav-row">
@@ -502,7 +934,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             type="button"
             className="ch-prev-next-btn"
             disabled={selectedChapter <= 1}
-            onClick={() => setSelectedChapter((c) => Math.max(1, c - 1))}
+            onClick={() => { setSelectedChapter((c) => Math.max(1, c - 1)); setChapterRetry((n) => n + 1); }}
           >
             ← Previous Chapter
           </button>
@@ -510,7 +942,7 @@ export default function BibleReaderView({ session, currentUser, openAuth }) {
             type="button"
             className="ch-prev-next-btn"
             disabled={selectedChapter >= currentBook.chapters}
-            onClick={() => setSelectedChapter((c) => Math.min(currentBook.chapters, c + 1))}
+            onClick={() => { setSelectedChapter((c) => Math.min(currentBook.chapters, c + 1)); setChapterRetry((n) => n + 1); }}
           >
             Next Chapter →
           </button>

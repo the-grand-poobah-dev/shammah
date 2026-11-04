@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { playSound } from '../../lib/soundEffects';
 import { createFundraiser } from '../../lib/data/fundraisersApi';
+import { supabase } from '../../lib/supabaseClient';
 
 const CATEGORIES = [
   { id: 'Relief', label: 'Relief & Mercy', icon: '💧', accent: '#10b981' },
@@ -29,6 +30,20 @@ const CATEGORIES = [
   { id: 'Missions', label: 'Gospel Missions', icon: '🌍', accent: '#06b6d4' },
   { id: 'Community', label: 'Community Outreach', icon: '🤝', accent: '#ec4899' },
 ];
+
+async function uploadFundraiserFile(bucket, ownerId, file) {
+  const safeName = String(file.name || 'upload').replace(/[^a-zA-Z0-9._-]/g, '-').slice(-100);
+  const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  const path = `${ownerId}/${Date.now()}-${randomPart}-${safeName}`;
+  const { error } = await supabase.storage.from(bucket).upload(path, file, {
+    cacheControl: '3600', upsert: false, contentType: file.type || 'application/octet-stream',
+  });
+  if (error) throw new Error(error.message || 'File upload failed.');
+  if (bucket === 'fundraiser-verification') return path;
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  if (!data?.publicUrl) throw new Error('Could not create a public media URL.');
+  return data.publicUrl;
+}
 
 const SAMPLE_COVERS = [
   'https://images.unsplash.com/photo-1541252260730-0412e8e2108e?w=1200&auto=format&fit=crop&q=80',
@@ -57,7 +72,9 @@ export default function FundraiserCreatorModal({
   const [deadline, setDeadline] = useState('');
   const [storyMd, setStoryMd] = useState('');
   const [coverUrl, setCoverUrl] = useState(SAMPLE_COVERS[0]);
-  const [verificationDocUrl, setVerificationDocUrl] = useState('');
+  const [coverFile, setCoverFile] = useState(null);
+  const [galleryFiles, setGalleryFiles] = useState([]);
+  const [verificationFile, setVerificationFile] = useState(null);
   const [milestone1Label, setMilestone1Label] = useState('Phase 1 Launch & Mobilization');
   const [milestone1Amount, setMilestone1Amount] = useState(80000);
 
@@ -107,6 +124,31 @@ export default function FundraiserCreatorModal({
         milestones.push({ amount: milestone1Amount, label: milestone1Label });
       }
 
+      const ownerId = currentUser?.id;
+      if (!ownerId) throw new Error('Please sign in before creating a fundraiser.');
+      if (coverFile && (!coverFile.type.startsWith('image/') || coverFile.size > 10 * 1024 * 1024)) {
+        throw new Error('Cover image must be an image no larger than 10 MB.');
+      }
+      if (galleryFiles.length > 9 || galleryFiles.some((file) => !file.type.startsWith('image/') || file.size > 10 * 1024 * 1024)) {
+        throw new Error('Choose up to 9 gallery images, each no larger than 10 MB.');
+      }
+      if (verificationFile && (
+        verificationFile.size > 10 * 1024 * 1024 ||
+        !(verificationFile.type === 'application/pdf' || verificationFile.type.startsWith('image/'))
+      )) {
+        throw new Error('Verification document must be a PDF or image no larger than 10 MB.');
+      }
+
+      const uploadedCoverUrl = coverFile
+        ? await uploadFundraiserFile('fundraiser-media', ownerId, coverFile)
+        : coverUrl;
+      const uploadedGallery = await Promise.all(
+        galleryFiles.map((file) => uploadFundraiserFile('fundraiser-media', ownerId, file))
+      );
+      const verificationDocPath = verificationFile
+        ? await uploadFundraiserFile('fundraiser-verification', ownerId, verificationFile)
+        : null;
+
       const res = await createFundraiser({
         title: title.trim(),
         category,
@@ -115,9 +157,9 @@ export default function FundraiserCreatorModal({
         goalKes: Number(goalKes),
         deadline: deadline || null,
         storyMd: storyMd.trim(),
-        coverUrl,
-        gallery: [coverUrl],
-        verificationDocUrl: verificationDocUrl.trim() || null,
+        coverUrl: uploadedCoverUrl,
+        gallery: [...new Set([uploadedCoverUrl, ...uploadedGallery])],
+        verificationDocPath,
         milestones,
       });
 
@@ -431,13 +473,40 @@ export default function FundraiserCreatorModal({
 
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: '6px' }}>
+                  Upload Cover Image (Optional, max 10 MB)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: '12px' }}
+                />
+                {coverFile && <span style={{ display: 'block', marginTop: '4px', fontSize: '11px', color: 'var(--teal)' }}>{coverFile.name}</span>}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: '6px' }}>
+                  Upload Gallery Images (Optional, up to 9 images)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => setGalleryFiles(Array.from(e.target.files || []).slice(0, 9))}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: '12px' }}
+                />
+                {galleryFiles.length > 0 && <span style={{ display: 'block', marginTop: '4px', fontSize: '11px', color: 'var(--teal)' }}>{galleryFiles.length} gallery image(s) selected</span>}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: '6px' }}>
                   Cover Image URL
                 </label>
                 <input
                   type="url"
                   placeholder="https://..."
                   value={coverUrl}
-                  onChange={(e) => setCoverUrl(e.target.value)}
+                  onChange={(e) => { setCoverUrl(e.target.value); setCoverFile(null); }}
                   style={{
                     width: '100%',
                     padding: '8px 12px',
@@ -457,7 +526,7 @@ export default function FundraiserCreatorModal({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => setCoverUrl(url)}
+                      onClick={() => { setCoverUrl(url); setCoverFile(null); }}
                       style={{
                         width: 64,
                         height: 48,
@@ -505,23 +574,18 @@ export default function FundraiserCreatorModal({
 
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: '6px' }}>
-                  Verification Document / Church Recommendation Letter (URL)
+                  Private Verification Document (Optional)
                 </label>
                 <input
-                  type="url"
-                  placeholder="https://... (Optional pastoral letter or committee ID)"
-                  value={verificationDocUrl}
-                  onChange={(e) => setVerificationDocUrl(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '10px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    color: 'var(--ink)',
-                    fontSize: '12px',
-                  }}
+                  type="file"
+                  accept=".pdf,image/*"
+                  onChange={(e) => setVerificationFile(e.target.files?.[0] || null)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: '12px' }}
                 />
+                <span style={{ display: 'block', marginTop: '5px', fontSize: '11px', color: 'var(--ink-muted)' }}>
+                  Stored privately. Only the campaign owner and administrators can access it.
+                </span>
+                {verificationFile && <span style={{ display: 'block', marginTop: '4px', fontSize: '11px', color: 'var(--teal)' }}>{verificationFile.name}</span>}
               </div>
 
               <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', fontSize: '12px', color: 'var(--ink-muted)' }}>

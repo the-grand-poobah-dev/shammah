@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   HeartHandshake,
@@ -49,6 +49,8 @@ import FundraiserShareModal from './fundraisers/FundraiserShareModal';
 import FundraiserAdminModal from './fundraisers/FundraiserAdminModal';
 
 export { COMMUNITY_PROJECTS, SAMPLE_FUNDRAISERS };
+
+const PAGE_SIZE = 9;
 
 const CATEGORY_CHIPS = [
   { id: 'All', label: 'All Causes' },
@@ -123,6 +125,8 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
   const [activeCategory, setActiveCategory] = useState('All');
   const [sortBy, setSortBy] = useState('trending');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [browseLayout, setBrowseLayout] = useState('list-rich'); // list-rich | magazine-flat | compact | rail
 
   // Active modals
@@ -134,11 +138,21 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
 
   const isAdmin = Boolean(
     currentUser?.role === 'platform_admin' ||
-    currentUser?.role === 'admin' ||
-    currentUser?.badge === 'pastor'
+    currentUser?.role === 'admin'
   );
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeCategory, sortBy, debouncedSearchQuery]);
+
+  const fundraiserRequestRef = useRef(0);
   const fetchData = useCallback(async (isRefresh = false) => {
+    const requestId = ++fundraiserRequestRef.current;
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -147,10 +161,11 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
       const data = await listFundraisers({
         category: activeCategory,
         sort: sortBy,
-        search: searchQuery,
+        search: debouncedSearchQuery,
         userId: currentUser?.id || null,
       });
 
+      if (requestId !== fundraiserRequestRef.current) return;
       setFundraisers(data.fundraisers || []);
       setUrgent(data.urgent || []);
       setFeatured(data.featured || null);
@@ -158,12 +173,14 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
       setNearYou(data.nearYou || []);
       setMyCampaigns(data.myCampaigns || []);
     } catch (err) {
-      setError(err.message || 'Unable to load Kingdom Fundraisers.');
+      if (requestId === fundraiserRequestRef.current) setError(err.message || 'Unable to load Kingdom Fundraisers.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === fundraiserRequestRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [activeCategory, sortBy, searchQuery, currentUser?.id]);
+  }, [activeCategory, sortBy, debouncedSearchQuery, currentUser?.id]);
 
   useEffect(() => {
     fetchData();
@@ -177,9 +194,12 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
       { label: 'Active Causes', value: fundraisers.length, accent: '#10b981' },
       { label: 'Total Raised (KES)', value: `KES ${totalRaised.toLocaleString()}`, accent: '#06b6d4' },
       { label: 'Generous Believers', value: totalDonors.toLocaleString(), accent: '#f59e0b' },
-      { label: 'Vetted Verification', value: '100% Direct', accent: '#8b5cf6' },
+      { label: 'Verified Campaigns', value: fundraisers.filter((item) => item.verified).length, accent: '#8b5cf6' },
     ];
   }, [fundraisers]);
+
+  const pageCount = Math.max(1, Math.ceil(fundraisers.length / PAGE_SIZE));
+  const paginatedFundraisers = fundraisers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   function handleOpenDonate(fundraiser) {
     playSound('reaction');
@@ -693,7 +713,7 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
             {/* Fundraiser Items in Chosen Layout */}
             {fundraisers.length > 0 ? (
               <ContentLayout mode={browseLayout} accent="#8b5cf6">
-                {fundraisers.map((proj) => {
+                {paginatedFundraisers.map((proj) => {
                   const pct = Math.min(100, Math.round(((Number(proj.raised_kes) || 0) / (Number(proj.goal_kes) || 1)) * 100));
 
                   return (
@@ -803,6 +823,27 @@ export default function FundraisersView({ session, currentUser, openAuth }) {
                   setSearchQuery('');
                 }}
               />
+            )}
+
+            {fundraisers.length > PAGE_SIZE && (
+              <nav aria-label="Fundraiser pages" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginTop: '18px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
+                  Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, fundraisers.length)} of {fundraisers.length} campaigns
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage <= 1}
+                    style={{ padding: '8px 12px', borderRadius: '9px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', cursor: currentPage <= 1 ? 'not-allowed' : 'pointer', opacity: currentPage <= 1 ? 0.5 : 1 }}>
+                    Previous
+                  </button>
+                  <span aria-live="polite" style={{ fontSize: '12px', color: 'var(--ink-muted)', minWidth: '76px', textAlign: 'center' }}>
+                    Page {currentPage} of {pageCount}
+                  </span>
+                  <button type="button" onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} disabled={currentPage >= pageCount}
+                    style={{ padding: '8px 12px', borderRadius: '9px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', cursor: currentPage >= pageCount ? 'not-allowed' : 'pointer', opacity: currentPage >= pageCount ? 0.5 : 1 }}>
+                    Next
+                  </button>
+                </div>
+              </nav>
             )}
           </SectionBlock>
 

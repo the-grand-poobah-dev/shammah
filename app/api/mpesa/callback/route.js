@@ -4,11 +4,23 @@
 // Must be publicly reachable (Vercel URL). No auth header from Daraja.
 
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { PERIODS } from '../../../lib/pricing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+function isAuthorizedCallback(request) {
+  const expected = process.env.MPESA_CALLBACK_SECRET;
+  // Deployed Next.js environments set NODE_ENV=production, even when Daraja is sandboxed.
+  // Fail closed unless a callback secret is explicitly configured.
+  if (!expected) return process.env.NODE_ENV !== 'production' && process.env.MPESA_ENVIRONMENT !== 'production';
+  const supplied = new URL(request.url).searchParams.get('secret') || '';
+  const expectedBytes = Buffer.from(expected);
+  const suppliedBytes = Buffer.from(supplied);
+  return suppliedBytes.length === expectedBytes.length && timingSafeEqual(suppliedBytes, expectedBytes);
+}
 
 function admin() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,6 +37,11 @@ function admin() {
 
 export async function POST(req) {
   try {
+    if (!isAuthorizedCallback(req)) {
+      console.warn('[mpesa/callback] Rejected callback without the configured shared secret.');
+      // Acknowledge the request without mutating payment records, avoiding retry storms.
+      return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+    }
     const body = await req.json().catch(() => ({}));
     // Daraja shape: { Body: { stkCallback: { ... } } }
     const cb = body?.Body?.stkCallback || body?.stkCallback || body;
@@ -50,7 +67,7 @@ export async function POST(req) {
 
     const { data: sub } = await supabase
       .from('subscriptions')
-      .select('id, church_id, period_id, status')
+      .select('id, church_id, plan_id, period_id, amount_kes, status')
       .eq('checkout_request_id', checkoutId)
       .maybeSingle();
 
@@ -59,95 +76,117 @@ export async function POST(req) {
     // Also check if this callback corresponds to a paid course enrollment transaction
     const { data: tx } = await supabase
       .from('mpesa_transactions')
-      .select('id, project_id, user_id, plan_id, amount_kes')
+      .select('id, project_id, user_id, plan_id, interval_id, amount_kes, status')
       .eq('checkout_request_id', checkoutId)
       .maybeSingle();
 
-    if (tx && tx.project_id && tx.user_id && success) {
-      await supabase
-        .from('mpesa_transactions')
-        .update({
-          status: 'completed',
-          receipt_code: receipt || undefined,
-          amount_kes: amount != null ? Math.round(amount) : tx.amount_kes,
-        })
-        .eq('id', tx.id);
-
-      await supabase
-        .from('course_enrollments')
-        .upsert(
-          {
-            user_id: tx.user_id,
-            course_id: String(tx.project_id).replace(/^course:/, ''),
-            paid: true,
-            mpesa_receipt: receipt || null,
-            amount_paid_kes: amount != null ? Math.round(amount) : tx.amount_kes || 0,
-            enrolled_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id,course_id' }
-        );
+    const isCoursePayment = Boolean(
+      tx &&
+      tx.project_id &&
+      tx.interval_id === 'course' &&
+      tx.plan_id === tx.project_id &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(tx.project_id))
+    );
+    if (isCoursePayment && tx.status === 'pending') {
+      const verifiedAmount = amount != null && Math.round(amount) === Number(tx.amount_kes);
+      if (success && receipt && verifiedAmount) {
+        const { error: enrollmentError } = await supabase
+          .from('course_enrollments')
+          .upsert(
+            {
+              user_id: tx.user_id,
+              course_id: String(tx.project_id),
+              paid: true,
+              mpesa_receipt: receipt,
+              amount_paid_kes: Math.round(amount),
+              enrolled_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,course_id' }
+          );
+        if (!enrollmentError) {
+          await supabase
+            .from('mpesa_transactions')
+            .update({
+              status: 'completed',
+              receipt_code: receipt,
+              amount_kes: Math.round(amount),
+            })
+            .eq('id', tx.id)
+            .eq('status', 'pending');
+        }
+      } else if (!success || !verifiedAmount || !receipt) {
+        await supabase
+          .from('mpesa_transactions')
+          .update({ status: 'failed' })
+          .eq('id', tx.id)
+          .eq('status', 'pending');
+      }
     }
 
-    // Check if this callback corresponds to a fundraiser donation
-    const { data: donation } = await supabase
+    // Fundraiser totals are changed only by the atomic credit_donation RPC.
+    const { data: donation, error: donationLookupError } = await supabase
       .from('fundraiser_donations')
-      .select('id, fundraiser_id, amount_kes, status')
+      .select('id, fundraiser_id, amount_kes, status, checkout_request_id')
       .eq('checkout_request_id', checkoutId)
       .maybeSingle();
 
-    if (donation && donation.status === 'pending') {
-      if (success) {
-        const donationAmount = amount != null ? Math.round(amount) : donation.amount_kes;
-        const { error: rpcErr } = await supabase.rpc('credit_donation', {
-          p_donation_id: donation.id,
-          p_mpesa_receipt: receipt || null,
-          p_amount_kes: donationAmount,
-        });
-
-        if (rpcErr) {
-          // Fallback service_role direct update
-          await supabase
-            .from('fundraiser_donations')
-            .update({
-              status: 'succeeded',
-              mpesa_transaction_id: receipt || undefined,
-            })
-            .eq('id', donation.id);
-
-          const { data: fr } = await supabase
-            .from('fundraisers')
-            .select('raised_kes, donors_count, goal_kes, status')
-            .eq('id', donation.fundraiser_id)
-            .single();
-
-          if (fr) {
-            const newRaised = (Number(fr.raised_kes) || 0) + donationAmount;
-            const newDonors = (Number(fr.donors_count) || 0) + 1;
-            const isCompleted = newRaised >= fr.goal_kes;
-
-            await supabase
-              .from('fundraisers')
-              .update({
-                raised_kes: newRaised,
-                donors_count: newDonors,
-                status: isCompleted && fr.status === 'active' ? 'completed' : fr.status,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', donation.fundraiser_id);
-
-            await supabase
-              .from('fundraiser_milestones')
-              .update({ reached_at: new Date().toISOString() })
-              .eq('fundraiser_id', donation.fundraiser_id)
-              .lte('amount_kes', newRaised)
-              .is('reached_at', null);
-          }
-        }
-      } else {
-        await supabase
-          .from('fundraiser_donations')
+    if (donationLookupError) {
+      console.error('Fundraiser callback lookup failed:', donationLookupError.message);
+    } else if (donation && donation.status === 'pending') {
+      if (!success) {
+        await supabase.from('fundraiser_donations')
+          .update({ status: 'failed' }).eq('id', donation.id).eq('status', 'pending');
+        await supabase.from('mpesa_transactions')
           .update({ status: 'failed' })
-          .eq('id', donation.id);
+          .eq('checkout_request_id', checkoutId)
+          .eq('status', 'pending');
+      } else {
+        const verifiedAmount = amount != null && Number.isFinite(amount) &&
+          Math.round(amount) === Number(donation.amount_kes);
+        if (receipt && verifiedAmount) {
+          const { data: creditResult, error: creditError } = await supabase.rpc('credit_donation', {
+            p_donation_id: donation.id,
+            p_mpesa_receipt: receipt,
+            p_amount_kes: Math.round(amount),
+          });
+
+          if (!creditError && creditResult?.success) {
+            await supabase.from('mpesa_transactions')
+              .update({
+                status: 'completed',
+                receipt_code: receipt,
+                amount_kes: Math.round(amount),
+              })
+              .eq('checkout_request_id', checkoutId)
+              .eq('status', 'pending');
+          } else {
+            console.error('Fundraiser donation credit failed:', creditError?.message || creditResult?.error || 'Unknown credit error');
+          }
+        } else {
+          // Do not credit an unverifiable callback. Leave it pending for reconciliation.
+          console.error('Fundraiser callback amount/receipt mismatch for checkout:', checkoutId);
+        }
+      }
+    } else if (!donation && !sub && !isCoursePayment && resultCode != null && String(resultCode).trim() !== '') {
+      // The callback may beat register_fundraiser_donation_checkout to the database.
+      // Persist the event, then try processing it; if registration is still in flight,
+      // the donation route will retry reconciliation immediately after registration.
+      const { error: inboxError } = await supabase.from('fundraiser_callback_inbox').insert({
+        checkout_request_id: String(checkoutId),
+        result_code: String(resultCode ?? ''),
+        result_desc: String(resultDesc).slice(0, 500),
+        amount_kes: amount != null && Number.isFinite(amount) ? amount : null,
+        receipt_code: receipt ? String(receipt).slice(0, 80) : null,
+        phone: phone ? String(phone).slice(0, 32) : null,
+      });
+      if (inboxError && inboxError.code !== '23505') {
+        console.error('Could not queue early M-Pesa callback:', inboxError.message);
+      }
+      const { error: inboxProcessError } = await supabase.rpc('process_fundraiser_callback_inbox', {
+        p_checkout_request_id: String(checkoutId),
+      });
+      if (inboxProcessError) {
+        console.error('Could not process queued fundraiser callback:', inboxProcessError.message);
       }
     }
 
@@ -168,9 +207,22 @@ export async function POST(req) {
       return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
     }
 
-    const period = PERIODS[sub.period_id] || PERIODS.monthly;
+    // Never activate a subscription unless the callback proves the expected payment.
+    // Daraja callbacks do not carry an auth header, so checkout ID alone is not enough.
+    const verifiedAmount = amount != null && Number.isFinite(amount) &&
+      Math.round(amount) === Number(sub.amount_kes);
+    if (!receipt || !verifiedAmount) {
+      console.error('Subscription callback amount/receipt mismatch for checkout:', checkoutId);
+      return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+    }
+
+    const period = PERIODS[sub.period_id];
+    if (!period) {
+      console.error('Subscription callback has an unknown billing period:', sub.period_id);
+      return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+    }
     const ends = new Date();
-    ends.setMonth(ends.getMonth() + (period.months || 1));
+    ends.setMonth(ends.getMonth() + period.months);
 
     await supabase
       .from('subscriptions')

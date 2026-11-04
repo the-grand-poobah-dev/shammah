@@ -141,11 +141,19 @@ export default function OnboardingWizard({ session, profile = {}, onDone, onSign
 
       // Private data goes in its own owner-only table
       try {
-        await supabase
+        const { error: privateError } = await supabase
           .from('profile_private')
-          .upsert({ id: user.id, date_of_birth: dob }, { onConflict: 'id' });
+          .upsert({
+            id: user.id,
+            date_of_birth: dob,
+            location_place_id: location?.placeId || null,
+            location_lat: location?.lat ?? null,
+            location_lng: location?.lng ?? null,
+          }, { onConflict: 'id' });
+        if (privateError) throw privateError;
       } catch (dobErr) {
-        console.warn('DOB store warning:', dobErr);
+        console.warn('Private profile store failed:', dobErr);
+        throw dobErr;
       }
 
       const update = {
@@ -153,9 +161,6 @@ export default function OnboardingWizard({ session, profile = {}, onDone, onSign
         badge,
         about: about.trim() || null,
         location_label: location?.label || null,
-        location_place_id: location?.placeId || null,
-        location_lat: location?.lat ?? null,
-        location_lng: location?.lng ?? null,
         onboarding_completed_at: new Date().toISOString(), // the database overwrites this with its own clock
       };
       if (avatarUrl) update.avatar_url = avatarUrl;

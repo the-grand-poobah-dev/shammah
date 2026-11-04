@@ -20,6 +20,7 @@ const CATEGORY_ALIASES = {
   Youth: ['Youth', 'Youth & Gen-Z'],
   'Live Replays': ['Live Replays', 'Live'],
   Prayer: ['Prayer'],
+  Devotionals: ['Devotionals', 'Prayer'],
   Missions: ['Missions', 'Testimonies'],
 };
 
@@ -67,24 +68,37 @@ export async function listMedia({
   sort = 'recent',
   limit = 20,
   offset = 0,
+  cursor = null,
   authorId,
   seriesId,
   churchId,
 } = {}) {
   try {
     // If text query provided, use the search_media RPC with trigram ranking
-    if (query && query.trim()) {
+    // The search RPC does not accept author/series/church filters. Use the
+    // filtered table query whenever those constraints are requested so search
+    // cannot return unrelated creators' media ahead of the client-side filter.
+    if (query && query.trim() && !cursor && !authorId && !seriesId && !churchId) {
       const { data, error } = await supabase.rpc('search_media', {
         q: query.trim(),
         p_kind: kind || null,
         p_category: category && category !== 'All' ? category : null,
         p_limit: limit,
-        p_offset: offset,
+        p_offset: cursor ? 0 : offset,
       });
 
       if (error) {
         console.warn('[mediaApi] search_media RPC fallback:', error.message);
       } else if (data && data.length > 0) {
+        if (kind === 'audio') {
+          const { data: transcriptRows } = await supabase
+            .from('media_items')
+            .select('id, transcript_url')
+            .in('id', data.map((item) => item.id));
+          const transcriptById = new Map((transcriptRows || []).map((row) => [row.id, row.transcript_url]));
+          const enriched = data.map((item) => ({ ...item, transcript_url: transcriptById.get(item.id) || null }));
+          return { data: enriched, count: enriched.length, error: null };
+        }
         return { data, count: data.length, error: null };
       }
     }
@@ -115,6 +129,10 @@ export async function listMedia({
 
     if (kind) {
       q = q.eq('kind', kind);
+    }
+
+    if (query && query.trim()) {
+      q = q.ilike('title', '%' + query.trim().replace(/[%_\\\\]/g, '') + '%');
     }
 
     const cats = expandCategories(category);
@@ -150,7 +168,13 @@ export async function listMedia({
       q = q.order('published_at', { ascending: false });
     }
 
-    q = q.range(offset, offset + limit - 1);
+    // Cursor is the last published_at ISO timestamp. Keep offset pagination for
+    // older callers while recent-feed consumers can use keyset pagination.
+    if (sort === 'recent' && typeof cursor === 'string' && cursor) {
+      q = q.lt('published_at', cursor).order('id', { ascending: false }).limit(limit);
+    } else {
+      q = q.range(offset, offset + limit - 1);
+    }
 
     const { data, count, error } = await q;
 
@@ -163,6 +187,10 @@ export async function listMedia({
         sort,
         limit,
         offset,
+        cursor,
+        authorId,
+        seriesId,
+        churchId,
       });
       if (fb && Array.isArray(fb.data) && (fb.data.length > 0 || error)) {
         return {
@@ -187,6 +215,10 @@ export async function listMedia({
       sort,
       limit,
       offset,
+      cursor,
+      authorId,
+      seriesId,
+      churchId,
     });
     if (fb && Array.isArray(fb.data)) {
       return { data: fb.data, count: fb.count ?? fb.data.length, error: null };
@@ -301,6 +333,7 @@ export async function createMedia(payload) {
       kind: payload.kind || 'video',
       media_url: payload.media_url,
       thumb_url: payload.thumb_url || null,
+      transcript_url: payload.transcript_url || null,
       duration_seconds: payload.duration_seconds || 0,
       category: payload.category || 'General',
       tags: Array.isArray(payload.tags) ? payload.tags : [],
@@ -350,7 +383,7 @@ export async function updateMedia(id, payload) {
  * Deletes a media item (RLS ensures only owner can delete).
  */
 export async function deleteMedia(id) {
-  if (!id) return { error: new Error('ID required for deletion.') };
+  if (!id) return { data: null, error: new Error('ID required for deletion.') };
 
   try {
     const { error } = await supabase
@@ -358,9 +391,9 @@ export async function deleteMedia(id) {
       .delete()
       .eq('id', id);
 
-    return { error };
+    return { data: null, error };
   } catch (err) {
-    return { error: err };
+    return { data: null, error: err };
   }
 }
 
@@ -368,7 +401,7 @@ export async function deleteMedia(id) {
  * Atomically toggles like status using the RPC toggle_media_like.
  */
 export async function toggleLike(itemId) {
-  if (!itemId) return { liked: false, likeCount: 0, error: new Error('Item ID required.') };
+  if (!itemId) return { data: null, liked: false, likeCount: 0, error: new Error('Item ID required.') };
 
   try {
     const { data, error } = await supabase.rpc('toggle_media_like', {
@@ -376,16 +409,17 @@ export async function toggleLike(itemId) {
     });
 
     if (error) {
-      return { liked: false, likeCount: 0, error };
+      return { data: null, liked: false, likeCount: 0, error };
     }
 
     return {
+      data: data || null,
       liked: Boolean(data?.liked),
       likeCount: data?.like_count || 0,
       error: null,
     };
   } catch (err) {
-    return { liked: false, likeCount: 0, error: err };
+    return { data: null, liked: false, likeCount: 0, error: err };
   }
 }
 
@@ -393,7 +427,7 @@ export async function toggleLike(itemId) {
  * Atomically toggles save/bookmark status using the RPC toggle_media_save.
  */
 export async function toggleSave(itemId) {
-  if (!itemId) return { saved: false, saveCount: 0, error: new Error('Item ID required.') };
+  if (!itemId) return { data: null, saved: false, saveCount: 0, error: new Error('Item ID required.') };
 
   try {
     const { data, error } = await supabase.rpc('toggle_media_save', {
@@ -401,16 +435,17 @@ export async function toggleSave(itemId) {
     });
 
     if (error) {
-      return { saved: false, saveCount: 0, error };
+      return { data: null, saved: false, saveCount: 0, error };
     }
 
     return {
+      data: data || null,
       saved: Boolean(data?.saved),
       saveCount: data?.save_count || 0,
       error: null,
     };
   } catch (err) {
-    return { saved: false, saveCount: 0, error: err };
+    return { data: null, saved: false, saveCount: 0, error: err };
   }
 }
 
@@ -445,7 +480,7 @@ export async function recordView(itemId, watchedSeconds = 0) {
       error,
     };
   } catch (err) {
-    return { viewCount: 0, error: err };
+    return { data: null, viewCount: 0, error: err };
   }
 }
 
@@ -453,12 +488,12 @@ export async function recordView(itemId, watchedSeconds = 0) {
  * Saves cross-device playback progress.
  */
 export async function saveProgress(itemId, positionSeconds, durationSeconds) {
-  if (!itemId) return { error: null };
+  if (!itemId) return { data: null, error: null };
 
   try {
     const sessionRes = await supabase.auth.getSession().catch(() => null);
     const userId = sessionRes?.data?.session?.user?.id;
-    if (!userId) return { error: null }; // Guests do not write to watch_progress table
+    if (!userId) return { data: null, error: null }; // Guests do not write to watch_progress table
 
     const completed = positionSeconds >= (durationSeconds * 0.92);
 
@@ -473,9 +508,9 @@ export async function saveProgress(itemId, positionSeconds, durationSeconds) {
         updated_at: new Date().toISOString(),
       });
 
-    return { error };
+    return { data: null, error };
   } catch (err) {
-    return { error: err };
+    return { data: null, error: err };
   }
 }
 
@@ -483,12 +518,12 @@ export async function saveProgress(itemId, positionSeconds, durationSeconds) {
  * Fetches playback progress for an item.
  */
 export async function getProgress(itemId) {
-  if (!itemId) return { position: 0, completed: false, error: null };
+  if (!itemId) return { data: { position: 0, duration: 0, completed: false }, position: 0, duration: 0, completed: false, error: null };
 
   try {
     const sessionRes = await supabase.auth.getSession().catch(() => null);
     const userId = sessionRes?.data?.session?.user?.id;
-    if (!userId) return { position: 0, completed: false, error: null };
+    if (!userId) return { data: { position: 0, duration: 0, completed: false }, position: 0, duration: 0, completed: false, error: null };
 
     const { data, error } = await supabase
       .from('watch_progress')
@@ -497,14 +532,14 @@ export async function getProgress(itemId) {
       .eq('item_id', itemId)
       .maybeSingle();
 
-    return {
+    const progress = {
       position: data?.position_seconds || 0,
       duration: data?.duration_seconds || 0,
       completed: data?.completed || false,
-      error,
     };
+    return { data: progress, ...progress, error };
   } catch (err) {
-    return { position: 0, completed: false, error: err };
+    return { data: { position: 0, duration: 0, completed: false }, position: 0, duration: 0, completed: false, error: err };
   }
 }
 
@@ -527,7 +562,8 @@ export async function listPlaylists({ kind, ownerId } = {}) {
       .order('created_at', { ascending: false });
 
     if (ownerId) {
-      q = q.eq('owner_id', ownerId);
+      // Include public community playlists plus the current user's private playlists.
+      q = q.or(`owner_id.eq.${ownerId},is_public.eq.true`);
     } else {
       q = q.eq('is_public', true);
     }
@@ -572,6 +608,62 @@ export async function createPlaylist({ title, description, kind = 'mixed', isPub
 }
 
 /**
+ * Updates a playlist owned by the signed-in user. RLS remains authoritative.
+ */
+export async function updatePlaylist(playlistId, changes = {}) {
+  if (!playlistId) return { data: null, error: new Error('Playlist ID required.') };
+  const sessionRes = await supabase.auth.getSession().catch(() => null);
+  const userId = sessionRes?.data?.session?.user?.id;
+  if (!userId) return { data: null, error: new Error('Sign-in required.') };
+
+  const update = {};
+  if (typeof changes.title === 'string') {
+    const title = changes.title.trim();
+    if (!title) return { data: null, error: new Error('Playlist title is required.') };
+    update.title = title.slice(0, 120);
+  }
+  if (typeof changes.description === 'string') update.description = changes.description.trim() || null;
+  if (typeof changes.isPublic === 'boolean') update.is_public = changes.isPublic;
+  if (typeof changes.coverUrl === 'string' || changes.coverUrl === null) update.cover_url = changes.coverUrl;
+
+  if (Object.keys(update).length === 0) return { data: null, error: new Error('No playlist changes supplied.') };
+  try {
+    const { data, error } = await supabase
+      .from('playlists')
+      .update(update)
+      .eq('id', playlistId)
+      .eq('owner_id', userId)
+      .select()
+      .maybeSingle();
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: new Error('Playlist not found or you do not own it.') };
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
+/**
+ * Deletes a playlist owned by the signed-in user. RLS remains authoritative.
+ */
+export async function deletePlaylist(playlistId) {
+  if (!playlistId) return { data: null, error: new Error('Playlist ID required.') };
+  const sessionRes = await supabase.auth.getSession().catch(() => null);
+  const userId = sessionRes?.data?.session?.user?.id;
+  if (!userId) return { data: null, error: new Error('Sign-in required.') };
+  try {
+    const { error } = await supabase
+      .from('playlists')
+      .delete()
+      .eq('id', playlistId)
+      .eq('owner_id', userId);
+    return { data: null, error: error || null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
+/**
  * Adds an item to a playlist.
  */
 export async function addPlaylistItem(playlistId, itemId, position = 0) {
@@ -604,9 +696,9 @@ export async function removePlaylistItem(playlistId, itemId) {
       .eq('playlist_id', playlistId)
       .eq('item_id', itemId);
 
-    return { error };
+    return { data: null, error };
   } catch (err) {
-    return { error: err };
+    return { data: null, error: err };
   }
 }
 
@@ -810,6 +902,97 @@ export async function listContinueWatching({ kind = 'video', limit = 10 } = {}) 
 }
 
 /**
+ * Creates a media series owned by the signed-in user.
+ */
+export async function createMediaSeries({ title, description = null, kind = 'video', churchId = null, coverUrl = null, accent = null } = {}) {
+  const cleanTitle = typeof title === 'string' ? title.trim() : '';
+  if (!cleanTitle) return { data: null, error: new Error('Series title is required.') };
+  if (cleanTitle.length > 160) return { data: null, error: new Error('Series title must be 160 characters or fewer.') };
+  if (!['video', 'audio'].includes(kind)) return { data: null, error: new Error('Series kind must be video or audio.') };
+
+  try {
+    const sessionRes = await supabase.auth.getSession().catch(() => null);
+    const userId = sessionRes?.data?.session?.user?.id;
+    if (!userId) return { data: null, error: new Error('Sign in to create a media series.') };
+
+    const { data, error } = await supabase
+      .from('media_series')
+      .insert({
+        owner_id: userId,
+        church_id: churchId || null,
+        title: cleanTitle,
+        description: typeof description === 'string' && description.trim() ? description.trim() : null,
+        kind,
+        cover_url: coverUrl || null,
+        accent: accent || null,
+      })
+      .select()
+      .single();
+
+    return { data: data || null, error: error || null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
+/**
+ * Checks whether the signed-in user follows an audio series.
+ */
+export async function checkSeriesFollow(seriesId) {
+  if (!seriesId) return { following: false, error: new Error('Series ID required.') };
+  try {
+    const sessionRes = await supabase.auth.getSession().catch(() => null);
+    const userId = sessionRes?.data?.session?.user?.id;
+    if (!userId) return { following: false, error: null };
+    const { data, error } = await supabase
+      .from('media_series_follows')
+      .select('series_id')
+      .eq('user_id', userId)
+      .eq('series_id', seriesId)
+      .maybeSingle();
+    return { following: Boolean(data), error: error || null };
+  } catch (error) {
+    return { following: false, error };
+  }
+}
+
+/**
+ * Follows or unfollows a series using the authenticated user's own row.
+ */
+export async function toggleSeriesFollow(seriesId) {
+  if (!seriesId) return { following: false, error: new Error('Series ID required.') };
+  try {
+    const sessionRes = await supabase.auth.getSession().catch(() => null);
+    const userId = sessionRes?.data?.session?.user?.id;
+    if (!userId) return { following: false, error: new Error('Sign in to follow this series.') };
+
+    const existing = await supabase
+      .from('media_series_follows')
+      .select('series_id')
+      .eq('user_id', userId)
+      .eq('series_id', seriesId)
+      .maybeSingle();
+    if (existing.error) return { following: false, error: existing.error };
+
+    if (existing.data) {
+      const { error } = await supabase
+        .from('media_series_follows')
+        .delete()
+        .eq('user_id', userId)
+        .eq('series_id', seriesId);
+      return { following: false, error: error || null };
+    }
+
+    const { error } = await supabase
+      .from('media_series_follows')
+      .insert({ user_id: userId, series_id: seriesId });
+    return { following: !error, error: error || null };
+  } catch (error) {
+    return { following: false, error };
+  }
+}
+
+/**
  * Lists published video/audio series.
  */
 export async function listSeries({ kind = 'video', limit = 12 } = {}) {
@@ -855,4 +1038,68 @@ export async function listSeries({ kind = 'video', limit = 12 } = {}) {
   }
 }
 
+/**
+ * Lists comments attached to a published media item.
+ * Cursor is the last comment's created_at ISO timestamp; offset remains available
+ * for callers that still use page-number pagination.
+ */
+export async function listMediaComments(itemId, { limit = 30, cursor = null, offset = 0 } = {}) {
+  if (!itemId) return { data: [], error: new Error('Media item ID required.') };
 
+  try {
+    const pageSize = Math.min(Math.max(Number(limit) || 30, 1), 100);
+    let query = supabase
+      .from('media_comments')
+      .select(`
+        id, item_id, user_id, parent_id, body, media_url, media_type, created_at,
+        author:profiles!user_id (id, display_name, avatar_url, badge, badge_verified)
+      `, { count: 'exact' })
+      .eq('item_id', itemId)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(pageSize);
+
+    if (cursor) query = query.gt('created_at', cursor);
+    else if (offset > 0) query = query.range(offset, offset + pageSize - 1);
+
+    const { data, error, count } = await query;
+    return { data: data || [], count: count || 0, error: error || null };
+  } catch (error) {
+    return { data: [], count: 0, error };
+  }
+}
+
+/**
+ * Creates a media comment using the signed-in user's identity and table RLS.
+ */
+export async function createMediaComment({ itemId, body, parentId = null, mediaUrl = null, mediaType = null } = {}) {
+  const text = typeof body === 'string' ? body.trim() : '';
+  if (!itemId) return { data: null, error: new Error('Media item ID required.') };
+  if (!text && !mediaUrl) return { data: null, error: new Error('Add text or media to your comment.') };
+  if (text.length > 2000) return { data: null, error: new Error('Comments must be 2,000 characters or fewer.') };
+  if (mediaType && !['image', 'video', 'audio', 'gif'].includes(mediaType)) {
+    return { data: null, error: new Error('Unsupported comment media type.') };
+  }
+
+  try {
+    const sessionRes = await supabase.auth.getSession().catch(() => null);
+    const userId = sessionRes?.data?.session?.user?.id;
+    if (!userId) return { data: null, error: new Error('Sign in to comment.') };
+
+    const { data, error } = await supabase
+      .from('media_comments')
+      .insert({
+        item_id: itemId, user_id: userId, parent_id: parentId || null,
+        body: text || '', media_url: mediaUrl || null, media_type: mediaType || null,
+      })
+      .select(`
+        id, item_id, user_id, parent_id, body, media_url, media_type, created_at,
+        author:profiles!user_id (id, display_name, avatar_url, badge, badge_verified)
+      `)
+      .single();
+
+    return { data: data || null, error: error || null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}

@@ -25,6 +25,9 @@ import {
   Sliders,
   X,
   Volume2,
+  Pencil,
+  Trash2,
+  Save,
 } from 'lucide-react';
 import { useAudioPlayer } from '../lib/audioPlayer';
 import {
@@ -35,6 +38,8 @@ import {
   createPlaylist,
   toggleLike,
   toggleSave,
+  updateMedia,
+  deleteMedia,
 } from '../lib/data/mediaApi';
 import { saveOfflineItem, removeOfflineItem, isItemSavedOffline } from '../lib/offlineSyncManager';
 import { formatPostDate, useRelativeTimeTick } from '../lib/postDisplay';
@@ -65,27 +70,15 @@ import {
 } from './layoutkit';
 
 // Compatibility export in case external components import SAMPLE_AUDIO_TRACKS
-export const SAMPLE_AUDIO_TRACKS = [
-  {
-    id: 'c1000000-0000-0000-0000-000000000001',
-    title: 'Finding Peace in the Secret Place (Psalm 23)',
-    speaker: 'Pastor David Mwangi',
-    church: 'Shammah Assembly of Saints',
-    type: 'podcast',
-    category_id: 'lessons',
-    duration_label: '15:00',
-    duration_seconds: 900,
-    audio_url: 'https://actions.google.com/sounds/v1/ambiences/morning_birds.ogg',
-    cover_image: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=500',
-    description: 'Morning devotion on Psalm 23. Starting your day conscious of the Shepherd who leads beside still waters.',
-  },
-];
+export const SAMPLE_AUDIO_TRACKS = []; // Compatibility shim; production content comes from Supabase.
 
 const AUDIO_CATEGORIES = [
   { id: 'All', label: 'All Audio' },
   { id: 'Sermon', label: 'Sermons' },
   { id: 'Worship', label: 'Worship & Praise' },
-  { id: 'Prayer', label: 'Prayer & Devotionals' },
+  { id: 'Prayer', label: 'Prayer' },
+  { id: 'Devotionals', label: 'Devotionals' },
+  { id: 'Kids & Family', label: 'Kids & Family' },
   { id: 'Youth', label: 'Youth & Young Adults' },
   { id: 'Theology', label: 'Bible Study & Theology' },
   { id: 'Leadership', label: 'Leadership & Marketplace' },
@@ -144,9 +137,15 @@ export default function AudioView({ session, currentUser, openAuth }) {
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
   const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
   const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
+  const [newPlaylistPublic, setNewPlaylistPublic] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
+  const [editingTrack, setEditingTrack] = useState(null);
+  const [editTrackTitle, setEditTrackTitle] = useState('');
+  const [editTrackDescription, setEditTrackDescription] = useState('');
+  const [savingTrack, setSavingTrack] = useState(false);
 
   const debounceTimerRef = useRef(null);
+  const catalogRequestRef = useRef(0);
 
   function triggerToast(msg) {
     setToastMessage(msg);
@@ -183,7 +182,7 @@ export default function AudioView({ session, currentUser, openAuth }) {
         listSeries({ kind: 'audio', limit: 8 }),
         listMedia({ kind: 'audio', category: 'Worship', limit: 6, sort: 'views' }),
         listMedia({ kind: 'audio', category: 'Prayer', limit: 6, sort: 'recent' }),
-        listPlaylists({ kind: 'audio' }),
+        session?.user?.id ? listPlaylists({ kind: 'audio', ownerId: session.user.id }) : listPlaylists({ kind: 'audio' }),
       ]);
 
       setContinueListening(continueRes.data || []);
@@ -198,7 +197,7 @@ export default function AudioView({ session, currentUser, openAuth }) {
     } finally {
       setLoadingInitial(false);
     }
-  }, []);
+  }, [session?.user?.id]);
 
   useEffect(() => {
     loadInitialBlocks();
@@ -212,6 +211,7 @@ export default function AudioView({ session, currentUser, openAuth }) {
       setHasMoreCatalog(true);
     }
 
+    const requestId = ++catalogRequestRef.current;
     setLoadingCatalog(true);
     try {
       const res = await listMedia({
@@ -223,6 +223,7 @@ export default function AudioView({ session, currentUser, openAuth }) {
         offset,
       });
 
+      if (requestId !== catalogRequestRef.current) return;
       const newItems = res.data || [];
       if (reset) {
         setCatalogItems(newItems);
@@ -233,9 +234,11 @@ export default function AudioView({ session, currentUser, openAuth }) {
       setCatalogOffset(offset + newItems.length);
       setHasMoreCatalog(newItems.length >= 12);
     } catch (err) {
-      console.warn('[AudioView] fetchCatalog error:', err);
+      if (requestId === catalogRequestRef.current) {
+        console.warn('[AudioView] fetchCatalog error:', err);
+      }
     } finally {
-      setLoadingCatalog(false);
+      if (requestId === catalogRequestRef.current) setLoadingCatalog(false);
     }
   }, [activeCategory, debouncedQuery, activeSort, catalogOffset]);
 
@@ -271,18 +274,59 @@ export default function AudioView({ session, currentUser, openAuth }) {
       title: newPlaylistTitle.trim(),
       description: newPlaylistDesc.trim(),
       kind: 'audio',
-      isPublic: true,
+      isPublic: newPlaylistPublic,
     });
 
     if (res.data) {
       setPlaylists((prev) => [res.data, ...prev]);
       setNewPlaylistTitle('');
       setNewPlaylistDesc('');
+      setNewPlaylistPublic(true);
       setIsCreatePlaylistOpen(false);
       triggerToast('Audio playlist created successfully!');
     } else {
       triggerToast('Failed to create playlist');
     }
+  }
+
+  async function handleSaveTrackEdits(e) {
+    e.preventDefault();
+    if (!editingTrack?.id || !editTrackTitle.trim()) return;
+    setSavingTrack(true);
+    const result = await updateMedia(editingTrack.id, {
+      title: editTrackTitle.trim(),
+      description: editTrackDescription.trim() || null,
+    });
+    setSavingTrack(false);
+    if (result.error) {
+      triggerToast(result.error.message || 'Could not update audio.');
+      return;
+    }
+    const applyUpdate = (items) => items.map((item) => item.id === editingTrack.id ? { ...item, ...result.data } : item);
+    setCatalogItems(applyUpdate);
+    setSermons(applyUpdate);
+    setWorshipTracks(applyUpdate);
+    setDevotionals(applyUpdate);
+    setContinueListening(applyUpdate);
+    setEditingTrack(null);
+    triggerToast('Audio details updated.');
+  }
+
+  async function handleDeleteTrack(track, event) {
+    event.stopPropagation();
+    if (!track?.id || !window.confirm(`Delete “${track.title}”? This cannot be undone.`)) return;
+    const result = await deleteMedia(track.id);
+    if (result.error) {
+      triggerToast(result.error.message || 'Could not delete audio.');
+      return;
+    }
+    const remove = (items) => items.filter((item) => item.id !== track.id);
+    setCatalogItems(remove);
+    setSermons(remove);
+    setWorshipTracks(remove);
+    setDevotionals(remove);
+    setContinueListening(remove);
+    triggerToast('Audio deleted.');
   }
 
   // Check if filtering/searching is active
@@ -1112,10 +1156,14 @@ export default function AudioView({ session, currentUser, openAuth }) {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       {isItemSavedOffline(track.id) && (
                         <Check size={16} color="#10b981" title="Saved for offline listening" />
                       )}
+                      {session?.user?.id && track.author_id === session.user.id && <>
+                        <button type="button" aria-label={`Edit ${track.title}`} title="Edit audio" onClick={(e) => { e.stopPropagation(); setEditingTrack(track); setEditTrackTitle(track.title || ''); setEditTrackDescription(track.description || ''); }} style={{ minWidth: '40px', minHeight: '40px', display: 'grid', placeItems: 'center', border: '1px solid var(--border)', borderRadius: '10px', background: 'transparent', color: 'var(--ink-muted)' }}><Pencil size={15} /></button>
+                        <button type="button" aria-label={`Delete ${track.title}`} title="Delete audio" onClick={(e) => handleDeleteTrack(track, e)} style={{ minWidth: '40px', minHeight: '40px', display: 'grid', placeItems: 'center', border: '1px solid rgba(239,68,68,.35)', borderRadius: '10px', background: 'transparent', color: '#ef4444' }}><Trash2 size={15} /></button>
+                      </>}
                     </div>
                   </div>
                 </AccentCard>
@@ -1132,6 +1180,24 @@ export default function AudioView({ session, currentUser, openAuth }) {
           />
         )}
       </SectionBlock>
+
+      {editingTrack && (
+        <div role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget && !savingTrack) setEditingTrack(null); }} style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,.78)', display: 'grid', placeItems: 'center', padding: '16px' }}>
+          <form onSubmit={handleSaveTrackEdits} role="dialog" aria-modal="true" aria-labelledby="edit-audio-title" style={{ width: 'min(480px,100%)', display: 'grid', gap: '14px', padding: '22px', borderRadius: '18px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}>
+            <h3 id="edit-audio-title" style={{ margin: 0 }}>Edit audio details</h3>
+            <label style={{ display: 'grid', gap: '6px', fontSize: '13px' }}>Title
+              <input required maxLength={180} value={editTrackTitle} onChange={(e) => setEditTrackTitle(e.target.value)} style={{ padding: '10px', borderRadius: '9px', border: '1px solid var(--border)', background: 'var(--surface-muted)', color: 'var(--ink)' }} />
+            </label>
+            <label style={{ display: 'grid', gap: '6px', fontSize: '13px' }}>Description
+              <textarea rows={4} value={editTrackDescription} onChange={(e) => setEditTrackDescription(e.target.value)} style={{ padding: '10px', borderRadius: '9px', border: '1px solid var(--border)', background: 'var(--surface-muted)', color: 'var(--ink)', resize: 'vertical' }} />
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button type="button" disabled={savingTrack} onClick={() => setEditingTrack(null)} style={{ minHeight: '44px', padding: '0 14px', borderRadius: '999px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--ink)' }}>Cancel</button>
+              <button type="submit" disabled={savingTrack || !editTrackTitle.trim()} style={{ minHeight: '44px', padding: '0 16px', borderRadius: '999px', border: 0, background: 'var(--teal)', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '7px' }}><Save size={15} />{savingTrack ? 'Saving…' : 'Save changes'}</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* SERIES EPISODES MODAL */}
       {selectedSeries && (
@@ -1252,6 +1318,11 @@ export default function AudioView({ session, currentUser, openAuth }) {
                   }}
                 />
               </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--ink-muted)', fontSize: '13px' }}>
+                <input type="checkbox" checked={newPlaylistPublic} onChange={(e) => setNewPlaylistPublic(e.target.checked)} />
+                Make this playlist public
+              </label>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
                 <button

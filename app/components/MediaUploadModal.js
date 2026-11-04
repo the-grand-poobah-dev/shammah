@@ -32,6 +32,7 @@ import {
   Tag,
   Eye,
   Building,
+  FileText,
 } from 'lucide-react';
 
 import {
@@ -39,8 +40,9 @@ import {
   generateVideoThumbnail,
   getMediaDuration,
   detectMediaType,
+  uploadTranscriptFile,
 } from '../lib/mediaUpload';
-import { createMedia } from '../lib/data/mediaApi';
+import { createMedia, createMediaSeries } from '../lib/data/mediaApi';
 import { ACCENT_PALETTE } from './layoutkit/palette';
 
 const CATEGORIES = [
@@ -76,6 +78,8 @@ export default function MediaUploadModal({
   const [tags, setTags] = useState([]);
   const [tagInput, setTagInput] = useState('');
   const [seriesTitle, setSeriesTitle] = useState('');
+  const [episodeNo, setEpisodeNo] = useState('');
+  const [transcriptFile, setTranscriptFile] = useState(null);
   const [visibility, setVisibility] = useState('public');
   const [accent, setAccent] = useState(ACCENT_PALETTE[0]);
 
@@ -87,6 +91,16 @@ export default function MediaUploadModal({
 
   const fileInputRef = useRef(null);
   const customThumbInputRef = useRef(null);
+  const transcriptInputRef = useRef(null);
+  const selectionTokenRef = useRef(0);
+  const thumbnailRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (!isOpen) {
+      selectionTokenRef.current += 1;
+      thumbnailRequestRef.current += 1;
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     setMounted(true);
@@ -138,8 +152,13 @@ export default function MediaUploadModal({
       return;
     }
 
+    const selectionToken = ++selectionTokenRef.current;
+    const thumbnailToken = ++thumbnailRequestRef.current;
     setKind(detected);
     setFile(selectedFile);
+    setThumbBlob(null);
+    setThumbPreviewUrl('');
+    setDuration(0);
 
     // Default title from filename if empty
     if (!title) {
@@ -153,16 +172,16 @@ export default function MediaUploadModal({
     // Auto extract duration
     try {
       const dur = await getMediaDuration(selectedFile);
-      setDuration(dur);
+      if (selectionToken === selectionTokenRef.current) setDuration(dur);
     } catch {
-      setDuration(0);
+      if (selectionToken === selectionTokenRef.current) setDuration(0);
     }
 
     // If video, auto generate thumbnail
     if (detected === 'video') {
       try {
         const blob = await generateVideoThumbnail(selectedFile);
-        if (blob) {
+        if (blob && thumbnailToken === thumbnailRequestRef.current) {
           setThumbBlob(blob);
           const preview = URL.createObjectURL(blob);
           setThumbPreviewUrl(preview);
@@ -175,6 +194,7 @@ export default function MediaUploadModal({
 
   const handleCustomThumbSelect = (imgFile) => {
     if (!imgFile) return;
+    thumbnailRequestRef.current += 1;
     setThumbBlob(imgFile);
     const url = URL.createObjectURL(imgFile);
     setThumbPreviewUrl(url);
@@ -223,7 +243,15 @@ export default function MediaUploadModal({
         onProgress: (pct) => setUploadProgress(Math.min(85, pct)),
       });
 
-      // 2. Upload thumbnail if available
+      // 2. Upload optional transcript for audio items
+      let transcriptUrl = null;
+      if (kind === 'audio' && transcriptFile) {
+        setUploadProgress(86);
+        const transcriptResult = await uploadTranscriptFile(transcriptFile, userId);
+        transcriptUrl = transcriptResult.url;
+      }
+
+      // 3. Upload thumbnail if available
       let finalThumbUrl = null;
       if (thumbBlob) {
         setUploadProgress(88);
@@ -236,17 +264,34 @@ export default function MediaUploadModal({
 
       setUploadProgress(95);
 
-      // 3. Insert database record
+      // 4. Create the optional series first so the uploaded item can reference it.
+      let seriesId = null;
+      if (seriesTitle.trim()) {
+        const { data: seriesData, error: seriesError } = await createMediaSeries({
+          title: seriesTitle.trim(),
+          kind,
+          churchId: sessionUser?.church_id || null,
+          accent,
+        });
+        if (seriesError) {
+          throw new Error(seriesError.message || 'Could not create the media series.');
+        }
+        seriesId = seriesData?.id || null;
+      }
+
+      // 5. Insert database record
       const payload = {
         kind,
         title: title.trim(),
         description: description.trim() || null,
         media_url: mediaResult.url,
         thumb_url: finalThumbUrl,
+        transcript_url: transcriptUrl,
         duration_seconds: duration,
         category,
         tags,
-        series_id: null,
+        series_id: seriesId,
+        episode_no: seriesId && episodeNo ? Number(episodeNo) : null,
         visibility,
         accent,
         church_id: sessionUser?.church_id || null,
@@ -438,7 +483,7 @@ export default function MediaUploadModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,audio/m4a,audio/aac"
+                accept="video/mp4,video/webm,video/quicktime,video/x-m4v,audio/mpeg,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/x-m4a,audio/aac"
                 style={{ display: 'none' }}
                 onChange={(e) => handleFileSelect(e.target.files?.[0])}
               />
@@ -646,6 +691,75 @@ export default function MediaUploadModal({
                 </select>
               </div>
             </div>
+
+            {/* Optional series and episode metadata */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 120px', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--ink)', marginBottom: '5px' }}>
+                  New Series Title (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={seriesTitle}
+                  onChange={(e) => setSeriesTitle(e.target.value)}
+                  placeholder="e.g. The Gospel of John"
+                  disabled={isUploading}
+                  maxLength={160}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: '13px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--ink)', marginBottom: '5px' }}>
+                  Episode #
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={episodeNo}
+                  onChange={(e) => setEpisodeNo(e.target.value)}
+                  placeholder="Optional"
+                  disabled={isUploading || !seriesTitle.trim()}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: '13px' }}
+                />
+              </div>
+            </div>
+
+            {kind === 'audio' && (
+              <div style={{ padding: '12px', border: '1px solid var(--border)', borderRadius: '12px', display: 'grid', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--ink)', fontSize: '13px', fontWeight: 650 }}>
+                  <FileText size={16} /> Transcript (Optional)
+                </div>
+                <p style={{ margin: 0, color: 'var(--ink-muted)', fontSize: '12px' }}>Attach a WebVTT (.vtt) or plain-text (.txt) transcript, up to 2 MB.</p>
+                <input
+                  ref={transcriptInputRef}
+                  type="file"
+                  accept=".vtt,.txt,text/vtt,text/plain"
+                  hidden
+                  disabled={isUploading}
+                  onChange={(e) => {
+                    const selected = e.target.files?.[0] || null;
+                    if (selected && !/\.(vtt|txt)$/i.test(selected.name)) {
+                      setErrorMsg('Transcript must be a .vtt or .txt file.');
+                      setTranscriptFile(null);
+                    } else if (selected && selected.size > 2 * 1024 * 1024) {
+                      setErrorMsg('Transcript files must be 2 MB or smaller.');
+                      setTranscriptFile(null);
+                    } else {
+                      setErrorMsg('');
+                      setTranscriptFile(selected);
+                    }
+                  }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--ink-muted)', overflowWrap: 'anywhere' }}>{transcriptFile?.name || 'No transcript selected'}</span>
+                  <button type="button" onClick={() => transcriptInputRef.current?.click()} disabled={isUploading} style={{ minHeight: '40px', padding: '0 12px', borderRadius: '9px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--teal)', fontWeight: 650 }}>
+                    {transcriptFile ? 'Change transcript' : 'Choose transcript'}
+                  </button>
+                </div>
+                {transcriptFile && <button type="button" onClick={() => { setTranscriptFile(null); if (transcriptInputRef.current) transcriptInputRef.current.value = ''; }} disabled={isUploading} style={{ justifySelf: 'start', border: 0, background: 'transparent', color: 'var(--ink-muted)', padding: 0 }}>Remove transcript</button>}
+              </div>
+            )}
 
             {/* Custom Thumbnail Picker */}
             <div>

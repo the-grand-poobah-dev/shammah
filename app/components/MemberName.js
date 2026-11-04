@@ -1,5 +1,6 @@
 import ProfileBadge from './ProfileBadge';
 import VerifiedBadge from './VerifiedBadge';
+import PlatformAdminBadge from './PlatformAdminBadge';
 
 /**
  * A person's name with their badge, shown together everywhere a name appears in public.
@@ -64,6 +65,7 @@ export default function MemberName({
         {verified && <VerifiedBadge badge={badge} role={role} size={15} />}
       </span>
       {badge && <ProfileBadge badge={badge} verified={false} />}
+      {userId === 'ab810a3d-90ed-4f21-b01d-d140bdd8449f' && <PlatformAdminBadge compact={layout === 'inline'} />}
     </span>
   );
 }

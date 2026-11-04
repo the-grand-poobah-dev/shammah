@@ -18,8 +18,6 @@ import {
   Plus,
   Trash2,
   ChevronDown,
-  Camera,
-  Mic,
 } from 'lucide-react';
 import {
   createStatusUpdate,
@@ -27,8 +25,9 @@ import {
   setDefaultStatusAudience,
   STATUS_AUDIENCE_OPTIONS,
 } from '../lib/statusManager';
-import { uploadPostMedia } from '../lib/mediaUpload';
-import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
+import { uploadPostMedia, getImageSize, getVideoMeta } from '../lib/mediaUpload';
+import MediaToolbar from './media/MediaToolbar';
+import GifPicker from './media/GifPicker';
 import { supabase } from '../../lib/supabaseClient';
 import { cleanDisplayName } from '../lib/postDisplay';
 import Avatar from './Avatar';
@@ -45,12 +44,14 @@ const BG_THEMES = [
 
 const STATUS_MEDIA_LIMITS = {
   image: { maxBytes: 10 * 1024 * 1024, maxLabel: '10 MB', maxSeconds: null },
+  gif: { maxBytes: 10 * 1024 * 1024, maxLabel: '10 MB', maxSeconds: null },
   video: { maxBytes: 50 * 1024 * 1024, maxLabel: '50 MB', maxSeconds: 60 },
   audio: { maxBytes: 5 * 1024 * 1024, maxLabel: '5 MB', maxSeconds: 60 },
 };
 
 function getMediaType(file) {
   if (!file) return null;
+  if (file.type === 'image/gif' || /\.gif$/i.test(file.name || '')) return 'gif';
   if (file.type?.startsWith('image/')) return 'image';
   if (file.type?.startsWith('video/')) return 'video';
   if (file.type?.startsWith('audio/')) return 'audio';
@@ -108,6 +109,7 @@ function createEmptySlide() {
     previewUrl: '',
     mediaUrl: '',
     mediaType: null,
+    mediaMeta: {},
     fileName: '',
     caption: '',
     scriptureTag: '',
@@ -129,16 +131,11 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
   const [globalError, setGlobalError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [publishProgress, setPublishProgress] = useState('');
+  const [showGifPicker, setShowGifPicker] = useState(false);
 
   const fileInputRef = useRef(null);
-  const cameraPhotoInputRef = useRef(null);
-  const cameraVideoInputRef = useRef(null);
-  const cameraAudioInputRef = useRef(null);
 
   // Live Voice Note Recording State
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
-  const [voiceSeconds, setVoiceSeconds] = useState(0);
-  const voiceRecorderRef = useRef(null);
 
   const displayName = cleanDisplayName(currentUser?.name || currentUser?.display_name || 'You', 'You');
 
@@ -194,6 +191,19 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
         continue;
       }
 
+      let mediaMeta = detected === 'gif' ? { provider: 'upload', gif_id: null } : {};
+      try {
+        if (detected === 'video') {
+          mediaMeta = { ...await getVideoMeta(file), duration: durCheck.duration || 0 };
+        } else if (detected === 'image' || detected === 'gif') {
+          mediaMeta = { ...await getImageSize(file), ...(detected === 'gif' ? { provider: 'upload', gif_id: null } : {}) };
+        } else if (detected === 'audio') {
+          mediaMeta = { duration: durCheck.duration || null };
+        }
+      } catch {
+        // Metadata is optional; media upload can still proceed.
+      }
+
       const localObjUrl = URL.createObjectURL(file);
       const slideId = `slide-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`;
 
@@ -203,6 +213,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
         previewUrl: localObjUrl,
         mediaUrl: localObjUrl, // fallback until cloud upload completes
         mediaType: detected,
+        mediaMeta,
         fileName: file.name,
         caption: '',
         scriptureTag: '',
@@ -249,63 +260,28 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
     });
   }
 
+  function handleChooseStatusGif(gif) {
+    if (!gif?.url) return;
+    const slide = {
+      ...createEmptySlide(),
+      previewUrl: gif.url,
+      mediaUrl: gif.url,
+      mediaType: 'gif',
+      mediaMeta: { provider: gif.provider || 'giphy', gif_id: gif.id, width: gif.width || null, height: gif.height || null },
+      fileName: gif.title || 'GIF',
+      isUploading: false,
+    };
+    const replaceEmpty = slides.length === 1 && !slides[0].file && !slides[0].previewUrl && !slides[0].caption.trim();
+    setSlides((previous) => replaceEmpty ? [slide] : [...previous, slide]);
+    setActiveIdx(replaceEmpty ? 0 : slides.length);
+    setShowGifPicker(false);
+  }
+
   // Handle Bulk File Selection or Live Camera Captures
   async function handleFileSelect(e) {
     const files = Array.from(e.target.files || []);
     if (e.target) e.target.value = '';
     await processFiles(files);
-  }
-
-  // Live Voice Note handlers
-  async function handleStartVoiceNote() {
-    setGlobalError('');
-    if (!isAudioRecordingSupported()) {
-      cameraAudioInputRef.current?.click();
-      return;
-    }
-
-    try {
-      setVoiceSeconds(0);
-      setIsRecordingVoice(true);
-      const recorder = await startAudioRecording({
-        maxSeconds: 60, // STATUS_MEDIA_LIMITS.audio.maxSeconds
-        onTimeTick: (sec) => setVoiceSeconds(sec),
-      });
-      voiceRecorderRef.current = recorder;
-    } catch (err) {
-      console.warn('Live voice recording init error:', err);
-      setIsRecordingVoice(false);
-      if (cameraAudioInputRef.current) {
-        cameraAudioInputRef.current.click();
-      } else {
-        setGlobalError(err.message || 'Could not access microphone.');
-      }
-    }
-  }
-
-  async function handleStopVoiceNote() {
-    if (!voiceRecorderRef.current) return;
-    try {
-      const res = await voiceRecorderRef.current.stop();
-      setIsRecordingVoice(false);
-      voiceRecorderRef.current = null;
-      if (res?.file) {
-        await processFiles([res.file]);
-      }
-    } catch (err) {
-      console.error('Error stopping voice note:', err);
-      setIsRecordingVoice(false);
-      setGlobalError('Could not save voice note recording.');
-    }
-  }
-
-  function handleCancelVoiceNote() {
-    if (voiceRecorderRef.current) {
-      voiceRecorderRef.current.cancel();
-      voiceRecorderRef.current = null;
-    }
-    setIsRecordingVoice(false);
-    setVoiceSeconds(0);
   }
 
   // Delete an individual slide (like WhatsApp status delete item)
@@ -372,6 +348,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
           text: resolvedText,
           mediaUrl: s.mediaUrl || s.previewUrl || null,
           mediaType: s.mediaType || null,
+          mediaMeta: s.mediaMeta || {},
           bgStyle: s.bgStyle || 'emerald',
           scriptureTag: s.scriptureTag?.trim() || null,
           visibility: audience,
@@ -519,6 +496,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
                     controls
                     playsInline
                     className="status-preview-media-video"
+                    style={{ objectFit: 'contain' }}
                   />
                 ) : currentSlide.mediaType === 'audio' ? (
                   <div className="status-preview-media-audio-card">
@@ -535,6 +513,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
                     src={currentSlide.previewUrl}
                     alt="Status media preview"
                     className="status-preview-media-image"
+                    style={{ objectFit: 'contain' }}
                   />
                 )}
 
@@ -596,7 +575,7 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
                   title={`Slide ${idx + 1}${s.caption ? `: "${s.caption.slice(0, 30)}..."` : ''}`}
                 >
                   {hasMedia ? (
-                    s.mediaType === 'image' ? (
+                    (s.mediaType === 'image' || s.mediaType === 'gif') ? (
                       <img src={s.previewUrl} alt="" className="status-bulk-thumb-img" />
                     ) : s.mediaType === 'video' ? (
                       <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
@@ -692,182 +671,16 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
             style={{ display: 'none' }}
           />
 
-          {/* Hidden Device Camera / Capture Inputs */}
-          <input
-            ref={cameraPhotoInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
-          <input
-            ref={cameraVideoInputRef}
-            type="file"
-            accept="video/*"
-            capture="environment"
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
-          <input
-            ref={cameraAudioInputRef}
-            type="file"
-            accept="audio/*"
-            capture
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
-
           {/* Media Capture & Import Options Group */}
           <div className="status-media-options-group" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-            {/* Live Camera & Voice Note Capture Chips */}
-            <div
-              className="status-live-capture-row"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 8,
-              }}
-            >
-              <button
-                type="button"
-                className="status-capture-chip"
-                onClick={() => cameraPhotoInputRef.current?.click()}
-                title="Take a photo with your camera"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '10px 8px',
-                  borderRadius: 12,
-                  background: 'var(--surface-sunken)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--ink)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  minHeight: 40,
-                }}
-              >
-                <Camera size={16} className="text-emerald-400 shrink-0" />
-                <span>Take Photo</span>
-              </button>
-
-              <button
-                type="button"
-                className="status-capture-chip"
-                onClick={() => cameraVideoInputRef.current?.click()}
-                title="Record a video with your camera (up to 60s)"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '10px 8px',
-                  borderRadius: 12,
-                  background: 'var(--surface-sunken)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--ink)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  minHeight: 40,
-                }}
-              >
-                <Video size={16} className="text-amber-400 shrink-0" />
-                <span>Record Video</span>
-              </button>
-
-              <button
-                type="button"
-                className="status-capture-chip"
-                onClick={handleStartVoiceNote}
-                title="Record an audio voice note or prayer (up to 60s)"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '10px 8px',
-                  borderRadius: 12,
-                  background: isRecordingVoice ? 'rgba(239, 68, 68, 0.15)' : 'var(--surface-sunken)',
-                  border: isRecordingVoice ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border)',
-                  color: isRecordingVoice ? '#fca5a5' : 'var(--ink)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  minHeight: 40,
-                }}
-              >
-                <Mic size={16} className="text-cyan-400 shrink-0" />
-                <span>Voice Note</span>
-              </button>
-            </div>
-
-            {/* Active Live Voice Recording Status Bar */}
-            {isRecordingVoice && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  borderRadius: 12,
-                  background: 'rgba(239, 68, 68, 0.12)',
-                  border: '1px solid rgba(239, 68, 68, 0.35)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: '50%',
-                      background: '#ef4444',
-                      display: 'inline-block',
-                      animation: 'pulse 1s infinite',
-                    }}
-                  />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#fca5a5' }}>
-                    Recording Voice Note: {formatMediaTime(voiceSeconds)} / 1:00
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={handleCancelVoiceNote}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 8,
-                      background: 'rgba(255,255,255,0.1)',
-                      border: 'none',
-                      color: 'var(--ink)',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleStopVoiceNote}
-                    style={{
-                      padding: '4px 12px',
-                      borderRadius: 8,
-                      background: 'var(--teal, #14b8a6)',
-                      border: 'none',
-                      color: '#ffffff',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Done &amp; Attach
-                  </button>
-                </div>
-              </div>
-            )}
+            <MediaToolbar
+              context="status"
+              maxVideoSeconds={60}
+              onPickFile={(file) => processFiles([file])}
+              onVoice={(file) => processFiles([file])}
+              onGif={() => setShowGifPicker(true)}
+              disabled={submitting}
+            />
 
             {/* Import Media Button (Bulk photos/videos/audio file picker) */}
             <button
@@ -899,6 +712,8 @@ export default function StatusCreatorModal({ currentUser, onClose, onCreated }) 
           )}
         </form>
       </PopupSheet>
+
+      {showGifPicker && <GifPicker onSelect={handleChooseStatusGif} onClose={() => setShowGifPicker(false)} />}
 
       {/* =========================================
           PopupSheet: Story Audience / Privacy Selector

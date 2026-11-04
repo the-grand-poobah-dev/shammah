@@ -18,688 +18,9 @@ function checkRateLimit(key, maxRequests = 30, windowMs = 60000) {
   return entry.count <= maxRequests;
 }
 
-// Server-side mirror of supabase/seed_polls.sql so the Polls Hub works immediately
-// even before the user runs 20261030_polls_hub.sql & seed_polls.sql in Supabase SQL Editor.
-const nowMs = Date.now();
-const HOUR = 3600 * 1000;
-const DAY = 24 * HOUR;
-
-const SEEDED_POLLS_CATALOG = [
-  // 1. Live Now · Ending Soon (Rail with countdown rings)
-  {
-    id: 'c1000000-0000-0000-0000-000000000001',
-    text_content: "Which worship song should our choir open with for this Friday's Night of Vigils?",
-    category_id: 'worship',
-    poll_category: 'Worship',
-    poll_type: 'survey',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - 3 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 45 * 60 * 1000).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#ec4899',
-    visibility: 'public',
-    author_id: 'seed-pastor-grace',
-    created_at: new Date(nowMs - 3 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-pastor-grace',
-      display_name: 'Pastor Grace Wanjiku',
-      badge: 'pastor',
-      badge_verified: true,
-      role: 'church_admin',
-      church_name: 'Nairobi Chapel',
-    },
-    options: [
-      { id: 'd1000001-0000-0000-0000-000000000001', post_id: 'c1000000-0000-0000-0000-000000000001', label: 'Way Maker (Swahili & English Medley)', image_url: null, is_correct: false, position: 0, vote_count: 38 },
-      { id: 'd1000001-0000-0000-0000-000000000002', post_id: 'c1000000-0000-0000-0000-000000000001', label: 'Nakuabudu (East African Worship Anthem)', image_url: null, is_correct: false, position: 1, vote_count: 29 },
-      { id: 'd1000001-0000-0000-0000-000000000003', post_id: 'c1000000-0000-0000-0000-000000000001', label: 'Goodness of God (Acoustic Choir Intro)', image_url: null, is_correct: false, position: 2, vote_count: 21 },
-    ],
-    sample_voters: [
-      { id: 'v-1', display_name: 'Faith Njeri', avatar_url: null },
-      { id: 'v-2', display_name: 'Daniel Kiprop', avatar_url: null },
-      { id: 'v-3', display_name: 'Mercy Achieng', avatar_url: null },
-      { id: 'v-4', display_name: 'Samuel Ochieng', avatar_url: null },
-    ],
-  },
-  {
-    id: 'c1000000-0000-0000-0000-000000000002',
-    text_content: 'What time works best for our 30-Minute Midday Intercession Livestream tomorrow?',
-    category_id: 'prayer',
-    poll_category: 'Prayer',
-    poll_type: 'survey',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - 5 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 2 * HOUR).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#06b6d4',
-    visibility: 'public',
-    author_id: 'seed-elder-john',
-    created_at: new Date(nowMs - 5 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-elder-john',
-      display_name: 'Elder John Kamau',
-      badge: 'elder',
-      badge_verified: true,
-      role: 'church_admin',
-      church_name: 'CITAM Valley Road',
-    },
-    options: [
-      { id: 'd1000002-0000-0000-0000-000000000001', post_id: 'c1000000-0000-0000-0000-000000000002', label: '12:30 PM EAT — Lunch Hour Prayer', image_url: null, is_correct: false, position: 0, vote_count: 34 },
-      { id: 'd1000002-0000-0000-0000-000000000002', post_id: 'c1000000-0000-0000-0000-000000000002', label: '1:00 PM EAT — Midday Breakthrough', image_url: null, is_correct: false, position: 1, vote_count: 22 },
-      { id: 'd1000002-0000-0000-0000-000000000003', post_id: 'c1000000-0000-0000-0000-000000000002', label: '5:30 PM EAT — Evening Commute Altar', image_url: null, is_correct: false, position: 2, vote_count: 8 },
-    ],
-    sample_voters: [
-      { id: 'v-5', display_name: 'Esther Mutua', avatar_url: null },
-      { id: 'v-6', display_name: 'Kelvin Mwangi', avatar_url: null },
-      { id: 'v-7', display_name: 'joyce Wambui', avatar_url: null },
-    ],
-  },
-  {
-    id: 'c1000000-0000-0000-0000-000000000003',
-    text_content: 'Flash Bible Quiz: Which prophet was taken up to heaven in a whirlwind with a chariot of fire?',
-    category_id: 'youth',
-    poll_category: 'Bible Quiz',
-    poll_type: 'quiz',
-    is_quiz: true,
-    quiz_explanation: '2 Kings 2:11 — Suddenly a chariot of fire and horses of fire appeared and separated the two of them, and Elijah went up to heaven in a whirlwind.',
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: true,
-    poll_starts_at: new Date(nowMs - 2 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 3.3 * HOUR).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#f59e0b',
-    visibility: 'public',
-    author_id: 'seed-youth-lead',
-    created_at: new Date(nowMs - 2 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-youth-lead',
-      display_name: 'David Omondi · Youth Ministry',
-      badge: 'leader',
-      badge_verified: true,
-      role: 'member',
-      church_name: 'Mavuno Church',
-    },
-    options: [
-      { id: 'd1000003-0000-0000-0000-000000000001', post_id: 'c1000000-0000-0000-0000-000000000003', label: 'Prophet Isaiah', image_url: null, is_correct: false, position: 0, vote_count: 14 },
-      { id: 'd1000003-0000-0000-0000-000000000002', post_id: 'c1000000-0000-0000-0000-000000000003', label: 'Prophet Elijah', image_url: null, is_correct: true, position: 1, vote_count: 79 },
-      { id: 'd1000003-0000-0000-0000-000000000003', post_id: 'c1000000-0000-0000-0000-000000000003', label: 'Prophet Elisha', image_url: null, is_correct: false, position: 2, vote_count: 19 },
-    ],
-    sample_voters: [
-      { id: 'v-8', display_name: 'Brian Otieno', avatar_url: null },
-      { id: 'v-9', display_name: 'Sharon Chebet', avatar_url: null },
-    ],
-  },
-  {
-    id: 'c1000000-0000-0000-0000-000000000004',
-    text_content: 'Where should our Saturday Mercy Ministry team focus food distribution this weekend?',
-    category_id: 'missions',
-    poll_category: 'Missions',
-    poll_type: 'survey',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: false,
-    poll_multi_select: true,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - 6 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 5 * HOUR).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#10b981',
-    visibility: 'public',
-    author_id: 'seed-deacon-mary',
-    created_at: new Date(nowMs - 6 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-deacon-mary',
-      display_name: 'Deacon Mary Njoroge',
-      badge: 'deacon',
-      badge_verified: true,
-      role: 'member',
-      church_name: 'All Saints Cathedral',
-    },
-    options: [
-      { id: 'd1000004-0000-0000-0000-000000000001', post_id: 'c1000000-0000-0000-0000-000000000004', label: "Kibera & Lang'ata Children's Homes", image_url: null, is_correct: false, position: 0, vote_count: 35 },
-      { id: 'd1000004-0000-0000-0000-000000000002', post_id: 'c1000000-0000-0000-0000-000000000004', label: 'Mathare Maternal & Widows Support', image_url: null, is_correct: false, position: 1, vote_count: 26 },
-      { id: 'd1000004-0000-0000-0000-000000000003', post_id: 'c1000000-0000-0000-0000-000000000004', label: 'Kenyatta Hospital Caregivers Packages', image_url: null, is_correct: false, position: 2, vote_count: 18 },
-    ],
-    sample_voters: [
-      { id: 'v-10', display_name: 'Ruth Wairimu', avatar_url: null },
-      { id: 'v-11', display_name: 'Peter Karanja', avatar_url: null },
-    ],
-  },
-
-  // 2. Featured Quiz (Spotlight) + Faith Quizzes (Magazine-flat)
-  {
-    id: 'c2000000-0000-0000-0000-000000000001',
-    text_content: 'Scripture Mastery Spotlight: In Ephesians 6, which piece of the Armor of God represents the Word of God?',
-    category_id: 'bible-study',
-    poll_category: 'Bible Quiz',
-    poll_type: 'quiz',
-    is_quiz: true,
-    quiz_explanation: 'Ephesians 6:17 — "Take the helmet of salvation and the sword of the Spirit, which is the word of God." It is the primary offensive weapon in spiritual warfare.',
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: true,
-    poll_starts_at: new Date(nowMs - 4 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 4 * DAY).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#f59e0b',
-    visibility: 'public',
-    author_id: 'seed-pastor-grace',
-    created_at: new Date(nowMs - 4 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-pastor-grace',
-      display_name: 'Pastor Grace Wanjiku',
-      badge: 'pastor',
-      badge_verified: true,
-      role: 'church_admin',
-      church_name: 'Nairobi Chapel',
-    },
-    options: [
-      { id: 'd2000001-0000-0000-0000-000000000001', post_id: 'c2000000-0000-0000-0000-000000000001', label: 'The Breastplate of Righteousness', image_url: null, is_correct: false, position: 0, vote_count: 18 },
-      { id: 'd2000001-0000-0000-0000-000000000002', post_id: 'c2000000-0000-0000-0000-000000000001', label: 'The Shield of Faith', image_url: null, is_correct: false, position: 1, vote_count: 24 },
-      { id: 'd2000001-0000-0000-0000-000000000003', post_id: 'c2000000-0000-0000-0000-000000000001', label: 'The Sword of the Spirit', image_url: null, is_correct: true, position: 2, vote_count: 111 },
-      { id: 'd2000001-0000-0000-0000-000000000004', post_id: 'c2000000-0000-0000-0000-000000000001', label: 'The Belt of Truth', image_url: null, is_correct: false, position: 3, vote_count: 12 },
-    ],
-    sample_voters: [
-      { id: 'v-12', display_name: 'Caleb Kipchoge', avatar_url: null },
-      { id: 'v-13', display_name: 'Naomi Wafula', avatar_url: null },
-      { id: 'v-14', display_name: 'Lydia Mumbi', avatar_url: null },
-    ],
-  },
-  {
-    id: 'c2000000-0000-0000-0000-000000000002',
-    text_content: 'Acts of the Apostles Quiz: On the road to Gaza, which Ethiopian official did Philip lead to Christ through Isaiah 53?',
-    category_id: 'bible-study',
-    poll_category: 'Bible Quiz',
-    poll_type: 'quiz',
-    is_quiz: true,
-    quiz_explanation: "Acts 8:27-38 records how Philip explained Isaiah's prophecy to the Ethiopian eunuch (treasurer of Candace), who was immediately baptized.",
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: true,
-    poll_starts_at: new Date(nowMs - 12 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 5 * DAY).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#8b5cf6',
-    visibility: 'public',
-    author_id: 'seed-elder-john',
-    created_at: new Date(nowMs - 12 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-elder-john',
-      display_name: 'Elder John Kamau',
-      badge: 'elder',
-      badge_verified: true,
-      role: 'church_admin',
-      church_name: 'CITAM Valley Road',
-    },
-    options: [
-      { id: 'd2000002-0000-0000-0000-000000000001', post_id: 'c2000000-0000-0000-0000-000000000002', label: 'Cornelius the Centurion', image_url: null, is_correct: false, position: 0, vote_count: 15 },
-      { id: 'd2000002-0000-0000-0000-000000000002', post_id: 'c2000000-0000-0000-0000-000000000002', label: 'The Ethiopian Eunuch (Royal Treasurer)', image_url: null, is_correct: true, position: 1, vote_count: 68 },
-      { id: 'd2000002-0000-0000-0000-000000000003', post_id: 'c2000000-0000-0000-0000-000000000002', label: 'Sergius Paulus of Cyprus', image_url: null, is_correct: false, position: 2, vote_count: 11 },
-    ],
-    sample_voters: [
-      { id: 'v-15', display_name: 'Hannah Nduta', avatar_url: null },
-      { id: 'v-16', display_name: 'Titus Mutinda', avatar_url: null },
-    ],
-  },
-  {
-    id: 'c2000000-0000-0000-0000-000000000003',
-    text_content: 'Gospels Trivia: Which miracle of Jesus is the ONLY one recorded in all four Gospels (Matthew, Mark, Luke, and John)?',
-    category_id: 'bible-study',
-    poll_category: 'Bible Quiz',
-    poll_type: 'quiz',
-    is_quiz: true,
-    quiz_explanation: 'Aside from the Resurrection, the Feeding of the 5,000 is the only miracle recorded in Matthew 14, Mark 6, Luke 9, and John 6.',
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: true,
-    poll_starts_at: new Date(nowMs - DAY).toISOString(),
-    poll_expires_at: new Date(nowMs + 6 * DAY).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#06b6d4',
-    visibility: 'public',
-    author_id: 'seed-pastor-grace',
-    created_at: new Date(nowMs - DAY).toISOString(),
-    profiles: {
-      id: 'seed-pastor-grace',
-      display_name: 'Pastor Grace Wanjiku',
-      badge: 'pastor',
-      badge_verified: true,
-      role: 'church_admin',
-      church_name: 'Nairobi Chapel',
-    },
-    options: [
-      { id: 'd2000003-0000-0000-0000-000000000001', post_id: 'c2000000-0000-0000-0000-000000000003', label: 'Turning Water into Wine at Cana', image_url: null, is_correct: false, position: 0, vote_count: 29 },
-      { id: 'd2000003-0000-0000-0000-000000000002', post_id: 'c2000000-0000-0000-0000-000000000003', label: 'Feeding the 5,000 with Loaves & Fishes', image_url: null, is_correct: true, position: 1, vote_count: 86 },
-      { id: 'd2000003-0000-0000-0000-000000000003', post_id: 'c2000000-0000-0000-0000-000000000003', label: 'Walking on Water in Galilee', image_url: null, is_correct: false, position: 2, vote_count: 23 },
-    ],
-    sample_voters: [
-      { id: 'v-1', display_name: 'Faith Njeri', avatar_url: null },
-      { id: 'v-4', display_name: 'Samuel Ochieng', avatar_url: null },
-    ],
-  },
-
-  // 3. Community Surveys (Magazine-x2)
-  {
-    id: 'c3000000-0000-0000-0000-000000000001',
-    text_content: 'Which Sunday morning service time works best for you and your family?',
-    category_id: 'worship',
-    poll_category: 'Church Life',
-    poll_type: 'survey',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - 8 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 2 * DAY).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#06b6d4',
-    visibility: 'public',
-    author_id: 'seed-pastor-grace',
-    created_at: new Date(nowMs - 8 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-pastor-grace',
-      display_name: 'Pastor Grace Wanjiku',
-      badge: 'pastor',
-      badge_verified: true,
-      role: 'church_admin',
-      church_name: 'Nairobi Chapel',
-    },
-    options: [
-      { id: 'd3000001-0000-0000-0000-000000000001', post_id: 'c3000000-0000-0000-0000-000000000001', label: '8:00 AM – Early Glory Service', image_url: null, is_correct: false, position: 0, vote_count: 42 },
-      { id: 'd3000001-0000-0000-0000-000000000002', post_id: 'c3000000-0000-0000-0000-000000000001', label: '10:00 AM – Family & Youth Service', image_url: null, is_correct: false, position: 1, vote_count: 68 },
-      { id: 'd3000001-0000-0000-0000-000000000003', post_id: 'c3000000-0000-0000-0000-000000000001', label: '12:00 PM – Midday Overflow Service', image_url: null, is_correct: false, position: 2, vote_count: 29 },
-    ],
-    sample_voters: [
-      { id: 'v-2', display_name: 'Daniel Kiprop', avatar_url: null },
-      { id: 'v-3', display_name: 'Mercy Achieng', avatar_url: null },
-      { id: 'v-5', display_name: 'Esther Mutua', avatar_url: null },
-    ],
-  },
-  {
-    id: 'c3000000-0000-0000-0000-000000000002',
-    text_content: 'Which book of the Bible should we study next in Wednesday Home Cells?',
-    category_id: 'bible-study',
-    poll_category: 'Discipleship',
-    poll_type: 'survey',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: false,
-    poll_multi_select: true,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - 16 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 3 * DAY).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#10b981',
-    visibility: 'public',
-    author_id: 'seed-elder-john',
-    created_at: new Date(nowMs - 16 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-elder-john',
-      display_name: 'Elder John Kamau',
-      badge: 'elder',
-      badge_verified: true,
-      role: 'church_admin',
-      church_name: 'CITAM Valley Road',
-    },
-    options: [
-      { id: 'd3000002-0000-0000-0000-000000000001', post_id: 'c3000000-0000-0000-0000-000000000002', label: 'Book of Acts (Early Church Power)', image_url: null, is_correct: false, position: 0, vote_count: 51 },
-      { id: 'd3000002-0000-0000-0000-000000000002', post_id: 'c3000000-0000-0000-0000-000000000002', label: 'Epistle to the Romans (Gospel Foundations)', image_url: null, is_correct: false, position: 1, vote_count: 24 },
-      { id: 'd3000002-0000-0000-0000-000000000003', post_id: 'c3000000-0000-0000-0000-000000000002', label: 'Book of James (Faith in Action)', image_url: null, is_correct: false, position: 2, vote_count: 18 },
-    ],
-    sample_voters: [
-      { id: 'v-6', display_name: 'Kelvin Mwangi', avatar_url: null },
-      { id: 'v-7', display_name: 'Joyce Wambui', avatar_url: null },
-    ],
-  },
-  {
-    id: 'c3000000-0000-0000-0000-000000000003',
-    text_content: 'Where should our Youth & Young Adults Fellowship hold the next Worship & Bonfire Retreat?',
-    category_id: 'youth',
-    poll_category: 'Youth & Gen-Z',
-    poll_type: 'survey',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - DAY).toISOString(),
-    poll_expires_at: new Date(nowMs + 5 * DAY).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#ec4899',
-    visibility: 'public',
-    author_id: 'seed-youth-lead',
-    created_at: new Date(nowMs - DAY).toISOString(),
-    profiles: {
-      id: 'seed-youth-lead',
-      display_name: 'David Omondi · Youth Ministry',
-      badge: 'leader',
-      badge_verified: true,
-      role: 'member',
-      church_name: 'Mavuno Church',
-    },
-    options: [
-      {
-        id: 'd3000003-0000-0000-0000-000000000001',
-        post_id: 'c3000000-0000-0000-0000-000000000003',
-        label: 'Karura Forest Nature Sanctuary',
-        image_url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=600&auto=format&fit=crop&q=80',
-        is_correct: false,
-        position: 0,
-        vote_count: 54,
-      },
-      {
-        id: 'd3000003-0000-0000-0000-000000000002',
-        post_id: 'c3000000-0000-0000-0000-000000000003',
-        label: 'Lake Naivasha Lakeside Camp',
-        image_url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=80',
-        is_correct: false,
-        position: 1,
-        vote_count: 46,
-      },
-      {
-        id: 'd3000003-0000-0000-0000-000000000003',
-        post_id: 'c3000000-0000-0000-0000-000000000003',
-        label: 'Ngong Hills Sunset Amphitheatre',
-        image_url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&auto=format&fit=crop&q=80',
-        is_correct: false,
-        position: 2,
-        vote_count: 24,
-      },
-    ],
-    sample_voters: [
-      { id: 'v-8', display_name: 'Brian Otieno', avatar_url: null },
-      { id: 'v-9', display_name: 'Sharon Chebet', avatar_url: null },
-    ],
-  },
-  {
-    id: 'c3000000-0000-0000-0000-000000000004',
-    text_content: 'Which practical life-skills workshop would help young believers most this quarter? (Multi-select)',
-    category_id: 'fellowship',
-    poll_category: 'Fellowship',
-    poll_type: 'survey',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: true,
-    poll_multi_select: true,
-    hide_results_until_vote: true,
-    poll_starts_at: new Date(nowMs - 20 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 4 * DAY).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#8b5cf6',
-    visibility: 'public',
-    author_id: 'seed-deacon-mary',
-    created_at: new Date(nowMs - 20 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-deacon-mary',
-      display_name: 'Deacon Mary Njoroge',
-      badge: 'deacon',
-      badge_verified: true,
-      role: 'member',
-      church_name: 'All Saints Cathedral',
-    },
-    options: [
-      { id: 'd3000004-0000-0000-0000-000000000001', post_id: 'c3000000-0000-0000-0000-000000000004', label: 'Biblical Financial Stewardship & Investing', image_url: null, is_correct: false, position: 0, vote_count: 34 },
-      { id: 'd3000004-0000-0000-0000-000000000002', post_id: 'c3000000-0000-0000-0000-000000000004', label: 'Christian Dating, Courtship & Marriage Prep', image_url: null, is_correct: false, position: 1, vote_count: 29 },
-      { id: 'd3000004-0000-0000-0000-000000000003', post_id: 'c3000000-0000-0000-0000-000000000004', label: 'Tech, Career Mentorship & Entrepreneurship', image_url: null, is_correct: false, position: 2, vote_count: 19 },
-    ],
-    sample_voters: [],
-  },
-
-  // 4. Icebreakers (Tiles)
-  {
-    id: 'c4000000-0000-0000-0000-000000000001',
-    text_content: 'How is your spirit feeling walking into fellowship today?',
-    category_id: 'fellowship',
-    poll_category: 'Icebreaker',
-    poll_type: 'icebreaker',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: true,
-    poll_multi_select: false,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - 6 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 7 * DAY).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#f59e0b',
-    visibility: 'public',
-    author_id: 'seed-pastor-grace',
-    created_at: new Date(nowMs - 6 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-pastor-grace',
-      display_name: 'Pastor Grace Wanjiku',
-      badge: 'pastor',
-      badge_verified: true,
-      role: 'church_admin',
-      church_name: 'Nairobi Chapel',
-    },
-    options: [
-      { id: 'd4000001-0000-0000-0000-000000000001', post_id: 'c4000000-0000-0000-0000-000000000001', label: "🔥 On fire & grateful for God's grace", image_url: null, is_correct: false, position: 0, vote_count: 58 },
-      { id: 'd4000001-0000-0000-0000-000000000002', post_id: 'c4000000-0000-0000-0000-000000000001', label: '🕊️ Seeking quiet peace & renewal', image_url: null, is_correct: false, position: 1, vote_count: 41 },
-      { id: 'd4000001-0000-0000-0000-000000000003', post_id: 'c4000000-0000-0000-0000-000000000001', label: '🙏 Standing in prayer for a breakthrough', image_url: null, is_correct: false, position: 2, vote_count: 29 },
-      { id: 'd4000001-0000-0000-0000-000000000004', post_id: 'c4000000-0000-0000-0000-000000000001', label: '💪 Ready to serve & encourage someone', image_url: null, is_correct: false, position: 3, vote_count: 14 },
-    ],
-    sample_voters: [],
-  },
-  {
-    id: 'c4000000-0000-0000-0000-000000000002',
-    text_content: 'What is your go-to way to connect with God first thing in the morning?',
-    category_id: 'worship',
-    poll_category: 'Icebreaker',
-    poll_type: 'icebreaker',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - 14 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 7 * DAY).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#06b6d4',
-    visibility: 'public',
-    author_id: 'seed-youth-lead',
-    created_at: new Date(nowMs - 14 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-youth-lead',
-      display_name: 'David Omondi · Youth Ministry',
-      badge: 'leader',
-      badge_verified: true,
-      role: 'member',
-      church_name: 'Mavuno Church',
-    },
-    options: [
-      { id: 'd4000002-0000-0000-0000-000000000001', post_id: 'c4000000-0000-0000-0000-000000000002', label: '🎶 Worship playlist on full volume', image_url: null, is_correct: false, position: 0, vote_count: 44 },
-      { id: 'd4000002-0000-0000-0000-000000000002', post_id: 'c4000000-0000-0000-0000-000000000002', label: '📖 Reading a chapter in Psalms or Proverbs', image_url: null, is_correct: false, position: 1, vote_count: 39 },
-      { id: 'd4000002-0000-0000-0000-000000000003', post_id: 'c4000000-0000-0000-0000-000000000002', label: '☕ Quiet prayer over morning chai/coffee', image_url: null, is_correct: false, position: 2, vote_count: 35 },
-    ],
-    sample_voters: [
-      { id: 'v-1', display_name: 'Faith Njeri', avatar_url: null },
-      { id: 'v-8', display_name: 'Brian Otieno', avatar_url: null },
-    ],
-  },
-  {
-    id: 'c4000000-0000-0000-0000-000000000003',
-    text_content: 'Sunday afternoon vibes after church service:',
-    category_id: 'fellowship',
-    poll_category: 'Icebreaker',
-    poll_type: 'icebreaker',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - 18 * HOUR).toISOString(),
-    poll_expires_at: new Date(nowMs + 7 * DAY).toISOString(),
-    poll_closed_at: null,
-    poll_accent: '#10b981',
-    visibility: 'public',
-    author_id: 'seed-deacon-mary',
-    created_at: new Date(nowMs - 18 * HOUR).toISOString(),
-    profiles: {
-      id: 'seed-deacon-mary',
-      display_name: 'Deacon Mary Njoroge',
-      badge: 'deacon',
-      badge_verified: true,
-      role: 'member',
-      church_name: 'All Saints Cathedral',
-    },
-    options: [
-      { id: 'd4000003-0000-0000-0000-000000000001', post_id: 'c4000000-0000-0000-0000-000000000003', label: '🍛 Nyama choma & fellowship with family', image_url: null, is_correct: false, position: 0, vote_count: 67 },
-      { id: 'd4000003-0000-0000-0000-000000000002', post_id: 'c4000000-0000-0000-0000-000000000003', label: '😴 Legendary 2-hour Sunday afternoon nap', image_url: null, is_correct: false, position: 1, vote_count: 59 },
-      { id: 'd4000003-0000-0000-0000-000000000003', post_id: 'c4000000-0000-0000-0000-000000000003', label: '🎤 Choir & youth ministry rehearsal', image_url: null, is_correct: false, position: 2, vote_count: 37 },
-    ],
-    sample_voters: [
-      { id: 'v-10', display_name: 'Ruth Wairimu', avatar_url: null },
-      { id: 'v-12', display_name: 'Caleb Kipchoge', avatar_url: null },
-    ],
-  },
-
-  // 5. Results & Closed Polls (List-rich with Winner Badge)
-  {
-    id: 'c5000000-0000-0000-0000-000000000001',
-    text_content: 'Annual Praise Night Theme Vote: Which theme should headline our December Kesha?',
-    category_id: 'worship',
-    poll_category: 'Worship',
-    poll_type: 'survey',
-    is_quiz: false,
-    quiz_explanation: null,
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - 6 * DAY).toISOString(),
-    poll_expires_at: new Date(nowMs - DAY).toISOString(),
-    poll_closed_at: new Date(nowMs - DAY).toISOString(),
-    poll_accent: '#10b981',
-    visibility: 'public',
-    author_id: 'seed-pastor-grace',
-    created_at: new Date(nowMs - 6 * DAY).toISOString(),
-    profiles: {
-      id: 'seed-pastor-grace',
-      display_name: 'Pastor Grace Wanjiku',
-      badge: 'pastor',
-      badge_verified: true,
-      role: 'church_admin',
-      church_name: 'Nairobi Chapel',
-    },
-    options: [
-      { id: 'd5000001-0000-0000-0000-000000000001', post_id: 'c5000000-0000-0000-0000-000000000001', label: 'Jehovah Shammah: The Lord is Here (Ezekiel 48:35)', image_url: null, is_correct: false, position: 0, vote_count: 142 },
-      { id: 'd5000001-0000-0000-0000-000000000002', post_id: 'c5000000-0000-0000-0000-000000000001', label: 'Streams of Living Water (John 7:38)', image_url: null, is_correct: false, position: 1, vote_count: 64 },
-      { id: 'd5000001-0000-0000-0000-000000000003', post_id: 'c5000000-0000-0000-0000-000000000001', label: 'Arise & Shine (Isaiah 60:1)', image_url: null, is_correct: false, position: 2, vote_count: 42 },
-    ],
-    sample_voters: [
-      { id: 'v-1', display_name: 'Faith Njeri', avatar_url: null },
-      { id: 'v-2', display_name: 'Daniel Kiprop', avatar_url: null },
-      { id: 'v-3', display_name: 'Mercy Achieng', avatar_url: null },
-    ],
-  },
-  {
-    id: 'c5000000-0000-0000-0000-000000000002',
-    text_content: 'Completed Quiz: How many loaves and fishes did the boy bring before Jesus fed the 5,000?',
-    category_id: 'bible-study',
-    poll_category: 'Bible Quiz',
-    poll_type: 'quiz',
-    is_quiz: true,
-    quiz_explanation: 'John 6:9 — "Here is a boy with five small barley loaves and two small fish, but how far will they go among so many?"',
-    poll_anonymous: false,
-    poll_multi_select: false,
-    hide_results_until_vote: false,
-    poll_starts_at: new Date(nowMs - 5 * DAY).toISOString(),
-    poll_expires_at: new Date(nowMs - 2 * DAY).toISOString(),
-    poll_closed_at: new Date(nowMs - 2 * DAY).toISOString(),
-    poll_accent: '#f59e0b',
-    visibility: 'public',
-    author_id: 'seed-elder-john',
-    created_at: new Date(nowMs - 5 * DAY).toISOString(),
-    profiles: {
-      id: 'seed-elder-john',
-      display_name: 'Elder John Kamau',
-      badge: 'elder',
-      badge_verified: true,
-      role: 'church_admin',
-      church_name: 'CITAM Valley Road',
-    },
-    options: [
-      { id: 'd5000002-0000-0000-0000-000000000001', post_id: 'c5000000-0000-0000-0000-000000000002', label: '5 Barley Loaves & 2 Small Fish', image_url: null, is_correct: true, position: 0, vote_count: 158 },
-      { id: 'd5000002-0000-0000-0000-000000000002', post_id: 'c5000000-0000-0000-0000-000000000002', label: '7 Barley Loaves & 3 Small Fish', image_url: null, is_correct: false, position: 1, vote_count: 25 },
-      { id: 'd5000002-0000-0000-0000-000000000003', post_id: 'c5000000-0000-0000-0000-000000000002', label: '12 Loaves & 2 Fish', image_url: null, is_correct: false, position: 2, vote_count: 12 },
-    ],
-    sample_voters: [
-      { id: 'v-12', display_name: 'Caleb Kipchoge', avatar_url: null },
-      { id: 'v-13', display_name: 'Naomi Wafula', avatar_url: null },
-    ],
-  },
-];
-
-const SEEDED_LEADERBOARD = [
-  {
-    user_id: 'seed-user-1',
-    display_name: 'Faith Njeri',
-    avatar_url: null,
-    badge: 'scholar',
-    badge_verified: true,
-    role: 'member',
-    total_score: 400,
-    quizzes_taken: 4,
-    correct_count: 4,
-    accuracy_pct: 100,
-  },
-  {
-    user_id: 'seed-user-2',
-    display_name: 'Caleb Kipchoge',
-    avatar_url: null,
-    badge: 'leader',
-    badge_verified: true,
-    role: 'member',
-    total_score: 310,
-    quizzes_taken: 4,
-    correct_count: 3,
-    accuracy_pct: 75,
-  },
-  {
-    user_id: 'seed-user-3',
-    display_name: 'Pastor Grace Wanjiku',
-    avatar_url: null,
-    badge: 'pastor',
-    badge_verified: true,
-    role: 'church_admin',
-    total_score: 300,
-    quizzes_taken: 3,
-    correct_count: 3,
-    accuracy_pct: 100,
-  },
-  {
-    user_id: 'seed-user-4',
-    display_name: 'Mercy Achieng',
-    avatar_url: null,
-    badge: 'worship',
-    badge_verified: false,
-    role: 'member',
-    total_score: 210,
-    quizzes_taken: 3,
-    correct_count: 2,
-    accuracy_pct: 67,
-  },
-  {
-    user_id: 'seed-user-5',
-    display_name: 'Daniel Kiprop',
-    avatar_url: null,
-    badge: 'member',
-    badge_verified: false,
-    role: 'member',
-    total_score: 200,
-    quizzes_taken: 2,
-    correct_count: 2,
-    accuracy_pct: 100,
-  },
-];
+// Demo poll content lives only in supabase/seed_polls.sql; never fabricate live poll data here.
+const SEEDED_POLLS_CATALOG = [];
+const SEEDED_LEADERBOARD = [];
 
 // Runtime state store on globalThis so seeded or newly created polls/votes/scores
 // persist across requests even if the SQL migration has not yet been applied in Supabase
@@ -721,10 +42,51 @@ function getSupabaseServerClient(req) {
   const authHeader = req?.headers?.get?.('authorization') || '';
   const client = createClient(url, serviceKey || anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: authHeader && !serviceKey ? { headers: { Authorization: authHeader } } : undefined,
   });
   return { client, hasServiceKey: Boolean(serviceKey), authHeader };
 }
+
+function getSupabaseUserClient(req) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const authHeader = req?.headers?.get?.('authorization') || '';
+  if (!url || !anonKey || !authHeader.startsWith('Bearer ')) return null;
+  return createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: authHeader } },
+  });
+}
+
+async function canViewPoll(supa, poll, viewerId) {
+  if (!poll) return false;
+  const visibility = poll.visibility || 'public';
+  if (visibility === 'public') return true;
+  if (!viewerId) return false;
+  if (poll.author_id === viewerId) return true;
+
+  if (visibility === 'followers') {
+    const { data, error } = await supa.client
+      .from('follows')
+      .select('follower_id')
+      .eq('follower_id', viewerId)
+      .eq('followed_id', poll.author_id)
+      .maybeSingle();
+    return !error && Boolean(data);
+  }
+
+  if (visibility === 'church') {
+    const [{ data: profile }, { data: memberships }] = await Promise.all([
+      supa.client.from('profiles').select('church_id').eq('id', viewerId).maybeSingle(),
+      supa.client.from('church_members').select('church_id').eq('user_id', viewerId),
+    ]);
+    const userChurchIds = new Set((memberships || []).map((m) => String(m.church_id)));
+    if (profile?.church_id) userChurchIds.add(String(profile.church_id));
+    return Boolean(poll.church_id && userChurchIds.has(String(poll.church_id)));
+  }
+
+  return false;
+}
+
 
 async function resolveAuthenticatedUser(req) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -765,6 +127,12 @@ function normalizePollRecord(rawPost, options = [], countsByOption = {}, myVotes
   const isQuiz = Boolean(rawPost.is_quiz || pollType === 'quiz' || options.some((o) => o.is_correct));
 
   // Merge option counts with runtime vote ledger
+  const hasVoted = Array.isArray(myVotes) && myVotes.length > 0;
+  const isExpired = Boolean(expiresAt && new Date(expiresAt).getTime() <= Date.now());
+  const canRevealQuizAnswers = !isQuiz ||
+    !Boolean(rawPost.hide_results_until_vote ?? rawPost.reveal_results_after_voting) ||
+    hasVoted || Boolean(closedAt) || isExpired;
+
   const normalizedOptions = options
     .slice()
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
@@ -781,7 +149,7 @@ function normalizePollRecord(rawPost, options = [], countsByOption = {}, myVotes
         post_id: rawPost.id,
         label: opt.label || `Option ${idx + 1}`,
         image_url: opt.image_url || null,
-        is_correct: Boolean(opt.is_correct),
+        is_correct: canRevealQuizAnswers ? Boolean(opt.is_correct) : false,
         position: opt.position ?? idx,
         vote_count: Math.max(0, baseCount + runtimeExtraVotes),
       };
@@ -836,9 +204,8 @@ function normalizePollRecord(rawPost, options = [], countsByOption = {}, myVotes
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action') || 'list';
-  const userIdParam = searchParams.get('user_id') || null;
   const authedUser = await resolveAuthenticatedUser(req);
-  const viewerId = authedUser?.id || userIdParam || null;
+  const viewerId = authedUser?.id || null;
   const supa = getSupabaseServerClient(req);
 
   // -------------------------------------------------------------------------
@@ -974,6 +341,9 @@ export async function GET(req) {
       SEEDED_POLLS_CATALOG.find((p) => p.id === pollId) ||
       runtimeState.createdPolls.find((p) => p.id === pollId);
     const pollMeta = dbPoll || seededPoll;
+    if (!pollMeta || !(await canViewPoll(supa, pollMeta, authedUser?.id || null))) {
+      return NextResponse.json({ error: 'Poll not found or you do not have access to its analytics.' }, { status: 404 });
+    }
     const options =
       dbOptions.length > 0
         ? dbOptions
@@ -1173,6 +543,11 @@ export async function GET(req) {
     }
   }
 
+  // Enforce visibility before any poll data is returned from this server-side client.
+  dbPosts = (await Promise.all(
+    dbPosts.map(async (post) => (await canViewPoll(supa, post, viewerId) ? post : null))
+  )).filter(Boolean);
+
   // Merge DB polls + runtime created polls + seeded polls (deduped by id)
   const mergedMap = new Map();
 
@@ -1271,7 +646,8 @@ export async function POST(req) {
 
   const action = body.action;
   const authedUser = await resolveAuthenticatedUser(req);
-  const userId = authedUser?.id || body.user_id || null;
+  // Never trust a client-supplied user_id for writes.
+  const userId = authedUser?.id || null;
 
   if (!userId) {
     return NextResponse.json({ error: 'Please sign in to perform this action.' }, { status: 401 });
@@ -1285,6 +661,7 @@ export async function POST(req) {
   }
 
   const supa = getSupabaseServerClient(req);
+  const userSupa = getSupabaseUserClient(req);
 
   // -------------------------------------------------------------------------
   // 1. CAST VOTE
@@ -1295,232 +672,31 @@ export async function POST(req) {
     if (!pollId || !optionId) {
       return NextResponse.json({ error: 'poll_id and option_id are required.' }, { status: 400 });
     }
-
-    // Try Supabase cast_vote RPC first
-    if (supa?.client) {
-      try {
-        const { data: rpcRes, error: rpcErr } = await supa.client.rpc('cast_vote', {
-          p_poll_id: pollId,
-          p_option_id: optionId,
-        });
-        if (!rpcErr && rpcRes && rpcRes.ok) {
-          return NextResponse.json(rpcRes);
-        }
-        // If RPC returned a domain validation error (expired, closed, double vote), return it directly
-        if (rpcErr && rpcErr.code === 'P0001') {
-          return NextResponse.json({ error: rpcErr.message }, { status: 400 });
-        }
-      } catch {
-        // Continue to server-validated fallback
-      }
+    if (!userSupa) {
+      return NextResponse.json({ error: 'Poll voting is temporarily unavailable. Please sign in again.' }, { status: 503 });
     }
 
-    // Find poll in DB, runtime, or seeded catalog
-    let targetPoll =
-      runtimeState.createdPolls.find((p) => p.id === pollId) ||
-      SEEDED_POLLS_CATALOG.find((p) => p.id === pollId);
-    let targetOptions = targetPoll?.options || [];
-
-    if (supa?.client && !targetPoll) {
-      try {
-        const [{ data: pRow }, { data: oRows }] = await Promise.all([
-          supa.client.from('posts').select('*').eq('id', pollId).maybeSingle(),
-          supa.client.from('poll_options').select('*').eq('post_id', pollId).order('position'),
-        ]);
-        if (pRow) {
-          targetPoll = pRow;
-          targetOptions = oRows || [];
-        }
-      } catch {}
-    }
-
-    if (!targetPoll) {
-      return NextResponse.json({ error: 'Poll not found.' }, { status: 404 });
-    }
-
-    // Enforce closed / expired / scheduled rules server-side
-    const closedAt = runtimeState.closedPollIds.get(pollId) || targetPoll.poll_closed_at;
-    if (closedAt) {
-      return NextResponse.json(
-        { error: 'This poll has been closed early. No further votes can be cast.' },
-        { status: 400 }
-      );
-    }
-
-    if (targetPoll.poll_starts_at && new Date(targetPoll.poll_starts_at).getTime() > Date.now()) {
-      return NextResponse.json(
-        { error: 'This poll is scheduled to open later.' },
-        { status: 400 }
-      );
-    }
-
-    if (targetPoll.poll_expires_at && new Date(targetPoll.poll_expires_at).getTime() <= Date.now()) {
-      return NextResponse.json(
-        { error: 'This poll has expired and is closed.' },
-        { status: 400 }
-      );
-    }
-
-    const chosenOption = targetOptions.find((o) => o.id === optionId);
-    if (!chosenOption) {
-      return NextResponse.json({ error: 'Invalid option selected.' }, { status: 400 });
-    }
-
-    const isQuiz = Boolean(
-      targetPoll.is_quiz ||
-        targetPoll.poll_type === 'quiz' ||
-        targetOptions.some((o) => o.is_correct)
-    );
-    const isMultiSelect = Boolean(targetPoll.poll_multi_select) && !isQuiz;
-
-    // Check existing votes by this user
-    let existingUserVotes = runtimeState.voteLedger.filter(
-      (v) => v.post_id === pollId && v.voter_id === userId
-    );
-
-    if (supa?.client) {
-      try {
-        const { data: dbExisting } = await supa.client
-          .from('poll_votes')
-          .select('id, option_id')
-          .eq('post_id', pollId)
-          .eq('voter_id', userId);
-        if (Array.isArray(dbExisting) && dbExisting.length > 0) {
-          existingUserVotes = dbExisting;
-        }
-      } catch {}
-    }
-
-    let toggledOff = false;
-    if (isMultiSelect) {
-      const alreadyPickedThisOption = existingUserVotes.some((v) => v.option_id === optionId);
-      if (alreadyPickedThisOption) {
-        toggledOff = true;
-        runtimeState.voteLedger = runtimeState.voteLedger.filter(
-          (v) => !(v.post_id === pollId && v.voter_id === userId && v.option_id === optionId)
-        );
-        if (supa?.client) {
-          try {
-            await supa.client
-              .from('poll_votes')
-              .delete()
-              .eq('post_id', pollId)
-              .eq('voter_id', userId)
-              .eq('option_id', optionId);
-          } catch {}
-        }
-      }
-    } else if (existingUserVotes.length > 0) {
-      return NextResponse.json(
-        { error: 'You have already voted in this poll. Double votes are rejected.' },
-        { status: 400 }
-      );
-    }
-
-    let persistedInDb = false;
-    if (!toggledOff && supa?.client) {
-      try {
-        const { error: insErr } = await supa.client.from('poll_votes').insert({
-          post_id: pollId,
-          option_id: optionId,
-          voter_id: userId,
-        });
-        if (!insErr) persistedInDb = true;
-      } catch {}
-    }
-
-    if (!toggledOff) {
-      runtimeState.voteLedger.push({
-        id: `vote-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        post_id: pollId,
-        option_id: optionId,
-        voter_id: userId,
-        voter_name: body.voter_name || authedUser?.user_metadata?.display_name || 'Member',
-        voter_avatar: body.voter_avatar || null,
-        is_anonymous: Boolean(targetPoll.poll_anonymous),
-        created_at: new Date().toISOString(),
-        from_fallback: !persistedInDb,
+    try {
+      const { data, error } = await userSupa.rpc('cast_vote', {
+        p_poll_id: pollId,
+        p_option_id: optionId,
       });
-    }
-
-    // Quiz scoring
-    let score = 0;
-    let isCorrect = null;
-    let correctOptionId = null;
-    if (isQuiz && !toggledOff) {
-      const correctOpt = targetOptions.find((o) => o.is_correct) || targetOptions[0];
-      correctOptionId = correctOpt?.id || null;
-      isCorrect = Boolean(chosenOption.is_correct);
-      score = isCorrect ? 100 : 10;
-
-      let scoreSavedInDb = false;
-      if (supa?.client) {
-        try {
-          const { error: scErr } = await supa.client.from('quiz_scores').upsert(
-            {
-              poll_id: pollId,
-              user_id: userId,
-              option_id: optionId,
-              is_correct: isCorrect,
-              score,
-              answered_at: new Date().toISOString(),
-            },
-            { onConflict: 'poll_id,user_id' }
-          );
-          if (!scErr) scoreSavedInDb = true;
-        } catch {}
+      if (error) {
+        const status = error.code === '42501' ? 403 : error.code === 'P0002' ? 404 : error.code === 'P0001' ? 400 : 500;
+        return NextResponse.json(
+          { error: status === 500 ? 'Unable to record this vote right now.' : error.message },
+          { status }
+        );
       }
-
-      if (!runtimeState.quizScoreLedger.some((q) => q.poll_id === pollId && q.user_id === userId)) {
-        runtimeState.quizScoreLedger.push({
-          poll_id: pollId,
-          user_id: userId,
-          display_name: body.voter_name || authedUser?.user_metadata?.display_name || 'Believer',
-          avatar_url: body.voter_avatar || null,
-          badge: body.voter_badge || 'member',
-          badge_verified: Boolean(body.voter_verified),
-          option_id: optionId,
-          is_correct: isCorrect,
-          score,
-          answered_at: new Date().toISOString(),
-          from_fallback: !scoreSavedInDb,
-        });
+      if (!data?.ok) {
+        return NextResponse.json({ error: 'The vote was not accepted.' }, { status: 400 });
       }
+      return NextResponse.json(data);
+    } catch {
+      return NextResponse.json({ error: 'Unable to record this vote right now.' }, { status: 500 });
     }
-
-    // Build updated counts
-    const counts = {};
-    let totalVotes = 0;
-    targetOptions.forEach((opt) => {
-      const extra = runtimeState.voteLedger.filter(
-        (v) => v.post_id === pollId && v.option_id === opt.id && v.from_fallback
-      ).length;
-      const c = Number(opt.vote_count || 0) + extra + (persistedInDb && opt.id === optionId ? 1 : 0);
-      counts[opt.id] = c;
-      totalVotes += c;
-    });
-
-    const myVotes = runtimeState.voteLedger
-      .filter((v) => v.post_id === pollId && v.voter_id === userId)
-      .map((v) => v.option_id);
-
-    return NextResponse.json({
-      ok: true,
-      poll_id: pollId,
-      option_id: optionId,
-      toggled_off: toggledOff,
-      is_quiz: isQuiz,
-      is_correct: isCorrect,
-      score,
-      correct_option_id: correctOptionId,
-      explanation: targetPoll.quiz_explanation || null,
-      total_votes: totalVotes,
-      counts,
-      my_votes: myVotes,
-    });
   }
 
-  // -------------------------------------------------------------------------
   // 2. CREATE POLL
   // -------------------------------------------------------------------------
   if (action === 'create_poll') {
@@ -1567,105 +743,71 @@ export async function POST(req) {
     let createdPostId = null;
     let createdOptions = [];
 
-    if (supa?.client) {
-      try {
-        // Try inserting with full 20261030_polls_hub.sql columns first
-        const { data: fullInsert, error: fullErr } = await supa.client
-          .from('posts')
-          .insert({
-            author_id: userId,
-            church_id: body.church_id || null,
-            category_id: categoryId,
-            text_content: question,
-            visibility,
-            poll_type: pollType,
-            is_quiz: isQuiz,
-            quiz_explanation: quizExplanation,
-            poll_anonymous: pollAnonymous,
-            poll_multi_select: pollMultiSelect,
-            hide_results_until_vote: hideResultsUntilVote,
-            poll_starts_at: startsAt,
-            poll_expires_at: expiresAt,
-            poll_accent: pollAccent,
-            poll_category: pollCategory,
-            is_anonymous: pollAnonymous,
-          })
-          .select('id')
-          .single();
-
-        if (!fullErr && fullInsert?.id) {
-          createdPostId = fullInsert.id;
-        } else {
-          // Fallback to base posts columns
-          const { data: baseInsert } = await supa.client
-            .from('posts')
-            .insert({
-              author_id: userId,
-              church_id: body.church_id || null,
-              category_id: categoryId,
-              text_content: question,
-              visibility,
-              poll_expires_at: expiresAt,
-              is_anonymous: pollAnonymous,
-            })
-            .select('id')
-            .single();
-          if (baseInsert?.id) createdPostId = baseInsert.id;
-        }
-
-        if (createdPostId) {
-          const { data: optRows, error: optErr } = await supa.client
-            .from('poll_options')
-            .insert(
-              cleanOptions.map((o) => ({
-                post_id: createdPostId,
-                label: o.label,
-                image_url: o.image_url,
-                is_correct: o.is_correct,
-                position: o.position,
-              }))
-            )
-            .select('*');
-
-          if (!optErr && Array.isArray(optRows)) {
-            createdOptions = optRows;
-          } else {
-            // Fallback without is_correct if migration not yet applied
-            const { data: basicOptRows } = await supa.client
-              .from('poll_options')
-              .insert(
-                cleanOptions.map((o) => ({
-                  post_id: createdPostId,
-                  label: o.label,
-                  image_url: o.image_url,
-                  position: o.position,
-                }))
-              )
-              .select('*');
-            if (Array.isArray(basicOptRows)) {
-              createdOptions = basicOptRows.map((bo, idx) => ({
-                ...bo,
-                is_correct: cleanOptions[idx]?.is_correct || false,
-              }));
-            }
-          }
-        }
-      } catch {}
+    if (!supa?.client) {
+      return NextResponse.json({ error: 'Poll creation is temporarily unavailable. Please try again later.' }, { status: 503 });
     }
 
-    const finalId = createdPostId || `poll-${Date.now()}`;
-    const finalOptions =
-      createdOptions.length > 0
-        ? createdOptions
-        : cleanOptions.map((o, idx) => ({
-            id: `opt-${finalId}-${idx}`,
-            post_id: finalId,
-            label: o.label,
-            image_url: o.image_url,
-            is_correct: o.is_correct,
-            position: idx,
-            vote_count: 0,
-          }));
+    try {
+      const { data: insertedPost, error: postError } = await supa.client
+        .from('posts')
+        .insert({
+          author_id: userId,
+          church_id: body.church_id || null,
+          category_id: categoryId,
+          text_content: question,
+          visibility,
+          poll_type: pollType,
+          is_quiz: isQuiz,
+          quiz_explanation: quizExplanation,
+          poll_anonymous: pollAnonymous,
+          poll_multi_select: pollMultiSelect,
+          hide_results_until_vote: hideResultsUntilVote,
+          poll_starts_at: startsAt,
+          poll_expires_at: expiresAt,
+          poll_accent: pollAccent,
+          poll_category: pollCategory,
+          is_anonymous: pollAnonymous,
+        })
+        .select('id')
+        .single();
+
+      if (postError || !insertedPost?.id) {
+        return NextResponse.json({ error: 'The poll could not be saved. Please confirm the polls migration has been applied.' }, { status: 500 });
+      }
+      createdPostId = insertedPost.id;
+
+      const { data: optionRows, error: optionError } = await supa.client
+        .from('poll_options')
+        .insert(cleanOptions.map((o) => ({
+          post_id: createdPostId,
+          label: o.label,
+          image_url: o.image_url,
+          is_correct: o.is_correct,
+          position: o.position,
+        })))
+        .select('*');
+
+      if (optionError || !Array.isArray(optionRows) || optionRows.length !== cleanOptions.length) {
+        await supa.client.from('posts').delete().eq('id', createdPostId);
+        return NextResponse.json({ error: 'The poll options could not be saved. No incomplete poll was published.' }, { status: 500 });
+      }
+      createdOptions = optionRows;
+    } catch {
+      if (createdPostId) {
+        try { await supa.client.from('posts').delete().eq('id', createdPostId); } catch {}
+      }
+      return NextResponse.json({ error: 'The poll could not be saved to the database.' }, { status: 500 });
+    }
+
+    if (!createdPostId || createdOptions.length !== cleanOptions.length) {
+      if (createdPostId) {
+        try { await supa.client.from('posts').delete().eq('id', createdPostId); } catch {}
+      }
+      return NextResponse.json({ error: 'The poll could not be saved to the database. Please check the poll schema and try again.' }, { status: 500 });
+    }
+
+    const finalId = createdPostId;
+    const finalOptions = createdOptions;
 
     const authorProfile = body.author_profile || {
       id: userId,
@@ -1701,8 +843,6 @@ export async function POST(req) {
       options: finalOptions,
     };
 
-    runtimeState.createdPolls.unshift(newPollRecord);
-
     return NextResponse.json({
       ok: true,
       poll: normalizePollRecord(newPollRecord, finalOptions, {}, [], [], null),
@@ -1714,49 +854,47 @@ export async function POST(req) {
   // -------------------------------------------------------------------------
   if (action === 'close_poll') {
     const pollId = body.poll_id;
-    if (!pollId) {
-      return NextResponse.json({ error: 'Missing poll_id' }, { status: 400 });
+    if (!pollId) return NextResponse.json({ error: 'Missing poll_id' }, { status: 400 });
+    if (!userSupa) return NextResponse.json({ error: 'Poll closing is temporarily unavailable. Please sign in again.' }, { status: 503 });
+
+    try {
+      const { data, error } = await userSupa.rpc('close_poll_early', { p_poll_id: pollId });
+      if (error) {
+        const status = error.code === '42501' ? 403 : error.code === 'P0002' ? 404 : 500;
+        return NextResponse.json({ error: status === 500 ? 'Unable to close this poll right now.' : error.message }, { status });
+      }
+      return NextResponse.json(data || { ok: true, poll_id: pollId });
+    } catch {
+      return NextResponse.json({ error: 'Unable to close this poll right now.' }, { status: 500 });
     }
-
-    const nowIso = new Date().toISOString();
-    runtimeState.closedPollIds.set(pollId, nowIso);
-
-    if (supa?.client) {
-      try {
-        const { error: rpcErr } = await supa.client.rpc('close_poll_early', {
-          p_poll_id: pollId,
-        });
-        if (rpcErr) {
-          await supa.client
-            .from('posts')
-            .update({ poll_expires_at: nowIso })
-            .eq('id', pollId);
-        }
-      } catch {}
-    }
-
-    return NextResponse.json({ ok: true, poll_id: pollId, closed_at: nowIso });
   }
 
+  // -------------------------------------------------------------------------
   // -------------------------------------------------------------------------
   // 4. DELETE POLL (Creator or Moderator)
   // -------------------------------------------------------------------------
   if (action === 'delete_poll') {
     const pollId = body.poll_id;
-    if (!pollId) {
-      return NextResponse.json({ error: 'Missing poll_id' }, { status: 400 });
+    if (!pollId) return NextResponse.json({ error: 'Missing poll_id' }, { status: 400 });
+    if (!supa?.client) return NextResponse.json({ error: 'Poll deletion is temporarily unavailable.' }, { status: 503 });
+
+    try {
+      const { data, error } = await supa.client
+        .from('posts')
+        .delete()
+        .eq('id', pollId)
+        .eq('author_id', userId)
+        .select('id');
+      if (error) {
+        return NextResponse.json({ error: 'Unable to delete this poll. You may not have permission.' }, { status: 403 });
+      }
+      if (!Array.isArray(data) || data.length === 0) {
+        return NextResponse.json({ error: 'Poll not found or you are not its creator.' }, { status: 404 });
+      }
+      return NextResponse.json({ ok: true, poll_id: pollId });
+    } catch {
+      return NextResponse.json({ error: 'Unable to delete this poll right now.' }, { status: 500 });
     }
-
-    runtimeState.deletedPollIds.add(pollId);
-    runtimeState.createdPolls = runtimeState.createdPolls.filter((p) => p.id !== pollId);
-
-    if (supa?.client) {
-      try {
-        await supa.client.from('posts').delete().eq('id', pollId);
-      } catch {}
-    }
-
-    return NextResponse.json({ ok: true, poll_id: pollId });
   }
 
   return NextResponse.json({ error: 'Unsupported action' }, { status: 400 });

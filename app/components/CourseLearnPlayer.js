@@ -32,6 +32,7 @@ import {
   completeCourseLesson,
   saveLessonProgress,
   issueCourseCertificate,
+  submitCourseQuiz,
   formatDurationSeconds
 } from '../lib/data/coursesApi';
 import { playSound } from '../lib/soundEffects';
@@ -138,6 +139,8 @@ export default function CourseLearnPlayer({
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(null);
+  const [quizResults, setQuizResults] = useState({});
+  const [quizError, setQuizError] = useState('');
 
   // Certificate state
   const [certificate, setCertificate] = useState(course?.certificate || null);
@@ -156,6 +159,8 @@ export default function CourseLearnPlayer({
     setQuizAnswers({});
     setQuizSubmitted(false);
     setQuizScore(saved?.quiz_score ?? null);
+    setQuizResults({});
+    setQuizError('');
     setReadingProgress(saved?.completed ? 100 : 25);
     lastSavedPosRef.current = Number(saved?.last_position_seconds || 0);
   }, [currentLesson?.id]);
@@ -219,19 +224,6 @@ export default function CourseLearnPlayer({
       const pos = Math.floor(mediaRef.current?.currentTime || lastSavedPosRef.current || 0);
       const finalScore = overrideQuizScore !== null ? overrideQuizScore : quizScore;
 
-      // Optimistic update
-      setLessonProgressMap((prev) => ({
-        ...prev,
-        [currentLesson.id]: {
-          ...(prev[currentLesson.id] || {}),
-          lesson_id: currentLesson.id,
-          completed: true,
-          last_position_seconds: pos,
-          quiz_score: finalScore,
-          personal_notes: notesText
-        }
-      }));
-
       try {
         playSound?.('confirm');
       } catch {}
@@ -246,12 +238,27 @@ export default function CourseLearnPlayer({
           quizScore: finalScore,
           personalNotes: notesText
         });
+        setLessonProgressMap((prev) => ({
+          ...prev,
+          [currentLesson.id]: {
+            ...(prev[currentLesson.id] || {}),
+            lesson_id: currentLesson.id,
+            completed: true,
+            last_position_seconds: pos,
+            quiz_score: finalScore,
+            personal_notes: notesText
+          }
+        }));
         if (res?.certificate) {
           setCertificate(res.certificate);
           setShowCertificateModal(true);
         }
         onCourseUpdated?.(res);
-      } catch {} finally {
+      } catch (error) {
+        const message = error?.message || 'Progress could not be saved. Please try again.';
+        if (currentLesson.kind === 'quiz') setQuizError(message);
+        else if (typeof window !== 'undefined') window.alert(message);
+      } finally {
         setCompleting(false);
       }
     },
@@ -290,24 +297,32 @@ export default function CourseLearnPlayer({
     }
   };
 
-  const handleSubmitQuiz = () => {
+  const handleSubmitQuiz = async () => {
     if (!currentLesson) return;
     const questions = currentLesson.quiz_questions || [];
     if (questions.length === 0) {
       handleMarkComplete(100);
       return;
     }
-    let correct = 0;
-    questions.forEach((q, idx) => {
-      const qKey = q.id || idx;
-      if (Number(quizAnswers[qKey]) === Number(q.correct_index)) {
-        correct += 1;
+    setQuizError('');
+    try {
+      const result = await submitCourseQuiz({
+        lessonId: currentLesson.id,
+        answers: quizAnswers
+      });
+      const byId = Object.fromEntries((result.results || []).map((item) => [item.id, item]));
+      setQuizResults(byId);
+      setQuizScore(Number(result.score || 0));
+      setQuizSubmitted(true);
+      if (result.passed) {
+        setQuizError('');
+        await handleMarkComplete(Number(result.score || 0));
+      } else {
+        setQuizError(`You scored ${Number(result.score || 0)}%. You need at least ${Number(result.passingScore || 70)}% to pass. Review the explanations and try again.`);
       }
-    });
-    const score = Math.round((correct / questions.length) * 100);
-    setQuizScore(score);
-    setQuizSubmitted(true);
-    handleMarkComplete(score);
+    } catch (error) {
+      setQuizError(error?.message || 'Could not submit this quiz. Please try again.');
+    }
   };
 
   const handleOpenCertificate = async () => {
@@ -629,6 +644,9 @@ export default function CourseLearnPlayer({
                       )}
                     </div>
 
+                    {quizError && (
+                      <p className="course-learn-quiz-error" role="alert">{quizError}</p>
+                    )}
                     {(currentLesson.quiz_questions || []).length === 0 ? (
                       <p className="course-learn-quiz-empty">
                         Click &ldquo;Mark Complete&rdquo; below once you have reviewed the module concepts.
@@ -647,7 +665,7 @@ export default function CourseLearnPlayer({
                               <div className="course-learn-quiz-options">
                                 {options.map((opt, oIdx) => {
                                   const isSelected = selectedOpt === oIdx;
-                                  const isCorrect = Number(q.correct_index) === oIdx;
+                                  const isCorrect = Number(quizResults[qKey]?.correct_index) === oIdx;
                                   let stateClass = '';
                                   if (quizSubmitted) {
                                     if (isCorrect) stateClass = 'is-correct';
@@ -673,9 +691,9 @@ export default function CourseLearnPlayer({
                                   );
                                 })}
                               </div>
-                              {quizSubmitted && q.explanation && (
+                              {quizSubmitted && quizResults[qKey]?.explanation && (
                                 <div className="course-learn-quiz-explanation">
-                                  <strong>Explanation:</strong> {q.explanation}
+                                  <strong>Explanation:</strong> {quizResults[qKey].explanation}
                                 </div>
                               )}
                             </div>
@@ -699,6 +717,9 @@ export default function CourseLearnPlayer({
                               onClick={() => {
                                 setQuizSubmitted(false);
                                 setQuizAnswers({});
+                                setQuizResults({});
+                                setQuizScore(null);
+                                setQuizError('');
                               }}
                             >
                               Retry Quiz

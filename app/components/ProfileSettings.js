@@ -21,7 +21,7 @@ import {
 } from '../lib/statusManager';
 
 const COLS =
-  'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, location_place_id, location_lat, location_lng, onboarding_completed_at, display_name_changed_at, allow_status_reshare, who_can_tag_me, review_tags';
+  'display_name, role, badge, badge_verified, avatar_url, cover_url, about, location_label, onboarding_completed_at, display_name_changed_at, allow_status_reshare';
 const ABOUT_MAX = 250;
 const MIN_AGE = 13;
 
@@ -102,8 +102,8 @@ export default function ProfileSettings({ session }) {
     setWhoCanTagMe(newPref);
     try {
       const { error } = await supabase
-        .from('profiles')
-        .update({ who_can_tag_me: newPref })
+        .from('profile_private')
+        .upsert({ id: uid, who_can_tag_me: newPref }, { onConflict: 'id' })
         .eq('id', uid);
       if (error) {
         setWhoCanTagMe(prev);
@@ -129,8 +129,8 @@ export default function ProfileSettings({ session }) {
     setReviewTags(nextVal);
     try {
       const { error } = await supabase
-        .from('profiles')
-        .update({ review_tags: nextVal })
+        .from('profile_private')
+        .upsert({ id: uid, review_tags: nextVal }, { onConflict: 'id' })
         .eq('id', uid);
       if (error) {
         setReviewTags(!nextVal);
@@ -188,12 +188,12 @@ export default function ProfileSettings({ session }) {
     (async () => {
       const [profRes, privRes, reqRes] = await Promise.all([
         supabase.from('profiles').select(COLS).eq('id', uid).single(),
-        supabase.from('profile_private').select('date_of_birth').eq('id', uid).maybeSingle(),
+        supabase.from('profile_private').select('date_of_birth, location_place_id, location_lat, location_lng, who_can_tag_me, review_tags').eq('id', uid).maybeSingle(),
         supabase.from('badge_requests').select('id, requested_badge, created_at').eq('user_id', uid).eq('status', 'pending').maybeSingle(),
       ]);
       if (cancelled) return;
       if (profRes.error) notify('error', 'Could not load your profile. Please refresh.');
-      else applyProfile(profRes.data);
+      else applyProfile({ ...profRes.data, ...(privRes.data || {}) });
       const d = privRes.data?.date_of_birth || '';
       setDobOrig(d);
       setDob(d);
@@ -249,7 +249,7 @@ export default function ProfileSettings({ session }) {
   const aboutChanged = about.trim() !== (profile.about || '');
   const dobChanged = dob !== dobOrig;
   const dobValid = !!dob && dob >= '1900-01-01' && dob <= maxDob;
-  const locChanged = (location?.label || '') !== (profile.location_label || '');
+  const locChanged = (location?.label || '') !== (profile.location_label || '') || (location?.placeId || null) !== (profile.location_place_id || null) || (location?.lat ?? null) !== (profile.location_lat ?? null) || (location?.lng ?? null) !== (profile.location_lng ?? null);
   const dirty = nameChanged || aboutChanged || dobChanged || locChanged;
   const canSave = dirty && !saving && (!nameChanged || (nameValid && !nameLocked)) && dobValid;
 
@@ -263,26 +263,42 @@ export default function ProfileSettings({ session }) {
     if (!canSave) return;
     setSaving(true);
     try {
-      if (dobChanged) {
-        const { error } = await supabase.from('profile_private').upsert({ id: uid, date_of_birth: dob }, { onConflict: 'id' });
+      const privateFields = {
+        date_of_birth: dobChanged ? dob : (profile.date_of_birth || dobOrig || null),
+        location_place_id: profile.location_place_id || null,
+        location_lat: profile.location_lat ?? null,
+        location_lng: profile.location_lng ?? null,
+      };
+      const privateUpdate = { id: uid };
+      if (dobChanged) privateUpdate.date_of_birth = dob;
+      if (locChanged) {
+        privateFields.location_place_id = location?.placeId || null;
+        privateFields.location_lat = location?.lat ?? null;
+        privateFields.location_lng = location?.lng ?? null;
+        privateUpdate.location_place_id = privateFields.location_place_id;
+        privateUpdate.location_lat = privateFields.location_lat;
+        privateUpdate.location_lng = privateFields.location_lng;
+      }
+      if (dobChanged || locChanged) {
+        const { error } = await supabase
+          .from('profile_private')
+          .upsert(privateUpdate, { onConflict: 'id' });
         if (error) throw new Error(error.message);
-        setDobOrig(dob);
+        if (dobChanged) setDobOrig(dob);
       }
       const upd = {};
       if (nameChanged) upd.display_name = nameTrim;
       if (aboutChanged) upd.about = about.trim() || null;
-      if (locChanged) {
-        upd.location_label = location?.label || null;
-        upd.location_place_id = location?.placeId || null;
-        upd.location_lat = location?.lat ?? null;
-        upd.location_lng = location?.lng ?? null;
-      }
+      if (locChanged) upd.location_label = location?.label || null;
+
+      let nextProfile = { ...profile, ...privateFields };
       if (Object.keys(upd).length) {
         const { data, error } = await supabase.from('profiles').update(upd).eq('id', uid).select(COLS).single();
         if (error) throw new Error(error.message);
-        applyProfile(data);
+        nextProfile = { ...data, ...privateFields };
       }
-      notify('success', 'Your profile has been updated.');
+      if (Object.keys(upd).length || dobChanged || locChanged) applyProfile(nextProfile);
+      notify('success', 'Your profile has been updated.' );
     } catch (e) {
       notify('error', e.message || 'Could not save. Please try again.');
     }

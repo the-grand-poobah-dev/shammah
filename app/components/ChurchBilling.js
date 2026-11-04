@@ -37,7 +37,10 @@ export default function ChurchBilling({ church, session, onPaid }) {
     try {
       const res = await fetch('/api/mpesa/stkpush', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           phone: normalised,
           churchId: church.id,

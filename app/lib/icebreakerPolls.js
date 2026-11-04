@@ -8,51 +8,8 @@
 
 import { listPolls, castPollVote, createPoll, deletePoll } from './data/pollsApi';
 
-export const DEFAULT_ICEBREAKER_POLLS = [
-  {
-    id: 'c4000000-0000-0000-0000-000000000001',
-    question: 'How is your spirit feeling walking into fellowship today?',
-    category: 'Icebreaker',
-    emoji: '🕊️',
-    authorName: 'Pastor Grace Wanjiku',
-    isAnonymous: true,
-    createdAt: new Date().toISOString(),
-    options: [
-      { id: 'd4000001-0000-0000-0000-000000000001', label: "🔥 On fire & grateful for God's grace", votes: 58 },
-      { id: 'd4000001-0000-0000-0000-000000000002', label: '🕊️ Seeking quiet peace & renewal', votes: 41 },
-      { id: 'd4000001-0000-0000-0000-000000000003', label: '🙏 Standing in prayer for a breakthrough', votes: 29 },
-      { id: 'd4000001-0000-0000-0000-000000000004', label: '💪 Ready to serve & encourage someone', votes: 14 },
-    ],
-  },
-  {
-    id: 'c4000000-0000-0000-0000-000000000002',
-    question: 'What is your go-to way to connect with God first thing in the morning?',
-    category: 'Icebreaker',
-    emoji: '☀️',
-    authorName: 'David Omondi · Youth Ministry',
-    isAnonymous: false,
-    createdAt: new Date().toISOString(),
-    options: [
-      { id: 'd4000002-0000-0000-0000-000000000001', label: '🎶 Worship playlist on full volume', votes: 44 },
-      { id: 'd4000002-0000-0000-0000-000000000002', label: '📖 Reading a chapter in Psalms or Proverbs', votes: 39 },
-      { id: 'd4000002-0000-0000-0000-000000000003', label: '☕ Quiet prayer over morning chai/coffee', votes: 35 },
-    ],
-  },
-  {
-    id: 'c4000000-0000-0000-0000-000000000003',
-    question: 'Sunday afternoon vibes after church service:',
-    category: 'Icebreaker',
-    emoji: '🍛',
-    authorName: 'Deacon Mary Njoroge',
-    isAnonymous: false,
-    createdAt: new Date().toISOString(),
-    options: [
-      { id: 'd4000003-0000-0000-0000-000000000001', label: '🍛 Nyama choma & fellowship with family', votes: 67 },
-      { id: 'd4000003-0000-0000-0000-000000000002', label: '😴 Legendary 2-hour Sunday afternoon nap', votes: 59 },
-      { id: 'd4000003-0000-0000-0000-000000000003', label: '🎤 Choir & youth ministry rehearsal', votes: 37 },
-    ],
-  },
-];
+// Demo content is stored in supabase/seed_polls.sql; never fabricate live poll data.
+export const DEFAULT_ICEBREAKER_POLLS = [];
 
 function mapPollToIcebreaker(p) {
   return {
@@ -82,11 +39,11 @@ export async function fetchIcebreakerPollsFromDb(userId = null) {
       return icebreakers.map(mapPollToIcebreaker);
     }
   } catch {}
-  return DEFAULT_ICEBREAKER_POLLS;
+  return [];
 }
 
 export function getIcebreakerPolls() {
-  return DEFAULT_ICEBREAKER_POLLS;
+  return [];
 }
 
 export function getIcebreakerVotes() {
@@ -94,7 +51,7 @@ export function getIcebreakerVotes() {
 }
 
 export async function voteInIcebreakerPoll(pollId, optionId, userId = null) {
-  if (!userId) return { polls: DEFAULT_ICEBREAKER_POLLS, votes: {} };
+  if (!userId) return { polls: [], votes: {} };
   await castPollVote({ pollId, optionId, userId });
   const polls = await fetchIcebreakerPollsFromDb(userId);
   const votes = {};

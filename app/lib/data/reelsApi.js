@@ -248,3 +248,60 @@ export async function toggleFollowAuthor(authorId) {
     return { following: false, error: err };
   }
 }
+
+/** Checks whether the signed-in user has saved a reel. */
+export async function checkReelSaved(reelId) {
+  if (!reelId) return false;
+  try {
+    const { data: sessionRes } = await supabase.auth.getSession();
+    const userId = sessionRes?.session?.user?.id;
+    if (!userId) return false;
+    const { data, error } = await supabase
+      .from('reel_saves')
+      .select('reel_id')
+      .eq('user_id', userId)
+      .eq('reel_id', reelId)
+      .maybeSingle();
+    if (error) return false;
+    return Boolean(data);
+  } catch {
+    return false;
+  }
+}
+
+/** Persists a reel save/unsave under the current user's own row. */
+export async function toggleReelSave(reelId) {
+  if (!reelId) return { saved: false, error: new Error('Reel ID required') };
+  try {
+    const { data: sessionRes, error: sessionError } = await supabase.auth.getSession();
+    const userId = sessionRes?.session?.user?.id;
+    if (sessionError || !userId) {
+      return { saved: false, error: new Error('Sign-in required to save reels') };
+    }
+
+    const { data: existing, error: lookupError } = await supabase
+      .from('reel_saves')
+      .select('reel_id')
+      .eq('user_id', userId)
+      .eq('reel_id', reelId)
+      .maybeSingle();
+    if (lookupError) return { saved: false, error: lookupError };
+
+    if (existing) {
+      const { error } = await supabase
+        .from('reel_saves')
+        .delete()
+        .eq('user_id', userId)
+        .eq('reel_id', reelId);
+      return { saved: false, error };
+    }
+
+    const { error } = await supabase
+      .from('reel_saves')
+      .insert({ user_id: userId, reel_id: reelId });
+    return { saved: !error, error };
+  } catch (error) {
+    return { saved: false, error };
+  }
+}
+

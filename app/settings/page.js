@@ -55,12 +55,18 @@ export default function SettingsPage() {
         setIsLocked(localSettings.isLocked);
         setInboxPermission(localSettings.inboxPermission || 'everyone');
 
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', uid)
-          .maybeSingle()
-          .then(({ data: prof }) => {
+        Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, display_name, role, church_id, created_at, badge, badge_verified, avatar_url, cover_url, about, location_label, display_name_changed_at, onboarding_completed_at, onboarded_at, badge_set_at, is_locked, church_name')
+            .eq('id', uid)
+            .maybeSingle(),
+          supabase
+            .from('profile_private')
+            .select('inbox_permission')
+            .eq('id', uid)
+            .maybeSingle(),
+        ]).then(([{ data: prof }, { data: priv }]) => {
             if (prof) {
               setProfile(prof);
               setDisplayName(prof.display_name || '');
@@ -68,7 +74,7 @@ export default function SettingsPage() {
               setLocationLabel(prof.location_label || '');
               setChurchName(prof.church_name || '');
               if (prof.is_locked !== undefined) setIsLocked(Boolean(prof.is_locked));
-              if (prof.inbox_permission) setInboxPermission(prof.inbox_permission);
+              if (priv?.inbox_permission) setInboxPermission(priv.inbox_permission);
             }
           });
       }
@@ -111,9 +117,13 @@ export default function SettingsPage() {
           location_label: locationLabel.trim(),
           church_name: churchName.trim(),
           is_locked: isLocked,
-          inbox_permission: inboxPermission,
         })
         .eq('id', uid);
+
+      const { error: privateSettingsError } = await supabase
+        .from('profile_private')
+        .upsert({ id: uid, inbox_permission: inboxPermission }, { onConflict: 'id' });
+      if (privateSettingsError) throw privateSettingsError;
 
       setSavedSuccess(true);
       playSound('success');

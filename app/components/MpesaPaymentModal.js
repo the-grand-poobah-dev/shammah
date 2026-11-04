@@ -1,20 +1,13 @@
 'use client';
 import { useState } from 'react';
 import {
-  Heart,
   Phone,
   ShieldCheck,
-  Check,
   X,
-  Sparkles,
-  ArrowRight,
-  Clock,
   Coins,
   Loader2,
   Lock,
-  Gift,
   AlertCircle,
-  Share2,
 } from 'lucide-react';
 import { playSound } from '../lib/soundEffects';
 
@@ -135,11 +128,9 @@ export default function MpesaPaymentModal({
       setStatus('waiting_pin');
       playSound('alert');
 
-      // Simulate the completion of PIN entry after 4.5 seconds for UX verification
-      setTimeout(() => {
-        setStatus('success');
-        playSound('postPublished');
-      }, 4500);
+      // Never infer payment success from elapsed time or an STK initiation response.
+      // This legacy giving flow has no verified status endpoint; the backend fails closed
+      // until it is wired to a real callback-backed payment record.
     } catch (err) {
       setStatus('error');
       setErrorMsg(err.message || 'Payment initiation failed. Please try again.');
@@ -406,67 +397,27 @@ export default function MpesaPaymentModal({
               </div>
 
               <p className="text-[11px] text-gray-400">
-                Do not close this window. Your donation will confirm automatically once you enter your PIN.
+                Do not treat this as a completed donation. This legacy payment option is awaiting secure callback-backed status verification.
               </p>
             </div>
           ) : (
-            /* Successful Giving Confirmation */
             <div className="text-center py-6 space-y-4">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-lg shadow-emerald-500/30">
-                <Check size={32} />
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                <AlertCircle size={30} />
               </div>
-
               <div>
-                <h4 className="text-lg font-bold text-white flex items-center justify-center gap-2">
-                  <span>Blessing Received! Amen</span>
-                  <Sparkles size={16} className="text-amber-400" />
-                </h4>
-                <p className="text-xs text-emerald-300 mt-1">
-                  Thank you for sowing KES {activeAmount.toLocaleString()} into{' '}
-                  <strong>{selectedProject.name}</strong>.
+                <h4 className="text-lg font-bold text-white">Payment not confirmed</h4>
+                <p className="text-xs text-gray-300 mt-1">
+                  We have not received a verified Safaricom confirmation for this payment. Do not assume the donation is complete.
                 </p>
               </div>
-
-              {/* Receipt details */}
-              <div className="p-4 rounded-xl bg-white/[0.03] border border-emerald-500/30 text-left space-y-2 text-xs">
-                <div className="flex items-center justify-between text-gray-400">
-                  <span>M-Pesa Receipt:</span>
-                  <span className="font-mono text-emerald-400 font-bold">
-                    {receiptData?.receiptNumber || 'NL89421034X'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-gray-400">
-                  <span>Amount:</span>
-                  <span className="text-white font-bold">KES {activeAmount.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between text-gray-400">
-                  <span>Ministry Project:</span>
-                  <span className="text-white font-medium truncate max-w-[200px]">
-                    {selectedProject.name}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-gray-400">
-                  <span>Date &amp; Time:</span>
-                  <span className="text-gray-300">
-                    {new Date().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })}
-                  </span>
-                </div>
-              </div>
-
-              {/* Scripture Blessing */}
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs italic">
-                &ldquo;Each of you should give what you have decided in your heart to give, not reluctantly or under compulsion, for God loves a cheerful giver.&rdquo; — 2 Corinthians 9:7
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-500 text-black font-bold text-xs hover:bg-emerald-400 transition-all cursor-pointer"
-                >
-                  Done
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-2.5 px-4 rounded-xl bg-white/10 text-white font-bold text-xs hover:bg-white/15 transition-all cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           )}
         </div>

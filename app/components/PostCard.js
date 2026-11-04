@@ -850,13 +850,14 @@ export default function PostCard({
             <p className="quoted-post-text">{quotedPostData.text_content}</p>
           )}
 
-          {quotedPostData.media_url && quotedPostData.media_type === 'image' && (
+          {quotedPostData.media_url && (quotedPostData.media_type === 'image' || quotedPostData.media_type === 'gif') && (
             <div className="quoted-post-media-wrap">
               <img
                 src={quotedPostData.media_url}
                 alt=""
                 className="quoted-post-media"
                 loading="lazy"
+                style={{ objectFit: 'contain', maxHeight: 320 }}
               />
             </div>
           )}
@@ -892,11 +893,11 @@ export default function PostCard({
       )}
 
       {/* Various media shared with long text posts remain visible in the card */}
-      {post.media_url && post.media_type === 'image' && (
-        <img className="post-media" src={post.media_url} alt="" loading="lazy" />
+      {post.media_url && (post.media_type === 'image' || post.media_type === 'gif') && (
+        <img className="post-media" src={post.media_url} alt="" loading="lazy" style={{ objectFit: 'contain', maxHeight: 'min(65dvh, 620px)' }} />
       )}
       {post.media_url && (post.media_type === 'video' || post.media_type === 'reel') && (
-        <video className="post-media" src={post.media_url} controls playsInline preload="metadata" />
+        <video className="post-media" src={post.media_url} controls playsInline preload="metadata" style={{ objectFit: 'contain', maxHeight: 'min(65dvh, 620px)' }} />
       )}
       {post.media_url && (post.media_type === 'audio' || post.media_type === 'podcast') && (
         <div className="post-audio-wrap">

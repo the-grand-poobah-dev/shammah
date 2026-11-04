@@ -1,767 +1,471 @@
 import { NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-function resolveSupabaseUrl() {
-  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (
-    rawUrl &&
-    (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) &&
-    !rawUrl.includes('placeholder') &&
-    !rawUrl.includes('your-project-url')
-  ) {
-    return rawUrl;
-  }
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (serviceKey && serviceKey.split('.').length === 3) {
+const PUBLIC_STATUSES = ['active', 'completed', 'paused'];
+const CATEGORIES = new Set(['Medical', 'Education', 'Church building', 'Missions', 'Relief', 'Community']);
+
+function getUrl() {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (raw && /^https?:\/\//i.test(raw) && !raw.includes('placeholder')) return raw;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (key && key.split('.').length === 3) {
     try {
-      const payload = JSON.parse(Buffer.from(serviceKey.split('.')[1], 'base64').toString('utf8'));
-      if (payload?.ref) return `https://${payload.ref}.supabase.co`;
+      const payload = JSON.parse(Buffer.from(key.split('.')[1], 'base64').toString('utf8'));
+      if (payload?.ref) return 'https://' + payload.ref + '.supabase.co';
     } catch {}
   }
   return null;
 }
 
-function getSupabaseServerClient(authHeader) {
-  const url = resolveSupabaseUrl();
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const key = serviceKey || anonKey;
-  if (!url || !key || key.includes('your-anon-key')) return null;
-
-  const headers = {};
-  if (!serviceKey && authHeader) {
-    headers.Authorization = authHeader;
-  }
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers },
-  });
+function db() {
+  const url = getUrl();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 
-async function resolveSessionUser(request) {
-  const authHeader = request.headers.get('authorization') || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  const url = resolveSupabaseUrl();
+function bearer(request) {
+  const match = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+async function sessionUser(request) {
+  const token = bearer(request);
+  const url = getUrl();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (token && url && key && !key.includes('your-anon-key')) {
-    try {
-      const client = createClient(url, key, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-      const { data } = await client.auth.getUser(token);
-      if (data?.user) return data.user;
-    } catch {}
+  if (!token || !url || !key) return null;
+  try {
+    const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data, error } = await client.auth.getUser(token);
+    return !error ? data?.user || null : null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
-// In-memory / seed fallback mirroring supabase/seed_fundraisers.sql
-const SEED_FUNDRAISERS = [
-  {
-    id: 'f1000000-0000-4000-a000-000000000001',
-    title: 'Turkana Clean Water Borehole & Solar Pump',
-    story_md: `### Bringing Living Water to Lodwar & Pastoralist Families\n\nFor generations, mothers and children in rural Turkana have walked up to 14 kilometers every day searching for scoop-wells in dry riverbeds. Contaminated water sources have caused recurring typhoid and waterborne illnesses among the little ones.\n\n**The Vision:**\nWith your support, our local pastoral ministry and hydrologist team will drill a 180-meter solar-powered borehole capable of pumping 12,000 liters of pure, potable water per hour. We are also building:\n- 4 community tap points adjacent to local schools and clinic\n- A solar livestock watering trough to reduce drought conflict\n- A gospel outreach pavilion where fellowships gather every Sunday\n\n*"Whoever drinks of the water that I shall give him will never thirst."* — John 4:14\n\nEvery shilling given directly funds steel casing, solar submersible pumps, and elevated distribution tanks.`,
-    cover_url: 'https://images.unsplash.com/photo-1541252260730-0412e8e2108e?w=1200&auto=format&fit=crop&q=80',
-    gallery: [
-      'https://images.unsplash.com/photo-1541252260730-0412e8e2108e?w=800',
-      'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?w=800',
-      'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=800',
-    ],
-    category: 'Relief',
-    goal_kes: 650000,
-    raised_kes: 520000,
-    donors_count: 312,
-    deadline: '2026-11-14',
-    status: 'active',
-    beneficiary_name: 'Turkana Pastoral Fellowship & Community Council',
-    verified: true,
-    accent: '#10b981',
-    location: 'Lodwar, Turkana County',
-    created_at: new Date(Date.now() - 3600000 * 24 * 12).toISOString(),
-    owner: {
-      display_name: 'Pastor Julius',
-      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      badge: 'pastor',
-      badge_verified: true,
-    },
-    church: {
-      name: 'Nairobi Worship Center',
-      logo_url: 'https://images.unsplash.com/photo-1548625361-195fe57876a3?w=150',
-    },
-  },
-  {
-    id: 'f1000000-0000-4000-a000-000000000002',
-    title: 'Eldoret Worship Chapel Roof Restoration',
-    story_md: `### Sheltering 450 Believers Before the Heavy Rain Season\n\nOur sanctuary in Eldoret has stood for over 28 years as a haven of prayer, marriage counseling, youth conferences, and Sunday school. However, severe hailstorms earlier this year punctured large sections of the rusted corrugated iron roof, causing continuous leakage during services and damaging our choir instruments and pews.\n\n**Our Project Scope:**\n- Full replacement with heavy gauge anti-rust tile sheets (680 sqm)\n- Installing heat-reflective acoustic ceiling boards\n- Gutters and a rainwater harvesting tank system for the community\n\nWe invite all alumni, church partners, and believers across Kenya to stand in the gap with us. Let us rebuild the house of prayer with joy!`,
-    cover_url: 'https://images.unsplash.com/photo-1519491050282-cf00c82424b4?w=1200&auto=format&fit=crop&q=80',
-    gallery: [
-      'https://images.unsplash.com/photo-1519491050282-cf00c82424b4?w=800',
-      'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=800',
-    ],
-    category: 'Church building',
-    goal_kes: 450000,
-    raised_kes: 310000,
-    donors_count: 198,
-    deadline: '2026-11-22',
-    status: 'active',
-    beneficiary_name: 'Eldoret Grace Chapel Sanctuary Board',
-    verified: true,
-    accent: '#f59e0b',
-    location: 'Eldoret, Uasin Gishu',
-    created_at: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
-    owner: {
-      display_name: 'Pastor Julius',
-      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      badge: 'pastor',
-      badge_verified: true,
-    },
-    church: {
-      name: 'Eldoret Grace Chapel',
-      logo_url: 'https://images.unsplash.com/photo-1519491050282-cf00c82424b4?w=150',
-    },
-  },
-  {
-    id: 'f1000000-0000-4000-a000-000000000003',
-    title: 'Coast Free Medical Camp & Eye Surgeries',
-    story_md: `### Compassion in Action for Kwale & Coastal Villages\n\nJesus went about preaching the kingdom and healing every disease. Next month, a dedicated team of 24 volunteer Christian doctors, pediatricians, ophthalmologists, and nurses will conduct a 4-day medical and surgical drive in Kwale.\n\n**Key Goals:**\n- 50 cataract restorations for elderly grandparents who have suffered blindness\n- Free prescription glasses, malaria testing, and antibiotic dispensary\n- Prenatal scans and nutritional vitamins for expectant mothers\n- One-on-one chaplaincy prayer for every patient seeking peace in Christ`,
-    cover_url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=1200&auto=format&fit=crop&q=80',
-    gallery: [
-      'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=800',
-      'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800',
-    ],
-    category: 'Medical',
-    goal_kes: 280000,
-    raised_kes: 195000,
-    donors_count: 145,
-    deadline: '2026-11-09',
-    status: 'active',
-    beneficiary_name: 'Coast Christian Doctors Fellowship & Kwale Clinic',
-    verified: true,
-    accent: '#ef4444',
-    location: 'Kwale & Msambweni, Coast',
-    created_at: new Date(Date.now() - 3600000 * 24 * 8).toISOString(),
-    owner: {
-      display_name: 'Sarah Ndung\'u',
-      avatar_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-      badge: 'teacher',
-      badge_verified: true,
-    },
-  },
-  {
-    id: 'f1000000-0000-4000-a000-000000000004',
-    title: 'Kibera & Mathare High School Christian Union Scholarship',
-    story_md: `### Equipping 40 Promising Christian Students with Tuition & Mentorship\n\nIn the informal settlements of Nairobi, bright Christian boys and girls frequently drop out of school due to unpaid school fees of just KES 12,000–18,000 per term. Many are active leaders in their high school Christian Unions (CUs).\n\n**What Every KES 15,000 Sponsor Provides:**\n- Full secondary school tuition clearance paid directly to schools\n- Complete textbook sets, stationery, and laboratory fee subsidies\n- Monthly Saturday leadership mentorship workshops and discipleship retreats\n\nInvest in kingdom leadership for Kenya’s next generation today.`,
-    cover_url: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=1200&auto=format&fit=crop&q=80',
-    gallery: [
-      'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=800',
-      'https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?w=800',
-    ],
-    category: 'Education',
-    goal_kes: 360000,
-    raised_kes: 285000,
-    donors_count: 174,
-    deadline: '2026-11-18',
-    status: 'active',
-    beneficiary_name: 'Nairobi Slum Youth Mission & CU Chaplains',
-    verified: true,
-    accent: '#8b5cf6',
-    location: 'Nairobi (Mathare & Kibera)',
-    created_at: new Date(Date.now() - 3600000 * 24 * 7).toISOString(),
-    owner: {
-      display_name: 'David Kimani',
-      avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-      badge: 'evangelist',
-      badge_verified: true,
-    },
-  },
-];
+async function profile(supabase, userId) {
+  if (!userId) return null;
+  const { data } = await supabase.from('profiles')
+    .select('id, display_name, avatar_url, role, badge, church_id, location_label')
+    .eq('id', userId).maybeSingle();
+  return data || null;
+}
 
-const SEED_MILESTONES = {
-  'f1000000-0000-4000-a000-000000000001': [
-    { id: 'm1', amount_kes: 150000, label: 'Geological survey & drilling rig mobilization', reached_at: '2026-10-21T08:00:00Z' },
-    { id: 'm2', amount_kes: 350000, label: 'Borehole drilling completed (180m depth reached)', reached_at: '2026-10-27T12:00:00Z' },
-    { id: 'm3', amount_kes: 500000, label: 'Solar pump installation & underground pipe distribution', reached_at: '2026-10-30T16:00:00Z' },
-    { id: 'm4', amount_kes: 650000, label: 'Elevated 20,000L tank towers & school tap stations', reached_at: null },
-  ],
-  'f1000000-0000-4000-a000-000000000002': [
-    { id: 'm5', amount_kes: 120000, label: 'Scaffolding & safe dismantling of damaged iron sheets', reached_at: '2026-10-23T09:00:00Z' },
-    { id: 'm6', amount_kes: 280000, label: 'Heavy-gauge iron tile purchase & timber reinforcement', reached_at: '2026-10-29T14:00:00Z' },
-    { id: 'm7', amount_kes: 450000, label: 'Ceiling acoustics, rainwater gutters & sanctuary dedication', reached_at: null },
-  ],
-  'f1000000-0000-4000-a000-000000000003': [
-    { id: 'm8', amount_kes: 80000, label: 'Pharmaceutical medications & diagnostic lab kit procurement', reached_at: '2026-10-25T11:00:00Z' },
-    { id: 'm9', amount_kes: 180000, label: 'Eye surgery equipment transport & medical team mobilization', reached_at: '2026-10-30T10:00:00Z' },
-    { id: 'm10', amount_kes: 280000, label: 'Complete hospital post-op care & gospel outreach materials', reached_at: null },
-  ],
-  'f1000000-0000-4000-a000-000000000004': [
-    { id: 'm11', amount_kes: 100000, label: 'Term 1 school fee clearance for first 15 students', reached_at: '2026-10-19T08:00:00Z' },
-    { id: 'm12', amount_kes: 220000, label: 'Textbooks, stationery, and CU youth leader retreats', reached_at: '2026-10-28T15:00:00Z' },
-    { id: 'm13', amount_kes: 360000, label: 'Term 2 & 3 scholarship fund for all 40 students', reached_at: null },
-  ],
-};
+function isAdmin(p) {
+  return p?.role === 'admin' || p?.role === 'platform_admin';
+}
 
-const SEED_UPDATES = {
-  'f1000000-0000-4000-a000-000000000001': [
-    {
-      id: 'u1',
-      body: 'Praise God! The drilling rig successfully struck freshwater at 174 meters depth! Testing shows water purity exceeds WHO standards. Thank you to everyone who gave!',
-      media_url: 'https://images.unsplash.com/photo-1541252260730-0412e8e2108e?w=800',
-      created_at: new Date(Date.now() - 3600000 * 24 * 3).toISOString(),
-    },
-  ],
-  'f1000000-0000-4000-a000-000000000002': [
-    {
-      id: 'u2',
-      body: 'The contractor delivered the first batch of anti-rust sheets today. Volunteers from the youth fellowship helped offload and stack them safely inside.',
-      media_url: 'https://images.unsplash.com/photo-1519491050282-cf00c82424b4?w=800',
-      created_at: new Date(Date.now() - 3600000 * 24 * 2).toISOString(),
-    },
-  ],
-  'f1000000-0000-4000-a000-000000000003': [
-    {
-      id: 'u3',
-      body: 'Our optical surgeon Dr. Ndegwa confirmed arrival of 60 intraocular lenses for cataract surgeries. The local chief has registered over 140 elders for screening.',
-      media_url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=800',
-      created_at: new Date(Date.now() - 3600000 * 24 * 1).toISOString(),
-    },
-  ],
-  'f1000000-0000-4000-a000-000000000004': [
-    {
-      id: 'u4',
-      body: 'Check out the report cards from our scholarship recipients — 18 of them ranked in the top 5 of their classes! God is raising mighty leaders.',
-      media_url: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=800',
-      created_at: new Date(Date.now() - 3600000 * 24 * 2).toISOString(),
-    },
-  ],
-};
+function normalized(row, owner = null, includePrivate = false) {
+  if (!row) return null;
+  const result = {
+    ...row,
+    owner_id: row.owner_id || row.creator_id || null,
+    story_md: row.story_md || row.description || '',
+    description: row.story_md || row.description || '',
+    cover_url: row.cover_url || row.banner_url || row.image_url || null,
+    goal_kes: Number(row.goal_kes ?? row.target_amount ?? 0),
+    raised_kes: Number(row.raised_kes ?? row.raised_amount ?? 0),
+    donors_count: Number(row.donors_count || 0),
+    deadline: row.deadline || row.end_date || row.expires_at || null,
+    owner: owner || null,
+  };
+  if (!includePrivate) delete result.verification_doc_url;
+  return result;
+}
 
-const SEED_DONATIONS = {
-  'f1000000-0000-4000-a000-000000000001': [
-    { id: 'd1', display_name: 'Grace Community Fellowship Nairobi', anonymous: false, amount_kes: 50000, message: 'Church missions offering for Turkana borehole.', mpesa_transaction_id: 'SHM9R1Z8', created_at: new Date(Date.now() - 3600000 * 24 * 2).toISOString() },
-    { id: 'd2', display_name: 'Elder Peter K.', anonymous: false, amount_kes: 15000, message: 'Standing with our brothers and sisters in Turkana. May God be glorified!', mpesa_transaction_id: 'SHM7K9W2', created_at: new Date(Date.now() - 3600000 * 24 * 5).toISOString() },
-    { id: 'd3', display_name: 'Anonymous Disciple', anonymous: true, amount_kes: 5000, message: 'Praying for abundant clean water and eternal salvation.', mpesa_transaction_id: 'SHM3P8L4', created_at: new Date(Date.now() - 3600000 * 24 * 3).toISOString() },
-    { id: 'd4', display_name: 'Brian Mwangi', anonymous: false, amount_kes: 2500, message: 'God bless this powerful work! 🙏', mpesa_transaction_id: 'SHM4T6V1', created_at: new Date(Date.now() - 3600000 * 4).toISOString() },
-  ],
-  'f1000000-0000-4000-a000-000000000002': [
-    { id: 'd5', display_name: 'Eldoret CU Alumni Group', anonymous: false, amount_kes: 35000, message: 'Honoring where our spiritual walk began.', mpesa_transaction_id: 'SHM8N3Q2', created_at: new Date(Date.now() - 3600000 * 24 * 1).toISOString() },
-    { id: 'd6', display_name: 'Mama Mercy Wambui', anonymous: false, amount_kes: 10000, message: 'Building the Lord\'s sanctuary with joy!', mpesa_transaction_id: 'SHM2X5J9', created_at: new Date(Date.now() - 3600000 * 24 * 4).toISOString() },
-    { id: 'd7', display_name: 'Anonymous Disciple', anonymous: true, amount_kes: 3000, message: 'May God protect His sanctuary from every storm.', mpesa_transaction_id: 'SHM5B7H6', created_at: new Date(Date.now() - 3600000 * 6).toISOString() },
-  ],
-  'f1000000-0000-4000-a000-000000000003': [
-    { id: 'd8', display_name: 'Dr. & Mrs. Kariuki', anonymous: false, amount_kes: 20000, message: 'In support of Kwale eye surgeries and maternal care.', mpesa_transaction_id: 'SHM1M9D4', created_at: new Date(Date.now() - 3600000 * 24 * 3).toISOString() },
-    { id: 'd9', display_name: 'Anonymous Disciple', anonymous: true, amount_kes: 5000, message: 'Luke 4:18 — recovering of sight to the blind!', mpesa_transaction_id: 'SHM6C2Y8', created_at: new Date(Date.now() - 3600000 * 18).toISOString() },
-  ],
-  'f1000000-0000-4000-a000-000000000004': [
-    { id: 'd10', display_name: 'Teacher Faith Njeri', anonymous: false, amount_kes: 15000, message: 'Sponsoring one high school student for an entire term.', mpesa_transaction_id: 'SHM4F8K3', created_at: new Date(Date.now() - 3600000 * 24 * 2).toISOString() },
-    { id: 'd11', display_name: 'David Kimani', anonymous: false, amount_kes: 5000, message: 'For God and our youth! Keep shining the light of Jesus.', mpesa_transaction_id: 'SHM9L2P5', created_at: new Date(Date.now() - 3600000 * 8).toISOString() },
-  ],
-};
+function safeUrl(value) {
+  if (!value) return null;
+  try {
+    const parsed = new URL(String(value).trim());
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function ownerProfiles(supabase, rows) {
+  const ids = [...new Set(rows.map((row) => row.owner_id || row.creator_id).filter(Boolean))];
+  if (!ids.length) return {};
+  const { data, error } = await supabase.from('profiles')
+    .select('id, display_name, avatar_url, badge, badge_verified, role, church_id, location_label')
+    .in('id', ids);
+  if (error) throw error;
+  return Object.fromEntries((data || []).map((item) => [item.id, item]));
+}
+
+async function requireAdmin(supabase, user) {
+  if (!user?.id) return { error: 'Please sign in to continue.', status: 401 };
+  const p = await profile(supabase, user.id);
+  if (!isAdmin(p)) return { error: 'Administrator access is required.', status: 403 };
+  return { profile: p };
+}
+
+async function campaignDetail(supabase, row, user, userProfile) {
+  const ownerId = row.owner_id || row.creator_id;
+  const isOwner = Boolean(user?.id && user.id === ownerId);
+  const includePrivate = isOwner || isAdmin(userProfile);
+  const owners = await ownerProfiles(supabase, [row]);
+  const fundraiser = normalized(row, owners[ownerId], includePrivate);
+  const [milestonesRes, updatesRes, donationsRes] = await Promise.all([
+    supabase.from('fundraiser_milestones').select('*').eq('fundraiser_id', row.id).order('amount_kes', { ascending: true }),
+    supabase.from('fundraiser_updates').select('id, fundraiser_id, author_id, body, media_url, created_at')
+      .eq('fundraiser_id', row.id).order('created_at', { ascending: false }).limit(50),
+    supabase.from('fundraiser_donations')
+      .select('id, fundraiser_id, display_name, anonymous, is_anonymous, amount_kes, message, status, created_at')
+      .eq('fundraiser_id', row.id).in('status', ['succeeded', 'completed'])
+      .order('created_at', { ascending: false }).limit(100),
+  ]);
+  if (milestonesRes.error) throw milestonesRes.error;
+  if (updatesRes.error) throw updatesRes.error;
+  if (donationsRes.error) throw donationsRes.error;
+  const donations = (donationsRes.data || []).map((d) => {
+    const anonymous = Boolean(d.anonymous ?? d.is_anonymous);
+    return {
+      id: d.id,
+      fundraiser_id: d.fundraiser_id,
+      display_name: anonymous ? 'Anonymous donor' : (d.display_name || 'A Shammah supporter'),
+      anonymous,
+      amount_kes: Number(d.amount_kes || 0),
+      message: d.message || null,
+      created_at: d.created_at,
+    };
+  });
+  const donors = new Map();
+  for (const d of donations) {
+    if (d.anonymous) continue;
+    const current = donors.get(d.display_name) || { id: d.display_name, display_name: d.display_name, amount_kes: 0 };
+    current.amount_kes += d.amount_kes;
+    donors.set(d.display_name, current);
+  }
+  return {
+    ok: true,
+    fundraiser,
+    milestones: milestonesRes.data || [],
+    updates: updatesRes.data || [],
+    donations,
+    recentDonors: donations.slice(0, 15),
+    topDonors: [...donors.values()].sort((a, b) => b.amount_kes - a.amount_kes).slice(0, 10),
+  };
+}
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const action = searchParams.get('action') || 'list';
-  const supabase = getSupabaseServerClient(request.headers.get('authorization'));
-
   try {
-    // 1. DETAIL VIEW
-    if (action === 'detail') {
-      const id = searchParams.get('id');
-      if (!id) return NextResponse.json({ error: 'Missing campaign id.' }, { status: 400 });
+    const supabase = db();
+    if (!supabase) return NextResponse.json({ error: 'Fundraising storage is not configured.' }, { status: 503 });
+    const user = await sessionUser(request);
+    const userProfile = await profile(supabase, user?.id);
+    const params = new URL(request.url).searchParams;
+    const action = params.get('action') || 'list';
 
-      let fundraiser = null;
-      let milestones = [];
-      let updates = [];
-      let donations = [];
-
-      if (supabase) {
-        try {
-          const { data: fr } = await supabase
-            .from('fundraisers')
-            .select(`
-              *,
-              owner:owner_id(id, display_name, avatar_url, badge, badge_verified, role),
-              church:church_id(id, name, logo_url)
-            `)
-            .eq('id', id)
-            .maybeSingle();
-
-          if (fr) fundraiser = fr;
-
-          const { data: ms } = await supabase
-            .from('fundraiser_milestones')
-            .select('*')
-            .eq('fundraiser_id', id)
-            .order('amount_kes', { ascending: true });
-          if (ms) milestones = ms;
-
-          const { data: ups } = await supabase
-            .from('fundraiser_updates')
-            .select('*, author:author_id(display_name, avatar_url, badge)')
-            .eq('fundraiser_id', id)
-            .order('created_at', { ascending: false });
-          if (ups) updates = ups;
-
-          const { data: dns } = await supabase
-            .from('fundraiser_donations')
-            .select('id, amount_kes, display_name, anonymous, message, created_at, status')
-            .eq('fundraiser_id', id)
-            .eq('status', 'succeeded')
-            .order('created_at', { ascending: false })
-            .limit(50);
-          if (dns) donations = dns;
-        } catch {
-          // Fallback to seed
-        }
-      }
-
-      if (!fundraiser) {
-        fundraiser = SEED_FUNDRAISERS.find((f) => f.id === id) || null;
-        milestones = SEED_MILESTONES[id] || [];
-        updates = SEED_UPDATES[id] || [];
-        donations = SEED_DONATIONS[id] || [];
-      }
-
-      if (!fundraiser) {
-        return NextResponse.json({ error: 'Fundraiser campaign not found.' }, { status: 404 });
-      }
-
-      // Privacy mask: anonymize donations
-      const sanitizedDonations = (donations || []).map((d) => ({
-        ...d,
-        display_name: d.anonymous ? 'Anonymous Disciple' : (d.display_name || 'A Believer in Christ'),
-      }));
-
-      // Top donors (sorted by amount descending)
-      const topDonors = [...sanitizedDonations]
-        .sort((a, b) => (Number(b.amount_kes) || 0) - (Number(a.amount_kes) || 0))
-        .slice(0, 10);
-
-      // Recent donors
-      const recentDonors = [...sanitizedDonations].slice(0, 15);
-
-      return NextResponse.json({
-        ok: true,
-        fundraiser,
-        milestones,
-        updates,
-        donations: sanitizedDonations,
-        topDonors,
-        recentDonors,
-      });
-    }
-
-    // 2. CHECK DONATION STATUS (Polling after STK push)
     if (action === 'check-donation') {
-      const checkoutRequestId = searchParams.get('checkoutRequestId');
-      const donationId = searchParams.get('donationId');
-      const fundraiserId = searchParams.get('fundraiserId');
-
-      if (!checkoutRequestId && !donationId) {
-        return NextResponse.json({ error: 'Missing checkoutRequestId or donationId.' }, { status: 400 });
+      const checkoutId = params.get('checkoutRequestId');
+      const donationId = params.get('donationId');
+      if (!checkoutId && !donationId) return NextResponse.json({ error: 'Donation reference is required.' }, { status: 400 });
+      let query = supabase.from('fundraiser_donations').select('id, fundraiser_id, status, amount_kes, checkout_request_id, mpesa_transaction_id');
+      if (checkoutId) query = query.eq('checkout_request_id', checkoutId);
+      if (donationId) query = query.eq('id', donationId);
+      const { data: donation, error } = await query.maybeSingle();
+      if (error) throw error;
+      if (!donation) return NextResponse.json({ error: 'Donation not found.' }, { status: 404 });
+      if (params.get('fundraiserId') && params.get('fundraiserId') !== donation.fundraiser_id) {
+        return NextResponse.json({ error: 'Donation reference mismatch.' }, { status: 400 });
       }
-
-      let donation = null;
-      let fundraiser = null;
-
-      if (supabase) {
-        try {
-          let query = supabase.from('fundraiser_donations').select('*');
-          if (donationId) query = query.eq('id', donationId);
-          else if (checkoutRequestId) query = query.eq('checkout_request_id', checkoutRequestId);
-
-          const { data } = await query.maybeSingle();
-          donation = data;
-
-          if (donation?.fundraiser_id) {
-            const { data: fr } = await supabase
-              .from('fundraisers')
-              .select('id, raised_kes, donors_count, goal_kes, status')
-              .eq('id', donation.fundraiser_id)
-              .maybeSingle();
-            fundraiser = fr;
-          }
-        } catch {}
-      }
-
+      const { data: row, error: rowError } = await supabase.from('fundraisers').select('*')
+        .eq('id', donation.fundraiser_id).maybeSingle();
+      if (rowError) throw rowError;
       return NextResponse.json({
         ok: true,
-        status: donation?.status || 'completed',
-        donationId: donation?.id || donationId,
-        checkoutRequestId: donation?.checkout_request_id || checkoutRequestId,
-        mpesaReceipt: donation?.mpesa_transaction_id || null,
-        fundraiser: fundraiser || null,
+        status: donation.status === 'completed' ? 'succeeded' : donation.status,
+        donationId: donation.id,
+        checkoutRequestId: donation.checkout_request_id,
+        receiptCode: ['succeeded', 'completed'].includes(donation.status) ? donation.mpesa_transaction_id : null,
+        fundraiser: row ? normalized(row) : null,
       });
     }
 
-    // 3. ADMIN REVIEW QUEUE
-    if (action === 'admin-list') {
-      let pendingCampaigns = [];
-      let pendingWithdrawals = [];
-
-      if (supabase) {
-        try {
-          const { data: pc } = await supabase
-            .from('fundraisers')
-            .select('*, owner:owner_id(display_name, avatar_url, badge)')
-            .eq('status', 'pending_review')
-            .order('created_at', { ascending: false });
-          if (pc) pendingCampaigns = pc;
-
-          const { data: pw } = await supabase
-            .from('fundraiser_withdrawals')
-            .select('*, fundraiser:fundraiser_id(title, raised_kes)')
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false });
-          if (pw) pendingWithdrawals = pw;
-        } catch {}
+    if (action === 'detail') {
+      const id = params.get('id');
+      if (!id) return NextResponse.json({ error: 'Fundraiser ID is required.' }, { status: 400 });
+      const { data: row, error } = await supabase.from('fundraisers').select('*').eq('id', id).maybeSingle();
+      if (error) throw error;
+      if (!row) return NextResponse.json({ error: 'Fundraiser not found.' }, { status: 404 });
+      const ownerId = row.owner_id || row.creator_id;
+      if (!PUBLIC_STATUSES.includes(row.status) && ownerId !== user?.id && !isAdmin(userProfile)) {
+        return NextResponse.json({ error: 'Fundraiser not found.' }, { status: 404 });
       }
+      return NextResponse.json(await campaignDetail(supabase, row, user, userProfile));
+    }
 
+    if (action === 'admin-list') {
+      const auth = await requireAdmin(supabase, user);
+      if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+      const [{ data: campaigns, error: campaignsError }, { data: withdrawals, error: withdrawalsError }] = await Promise.all([
+        supabase.from('fundraisers').select('*').eq('status', 'pending_review').order('created_at', { ascending: true }),
+        supabase.from('fundraiser_withdrawals').select('*').in('status', ['pending', 'approved']).order('created_at', { ascending: true }),
+      ]);
+      if (campaignsError) throw campaignsError;
+      if (withdrawalsError) throw withdrawalsError;
+      const owners = await ownerProfiles(supabase, campaigns || []);
+      const pendingCampaigns = await Promise.all((campaigns || []).map(async (row) => {
+        let verificationDocSignedUrl = null;
+        const ownerId = row.owner_id || row.creator_id;
+        const path = String(row.verification_doc_url || '');
+        if (path && ownerId && path.startsWith(ownerId + '/') && !path.includes('..')) {
+          const { data: signed } = await supabase.storage.from('fundraiser-verification').createSignedUrl(path, 300);
+          verificationDocSignedUrl = signed?.signedUrl || null;
+        }
+        return {
+          ...normalized(row, owners[ownerId], true),
+          verification_doc_signed_url: verificationDocSignedUrl,
+        };
+      }));
+      const ids = [...new Set((withdrawals || []).map((w) => w.fundraiser_id).filter(Boolean))];
+      const { data: related, error: relatedError } = ids.length
+        ? await supabase.from('fundraisers').select('id, title').in('id', ids)
+        : { data: [], error: null };
+      if (relatedError) throw relatedError;
+      const titles = Object.fromEntries((related || []).map((row) => [row.id, row.title]));
       return NextResponse.json({
         ok: true,
         pendingCampaigns,
-        pendingWithdrawals,
+        pendingWithdrawals: (withdrawals || []).map((w) => ({ ...w, fundraiser: { title: titles[w.fundraiser_id] || 'Fundraiser' } })),
       });
     }
 
-    // 4. MAIN LIST VIEW
-    const category = searchParams.get('category') || 'All';
-    const sort = searchParams.get('sort') || 'trending';
-    const search = (searchParams.get('search') || '').trim().toLowerCase();
-    const userId = searchParams.get('userId');
+    const category = params.get('category') || 'All';
+    const sort = params.get('sort') || 'trending';
+    const search = (params.get('search') || '').trim().toLowerCase().slice(0, 120);
+    const { data: rows, error } = await supabase.from('fundraisers').select('*')
+      .in('status', [...PUBLIC_STATUSES, ...(user?.id ? ['draft', 'pending_review', 'rejected'] : [])])
+      .order('created_at', { ascending: false }).limit(250);
+    if (error) throw error;
+    const visibleRows = (rows || []).filter((row) =>
+      PUBLIC_STATUSES.includes(row.status) ||
+      (user?.id && (row.owner_id || row.creator_id) === user.id) ||
+      isAdmin(userProfile)
+    );
+    const owners = await ownerProfiles(supabase, visibleRows);
+    let fundraisers = visibleRows.map((row) => normalized(row, owners[row.owner_id || row.creator_id]));
+    if (category !== 'All') fundraisers = fundraisers.filter((row) => row.category?.toLowerCase() === category.toLowerCase());
+    if (search) fundraisers = fundraisers.filter((row) =>
+      [row.title, row.story_md, row.beneficiary_name, row.location, row.category, row.owner?.display_name]
+        .some((value) => String(value || '').toLowerCase().includes(search))
+    );
+    if (sort === 'newest') fundraisers.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    else if (sort === 'ending_soon') fundraisers.sort((a, b) => new Date(a.deadline || '2999-12-31') - new Date(b.deadline || '2999-12-31'));
+    else if (sort === 'almost_funded') fundraisers.sort((a, b) => (b.raised_kes / Math.max(1, b.goal_kes)) - (a.raised_kes / Math.max(1, a.goal_kes)));
+    else if (sort === 'goal_asc') fundraisers.sort((a, b) => a.goal_kes - b.goal_kes);
+    else if (sort === 'goal_desc') fundraisers.sort((a, b) => b.goal_kes - a.goal_kes);
+    else fundraisers.sort((a, b) => (b.donors_count - a.donors_count) || (b.raised_kes - a.raised_kes));
 
-    let allFundraisers = [];
-
-    if (supabase) {
-      try {
-        const { data } = await supabase
-          .from('fundraisers')
-          .select(`
-            *,
-            owner:owner_id(id, display_name, avatar_url, badge, badge_verified, role),
-            church:church_id(id, name, logo_url)
-          `)
-          .in('status', ['active', 'completed', 'paused', 'pending_review'])
-          .order('created_at', { ascending: false });
-
-        if (data && data.length > 0) {
-          allFundraisers = data;
-        }
-      } catch {
-        // Fallback to seed
-      }
-    }
-
-    if (allFundraisers.length === 0) {
-      allFundraisers = [...SEED_FUNDRAISERS];
-    }
-
-    // Filter by search query
-    let filtered = allFundraisers.filter((f) => {
-      if (f.status === 'pending_review' && (!userId || f.owner_id !== userId)) {
-        return false;
-      }
-      if (search) {
-        const titleMatch = f.title?.toLowerCase().includes(search);
-        const descMatch = f.story_md?.toLowerCase().includes(search);
-        const beneMatch = f.beneficiary_name?.toLowerCase().includes(search);
-        const locMatch = f.location?.toLowerCase().includes(search);
-        const churchMatch = f.church?.name?.toLowerCase().includes(search);
-        if (!titleMatch && !descMatch && !beneMatch && !locMatch && !churchMatch) return false;
-      }
-      if (category && category !== 'All') {
-        if (f.category?.toLowerCase() !== category.toLowerCase()) return false;
-      }
-      return true;
-    });
-
-    // Sort order
-    if (sort === 'trending') {
-      filtered.sort((a, b) => (Number(b.donors_count) || 0) - (Number(a.donors_count) || 0));
-    } else if (sort === 'newest') {
-      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (sort === 'ending_soon') {
-      filtered.sort((a, b) => {
-        const da = a.deadline ? new Date(a.deadline).getTime() : Infinity;
-        const db = b.deadline ? new Date(b.deadline).getTime() : Infinity;
-        return da - db;
-      });
-    } else if (sort === 'almost_funded') {
-      filtered.sort((a, b) => {
-        const pa = (Number(a.raised_kes) || 0) / (Number(a.goal_kes) || 1);
-        const pb = (Number(b.raised_kes) || 0) / (Number(b.goal_kes) || 1);
-        return pb - pa;
-      });
-    } else if (sort === 'goal_asc') {
-      filtered.sort((a, b) => (Number(a.goal_kes) || 0) - (Number(b.goal_kes) || 0));
-    } else if (sort === 'goal_desc') {
-      filtered.sort((a, b) => (Number(b.goal_kes) || 0) - (Number(a.goal_kes) || 0));
-    }
-
-    // Blocks preparation for layout kit
-    const urgent = [...allFundraisers]
-      .filter((f) => f.status === 'active' && f.deadline)
-      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
-      .slice(0, 6);
-
-    const featured = allFundraisers.find((f) => f.verified && f.status === 'active') || allFundraisers[0] || null;
-
-    const trending = [...allFundraisers]
-      .sort((a, b) => (Number(b.donors_count) || 0) - (Number(a.donors_count) || 0))
-      .slice(0, 4);
-
-    const nearYou = [...allFundraisers].slice(0, 4);
-
-    const myCampaigns = userId
-      ? allFundraisers.filter((f) => f.owner_id === userId || f.owner?.id === userId)
-      : [];
-
-    return NextResponse.json({
-      ok: true,
-      fundraisers: filtered,
-      urgent,
-      featured,
-      trending,
-      nearYou,
-      myCampaigns,
-      totalCount: filtered.length,
-    });
-  } catch (err) {
-    return NextResponse.json({ error: err.message || 'Unable to fetch fundraisers.' }, { status: 500 });
+    const active = fundraisers.filter((row) => row.status === 'active');
+    const daysLeft = (row) => row.deadline ? Math.ceil((new Date(row.deadline).getTime() - Date.now()) / 86400000) : Infinity;
+    const urgent = active.filter((row) => daysLeft(row) >= 0 && daysLeft(row) <= 7).sort((a, b) => daysLeft(a) - daysLeft(b)).slice(0, 8);
+    const featured = [...active].sort((a, b) => (b.raised_kes / Math.max(1, b.goal_kes)) - (a.raised_kes / Math.max(1, a.goal_kes)))[0] || null;
+    const trending = [...active].sort((a, b) => (b.donors_count - a.donors_count) || (b.raised_kes - a.raised_kes)).slice(0, 8);
+    const nearYou = userProfile?.church_id ? active.filter((row) => row.church_id === userProfile.church_id).slice(0, 8) : [];
+    const myCampaigns = user?.id ? visibleRows.filter((row) => (row.owner_id || row.creator_id) === user.id).map((row) => normalized(row, owners[row.owner_id || row.creator_id], true)) : [];
+    return NextResponse.json({ ok: true, fundraisers, urgent, featured, trending, nearYou, myCampaigns, totalCount: fundraisers.length });
+  } catch (error) {
+    return NextResponse.json({ error: error?.message || 'Unable to load fundraisers.' }, { status: 500 });
   }
 }
 
 export async function POST(request) {
   try {
-    const user = await resolveSessionUser(request);
-    const body = await request.json();
-    const { action } = body || {};
+    const supabase = db();
+    if (!supabase) return NextResponse.json({ error: 'Fundraising storage is not configured.' }, { status: 503 });
+    const body = await request.json().catch(() => ({}));
+    const action = String(body.action || '');
+    const user = await sessionUser(request);
+    const userProfile = await profile(supabase, user?.id);
 
-    const supabase = getSupabaseServerClient(request.headers.get('authorization'));
-
-    // 1. CREATE CAMPAIGN
-    if (action === 'create') {
-      const {
-        title,
-        storyMd,
-        category,
-        goalKes,
-        deadline,
-        beneficiaryName,
-        location,
-        coverUrl,
-        gallery,
-        verificationDocUrl,
-        churchId,
-        milestones,
-      } = body;
-
-      if (!title || title.trim().length < 5) {
-        return NextResponse.json({ error: 'Please enter a clear campaign title (at least 5 characters).' }, { status: 400 });
-      }
-
-      const numGoal = Math.round(Number(goalKes || 0));
-      if (!Number.isFinite(numGoal) || numGoal < 100) {
-        return NextResponse.json({ error: 'Minimum campaign goal is KES 100.' }, { status: 400 });
-      }
-
-      if (!storyMd || storyMd.trim().length < 30) {
-        return NextResponse.json({ error: 'Please provide a clear campaign story explaining the need (at least 30 characters).' }, { status: 400 });
-      }
-
-      const categoryAccents = {
-        Medical: '#ef4444',
-        Education: '#8b5cf6',
-        'Church building': '#f59e0b',
-        Missions: '#06b6d4',
-        Relief: '#10b981',
-        Community: '#ec4899',
-      };
-      const accent = categoryAccents[category] || '#10b981';
-
-      const newRecord = {
-        title: title.trim(),
-        story_md: storyMd.trim(),
-        category: category || 'Community',
-        goal_kes: numGoal,
-        deadline: deadline || null,
-        beneficiary_name: beneficiaryName?.trim() || null,
-        location: location?.trim() || 'Kenya',
-        cover_url: coverUrl || 'https://images.unsplash.com/photo-1541252260730-0412e8e2108e?w=1200&auto=format&fit=crop&q=80',
-        gallery: Array.isArray(gallery) ? gallery : [],
-        verification_doc_url: verificationDocUrl || null,
-        accent,
-        owner_id: user?.id || null,
-        church_id: churchId || null,
-        status: 'active', // Active immediately for smooth user verification & testing
-        verified: false,
-        raised_kes: 0,
-        donors_count: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      let inserted = null;
-
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('fundraisers')
-          .insert(newRecord)
-          .select()
-          .single();
-
-        if (error) {
-          throw new Error(error.message);
-        }
-        inserted = data;
-
-        // Insert initial milestones if provided
-        if (Array.isArray(milestones) && milestones.length > 0 && inserted?.id) {
-          const msRows = milestones
-            .filter((m) => m.amount && m.label)
-            .map((m) => ({
-              fundraiser_id: inserted.id,
-              amount_kes: Math.round(Number(m.amount)),
-              label: m.label.trim(),
-            }));
-
-          if (msRows.length > 0) {
-            await supabase.from('fundraiser_milestones').insert(msRows);
-          }
-        }
-      } else {
-        inserted = { id: `fr-${Date.now()}`, ...newRecord };
-      }
-
-      return NextResponse.json({
-        ok: true,
-        fundraiser: inserted,
-        message: 'Fundraiser campaign created successfully!',
-      });
-    }
-
-    // 2. POST UPDATE
-    if (action === 'update') {
-      const { fundraiserId, body: updateBody, mediaUrl } = body;
-      if (!fundraiserId || !updateBody?.trim()) {
-        return NextResponse.json({ error: 'Missing campaign id or update content.' }, { status: 400 });
-      }
-
-      const updateRecord = {
-        fundraiser_id: fundraiserId,
-        author_id: user?.id || null,
-        body: updateBody.trim(),
-        media_url: mediaUrl || null,
-        created_at: new Date().toISOString(),
-      };
-
-      let inserted = null;
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('fundraiser_updates')
-          .insert(updateRecord)
-          .select()
-          .single();
-        if (error) throw new Error(error.message);
-        inserted = data;
-      } else {
-        inserted = { id: `up-${Date.now()}`, ...updateRecord };
-      }
-
-      return NextResponse.json({ ok: true, update: inserted });
-    }
-
-    // 3. REQUEST WITHDRAWAL
-    if (action === 'withdrawal') {
-      const { fundraiserId, amountKes, mpesaPhone } = body;
-      if (!fundraiserId) return NextResponse.json({ error: 'Missing fundraiser id.' }, { status: 400 });
-      const numAmount = Math.round(Number(amountKes || 0));
-      if (!Number.isFinite(numAmount) || numAmount < 100) {
-        return NextResponse.json({ error: 'Minimum withdrawal amount is KES 100.' }, { status: 400 });
-      }
-      if (!mpesaPhone) {
-        return NextResponse.json({ error: 'Please enter a valid M-Pesa phone number for disbursement.' }, { status: 400 });
-      }
-
-      const withdrawalRecord = {
-        fundraiser_id: fundraiserId,
-        amount_kes: numAmount,
-        mpesa_payout_phone: mpesaPhone,
-        requested_by: user?.id || null,
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      let inserted = null;
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('fundraiser_withdrawals')
-          .insert(withdrawalRecord)
-          .select()
-          .single();
-        if (error) throw new Error(error.message);
-        inserted = data;
-      } else {
-        inserted = { id: `wth-${Date.now()}`, ...withdrawalRecord };
-      }
-
-      return NextResponse.json({
-        ok: true,
-        withdrawal: inserted,
-        message: 'Withdrawal request submitted for church steward review.',
-      });
-    }
-
-    // 4. REPORT CAMPAIGN
     if (action === 'report') {
-      const { fundraiserId, reason, details } = body;
-      if (!fundraiserId || !reason) {
-        return NextResponse.json({ error: 'Missing campaign id or reason.' }, { status: 400 });
-      }
+      const fundraiserId = String(body.fundraiserId || '');
+      const allowedReasons = new Set(['fraud', 'misleading', 'duplicate', 'inappropriate', 'other']);
+      const rawReason = String(body.reason || 'other').trim().toLowerCase();
+      const reason = allowedReasons.has(rawReason) ? rawReason : 'other';
+      const details = String(body.details || '').trim().slice(0, 2000);
+      if (!fundraiserId) return NextResponse.json({ error: 'Campaign is required.' }, { status: 400 });
 
-      if (supabase) {
-        await supabase.from('fundraiser_reports').insert({
-          fundraiser_id: fundraiserId,
-          reporter_id: user?.id || null,
-          reason,
-          details: details || null,
-          created_at: new Date().toISOString(),
-        });
+      // Shared database-backed fixed-window limit works across serverless instances.
+      // Prefer the platform-supplied client IP header. If only the proxy chain is
+      // present, use its last hop rather than a client-supplied leading value.
+      const realIp = request.headers.get('x-real-ip')?.trim() || '';
+      const forwarded = request.headers.get('x-forwarded-for')?.split(',').map((value) => value.trim()).filter(Boolean) || [];
+      const clientIp = realIp || forwarded.at(-1) || 'unknown';
+      const rateKey = createHash('sha256').update(`fundraiser-report:v1:${user?.id || 'anonymous'}:${clientIp}`).digest('hex');
+      const { data: allowed, error: rateError } = await supabase.rpc('consume_fundraiser_report_rate_limit', {
+        p_bucket_key: rateKey, p_max_requests: 5, p_window_seconds: 3600,
+      });
+      if (rateError) {
+        console.error('Fundraiser report rate limit failed:', rateError.message);
+        return NextResponse.json({ error: 'Reporting is temporarily unavailable. Please try again later.' }, { status: 503 });
       }
+      if (allowed !== true) return NextResponse.json({ error: 'Report limit reached. Please try again later.' }, { status: 429 });
 
-      return NextResponse.json({ ok: true, message: 'Thank you for reporting. Our moderation team has been alerted.' });
+      const { data: row, error: rowError } = await supabase.from('fundraisers').select('id').eq('id', fundraiserId).maybeSingle();
+      if (rowError) throw rowError;
+      if (!row) return NextResponse.json({ error: 'Fundraiser not found.' }, { status: 404 });
+      const { data, error } = await supabase.from('fundraiser_reports').insert({
+        fundraiser_id: fundraiserId, reporter_id: user?.id || null, reason, details: details || null, status: 'open',
+      }).select('id, fundraiser_id, reason, status, created_at').single();
+      if (error) throw error;
+      return NextResponse.json({ ok: true, report: data }, { status: 201 });
     }
 
-    // 5. ADMIN REVIEW
-    if (action === 'admin-review') {
-      const { targetType, targetId, decision, adminNote } = body;
-      if (!targetType || !targetId || !decision) {
-        return NextResponse.json({ error: 'Missing target or decision.' }, { status: 400 });
-      }
+    if (!user?.id) return NextResponse.json({ error: 'Please sign in to continue.' }, { status: 401 });
 
-      if (supabase) {
-        if (targetType === 'campaign') {
-          const status = decision === 'approve' ? 'active' : 'rejected';
-          await supabase
-            .from('fundraisers')
-            .update({ status, verified: decision === 'approve' })
-            .eq('id', targetId);
-        } else if (targetType === 'withdrawal') {
-          const status = decision === 'approve' ? 'disbursed' : 'rejected';
-          await supabase
-            .from('fundraiser_withdrawals')
-            .update({ status, admin_note: adminNote || null })
-            .eq('id', targetId);
+    if (action === 'create') {
+      const title = String(body.title || '').trim().slice(0, 160);
+      const story = String(body.storyMd || body.story_md || '').trim().slice(0, 20000);
+      const category = String(body.category || 'Relief');
+      const goal = Math.round(Number(body.goalKes ?? body.goal_kes ?? 0));
+      const deadline = body.deadline ? String(body.deadline).slice(0, 10) : null;
+      const beneficiary = String(body.beneficiaryName || body.beneficiary_name || '').trim().slice(0, 200);
+      const location = String(body.location || '').trim().slice(0, 200);
+      const cover = safeUrl(body.coverUrl || body.cover_url) || 'https://images.unsplash.com/photo-1541252260730-0412e8e2108e?w=1200&auto=format&fit=crop&q=80';
+      const gallery = Array.isArray(body.gallery) ? body.gallery.slice(0, 10).map(safeUrl).filter(Boolean) : [cover];
+      const verificationDocPath = String(body.verificationDocPath || '').trim();
+      const verificationDocUrl = verificationDocPath.startsWith(user.id + '/') && !verificationDocPath.includes('..')
+        ? verificationDocPath
+        : null;
+      const milestones = Array.isArray(body.milestones) ? body.milestones.slice(0, 20) : [];
+      if (title.length < 5) return NextResponse.json({ error: 'Campaign title must be at least 5 characters.' }, { status: 400 });
+      if (story.length < 25) return NextResponse.json({ error: 'Campaign story must be at least 25 characters.' }, { status: 400 });
+      if (!CATEGORIES.has(category)) return NextResponse.json({ error: 'Choose a valid campaign category.' }, { status: 400 });
+      if (!Number.isSafeInteger(goal) || goal < 100 || goal > 1000000000) return NextResponse.json({ error: 'Campaign goal must be between KES 100 and KES 1,000,000,000.' }, { status: 400 });
+      if (deadline && (!/^\d{4}-\d{2}-\d{2}$/.test(deadline) || Number.isNaN(Date.parse(deadline)))) {
+        return NextResponse.json({ error: 'Choose a valid campaign deadline.' }, { status: 400 });
+      }
+      const insertRow = {
+        owner_id: user.id, creator_id: user.id, church_id: userProfile?.church_id || null,
+        title, story_md: story, description: story, cover_url: cover, banner_url: cover, image_url: cover,
+        gallery, category, goal_kes: goal, target_amount: goal, raised_kes: 0, raised_amount: 0,
+        donors_count: 0, currency: 'KES', deadline, end_date: deadline ? deadline + 'T23:59:59.000Z' : null,
+        expires_at: deadline ? deadline + 'T23:59:59.000Z' : null, status: 'pending_review',
+        beneficiary_name: beneficiary || null, verified: false, accent: String(body.accent || '#10b981').slice(0, 20),
+        location: location || null, verification_doc_url: verificationDocUrl,
+      };
+      const { data: row, error } = await supabase.from('fundraisers').insert(insertRow).select('*').single();
+      if (error) throw error;
+      const validMilestones = milestones.map((item) => ({
+        fundraiser_id: row.id, amount_kes: Math.round(Number(item.amount)), label: String(item.label || '').trim().slice(0, 180),
+      })).filter((item) => Number.isSafeInteger(item.amount_kes) && item.amount_kes >= 100 && item.label);
+      if (validMilestones.length) {
+        const { error: milestoneError } = await supabase.from('fundraiser_milestones').upsert(validMilestones, { onConflict: 'fundraiser_id,amount_kes', ignoreDuplicates: true });
+        if (milestoneError) {
+          await supabase.from('fundraisers').delete().eq('id', row.id).eq('owner_id', user.id);
+          throw milestoneError;
         }
       }
-
-      return NextResponse.json({ ok: true, message: `Review completed: ${decision}.` });
+      return NextResponse.json({ ok: true, fundraiser: normalized(row, userProfile, true), message: 'Campaign submitted for review.' }, { status: 201 });
     }
 
-    return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
-  } catch (err) {
-    return NextResponse.json({ error: err.message || 'Operation failed.' }, { status: 500 });
+    if (action === 'update') {
+      const fundraiserId = String(body.fundraiserId || '');
+      const text = String(body.body || '').trim().slice(0, 5000);
+      const mediaUrl = safeUrl(body.mediaUrl);
+      if (!fundraiserId || text.length < 3) return NextResponse.json({ error: 'Campaign and update text are required.' }, { status: 400 });
+      const { data: row, error: rowError } = await supabase.from('fundraisers').select('id, owner_id, creator_id, status')
+        .eq('id', fundraiserId).maybeSingle();
+      if (rowError) throw rowError;
+      if (!row) return NextResponse.json({ error: 'Fundraiser not found.' }, { status: 404 });
+      if ((row.owner_id || row.creator_id) !== user.id) return NextResponse.json({ error: 'Only the campaign owner can post updates.' }, { status: 403 });
+      if (!['active', 'completed', 'paused'].includes(row.status)) return NextResponse.json({ error: 'Updates are not available for this campaign status.' }, { status: 409 });
+      const { data, error } = await supabase.from('fundraiser_updates').insert({
+        fundraiser_id: fundraiserId, author_id: user.id, body: text, media_url: mediaUrl,
+      }).select('*').single();
+      if (error) throw error;
+      return NextResponse.json({ ok: true, update: data }, { status: 201 });
+    }
+
+    if (action === 'withdrawal') {
+      const fundraiserId = String(body.fundraiserId || '');
+      const amount = Math.round(Number(body.amountKes || 0));
+      const digits = String(body.mpesaPhone || '').replace(/\\D/g, '');
+      const phone = digits.startsWith('254') && digits.length === 12 ? digits : (digits.startsWith('0') && digits.length === 10 ? '254' + digits.slice(1) : null);
+      if (!fundraiserId || !Number.isSafeInteger(amount) || amount < 100 || !phone) return NextResponse.json({ error: 'Enter a valid withdrawal amount and M-Pesa number.' }, { status: 400 });
+      const { data: result, error } = await supabase.rpc('reserve_fundraiser_withdrawal', {
+        p_fundraiser_id: fundraiserId,
+        p_user_id: user.id,
+        p_amount_kes: amount,
+        p_mpesa_phone: phone,
+      });
+      if (error) {
+        console.error('Atomic fundraiser withdrawal reservation failed:', error.message);
+        return NextResponse.json({ error: 'Unable to reserve this withdrawal right now.' }, { status: 503 });
+      }
+      if (!result?.success) {
+        const status = result?.error === 'Fundraiser not found.' ? 404
+          : result?.error === 'Only the campaign owner can request a withdrawal.' ? 403
+          : result?.error === 'Withdrawals are not available for this campaign status.' ? 409
+          : 400;
+        return NextResponse.json({ error: result?.error || 'Unable to request withdrawal.' }, { status });
+      }
+      return NextResponse.json({ ok: true, withdrawal: result.withdrawal, availableAfterKes: result.available_after_kes }, { status: 201 });
+    }
+
+    if (action === 'admin-review') {
+      const auth = await requireAdmin(supabase, user);
+      if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+      const targetType = String(body.targetType || '');
+      const targetId = String(body.targetId || '');
+      const decision = String(body.decision || '');
+      const adminNote = String(body.adminNote || '').trim().slice(0, 2000) || null;
+      if (!targetId || !['approve', 'reject', 'disbursed', 'failed'].includes(decision)) return NextResponse.json({ error: 'Choose a valid review decision.' }, { status: 400 });
+      if (targetType === 'campaign') {
+        const { data, error } = await supabase.from('fundraisers').update({
+          status: decision === 'approve' ? 'active' : 'rejected', verified: decision === 'approve', updated_at: new Date().toISOString(),
+        }).eq('id', targetId).eq('status', 'pending_review').select('*').maybeSingle();
+        if (error) throw error;
+        if (!data) return NextResponse.json({ error: 'Campaign is no longer awaiting review.' }, { status: 409 });
+        return NextResponse.json({ ok: true, fundraiser: normalized(data, null, true) });
+      }
+      if (targetType === 'withdrawal') {
+        if (['approve', 'reject'].includes(decision)) {
+          const { data, error } = await supabase.from('fundraiser_withdrawals').update({
+            status: decision === 'approve' ? 'approved' : 'rejected',
+            admin_note: adminNote, updated_at: new Date().toISOString(),
+          }).eq('id', targetId).eq('status', 'pending').select('*').maybeSingle();
+          if (error) throw error;
+          if (!data) return NextResponse.json({ error: 'Withdrawal is no longer awaiting review.' }, { status: 409 });
+          return NextResponse.json({ ok: true, withdrawal: data });
+        }
+
+        if (decision === 'disbursed') {
+          const payoutReceipt = String(body.payoutReceipt || '').trim().slice(0, 120);
+          if (payoutReceipt.length < 4) return NextResponse.json({ error: 'Enter the M-Pesa payout receipt before confirming disbursement.' }, { status: 400 });
+          const { data, error } = await supabase.from('fundraiser_withdrawals').update({
+            status: 'disbursed', payout_receipt: payoutReceipt,
+            payout_confirmed_by: user.id, payout_confirmed_at: new Date().toISOString(),
+            admin_note: adminNote, updated_at: new Date().toISOString(),
+          }).eq('id', targetId).eq('status', 'approved').select('*').maybeSingle();
+          if (error) throw error;
+          if (!data) return NextResponse.json({ error: 'Only an approved withdrawal can be marked disbursed.' }, { status: 409 });
+          return NextResponse.json({ ok: true, withdrawal: data });
+        }
+
+        if (decision === 'failed') {
+          if (!adminNote || adminNote.length < 5) return NextResponse.json({ error: 'Add a short note explaining the failed payout.' }, { status: 400 });
+          const { data, error } = await supabase.from('fundraiser_withdrawals').update({
+            status: 'failed', admin_note: adminNote,
+            payout_confirmed_by: user.id, payout_confirmed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq('id', targetId).eq('status', 'approved').select('*').maybeSingle();
+          if (error) throw error;
+          if (!data) return NextResponse.json({ error: 'Only an approved withdrawal can be marked failed.' }, { status: 409 });
+          return NextResponse.json({ ok: true, withdrawal: data });
+        }
+      }
+      return NextResponse.json({ error: 'Unsupported review target.' }, { status: 400 });
+    }
+
+    return NextResponse.json({ error: 'Unsupported fundraiser action.' }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error: error?.message || 'Unable to process fundraiser request.' }, { status: 500 });
   }
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { saveProgress, getProgress, toggleLike as apiToggleLike, toggleSave as apiToggleSave } from './data/mediaApi';
-import { saveOfflineItem, removeOfflineItem, isItemSavedOffline } from './offlineSyncManager';
+import { saveProgress, recordView, toggleLike as apiToggleLike, toggleSave as apiToggleSave } from './data/mediaApi';
+import { saveOfflineItem, removeOfflineItem, isItemSavedOffline, cacheOfflineAudio, getOfflineAudioBlob, removeOfflineAudio } from './offlineSyncManager';
 
 const AudioPlayerContext = createContext(null);
 
@@ -14,8 +14,12 @@ export function useAudioPlayer() {
   return ctx;
 }
 
+export function useOptionalAudioPlayer() { return useContext(AudioPlayerContext); }
+
 export function AudioPlayerProvider({ children }) {
   const audioRef = useRef(null);
+  const activeTrackIdRef = useRef(null);
+  const offlineObjectUrlRef = useRef(null);
 
   // Playback state
   const [currentTrack, setCurrentTrack] = useState(null);
@@ -36,6 +40,7 @@ export function AudioPlayerProvider({ children }) {
   // UI state
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOfflineTrack, setIsOfflineTrack] = useState(false);
+  const [offlineActionMessage, setOfflineActionMessage] = useState('');
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
@@ -48,6 +53,13 @@ export function AudioPlayerProvider({ children }) {
   // Last progress sync timestamp to debounce saves
   const lastSyncTimeRef = useRef(0);
 
+  useEffect(() => () => {
+    if (offlineObjectUrlRef.current && typeof URL !== 'undefined') {
+      URL.revokeObjectURL(offlineObjectUrlRef.current);
+      offlineObjectUrlRef.current = null;
+    }
+  }, []);
+
   // Sync offline status and engagement when track changes
   useEffect(() => {
     if (!currentTrack?.id) {
@@ -57,7 +69,15 @@ export function AudioPlayerProvider({ children }) {
       return;
     }
 
-    setIsOfflineTrack(isItemSavedOffline(currentTrack.id));
+    const syncOfflineState = async () => {
+      if (!isItemSavedOffline(currentTrack.id)) {
+        setIsOfflineTrack(false);
+        return;
+      }
+      const cachedBlob = await getOfflineAudioBlob(currentTrack.id);
+      setIsOfflineTrack(Boolean(cachedBlob));
+    };
+    syncOfflineState();
     setIsLiked(Boolean(currentTrack.is_liked));
     setLikeCount(currentTrack.like_count || 0);
     setIsSaved(Boolean(currentTrack.is_saved));
@@ -65,7 +85,7 @@ export function AudioPlayerProvider({ children }) {
     // Listen for external offline updates
     function handleOfflineUpdated(e) {
       if (e.detail?.id === currentTrack.id) {
-        setIsOfflineTrack(isItemSavedOffline(currentTrack.id));
+        syncOfflineState();
       }
     }
 
@@ -208,6 +228,13 @@ export function AudioPlayerProvider({ children }) {
   const playTrack = useCallback((track, newQueue = null) => {
     if (!track) return;
 
+    // Flush the previous track's progress before changing currentTrack state.
+    if (audioRef.current && !audioRef.current.paused) {
+      syncPlaybackProgress(audioRef.current.currentTime, audioRef.current.duration, true);
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
+
     // Notify other components (videos) to pause
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('shammah:audio-play', { detail: { id: track.id } }));
@@ -232,36 +259,70 @@ export function AudioPlayerProvider({ children }) {
 
     setCurrentTrack(track);
     setIsLoading(true);
+    activeTrackIdRef.current = track.id;
+    // Persist the play event through the existing visibility-aware media RPC.
+    recordView(track.id, 0).catch(() => {});
 
     if (audioRef.current) {
-      const src = track.media_url || track.audio_url;
-      if (audioRef.current.src !== src) {
-        audioRef.current.src = src;
+      const audio = audioRef.current;
+      const remoteSrc = track.media_url || track.audio_url;
+      if (!remoteSrc) {
+        setIsLoading(false);
+        return;
       }
 
-      // Check if resuming from saved progress
-      const resumePos = track.playback_position || track.watch_progress?.position_seconds || 0;
-      if (resumePos > 5 && (!track.playback_percent || track.playback_percent < 92)) {
-        audioRef.current.currentTime = resumePos;
-        setCurrentTime(resumePos);
-      } else {
-        audioRef.current.currentTime = 0;
-        setCurrentTime(0);
-      }
+      const prepareAudio = async () => {
+        const cachedBlob = await getOfflineAudioBlob(track.id);
+        if (activeTrackIdRef.current !== track.id || !audioRef.current) return;
+        audio.pause();
+        let src = remoteSrc;
+        if (cachedBlob && typeof URL !== 'undefined') {
+          if (offlineObjectUrlRef.current) URL.revokeObjectURL(offlineObjectUrlRef.current);
+          offlineObjectUrlRef.current = URL.createObjectURL(cachedBlob);
+          src = offlineObjectUrlRef.current;
+        } else if (offlineObjectUrlRef.current) {
+          URL.revokeObjectURL(offlineObjectUrlRef.current);
+          offlineObjectUrlRef.current = null;
+        }
+        audio.src = src;
+        audio.load();
+        audio.playbackRate = playbackSpeed;
 
-      audioRef.current.playbackRate = playbackSpeed;
-      audioRef.current
-        .play()
-        .then(() => {
-          setIsPlaying(true);
-          setIsLoading(false);
-        })
-        .catch((err) => {
-          console.warn('[audioPlayer] Auto-play prevented or failed:', err);
-          setIsLoading(false);
-        });
+        const playAt = (position) => {
+          if (activeTrackIdRef.current !== track.id || !audioRef.current) return;
+          const safePosition = Math.max(0, Number(position) || 0);
+          audio.currentTime = safePosition;
+          setCurrentTime(safePosition);
+          audio.play()
+            .then(() => {
+              if (activeTrackIdRef.current === track.id) {
+                setIsPlaying(true);
+                setIsLoading(false);
+              }
+            })
+            .catch((err) => {
+              console.warn('[audioPlayer] Auto-play prevented or failed:', err);
+              if (activeTrackIdRef.current === track.id) setIsLoading(false);
+            });
+        };
+
+        const knownPosition = track.playback_position ?? track.watch_progress?.position_seconds;
+        const knownPercent = track.playback_percent ?? (track.watch_progress?.completed ? 100 : 0);
+        if (Number(knownPosition) > 5 && Number(knownPercent) < 92) {
+          playAt(knownPosition);
+        } else if (knownPosition !== undefined && knownPosition !== null) {
+          playAt(0);
+        } else {
+          getProgress(track.id).then((result) => {
+            const position = result?.position || result?.data?.position || 0;
+            const completed = result?.completed || result?.data?.completed;
+            playAt(position > 5 && !completed ? position : 0);
+          }).catch(() => playAt(0));
+        }
+      };
+      prepareAudio();
     }
-  }, [playbackSpeed]);
+  }, [playbackSpeed, syncPlaybackProgress]);
 
   const pauseTrack = useCallback(() => {
     if (audioRef.current) {
@@ -416,30 +477,25 @@ export function AudioPlayerProvider({ children }) {
   }, []);
 
   const removeFromQueue = useCallback((index) => {
-    setQueue((prev) => {
-      const copy = [...prev];
-      copy.splice(index, 1);
-      return copy;
-    });
-    setQueueIndex((curr) => {
-      if (index === curr) {
-        return Math.max(0, curr - 1);
-      }
-      if (index < curr) {
-        return curr - 1;
-      }
-      return curr;
-    });
-  }, []);
+    if (index < 0 || index >= queue.length) return;
+    // Keep the currently playing item in the queue until playback changes.
+    if (index === queueIndex && queue[index]?.id === currentTrack?.id) return;
+    const copy = [...queue];
+    copy.splice(index, 1);
+    setQueue(copy);
+    if (index < queueIndex) setQueueIndex(queueIndex - 1);
+  }, [queue, queueIndex, currentTrack]);
 
   const reorderQueue = useCallback((fromIndex, toIndex) => {
-    setQueue((prev) => {
-      const copy = [...prev];
-      const [moved] = copy.splice(fromIndex, 1);
-      copy.splice(toIndex, 0, moved);
-      return copy;
-    });
-  }, []);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= queue.length || toIndex >= queue.length || fromIndex === toIndex) return;
+    const copy = [...queue];
+    const [moved] = copy.splice(fromIndex, 1);
+    copy.splice(toIndex, 0, moved);
+    setQueue(copy);
+    if (queueIndex === fromIndex) setQueueIndex(toIndex);
+    else if (fromIndex < queueIndex && toIndex >= queueIndex) setQueueIndex(queueIndex - 1);
+    else if (fromIndex > queueIndex && toIndex <= queueIndex) setQueueIndex(queueIndex + 1);
+  }, [queue, queueIndex]);
 
   const clearQueue = useCallback(() => {
     setQueue(currentTrack ? [currentTrack] : []);
@@ -485,17 +541,31 @@ export function AudioPlayerProvider({ children }) {
     }
   }, [currentTrack, isSaved]);
 
-  const toggleOfflineTrack = useCallback(() => {
+  const toggleOfflineTrack = useCallback(async () => {
     if (!currentTrack?.id) return;
+    setOfflineActionMessage('');
     if (isOfflineTrack) {
       removeOfflineItem(currentTrack.id);
+      await removeOfflineAudio(currentTrack.id);
       setIsOfflineTrack(false);
-    } else {
-      const res = saveOfflineItem(currentTrack, 'audio');
-      if (res.success) {
-        setIsOfflineTrack(true);
-      }
+      setOfflineActionMessage('Removed downloaded audio from this device.');
+      return;
     }
+    const source = currentTrack.media_url || currentTrack.audio_url;
+    const cached = await cacheOfflineAudio(currentTrack.id, source);
+    if (!cached.success) {
+      setOfflineActionMessage(cached.reason || 'Could not download this audio.');
+      return;
+    }
+    const saved = saveOfflineItem(currentTrack, 'audio');
+    if (!saved.success) {
+      await removeOfflineAudio(currentTrack.id);
+      setOfflineActionMessage(saved.reason || 'Could not save this audio.');
+      return;
+    }
+    setIsOfflineTrack(true);
+    const sizeMb = Math.max(0.1, Math.round((cached.bytes || 0) / 104857.6) / 10);
+    setOfflineActionMessage(`Audio downloaded for offline listening (${sizeMb} MB).`);
   }, [currentTrack, isOfflineTrack]);
 
   // Audio HTML5 event callbacks
@@ -523,6 +593,14 @@ export function AudioPlayerProvider({ children }) {
     nextTrack();
   };
 
+  const expandPlayer = useCallback(() => setIsExpanded(true), []);
+  const collapsePlayer = useCallback(() => setIsExpanded(false), []);
+  const closePlayer = useCallback(() => {
+    pauseTrack();
+    setCurrentTrack(null);
+    setIsExpanded(false);
+  }, [pauseTrack]);
+
   const contextValue = {
     currentTrack,
     isPlaying,
@@ -538,6 +616,7 @@ export function AudioPlayerProvider({ children }) {
     repeatMode,
     isExpanded,
     isOfflineTrack,
+    offlineActionMessage,
     isLiked,
     likeCount,
     isSaved,
@@ -561,16 +640,12 @@ export function AudioPlayerProvider({ children }) {
     removeFromQueue,
     reorderQueue,
     clearQueue,
-    expandPlayer: () => setIsExpanded(true),
-    collapsePlayer: () => setIsExpanded(false),
+    expandPlayer,
+    collapsePlayer,
     toggleLikeTrack,
     toggleSaveTrack,
     toggleOfflineTrack,
-    closePlayer: () => {
-      pauseTrack();
-      setCurrentTrack(null);
-      setIsExpanded(false);
-    },
+    closePlayer,
   };
 
   return (

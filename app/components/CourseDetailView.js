@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft,
   Star,
@@ -26,11 +26,12 @@ import {
   Send
 } from 'lucide-react';
 import PopupSheet from './PopupSheet';
-import MpesaPaymentModal from './MpesaPaymentModal';
+import { Loader2, Phone } from 'lucide-react';
 import CourseCertificateModal from './CourseCertificateModal';
 import {
   enrollInCourse,
   submitCourseReview,
+  getCourseDetail,
   issueCourseCertificate,
   formatDurationMinutes,
   formatDurationSeconds
@@ -82,6 +83,10 @@ export default function CourseDetailView({
 
   // Paid course M-Pesa Modal
   const [showMpesaModal, setShowMpesaModal] = useState(false);
+  const [paymentPhone, setPaymentPhone] = useState('');
+  const [paymentCheckoutId, setPaymentCheckoutId] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('idle');
+  const [paymentError, setPaymentError] = useState('');
 
   // Certificate Modal
   const [certificate, setCertificate] = useState(initialCourse?.certificate || null);
@@ -175,27 +180,85 @@ export default function CourseDetailView({
     }
   };
 
-  const handleMpesaSuccess = async (paymentData) => {
+  const handleStartCoursePayment = async (event) => {
+    event.preventDefault();
+    setPaymentError('');
+    setPaymentStatus('sending');
     try {
-      await enrollInCourse({
-        courseId: course.id,
-        userId,
-        userName,
-        mpesaReceipt: paymentData?.receiptCode || 'MPESA-PAID',
-        amountPaidKes: course.price_kes
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) throw new Error('Please sign in before purchasing this course.');
+      const response = await fetch('/api/mpesa/stkpush', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ courseId: course.id, phone: paymentPhone.trim() })
       });
-      const updated = {
-        ...course,
-        enrolled: true,
-        paid: true,
-        enrolled_count: Number(course.enrolled_count || 0) + 1
-      };
-      setCourse(updated);
-      onCourseUpdated?.(updated);
-      setShowMpesaModal(false);
-      onStartLearning?.(updated, null);
-    } catch {}
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not initiate M-Pesa payment.');
+      if (!result.checkoutRequestId) throw new Error('M-Pesa did not return a checkout reference.');
+      setPaymentCheckoutId(result.checkoutRequestId);
+      setPaymentStatus('pending');
+    } catch (error) {
+      setPaymentStatus('failed');
+      setPaymentError(error?.message || 'Could not initiate payment.');
+    }
   };
+
+  useEffect(() => {
+    if (!showMpesaModal || !paymentCheckoutId || !['pending', 'processing'].includes(paymentStatus)) return undefined;
+    let cancelled = false;
+    let timer;
+    let attempts = 0;
+    const poll = async () => {
+      if (cancelled) return;
+      attempts += 1;
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data?.session?.access_token;
+        if (!token) throw new Error('Please sign in again to check payment status.');
+        const response = await fetch(`/api/mpesa/course-status?checkoutRequestId=${encodeURIComponent(paymentCheckoutId)}`, {
+          headers: { Authorization: `Bearer ${token} ` },
+          cache: 'no-store'
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not check payment status.');
+        if (cancelled) return;
+        if (result.status === 'completed') {
+          try {
+            await enrollInCourse({ courseId: course.id, userId, userName });
+            const updated = { ...course, enrolled: true, paid: true };
+            setCourse(updated);
+            onCourseUpdated?.(updated);
+            setPaymentStatus('success');
+            setShowMpesaModal(false);
+            onStartLearning?.(updated, null);
+          } catch (error) {
+            setPaymentStatus('processing');
+            setPaymentError(error?.message || 'Payment confirmed; refreshing enrollment failed. Please reopen the course.');
+          }
+          return;
+        }
+        if (result.status === 'failed') {
+          setPaymentStatus('failed');
+          setPaymentError('M-Pesa did not confirm the payment. You can try again.');
+          return;
+        }
+      } catch (error) {
+        if (attempts >= 60) {
+          setPaymentStatus('processing');
+          setPaymentError(error?.message || 'Payment is still processing. Check the course again shortly.');
+          return;
+        }
+      }
+      if (!cancelled && attempts < 60) timer = setTimeout(poll, 3000);
+      else if (!cancelled) {
+        setPaymentStatus('processing');
+        setPaymentError('Payment is still pending. Check the course again shortly.');
+      }
+    };
+    poll();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [showMpesaModal, paymentCheckoutId, paymentStatus, course, userId, userName, onCourseUpdated, onStartLearning]);
 
   const handleSubmitReview = async (e) => {
     e.preventDefault();
@@ -211,11 +274,19 @@ export default function CourseDetailView({
         body: reviewBody.trim()
       });
       if (res?.review) {
+        let refreshed = null;
+        if (res.rating_avg == null || res.rating_count == null) {
+          try { refreshed = await getCourseDetail(course.id, userId); } catch {}
+        }
+        const existingReviewIndex = (course.reviews || []).findIndex((review) => review.user_id === res.review.user_id);
+        const currentReviews = [...(course.reviews || [])];
+        if (existingReviewIndex >= 0) currentReviews.splice(existingReviewIndex, 1);
         const updated = {
           ...course,
-          rating_avg: res.rating_avg || course.rating_avg,
-          rating_count: res.rating_count || (course.rating_count || 0) + 1,
-          reviews: [res.review, ...(course.reviews || [])]
+          ...(refreshed || {}),
+          rating_avg: res.rating_avg ?? refreshed?.rating_avg ?? course.rating_avg ?? 0,
+          rating_count: res.rating_count ?? refreshed?.rating_count ?? course.rating_count ?? 0,
+          reviews: [res.review, ...currentReviews]
         };
         setCourse(updated);
         onCourseUpdated?.(updated);
@@ -310,8 +381,8 @@ export default function CourseDetailView({
           <div className="course-detail-stats-row">
             <span className="course-detail-stat">
               <Star size={15} fill="#fbbf24" color="#fbbf24" />
-              <strong>{course?.rating_avg || course?.rating || 4.9}</strong>
-              <span>({course?.rating_count || 42} reviews)</span>
+              <strong>{Number(course?.rating_avg ?? course?.rating ?? 0).toFixed(2)}</strong>
+              <span>({Number(course?.rating_count ?? 0).toLocaleString()} reviews)</span>
             </span>
             <span className="course-detail-stat">
               <Users size={15} />
@@ -622,19 +693,42 @@ export default function CourseDetailView({
       </PopupSheet>
 
       {/* M-Pesa Payment Modal for Paid Courses */}
-      <MpesaPaymentModal
-        isOpen={showMpesaModal}
-        onClose={() => setShowMpesaModal(false)}
-        project={{
-          id: `course:${course?.id}`,
-          title: course?.title,
-          organizer: course?.instructor_name || course?.instructor || 'Shammah Academy'
-        }}
-        initialAmount={course?.price_kes || 500}
-        tierLabel={`Course Enrollment: ${course?.title}`}
-        session={session}
-        onPaymentSuccess={handleMpesaSuccess}
-      />
+      {showMpesaModal && (
+        <div className="author-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="course-payment-heading" onClick={() => setShowMpesaModal(false)}>
+          <div className="inst-profile-modal-card" style={{ maxWidth: 460 }} onClick={(event) => event.stopPropagation()}>
+            <div className="inst-modal-header">
+              <div>
+                <h3 id="course-payment-heading" className="text-base font-bold">Course payment</h3>
+                <p className="text-xs text-gray-400">{course?.title}</p>
+              </div>
+              <button type="button" className="inst-modal-close" onClick={() => setShowMpesaModal(false)} aria-label="Close payment dialog">×</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xl font-bold">KES {Number(course?.price_kes || 0).toLocaleString()}</p>
+              {['idle', 'sending', 'failed'].includes(paymentStatus) ? (
+                <form onSubmit={handleStartCoursePayment} className="space-y-3">
+                  <label htmlFor="course-payment-phone" className="block text-sm">Safaricom M-Pesa phone number</label>
+                  <div className="flex items-center gap-2 rounded-xl border border-white/20 p-3">
+                    <Phone size={16} aria-hidden="true" />
+                    <input id="course-payment-phone" type="tel" required value={paymentPhone} onChange={(event) => setPaymentPhone(event.target.value)} placeholder="0712 345 678" className="w-full bg-transparent outline-none" />
+                  </div>
+                  {paymentError && <p role="alert" className="text-sm text-rose-400">{paymentError}</p>}
+                  <button type="submit" disabled={paymentStatus === 'sending'} className="w-full rounded-xl bg-emerald-500 p-3 font-bold text-black">
+                    {paymentStatus === 'sending' ? 'Sending prompt…' : 'Send M-Pesa prompt'}
+                  </button>
+                </form>
+              ) : (
+                <div className="space-y-3 text-center">
+                  <Loader2 size={28} className="mx-auto animate-spin" />
+                  <p>{paymentStatus === 'success' ? 'Payment confirmed.' : 'Waiting for Safaricom confirmation…'}</p>
+                  {paymentError && <p role="status" className="text-sm text-amber-300">{paymentError}</p>}
+                  <button type="button" onClick={() => setShowMpesaModal(false)} className="rounded-xl border border-white/20 px-4 py-2">Close</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Certificate Modal */}
       <CourseCertificateModal

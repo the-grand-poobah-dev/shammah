@@ -31,9 +31,11 @@ import { playSound } from '../lib/soundEffects';
 import { formatPostDate, getPostDateTitle, useRelativeTimeTick } from '../lib/postDisplay';
 
 import PopupSheet from './PopupSheet';
+import { useOptionalAudioPlayer } from '../lib/audioPlayer';
 
 export default function OfflineLibraryModal({ isOpen = true, onClose, onOpenItem }) {
   const router = useRouter();
+  const audioPlayer = useOptionalAudioPlayer();
   const now = useRelativeTimeTick();
   const [offlineItems, setOfflineItems] = useState([]);
   const [activeFilter, setActiveFilter] = useState('all'); // all | church_feed | bible_chapter | courses | audio | posts
@@ -170,6 +172,11 @@ export default function OfflineLibraryModal({ isOpen = true, onClose, onOpenItem
               const bibleChapter = item.type === 'bible_chapter' ? (item.bibleChapterData || getOfflineBibleChapter(item.bibleChapterData?.bookName, item.bibleChapterData?.chapterNum, item.bibleChapterData?.translation)) : null;
 
               function handleOpenItemTarget() {
+                if (item.type === 'audio' && audioPlayer) {
+                  audioPlayer.playTrack(item.itemData || item, [item.itemData || item]);
+                  onClose && onClose();
+                  return;
+                }
                 playSound('reaction');
                 onClose?.();
                 if (item.type === 'church_feed') {
@@ -235,7 +242,7 @@ export default function OfflineLibraryModal({ isOpen = true, onClose, onOpenItem
                         type="button"
                         className="offline-open-btn"
                         onClick={handleOpenItemTarget}
-                        title="Open interactive page"
+                        title="Open or play saved item"
                       >
                         <ExternalLink size={15} />
                       </button>

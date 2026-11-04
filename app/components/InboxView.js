@@ -119,7 +119,7 @@ export default function InboxView({
       try {
         const { data: prof } = await supabase
           .from('profiles')
-          .select('id, display_name, avatar_url, badge, badge_verified, role, inbox_permission')
+          .select('id, display_name, avatar_url, badge, badge_verified, role')
           .eq('id', recipientId)
           .maybeSingle();
 
@@ -131,7 +131,6 @@ export default function InboxView({
           participantBadge: prof?.badge || optionalMeta.recipientBadge || 'member',
           participantVerified: Boolean(prof?.badge_verified ?? optionalMeta.recipientVerified),
           participantRole: prof?.role || optionalMeta.recipientRole || 'member',
-          participantInboxPermission: prof?.inbox_permission || optionalMeta.recipientInboxPermission || 'everyone',
           lastMessage: '',
           lastMessageTime: new Date().toISOString(),
           unreadCount: 0,

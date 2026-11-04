@@ -1,10 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import {
-  Image as ImageIcon,
-  Video as VideoIcon,
   Mic as MicIcon,
-  Camera,
   Film,
   FileAudio,
   BarChart3,
@@ -48,7 +45,13 @@ import { CATEGORY_STYLES, categoryStyle, initials } from '../lib/postDisplay';
 import { VISIBILITY_OPTIONS } from '../lib/postInteractions';
 import { playSound } from '../lib/soundEffects';
 import { generatePseudoIdentity, ANONYMOUS_IDENTITY } from '../lib/anonymousManager';
-import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
+import { detectMediaType } from '../lib/mediaUpload';
+import { listMedia } from '../lib/data/mediaApi';
+import ReelCreatorModal from './ReelCreatorModal';
+import LiveHostModal from './LiveHostModal';
+import MediaToolbar from './media/MediaToolbar';
+import GifPicker from './media/GifPicker';
+import MediaPreviewFrame from './media/MediaPreviewFrame';
 import {
   FEELINGS_LIST,
   formatFeelingString,
@@ -76,6 +79,8 @@ export default function CreatePostBox({
   setPollOptions,
   mediaFile,
   setMediaFile,
+  selectedLibraryMedia,
+  setSelectedLibraryMedia,
   mediaPreview,
   setMediaPreview,
   mediaUploading,
@@ -109,6 +114,27 @@ export default function CreatePostBox({
   const [isQuizMode, setIsQuizMode] = useState(false);
   const [correctOptionIdx, setCorrectOptionIdx] = useState(0);
   const [quizExplanation, setQuizExplanation] = useState('');
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [libraryMedia, setLibraryMedia] = useState([]);
+  const [mediaLibraryLoaded, setMediaLibraryLoaded] = useState(false);
+  const [loadingMediaLibrary, setLoadingMediaLibrary] = useState(false);
+  const [mediaLibraryError, setMediaLibraryError] = useState('');
+  const [showReelCreator, setShowReelCreator] = useState(false);
+  const [showLiveModal, setShowLiveModal] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+
+  useEffect(() => {
+    const openLive = () => setShowLiveModal(true);
+    window.addEventListener('shammah:open-live', openLive);
+    return () => window.removeEventListener('shammah:open-live', openLive);
+  }, []);
+
+  useEffect(() => {
+    const previewUrl = mediaPreview?.url;
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    };
+  }, [mediaPreview?.url]);
 
   // Location, Feeling & Member Tagging state
   const [location, setLocation] = useState(null);
@@ -188,19 +214,11 @@ export default function CreatePostBox({
     }
   }
 
-  const photoInputRef = useRef(null);
-  const videoInputRef = useRef(null);
   const audioInputRef = useRef(null);
-  const cameraPhotoInputRef = useRef(null);
-  const cameraVideoInputRef = useRef(null);
-  const cameraAudioInputRef = useRef(null);
-  const voiceRecorderRef = useRef(null);
   const categoryTriggerRef = useRef(null);
   const visMenuRef = useRef(null);
   const identityMenuRef = useRef(null);
 
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
-  const [voiceSeconds, setVoiceSeconds] = useState(0);
 
   const headerName = profile?.display_name || session?.user?.email || 'Member';
   const cat = composeCategory ? categoryStyle(composeCategory) : null;
@@ -218,73 +236,74 @@ export default function CreatePostBox({
       ? null
       : profile?.avatar_url;
 
+  async function handleToggleMediaLibrary() {
+    if (!session?.user?.id) {
+      openAuth?.('signin');
+      return;
+    }
+    if (showMediaLibrary) {
+      setShowMediaLibrary(false);
+      return;
+    }
+    setShowMediaLibrary(true);
+    if (mediaLibraryLoaded || loadingMediaLibrary) return;
+    setLoadingMediaLibrary(true);
+    setMediaLibraryError('');
+    try {
+      const [videos, audio] = await Promise.all([
+        listMedia({ kind: 'video', authorId: session.user.id, sort: 'recent', limit: 30 }),
+        listMedia({ kind: 'audio', authorId: session.user.id, sort: 'recent', limit: 30 }),
+      ]);
+      if (videos.error) throw videos.error;
+      if (audio.error) throw audio.error;
+      const owned = [...(videos.data || []), ...(audio.data || [])]
+        .filter((item) => item.media_url && item.author_id === session.user.id && (item.kind === 'video' || item.kind === 'audio'))
+        .sort((a, b) => new Date(b.published_at || b.created_at || 0).getTime() - new Date(a.published_at || a.created_at || 0).getTime());
+      setLibraryMedia(owned);
+      setMediaLibraryLoaded(true);
+    } catch (err) {
+      setMediaLibraryError(err?.message || 'Could not load your published media.');
+    } finally {
+      setLoadingMediaLibrary(false);
+    }
+  }
+
+  function handleChooseLibraryMedia(item) {
+    if (!item?.media_url || !['video', 'audio'].includes(item.kind)) return;
+    setSelectedLibraryMedia(item);
+    setMediaFile(null);
+    setMediaPreview({ url: item.media_url, type: item.kind });
+    setShowMediaLibrary(false);
+    setMediaLibraryError('');
+  }
+
+  function handleChooseGif(gif) {
+    if (!gif?.url) return;
+    setSelectedLibraryMedia({ ...gif, kind: 'gif', type: 'gif', media_type: 'gif', media_url: gif.url });
+    setMediaFile(null);
+    setMediaPreview({ url: gif.url, type: 'gif', title: gif.title || 'GIF' });
+    setShowMediaLibrary(false);
+    setMediaLibraryError('');
+  }
+
   function handleFileSelected(file) {
     if (!file) return;
+    setShowMediaLibrary(false);
+    setSelectedLibraryMedia(null);
     setMediaFile(file);
     const url = URL.createObjectURL(file);
+    const detectedType = detectMediaType(file);
     setMediaPreview({
       url,
-      type: file.type.startsWith('video/')
-        ? 'video'
-        : file.type.startsWith('audio/')
-          ? 'audio'
-          : 'image',
+      type: detectedType || (file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'image'),
     });
   }
 
   function handleRemoveMedia() {
+    setSelectedLibraryMedia(null);
     setMediaFile(null);
     setMediaPreview(null);
-    if (photoInputRef.current) photoInputRef.current.value = '';
-    if (videoInputRef.current) videoInputRef.current.value = '';
     if (audioInputRef.current) audioInputRef.current.value = '';
-    if (cameraPhotoInputRef.current) cameraPhotoInputRef.current.value = '';
-    if (cameraVideoInputRef.current) cameraVideoInputRef.current.value = '';
-    if (cameraAudioInputRef.current) cameraAudioInputRef.current.value = '';
-  }
-
-  async function handleStartVoiceNote() {
-    if (!isAudioRecordingSupported()) {
-      cameraAudioInputRef.current?.click();
-      return;
-    }
-    try {
-      setVoiceSeconds(0);
-      setIsRecordingVoice(true);
-      const recorder = await startAudioRecording({
-        maxSeconds: 120,
-        onTimeTick: (sec) => setVoiceSeconds(sec),
-      });
-      voiceRecorderRef.current = recorder;
-    } catch (err) {
-      console.warn('Voice record init failed:', err);
-      setIsRecordingVoice(false);
-      cameraAudioInputRef.current?.click();
-    }
-  }
-
-  async function handleStopVoiceNote() {
-    if (!voiceRecorderRef.current) return;
-    try {
-      const res = await voiceRecorderRef.current.stop();
-      setIsRecordingVoice(false);
-      voiceRecorderRef.current = null;
-      if (res?.file) {
-        handleFileSelected(res.file);
-      }
-    } catch (err) {
-      console.error('Error stopping voice note:', err);
-      setIsRecordingVoice(false);
-    }
-  }
-
-  function handleCancelVoiceNote() {
-    if (voiceRecorderRef.current) {
-      voiceRecorderRef.current.cancel();
-      voiceRecorderRef.current = null;
-    }
-    setIsRecordingVoice(false);
-    setVoiceSeconds(0);
   }
 
   function handleAddPollOption() {
@@ -340,7 +359,7 @@ export default function CreatePostBox({
     pollUploading ||
     mediaUploading ||
     !composeCategory ||
-    (!composeText.trim() && !mediaFile) ||
+    (!composeText.trim() && !mediaFile && !selectedLibraryMedia) ||
     (isPoll && pollOptions.filter((o) => o.label.trim() || o.file).length < 2);
 
   // Filter categories in popover dropdown (excluding FAQ as requested)
@@ -394,6 +413,7 @@ export default function CreatePostBox({
   const CurrentVisIcon = VIS_ICONS[visibility] || Globe;
 
   return (
+    <>
     <form className="compose compose-genz" onSubmit={handleFormSubmit}>
       {/* Top Header: Avatar + Author + Privacy Selector + Admin Pin Toggle */}
       <div className="compose-header">
@@ -872,56 +892,20 @@ export default function CreatePostBox({
         )}
       </div>
 
-      {/* Media Preview (Photo / Video / Audio) */}
-      {mediaPreview && (
+      {/* Contain-based image/video/GIF preview; audio retains its player controls. */}
+      {mediaPreview && mediaPreview.type !== 'audio' && (
+        <MediaPreviewFrame mode="composer" media={{ ...mediaPreview, title: selectedLibraryMedia?.title || mediaFile?.name }} onRemove={handleRemoveMedia} />
+      )}
+      {mediaPreview?.type === 'audio' && (
         <div className="compose-media-preview-container">
-          {mediaPreview.type === 'image' && (
-            <div className="media-preview-box">
-              <img src={mediaPreview.url} alt="Upload preview" className="media-preview-img" />
-              <button
-                type="button"
-                className="media-preview-remove"
-                onClick={handleRemoveMedia}
-                title="Remove photo"
-              >
-                <X size={16} />
-              </button>
+          <div className="media-preview-audio-box">
+            <div className="audio-preview-icon"><MicIcon size={20} /></div>
+            <div className="audio-preview-details">
+              <span className="audio-preview-title">{selectedLibraryMedia?.title || mediaFile?.name || 'Audio Recording'}</span>
+              <audio src={mediaPreview.url} controls className="audio-preview-player" />
             </div>
-          )}
-
-          {mediaPreview.type === 'video' && (
-            <div className="media-preview-box">
-              <video src={mediaPreview.url} controls className="media-preview-video" />
-              <button
-                type="button"
-                className="media-preview-remove"
-                onClick={handleRemoveMedia}
-                title="Remove video"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
-
-          {mediaPreview.type === 'audio' && (
-            <div className="media-preview-audio-box">
-              <div className="audio-preview-icon">
-                <MicIcon size={20} />
-              </div>
-              <div className="audio-preview-details">
-                <span className="audio-preview-title">{mediaFile?.name || 'Audio Recording'}</span>
-                <audio src={mediaPreview.url} controls className="audio-preview-player" />
-              </div>
-              <button
-                type="button"
-                className="media-preview-remove"
-                onClick={handleRemoveMedia}
-                title="Remove audio"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
+            <button type="button" className="media-preview-remove" onClick={handleRemoveMedia} title="Remove audio" aria-label="Remove audio"><X size={16} /></button>
+          </div>
         </div>
       )}
 
@@ -960,198 +944,37 @@ export default function CreatePostBox({
         />
       )}
 
-      {/* Hidden File Inputs */}
-      {/* Hidden File Picker Inputs */}
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
-      <input
-        ref={videoInputRef}
-        type="file"
-        accept="video/mp4,video/webm,video/quicktime"
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
       <input
         ref={audioInputRef}
         type="file"
-        accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
+        accept="audio/*,.mp3,.wav,.ogg,.webm,.m4a,.aac,.flac"
         hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
+        onChange={(event) => { handleFileSelected(event.target.files?.[0]); event.target.value = ''; }}
       />
-
-      {/* Hidden Live Camera & Microphone Fallback Inputs */}
-      <input
-        ref={cameraPhotoInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
-      <input
-        ref={cameraVideoInputRef}
-        type="file"
-        accept="video/*"
-        capture="environment"
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
-      <input
-        ref={cameraAudioInputRef}
-        type="file"
-        accept="audio/*"
-        capture
-        hidden
-        onChange={(e) => {
-          handleFileSelected(e.target.files?.[0]);
-          e.target.value = '';
-        }}
-      />
-
-      {/* Active Live Voice Recording Status Bar */}
-      {isRecordingVoice && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '10px 14px',
-            borderRadius: 12,
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid rgba(239, 68, 68, 0.35)',
-            marginBottom: 10,
-            width: '100%',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: '#ef4444',
-                display: 'inline-block',
-                animation: 'pulse 1s infinite',
-              }}
-            />
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#fca5a5' }}>
-              Recording Voice Note: {Math.floor(voiceSeconds / 60)}:{String(voiceSeconds % 60).padStart(2, '0')}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button
-              type="button"
-              onClick={handleCancelVoiceNote}
-              style={{
-                padding: '4px 10px',
-                borderRadius: 8,
-                background: 'rgba(255,255,255,0.1)',
-                border: 'none',
-                color: 'var(--ink)',
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleStopVoiceNote}
-              style={{
-                padding: '4px 12px',
-                borderRadius: 8,
-                background: 'var(--teal, #14b8a6)',
-                border: 'none',
-                color: '#ffffff',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              Done &amp; Attach
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Bottom Action Bar */}
       <div className="compose-bottom-toolbar">
         <div className="compose-tools-group" role="group" aria-label="Attachments and options">
-          {/* Live Capture Tools */}
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => cameraPhotoInputRef.current?.click()}
-            title="Take a photo with camera"
-            aria-label="Take photo"
-          >
-            <Camera size={18} className="tool-icon text-emerald-400" />
-            <span className="tool-label">Camera</span>
-          </button>
+          <MediaToolbar
+            context="post"
+            onPickFile={handleFileSelected}
+            onVoice={(file) => handleFileSelected(file)}
+            onGif={() => setShowGifPicker(true)}
+            onReel={() => setShowReelCreator(true)}
+            onLive={() => setShowLiveModal(true)}
+            disabled={posting || mediaUploading}
+          />
 
           <button
             type="button"
-            className="tool-btn"
-            onClick={() => cameraVideoInputRef.current?.click()}
-            title="Record video with camera"
-            aria-label="Record video"
+            className={`tool-btn${showMediaLibrary ? ' active' : ''}`}
+            onClick={handleToggleMediaLibrary}
+            title="Choose a published video or audio file from your media library"
+            aria-label="Choose from media library"
+            aria-expanded={showMediaLibrary}
+            disabled={loadingMediaLibrary}
           >
-            <VideoIcon size={18} className="tool-icon text-amber-400" />
-            <span className="tool-label">Record</span>
-          </button>
-
-          <button
-            type="button"
-            className={`tool-btn${isRecordingVoice ? ' active' : ''}`}
-            onClick={isRecordingVoice ? handleStopVoiceNote : handleStartVoiceNote}
-            title={isRecordingVoice ? 'Stop recording voice note' : 'Record voice note or prayer'}
-            aria-label="Record voice note"
-          >
-            <MicIcon size={18} className="tool-icon text-cyan-400" />
-            <span className="tool-label">{isRecordingVoice ? 'Recording…' : 'Voice Note'}</span>
-          </button>
-
-          {/* Storage File Pickers */}
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => photoInputRef.current?.click()}
-            title="Attach a photo from device"
-            aria-label="Attach photo"
-          >
-            <ImageIcon size={18} className="tool-icon tool-photo" />
-            <span className="tool-label">Photo</span>
-          </button>
-
-          <button
-            type="button"
-            className="tool-btn"
-            onClick={() => videoInputRef.current?.click()}
-            title="Attach a video from device"
-            aria-label="Attach video"
-          >
-            <Film size={18} className="tool-icon tool-video" />
-            <span className="tool-label">Video</span>
+            <Film size={18} className="tool-icon text-purple-400" />
+            <span className="tool-label">Library</span>
           </button>
 
           <button
@@ -1578,5 +1401,23 @@ export default function CreatePostBox({
         </div>
       </PopupSheet>
     </form>
+    <ReelCreatorModal
+      isOpen={showReelCreator}
+      onClose={() => setShowReelCreator(false)}
+      session={session}
+      profile={profile}
+      onCreated={(newReel) => {
+        setShowReelCreator(false);
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('shammah:reel-created', { detail: newReel }));
+      }}
+    />
+    <LiveHostModal
+      isOpen={showLiveModal}
+      onClose={() => setShowLiveModal(false)}
+      session={session}
+      profile={profile}
+    />
+    {showGifPicker && <GifPicker onSelect={handleChooseGif} onClose={() => setShowGifPicker(false)} />}
+    </>
   );
 }

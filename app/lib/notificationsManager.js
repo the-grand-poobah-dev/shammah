@@ -164,7 +164,63 @@ export async function fetchRealNotifications(userId) {
       profileById = new Map((profiles || []).map((p) => [p.id, p]));
     }
 
+    // Live notifications are optional until the Live schema migration is applied.
+    // Keep this isolated so a missing live_streams table never breaks other alerts.
+    let liveStreams = [];
+    try {
+      const { data: followedRows, error: followsError } = await supabase
+        .from('follows')
+        .select('followed_id')
+        .eq('follower_id', uid)
+        .limit(100);
+      if (followsError) throw followsError;
+      const followedIds = [...new Set((followedRows || []).map((row) => row.followed_id).filter(Boolean))];
+      if (followedIds.length) {
+        const { data: rows, error: liveError } = await supabase
+          .from('live_streams')
+          .select('id, host_id, title, started_at, visibility')
+          .in('host_id', followedIds)
+          .eq('status', 'live')
+          .in('visibility', ['public', 'followers'])
+          .order('started_at', { ascending: false })
+          .limit(20);
+        if (liveError) throw liveError;
+        liveStreams = rows || [];
+        const missingHostIds = [...new Set(liveStreams.map((row) => row.host_id).filter((id) => id && !profileById.has(id)))];
+        if (missingHostIds.length) {
+          const { data: liveProfiles } = await supabase
+            .from('profiles')
+            .select('id, display_name, avatar_url, badge, badge_verified')
+            .in('id', missingHostIds);
+          (liveProfiles || []).forEach((profile) => profileById.set(profile.id, profile));
+        }
+      }
+    } catch (liveNotificationError) {
+      console.warn('Could not load live broadcast notifications:', liveNotificationError?.message || liveNotificationError);
+    }
+
     const derived = [];
+
+    for (const stream of liveStreams) {
+      const id = `db-live-${stream.id}`;
+      if (deletedIds.has(id)) continue;
+      const actor = profileById.get(stream.host_id);
+      const actorName = actor?.display_name || 'Someone you follow';
+      derived.push({
+        id,
+        type: 'live',
+        category: 'church',
+        title: `${actorName} is live now`,
+        body: (stream.title || 'A live broadcast is happening now').slice(0, 140),
+        timestamp: stream.started_at,
+        isRead: readIds.has(id),
+        actorName,
+        actorAvatar: actor?.avatar_url || null,
+        actorBadge: actor?.badge || null,
+        targetLink: `/live/${stream.id}`,
+        icon: '🔴',
+      });
+    }
 
     for (const c of commentsRes.data || []) {
       const id = `db-comment-${c.id}`;
@@ -296,6 +352,54 @@ export async function fetchRealNotifications(userId) {
         targetLink: '/?tab=home',
         icon: '🏷️',
       });
+    }
+
+    // Audio series updates: surface episodes published after the user followed a series.
+    // Isolated so an unapplied optional audio migration cannot break other notifications.
+    try {
+      const { data: seriesFollows } = await supabase
+        .from('media_series_follows')
+        .select('series_id, created_at, series:media_series!series_id(title, kind)')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      const followBySeries = new Map((seriesFollows || []).map((row) => [row.series_id, row]));
+      const followedSeriesIds = Array.from(followBySeries.keys());
+      if (followedSeriesIds.length) {
+        const { data: newEpisodes } = await supabase
+          .from('media_items')
+          .select('id, title, series_id, published_at, created_at')
+          .eq('kind', 'audio')
+          .eq('status', 'published')
+          .in('series_id', followedSeriesIds)
+          .order('published_at', { ascending: false })
+          .limit(50);
+        const alreadyStored = new Set(getNotifications().map((item) => item.id));
+        for (const episode of newEpisodes || []) {
+          const follow = followBySeries.get(episode.series_id);
+          const publishedAt = episode.published_at || episode.created_at;
+          if (!follow || !publishedAt || new Date(publishedAt) <= new Date(follow.created_at)) continue;
+          const id = `db-series-episode-${episode.id}`;
+          if (deletedIds.has(id)) continue;
+          const seriesTitle = follow.series?.title || 'a podcast series you follow';
+          const notification = {
+            id,
+            type: 'all',
+            category: 'all',
+            title: 'New podcast episode',
+            body: `${episode.title} is now available in ${seriesTitle}.`,
+            timestamp: publishedAt,
+            isRead: readIds.has(id),
+            actorName: seriesTitle,
+            targetLink: '/audio',
+            icon: '🎧',
+          };
+          derived.push(notification);
+          if (!alreadyStored.has(id)) triggerFirebaseBrowserPush(notification);
+        }
+      }
+    } catch (seriesNotificationError) {
+      console.warn('Could not load audio series notifications:', seriesNotificationError);
     }
 
     // Keep any live FCM push alerts that are not db-* rows
@@ -434,14 +538,42 @@ export async function requestFirebasePushPermission() {
   try {
     const permission = await Notification.requestPermission();
     const current = getFirebasePushConfig();
+    let fcmToken = permission === 'granted' ? current.fcmToken : null;
+    let pushSetup = 'browser-only';
+
+    if (permission === 'granted' && 'serviceWorker' in navigator) {
+      const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+      if (vapidKey) {
+        try {
+          const [{ getMessaging, getToken, isSupported }, { default: firebaseApp }] = await Promise.all([
+            import('firebase/messaging'),
+            import('./firebaseClient'),
+          ]);
+          if (await isSupported()) {
+            const serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+            const messaging = getMessaging(firebaseApp);
+            fcmToken = await getToken(messaging, { vapidKey, serviceWorkerRegistration });
+            pushSetup = 'fcm';
+          } else {
+            pushSetup = 'browser-only';
+          }
+        } catch (pushError) {
+          console.warn('FCM token setup failed; browser notifications remain available:', pushError?.message || pushError);
+          pushSetup = 'browser-only';
+        }
+      } else {
+        pushSetup = 'vapid-key-missing';
+      }
+    }
+
     const updated = {
       ...current,
       enabled: permission === 'granted',
       pushPermission: permission,
-      fcmToken: permission === 'granted' ? current.fcmToken : null,
+      fcmToken,
     };
     saveFirebasePushConfig(updated);
-    return { success: permission === 'granted', permission };
+    return { success: permission === 'granted', permission, fcmToken, pushSetup };
   } catch (err) {
     console.error('Notification permission request error:', err);
     return { success: false, permission: 'denied' };

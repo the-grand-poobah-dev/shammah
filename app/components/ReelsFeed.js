@@ -27,11 +27,13 @@ import VerifiedBadge from './VerifiedBadge';
 import MemberBadge from './MemberBadge';
 import CommentThread from './CommentThread';
 import ReelCreatorModal from './ReelCreatorModal';
-import { listReels, toggleReelLike, recordReelView, toggleFollowAuthor, checkIsFollowing } from '../lib/data/reelsApi';
+import { listReels, toggleReelLike, recordReelView, toggleFollowAuthor, checkIsFollowing, toggleReelSave, checkReelSaved } from '../lib/data/reelsApi';
 import { playSound } from '../lib/soundEffects';
 
+const EMPTY_REELS = [];
+
 export default function ReelsFeed({
-  initialReels = [],
+  initialReels = EMPTY_REELS,
   initialIndex = 0,
   currentUser,
   session,
@@ -45,9 +47,10 @@ export default function ReelsFeed({
   const [loading, setLoading] = useState(initialReels.length === 0);
   const [isMuted, setIsMuted] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('shammah_reels_muted') === 'true';
+      // Start muted by default to comply with browser autoplay policies.
+      return localStorage.getItem('shammah_reels_muted') !== 'false';
     }
-    return false;
+    return true;
   });
   const [showCreator, setShowCreator] = useState(false);
   const [activeCommentsReelId, setActiveCommentsReelId] = useState(null);
@@ -58,6 +61,7 @@ export default function ReelsFeed({
   const containerRef = useRef(null);
   const reelRefs = useRef({});
   const lastTapRef = useRef({ time: 0, x: 0, y: 0 });
+  const feedRequestRef = useRef(0);
 
   // Update localStorage when mute status toggles
   const handleToggleMute = useCallback(() => {
@@ -77,23 +81,55 @@ export default function ReelsFeed({
 
   // Fetch reels from Supabase
   const loadFeed = useCallback(async (tab) => {
+    const requestId = ++feedRequestRef.current;
     setLoading(true);
-    const { data } = await listReels({ feed: tab, limit: 20 });
-    if (data && data.length > 0) {
-      setReels(data);
-    } else if (initialReels.length > 0 && tab === 'foryou') {
-      setReels(initialReels);
-    } else {
-      setReels([]);
+    try {
+      const { data } = await listReels({ feed: tab, limit: 20 });
+      if (requestId !== feedRequestRef.current) return;
+      if (data && data.length > 0) {
+        setReels(data);
+      } else if (initialReels.length > 0 && tab === 'foryou') {
+        setReels(initialReels);
+      } else {
+        setReels([]);
+      }
+    } catch (error) {
+      if (requestId === feedRequestRef.current) {
+        console.warn('[ReelsFeed] Could not load feed:', error);
+        setReels(initialReels.length > 0 && tab === 'foryou' ? initialReels : []);
+      }
+    } finally {
+      if (requestId === feedRequestRef.current) setLoading(false);
     }
-    setLoading(false);
   }, [initialReels]);
 
   useEffect(() => {
-    if (initialReels.length === 0) {
+    // A supplied list is fine for the initial For You modal, but Following must
+    // always query its own feed.
+    if (initialReels.length === 0 || feedTab === 'following') {
       loadFeed(feedTab);
     }
   }, [feedTab, initialReels.length, loadFeed]);
+
+  useEffect(() => {
+    const handleReelCreated = () => loadFeed(feedTab);
+    window.addEventListener('shammah:reel-created', handleReelCreated);
+    return () => window.removeEventListener('shammah:reel-created', handleReelCreated);
+  }, [feedTab, loadFeed]);
+
+  // Honour shared links such as /reels?id=<uuid> after the feed has loaded.
+  useEffect(() => {
+    if (typeof window === 'undefined' || reels.length === 0) return;
+    const requestedId = new URLSearchParams(window.location.search).get('id');
+    if (!requestedId) return;
+    const requestedIndex = reels.findIndex((item) => item.id === requestedId);
+    if (requestedIndex >= 0 && requestedIndex !== currentIndex) {
+      setCurrentIndex(requestedIndex);
+      const container = containerRef.current;
+      const child = container?.children[requestedIndex];
+      if (child) child.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+  }, [reels, currentIndex]);
 
   // Keyboard navigation on desktop (Up, Down, Space, M, Esc)
   useEffect(() => {
@@ -266,7 +302,7 @@ export default function ReelsFeed({
           </div>
         ) : (
           reels.map((reel, idx) => {
-            const isMounted = Math.abs(idx - currentIndex) <= 2; // Keep max 3-5 around current
+            const isMounted = Math.abs(idx - currentIndex) <= 1; // Keep only current reel plus one neighbour on each side
             const isCurrent = idx === currentIndex;
 
             return (
@@ -464,8 +500,8 @@ function ReelItem({
 }) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(reel.like_count || 18);
-  const [commentCount, setCommentCount] = useState(reel.comment_count || 4);
+  const [likeCount, setLikeCount] = useState(reel.like_count || 0);
+  const [commentCount, setCommentCount] = useState(reel.comment_count || 0);
   const [following, setFollowing] = useState(Boolean(reel.is_following));
   const [saved, setSaved] = useState(false);
   const [showPlayFlash, setShowPlayFlash] = useState(false);
@@ -519,6 +555,19 @@ function ReelItem({
       checkIsFollowing(reel.author_id).then((isFol) => setFollowing(isFol));
     }
   }, [session?.user?.id, reel.author_id]);
+
+  // Saved state is loaded from Supabase, not inferred from local component state.
+  useEffect(() => {
+    let cancelled = false;
+    if (session?.user?.id && reel.id) {
+      checkReelSaved(reel.id).then((isSaved) => {
+        if (!cancelled) setSaved(isSaved);
+      });
+    } else {
+      setSaved(false);
+    }
+    return () => { cancelled = true; };
+  }, [session?.user?.id, reel.id]);
 
   function handleVideoClick(e) {
     const now = Date.now();
@@ -603,15 +652,23 @@ function ReelItem({
     showToast('Reel link copied!');
   }
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.stopPropagation();
     if (!session?.user?.id) {
       if (openAuth) openAuth('signin');
       return;
     }
-    setSaved((s) => !s);
+    const previous = saved;
+    setSaved(!previous);
+    const result = await toggleReelSave(reel.id);
+    if (result.error) {
+      setSaved(previous);
+      showToast(result.error.message || 'Could not update saved reels.');
+      return;
+    }
+    setSaved(Boolean(result.saved));
     playSound('reaction');
-    showToast(!saved ? 'Saved to Bookmarks' : 'Removed from Bookmarks');
+    showToast(result.saved ? 'Saved to Bookmarks' : 'Removed from Bookmarks');
   }
 
   const authorName = reel.profiles?.display_name || 'Faith Member';
@@ -620,17 +677,16 @@ function ReelItem({
   return (
     <div className="reels-card-viewport">
       <div className="reels-card-frame" onClick={handleVideoClick}>
-        {/* Background Blurred Video / Backdrop to prevent black borders */}
-        {isMounted && (
-          <video
-            src={reel.media_url}
+        {/* Blurred thumbnail backdrop preserves the 9:16 contain fit without mounting a second video. */}
+        {isMounted && (reel.media_thumbnail_url || reel.thumb_url) ? (
+          <img
+            src={reel.media_thumbnail_url || reel.thumb_url}
             className="reels-video-blurred-backdrop"
-            muted
-            loop
-            playsInline
+            alt=""
             aria-hidden="true"
+            loading={isActive ? 'eager' : 'lazy'}
           />
-        )}
+        ) : null}
 
         {/* Foreground 9:16 Video */}
         {isMounted ? (

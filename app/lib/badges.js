@@ -21,6 +21,11 @@ export const BADGES = [
   { id: 'intercessor', label: 'Intercessor', group: 'community', desc: 'Standing in the gap in prayer.',
     icon: ['M12 21s-8-5.2-8-11a4.5 4.5 0 018-2.6A4.5 4.5 0 0120 10c0 5.8-8 11-8 11z'] },
 
+  { id: 'spiritual_spark', label: 'Spiritual Spark', group: 'community', desc: 'Three consecutive days of faith challenge check-ins.', icon: ['M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z'] },
+  { id: 'steadfast_believer', label: 'Steadfast Believer', group: 'community', desc: 'Seven consecutive days of faith challenge check-ins.', icon: ['M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z', 'M8 12l2.5 2.5L16 9'] },
+  { id: 'overcomer_in_christ', label: 'Overcomer in Christ', group: 'community', desc: 'Twenty-one consecutive days of faith challenge check-ins.', icon: ['M12 2l3 5 6 1-4 4 1 6-6-3-6 3 1-6-4-4 6-1z'] },
+  { id: 'kingdom_champion', label: 'Kingdom Champion', group: 'community', desc: 'Forty consecutive days of faith challenge check-ins.', icon: ['M5 4h14l-1 7-6 4-6-4z', 'M12 15v6', 'M8 21h8'] },
+
   // ----- Serving -----
   { id: 'teacher', label: 'Teacher', group: 'serving', desc: 'Teaching the Word (Sunday school, small groups, classes).',
     icon: ['M2 5h7a3 3 0 013 3v13a2 2 0 00-2-2H2z', 'M22 5h-7a3 3 0 00-3 3v13a2 2 0 012-2h8z'] },

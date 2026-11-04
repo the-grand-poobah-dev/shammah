@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createHash, randomUUID } from 'node:crypto';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,176 @@ function resolveSupabaseUrl() {
   return null;
 }
 
+
+
+const DARAJA_BASE = process.env.MPESA_ENVIRONMENT === 'production'
+  ? 'https://api.safaricom.co.ke'
+  : 'https://sandbox.safaricom.co.ke';
+
+function hasSecureCallbackConfiguration() {
+  const secret = process.env.MPESA_CALLBACK_SECRET;
+  const callbackUrl = process.env.MPESA_CALLBACK_URL;
+  // A deployed app must always authenticate callbacks, including Daraja sandbox tests.
+  if (!secret) return process.env.NODE_ENV !== 'production' && process.env.MPESA_ENVIRONMENT !== 'production';
+  if (!callbackUrl) return false;
+  try {
+    return new URL(callbackUrl).searchParams.get('secret') === secret;
+  } catch {
+    return false;
+  }
+}
+
+async function getDarajaAccessToken() {
+  const consumerKey = process.env.MPESA_CONSUMER_KEY;
+  const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
+  if (!consumerKey || !consumerSecret) throw new Error('M-Pesa API credentials are not configured.');
+  const response = await fetch(DARAJA_BASE + '/oauth/v1/generate?grant_type=client_credentials', {
+    headers: { Authorization: 'Basic ' + Buffer.from(consumerKey + ':' + consumerSecret).toString('base64') },
+    cache: 'no-store',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.access_token) throw new Error('Could not authenticate with M-Pesa. Please try again later.');
+  return data.access_token;
+}
+
+async function initiateFundraiserDonation(request, body, fundraiserId, phone, amountKes) {
+  const url = resolveSupabaseUrl();
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return NextResponse.json({ error: 'Fundraiser payment storage is not configured.' }, { status: 503 });
+  if (!process.env.MPESA_SHORTCODE || !process.env.MPESA_PASSKEY || !process.env.MPESA_CALLBACK_URL ||
+      !hasSecureCallbackConfiguration()) {
+    return NextResponse.json({ error: 'M-Pesa STK Push is not configured. Please contact support.' }, { status: 503 });
+  }
+
+  const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: fundraiser, error: fundraiserError } = await supabase.from('fundraisers')
+    .select('id, title, status, deadline, goal_kes').eq('id', fundraiserId).maybeSingle();
+  if (fundraiserError) return NextResponse.json({ error: 'Could not verify this fundraiser.' }, { status: 500 });
+  if (!fundraiser || fundraiser.status !== 'active') return NextResponse.json({ error: 'This fundraiser is not accepting donations right now.' }, { status: 409 });
+  if (fundraiser.deadline && new Date(fundraiser.deadline + 'T23:59:59Z').getTime() < Date.now()) {
+    return NextResponse.json({ error: 'This fundraiser has reached its deadline.' }, { status: 409 });
+  }
+
+  const idempotencyKey = String(body.idempotencyKey || request.headers.get('idempotency-key') || randomUUID()).trim().slice(0, 100);
+  if (idempotencyKey.length < 12) return NextResponse.json({ error: 'Invalid donation request reference.' }, { status: 400 });
+  const { data: existing, error: existingError } = await supabase.from('fundraiser_donations')
+    .select('id, fundraiser_id, status, amount_kes, checkout_request_id, mpesa_transaction_id')
+    .eq('idempotency_key', idempotencyKey).maybeSingle();
+  if (existingError) return NextResponse.json({ error: 'Could not verify this donation request.' }, { status: 500 });
+  if (existing) {
+    if (existing.fundraiser_id !== fundraiserId || Number(existing.amount_kes) !== amountKes) {
+      return NextResponse.json({ error: 'This donation reference was already used for a different request.' }, { status: 409 });
+    }
+    if (!existing.checkout_request_id && existing.status === 'pending') {
+      return NextResponse.json({ error: 'This donation is still being initiated. Please wait before retrying.' }, { status: 409 });
+    }
+    return NextResponse.json({
+      ok: true, status: existing.status === 'completed' ? 'succeeded' : existing.status,
+      donationId: existing.id, checkoutRequestId: existing.checkout_request_id, fundraiserId,
+      amount: amountKes, receiptCode: existing.mpesa_transaction_id || null, idempotentReplay: true,
+    });
+  }
+
+  const realIp = request.headers.get('x-real-ip')?.trim() || '';
+  const forwardedHops = request.headers.get('x-forwarded-for')?.split(',').map((value) => value.trim()).filter(Boolean) || [];
+  // Do not trust the left-most forwarded value, which may be supplied by the caller.
+  const ip = (realIp || forwardedHops.at(-1) || 'unknown').slice(0, 80);
+  const rateKey = createHash('sha256').update(phone + ':' + ip).digest('hex');
+  const { data: allowed, error: rateError } = await supabase.rpc('reserve_fundraiser_donation_attempt', {
+    p_rate_key: rateKey, p_max_attempts: 5, p_window_seconds: 900,
+  });
+  if (rateError) return NextResponse.json({ error: 'Donation protection is temporarily unavailable. Please retry shortly.' }, { status: 503 });
+  if (allowed !== true) return NextResponse.json({ error: 'Too many donation attempts. Please wait 15 minutes before trying again.' }, { status: 429 });
+
+  let donorId = null;
+  const authMatch = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (authMatch?.[1] && anonKey) {
+    try {
+      const userClient = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { data } = await userClient.auth.getUser(authMatch[1].trim());
+      donorId = data?.user?.id || null;
+    } catch {}
+  }
+  let donorName = String(body.donorName || '').trim().slice(0, 80) || 'A Shammah supporter';
+  if (body.anonymous === true) donorName = 'Anonymous donor';
+  else if (donorId) {
+    const { data: donorProfile } = await supabase.from('profiles').select('display_name').eq('id', donorId).maybeSingle();
+    donorName = donorProfile?.display_name || donorName;
+  }
+
+  const { data: donation, error: donationError } = await supabase.from('fundraiser_donations').insert({
+    fundraiser_id: fundraiserId, donor_id: donorId, display_name: donorName,
+    anonymous: body.anonymous === true, is_anonymous: body.anonymous === true,
+    amount_kes: amountKes, amount: amountKes, currency: 'KES',
+    message: String(body.message || '').trim().slice(0, 500) || null, phone,
+    idempotency_key: idempotencyKey, status: 'pending',
+  }).select('id').single();
+  if (donationError) {
+    if (donationError.code === '23505') return NextResponse.json({ error: 'This donation request was already submitted.' }, { status: 409 });
+    return NextResponse.json({ error: 'Could not create a pending donation record.' }, { status: 500 });
+  }
+
+  try {
+    const token = await getDarajaAccessToken();
+    const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+    const password = Buffer.from(String(process.env.MPESA_SHORTCODE) + String(process.env.MPESA_PASSKEY) + timestamp).toString('base64');
+    const stkResponse = await fetch(DARAJA_BASE + '/mpesa/stkpush/v1/processrequest', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        BusinessShortCode: process.env.MPESA_SHORTCODE, Password: password, Timestamp: timestamp,
+        TransactionType: 'CustomerPayBillOnline', Amount: amountKes, PartyA: phone,
+        PartyB: process.env.MPESA_SHORTCODE, PhoneNumber: phone, CallBackURL: process.env.MPESA_CALLBACK_URL,
+        AccountReference: 'SHM-' + fundraiserId.slice(0, 8), TransactionDesc: 'Shammah Gift',
+      }),
+      cache: 'no-store',
+    });
+    const stk = await stkResponse.json().catch(() => ({}));
+    if (!stkResponse.ok || String(stk.ResponseCode) !== '0' || !stk.CheckoutRequestID) {
+      await supabase.from('fundraiser_donations').update({ status: 'failed' }).eq('id', donation.id).eq('status', 'pending');
+      return NextResponse.json({ error: stk.errorMessage || stk.ResponseDescription || 'M-Pesa could not start the payment prompt.' }, { status: 400 });
+    }
+    // Persist the checkout reference and pending ledger row in one database transaction.
+    const { data: registration, error: registrationError } = await supabase.rpc('register_fundraiser_donation_checkout', {
+      p_donation_id: donation.id,
+      p_checkout_request_id: stk.CheckoutRequestID,
+      p_merchant_request_id: stk.MerchantRequestID || null,
+    });
+    if (registrationError || !registration?.success) {
+      console.error('Fundraiser checkout registration failed:', registrationError?.message || registration?.error || 'Unknown registration error');
+      return NextResponse.json({ error: 'M-Pesa started the prompt, but its reference could not be saved. Please contact support before retrying.' }, { status: 500 });
+    }
+
+    // A very fast Safaricom callback may have been queued before registration completed.
+    // Reconcile it now that the donation and checkout reference are visible.
+    const { error: reconciliationError } = await supabase.rpc('process_fundraiser_callback_inbox', {
+      p_checkout_request_id: stk.CheckoutRequestID,
+    });
+    if (reconciliationError) {
+      console.error('Fundraiser callback inbox reconciliation failed:', reconciliationError.message);
+    }
+
+    const { data: latestDonation } = await supabase.from('fundraiser_donations')
+      .select('status, mpesa_transaction_id')
+      .eq('id', donation.id)
+      .maybeSingle();
+
+    return NextResponse.json({
+      ok: true,
+      status: latestDonation?.status || 'pending',
+      donationId: donation.id, fundraiserId,
+      checkoutRequestId: stk.CheckoutRequestID, amount: amountKes, phone,
+      receiptCode: latestDonation?.mpesa_transaction_id || null,
+      customerMessage: stk.CustomerMessage || 'Check your phone and enter your M-Pesa PIN to confirm the donation.',
+    });
+  } catch (error) {
+    await supabase.from('fundraiser_donations').update({ status: 'failed' }).eq('id', donation.id).eq('status', 'pending');
+    return NextResponse.json({ error: error?.message || 'Could not initiate the M-Pesa prompt.' }, { status: 502 });
+  }
+}
+
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -75,6 +246,33 @@ export async function POST(request) {
 
     const numAmount = Math.round(Number(amount || 0));
     const targetFundraiserId = fundraiserId || (String(projectId || '').startsWith('fundraiser:') ? String(projectId).replace('fundraiser:', '') : null);
+
+    if (targetFundraiserId) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(targetFundraiserId))) {
+        return NextResponse.json({ error: 'A valid fundraiser ID is required.' }, { status: 400 });
+      }
+      if (!Number.isSafeInteger(numAmount) || numAmount < 10 || numAmount > 1000000) {
+        return NextResponse.json({ error: 'Donation amount must be between KES 10 and KES 1,000,000.' }, { status: 400 });
+      }
+      // Fundraiser donations use the authenticated, real STK Push flow above.
+      return initiateFundraiserDonation(request, body, String(targetFundraiserId), cleanPhone, numAmount);
+    }
+
+    // This legacy branch fabricates a receipt and can mark subscriptions/course
+    // enrollments paid without a verified Safaricom callback. Never allow it in
+    // production; only enable it deliberately for local/test simulation.
+    if (process.env.NODE_ENV === 'production' || process.env.MPESA_ALLOW_SIMULATION !== 'true') {
+      return NextResponse.json(
+        { error: 'This legacy payment path is disabled. Use the secure M-Pesa STK Push flow.' },
+        { status: 503 }
+      );
+    }
+    if (simulateConfirmation !== true) {
+      return NextResponse.json(
+        { error: 'Payment simulation requires simulateConfirmation=true in an explicitly enabled non-production environment.' },
+        { status: 400 }
+      );
+    }
 
     if (targetFundraiserId && (!Number.isFinite(numAmount) || numAmount < 10)) {
       return NextResponse.json(
@@ -116,7 +314,8 @@ export async function POST(request) {
               message: message || null,
               phone: cleanPhone,
               checkout_request_id: checkoutRequestId,
-              status: simulateConfirmation ? 'succeeded' : 'pending',
+              // Keep the row pending so credit_donation performs the single atomic credit.
+              status: 'pending',
               mpesa_transaction_id: simulateConfirmation ? receiptCode : null,
             })
             .select('id')
@@ -133,34 +332,8 @@ export async function POST(request) {
             });
 
             if (rpcErr) {
-              const { data: fr } = await supabase
-                .from('fundraisers')
-                .select('raised_kes, donors_count, goal_kes, status')
-                .eq('id', targetFundraiserId)
-                .single();
-
-              if (fr) {
-                const newRaised = (Number(fr.raised_kes) || 0) + numAmount;
-                const newDonors = (Number(fr.donors_count) || 0) + 1;
-                const isCompleted = newRaised >= fr.goal_kes;
-
-                await supabase
-                  .from('fundraisers')
-                  .update({
-                    raised_kes: newRaised,
-                    donors_count: newDonors,
-                    status: isCompleted && fr.status === 'active' ? 'completed' : fr.status,
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq('id', targetFundraiserId);
-
-                await supabase
-                  .from('fundraiser_milestones')
-                  .update({ reached_at: new Date().toISOString() })
-                  .eq('fundraiser_id', targetFundraiserId)
-                  .lte('amount_kes', newRaised)
-                  .is('reached_at', null);
-              }
+              console.error('Donation credit failed during simulation:', rpcErr.message);
+              throw new Error('Donation credit failed during simulation. No fallback credit was applied.');
             }
           }
         }

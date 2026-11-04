@@ -20,7 +20,8 @@ import {
 import PopupSheet from './PopupSheet';
 import Avatar from './Avatar';
 import MemberName from './MemberName';
-import { uploadPostMedia } from '../lib/mediaUpload';
+import { uploadPostMedia, detectMediaType } from '../lib/mediaUpload';
+import { listMedia } from '../lib/data/mediaApi';
 import { supabase } from '../../lib/supabaseClient';
 import { playSound } from '../lib/soundEffects';
 import { cleanDisplayName } from '../lib/postDisplay';
@@ -57,9 +58,18 @@ export default function ReelCreatorModal({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [libraryVideos, setLibraryVideos] = useState([]);
+  const [loadingLibrary, setLoadingLibrary] = useState(false);
+  const [selectedLibraryVideo, setSelectedLibraryVideo] = useState(null);
 
   const fileInputRef = useRef(null);
   const videoElemRef = useRef(null);
+  const videoSelectionRef = useRef(0);
+
+  useEffect(() => {
+    if (!isOpen) videoSelectionRef.current += 1;
+  }, [isOpen]);
 
   const displayName = cleanDisplayName(
     profile?.display_name || session?.user?.email?.split('@')[0] || 'Disciple',
@@ -79,7 +89,7 @@ export default function ReelCreatorModal({
     if (!file) return;
     setError('');
 
-    if (!file.type.startsWith('video/')) {
+    if (detectMediaType(file) !== 'video') {
       setError('Please select a video file (MP4, WebM, or QuickTime MOV).');
       return;
     }
@@ -90,6 +100,9 @@ export default function ReelCreatorModal({
       return;
     }
 
+    const selectionId = ++videoSelectionRef.current;
+    if (videoPreview && videoPreview.startsWith('blob:')) URL.revokeObjectURL(videoPreview);
+    setSelectedLibraryVideo(null);
     const objectUrl = URL.createObjectURL(file);
     setVideoFile(file);
     setVideoPreview(objectUrl);
@@ -98,16 +111,57 @@ export default function ReelCreatorModal({
     const tempVideo = document.createElement('video');
     tempVideo.preload = 'metadata';
     tempVideo.onloadedmetadata = () => {
-      setVideoDuration(Math.round(tempVideo.duration || 0));
+      if (selectionId === videoSelectionRef.current) {
+        setVideoDuration(Math.round(tempVideo.duration || 0));
+      }
     };
     tempVideo.src = objectUrl;
   }
 
+  async function handleOpenMediaLibrary() {
+    if (!session?.user?.id) {
+      setError('Please sign in to choose a video from your media library.');
+      return;
+    }
+    if (showMediaLibrary) {
+      setShowMediaLibrary(false);
+      return;
+    }
+    setShowMediaLibrary(true);
+    if (libraryVideos.length || loadingLibrary) return;
+    setLoadingLibrary(true);
+    setError('');
+    try {
+      const result = await listMedia({ kind: 'video', authorId: session.user.id, sort: 'recent', limit: 30 });
+      if (result.error) throw result.error;
+      setLibraryVideos((result.data || []).filter((item) => item.media_url && item.author_id === session?.user?.id));
+    } catch (err) {
+      setError(err?.message || 'Could not load published videos.');
+    } finally {
+      setLoadingLibrary(false);
+    }
+  }
+
+  function handleChooseLibraryVideo(item) {
+    if (!item?.media_url) return;
+    videoSelectionRef.current += 1;
+    if (videoPreview && videoPreview.startsWith('blob:')) URL.revokeObjectURL(videoPreview);
+    setVideoFile(null);
+    setSelectedLibraryVideo(item);
+    setVideoPreview(item.media_url);
+    setVideoDuration(Number(item.duration_seconds) || null);
+    setShowMediaLibrary(false);
+    setError('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
   function handleRemoveVideo() {
+    videoSelectionRef.current += 1;
     if (videoPreview && videoPreview.startsWith('blob:')) {
       URL.revokeObjectURL(videoPreview);
     }
     setVideoFile(null);
+    setSelectedLibraryVideo(null);
     setVideoPreview('');
     setVideoDuration(null);
     setError('');
@@ -138,8 +192,8 @@ export default function ReelCreatorModal({
 
   async function handlePublishReel(e) {
     if (e) e.preventDefault();
-    if (!videoFile) {
-      setError('Please select a vertical video to post as a reel.');
+    if (!videoFile && !selectedLibraryVideo) {
+      setError('Please select a video file or choose a published video from your media library.');
       return;
     }
 
@@ -153,8 +207,8 @@ export default function ReelCreatorModal({
     setError('');
 
     try {
-      // 1. Upload video to Supabase Storage bucket 'post-media'
-      const uploaded = await uploadPostMedia(videoFile, session.user.id);
+      // Reuse published library URLs; only upload when a local file was selected.
+      const mediaUrl = selectedLibraryVideo?.media_url || (await uploadPostMedia(videoFile, session.user.id)).url;
 
       // 2. Insert into posts table as a 'reel'
       const { data: inserted, error: insertError } = await supabase
@@ -164,7 +218,7 @@ export default function ReelCreatorModal({
           church_id: profile?.church_id ?? null,
           category_id: category,
           text_content: caption.trim() || null,
-          media_url: uploaded.url,
+          media_url: mediaUrl,
           media_type: 'reel',
           visibility: visibility,
         })
@@ -182,7 +236,7 @@ export default function ReelCreatorModal({
         church_id: profile?.church_id ?? null,
         category_id: category,
         text_content: caption.trim() || null,
-        media_url: uploaded.url,
+        media_url: mediaUrl,
         media_type: 'reel',
         visibility: visibility,
         created_at: inserted?.created_at || new Date().toISOString(),
@@ -236,7 +290,7 @@ export default function ReelCreatorModal({
       <button
         type="button"
         className="gws-btn-primary px-5 py-2.5 text-xs font-bold flex items-center gap-2"
-        disabled={!videoFile || uploading}
+        disabled={(!videoFile && !selectedLibraryVideo) || uploading}
         onClick={handlePublishReel}
       >
         {uploading ? (
@@ -281,6 +335,22 @@ export default function ReelCreatorModal({
         </div>
 
         {/* Video Upload Dropzone / Preview */}
+        <div className="flex justify-center">
+          <button type="button" onClick={handleOpenMediaLibrary} disabled={loadingLibrary || uploading} className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 px-3 py-2 text-xs font-medium text-purple-300 hover:bg-purple-500/10 disabled:opacity-50">
+            <Film size={14} /> {loadingLibrary ? 'Loading library…' : showMediaLibrary ? 'Hide media library' : 'Choose from media library'}
+          </button>
+        </div>
+        {showMediaLibrary && (
+          <div className="max-h-52 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2 space-y-1">
+            {loadingLibrary ? <p className="p-3 text-xs text-[var(--ink-muted)]">Loading published videos…</p> : libraryVideos.length ? libraryVideos.map((item) => (
+              <button key={item.id} type="button" onClick={() => handleChooseLibraryVideo(item)} className="flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-purple-500/10">
+                {item.thumb_url ? <img src={item.thumb_url} alt="" className="h-12 w-16 rounded-md object-cover" /> : <span className="flex h-12 w-16 items-center justify-center rounded-md bg-black/20"><Film size={18} /></span>}
+                <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-[var(--ink)]">{item.title || 'Untitled video'}</strong><span className="block text-[10px] text-[var(--ink-muted)]">{item.duration_seconds ? `${Math.round(item.duration_seconds)} sec` : 'Video'} · Published</span></span>
+                <Play size={14} className="shrink-0 text-purple-400" />
+              </button>
+            )) : <p className="p-3 text-xs text-[var(--ink-muted)]">No published videos found. Upload a new video instead.</p>}
+          </div>
+        )}
         {!videoPreview ? (
           <div
             className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
@@ -317,7 +387,7 @@ export default function ReelCreatorModal({
             <input
               ref={fileInputRef}
               type="file"
-              accept="video/mp4,video/webm,video/quicktime"
+              accept="video/*,.mp4,.webm,.mov,.m4v"
               hidden
               onChange={(e) => {
                 const f = e.target.files?.[0];

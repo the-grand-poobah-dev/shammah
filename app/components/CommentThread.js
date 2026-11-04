@@ -23,10 +23,7 @@ import {
   RefreshCw,
   EyeOff,
   Trash2,
-  Camera,
   Video,
-  Mic,
-  Image as ImageIcon,
   Film,
   FileAudio,
   X,
@@ -35,7 +32,9 @@ import {
 } from 'lucide-react';
 import PopupSheet from './PopupSheet';
 import { uploadPostMedia } from '../lib/mediaUpload';
-import { startAudioRecording, isAudioRecordingSupported } from '../lib/voiceRecorder';
+import MediaToolbar from './media/MediaToolbar';
+import GifPicker from './media/GifPicker';
+import { useMediaAttachment } from '../hooks/useMediaAttachment';
 
 export default function CommentThread({
   postId,
@@ -107,90 +106,23 @@ export default function CommentThread({
   const isPostAuthor = Boolean(session?.user?.id && postAuthorId && session.user.id === postAuthorId);
 
   // Comment Media Attachment & Live Capture State
-  const [commentMediaFile, setCommentMediaFile] = useState(null);
-  const [commentMediaPreview, setCommentMediaPreview] = useState(null);
+  const commentAttachment = useMediaAttachment();
+  const commentMediaFile = commentAttachment.file;
+  const commentMediaPreview = commentAttachment.preview;
+  const selectedCommentGif = commentAttachment.gifRef;
+  const [showGifPicker, setShowGifPicker] = useState(false);
   const [mediaUploading, setMediaUploading] = useState(false);
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
-  const [voiceSeconds, setVoiceSeconds] = useState(0);
 
-  const photoInputRef = useRef(null);
-  const videoInputRef = useRef(null);
   const audioInputRef = useRef(null);
-  const cameraPhotoInputRef = useRef(null);
-  const cameraVideoInputRef = useRef(null);
-  const cameraAudioInputRef = useRef(null);
-  const voiceRecorderRef = useRef(null);
 
   function handleCommentFileSelected(file) {
     if (!file) return;
-    setCommentMediaFile(file);
-    const url = URL.createObjectURL(file);
-    const type = file.type?.startsWith('video/')
-      ? 'video'
-      : file.type?.startsWith('audio/')
-      ? 'audio'
-      : 'image';
-    setCommentMediaPreview({ url, type, name: file.name });
+    commentAttachment.selectFile(file);
   }
 
   function handleRemoveCommentMedia() {
-    setCommentMediaFile(null);
-    if (commentMediaPreview?.url && commentMediaPreview.url.startsWith('blob:')) {
-      try {
-        URL.revokeObjectURL(commentMediaPreview.url);
-      } catch (_) {}
-    }
-    setCommentMediaPreview(null);
-    if (photoInputRef.current) photoInputRef.current.value = '';
-    if (videoInputRef.current) videoInputRef.current.value = '';
+    commentAttachment.clear();
     if (audioInputRef.current) audioInputRef.current.value = '';
-    if (cameraPhotoInputRef.current) cameraPhotoInputRef.current.value = '';
-    if (cameraVideoInputRef.current) cameraVideoInputRef.current.value = '';
-    if (cameraAudioInputRef.current) cameraAudioInputRef.current.value = '';
-  }
-
-  async function handleStartCommentVoiceNote() {
-    if (!isAudioRecordingSupported()) {
-      cameraAudioInputRef.current?.click();
-      return;
-    }
-    try {
-      setVoiceSeconds(0);
-      setIsRecordingVoice(true);
-      const recorder = await startAudioRecording({
-        maxSeconds: 60,
-        onTimeTick: (sec) => setVoiceSeconds(sec),
-      });
-      voiceRecorderRef.current = recorder;
-    } catch (err) {
-      console.warn('Voice record init failed:', err);
-      setIsRecordingVoice(false);
-      cameraAudioInputRef.current?.click();
-    }
-  }
-
-  async function handleStopCommentVoiceNote() {
-    if (!voiceRecorderRef.current) return;
-    try {
-      const res = await voiceRecorderRef.current.stop();
-      setIsRecordingVoice(false);
-      voiceRecorderRef.current = null;
-      if (res?.file) {
-        handleCommentFileSelected(res.file);
-      }
-    } catch (err) {
-      console.error('Error stopping voice note:', err);
-      setIsRecordingVoice(false);
-    }
-  }
-
-  function handleCancelCommentVoiceNote() {
-    if (voiceRecorderRef.current) {
-      voiceRecorderRef.current.cancel();
-      voiceRecorderRef.current = null;
-    }
-    setIsRecordingVoice(false);
-    setVoiceSeconds(0);
   }
 
   useEffect(() => {
@@ -228,7 +160,7 @@ export default function CommentThread({
     async function load() {
       let query = supabase
         .from('comments')
-        .select('id, parent_id, author_id, text_content, media_url, media_type, mentioned_user_ids, created_at, profiles(display_name, avatar_url, badge, badge_verified)')
+        .select('id, parent_id, author_id, text_content, media_url, media_type, media_meta, mentioned_user_ids, created_at, profiles(display_name, avatar_url, badge, badge_verified)')
         .order('created_at', { ascending: true });
 
       if (mediaId) {
@@ -373,16 +305,20 @@ export default function CommentThread({
     }
   }
 
+  function handleChooseCommentGif(gif) {
+    commentAttachment.selectGif(gif);
+  }
+
   async function submit(e) {
     e.preventDefault();
     if (!session) return onRequireSignIn();
     const clean = text.trim();
-    if (!clean && !commentMediaFile) return;
+    if (!clean && !commentMediaFile && !selectedCommentGif) return;
     setBusy(true);
     setError('');
 
-    let uploadedMediaUrl = null;
-    let uploadedMediaType = null;
+    let uploadedMediaUrl = selectedCommentGif?.url || null;
+    let uploadedMediaType = selectedCommentGif ? 'gif' : null;
 
     if (commentMediaFile) {
       setMediaUploading(true);
@@ -405,6 +341,7 @@ export default function CommentThread({
       text_content: clean || null,
       media_url: uploadedMediaUrl,
       media_type: uploadedMediaType,
+      media_meta: commentAttachment.meta || {},
       mentioned_user_ids: mentionedIds,
     };
     if (mediaId) {
@@ -417,7 +354,7 @@ export default function CommentThread({
     const { data, error: insertErr } = await supabase
       .from('comments')
       .insert(insertRow)
-      .select('id, parent_id, author_id, text_content, media_url, media_type, mentioned_user_ids, created_at')
+      .select('id, parent_id, author_id, text_content, media_url, media_type, media_meta, mentioned_user_ids, created_at')
       .single();
     setBusy(false);
     if (insertErr) {
@@ -442,6 +379,7 @@ export default function CommentThread({
       ...data,
       media_url: uploadedMediaUrl,
       media_type: uploadedMediaType,
+      media_meta: insertRow.media_meta,
       is_anonymous: isAnon,
       is_pseudo: isPsd,
       pseudo_name: isPsd ? effectivePseudoName : null,
@@ -592,7 +530,7 @@ export default function CommentThread({
 
               {comment.media_url && (
                 <div className="comment-media-container" style={{ marginTop: comment.text_content ? 6 : 2 }}>
-                  {comment.media_type === 'image' && (
+                  {(comment.media_type === 'image' || comment.media_type === 'gif') && (
                     <img
                       src={comment.media_url}
                       alt="Attachment"
@@ -600,7 +538,7 @@ export default function CommentThread({
                         maxHeight: 240,
                         maxWidth: '100%',
                         borderRadius: 10,
-                        objectFit: 'cover',
+                        objectFit: 'contain',
                         display: 'block',
                       }}
                       loading="lazy"
@@ -907,212 +845,9 @@ export default function CommentThread({
           </div>
         )}
 
-        {/* Hidden File Picker Inputs for Comments */}
-        <input
-          ref={photoInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          hidden
-          onChange={(e) => {
-            handleCommentFileSelected(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
-        <input
-          ref={videoInputRef}
-          type="file"
-          accept="video/mp4,video/webm,video/quicktime"
-          hidden
-          onChange={(e) => {
-            handleCommentFileSelected(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
-        <input
-          ref={audioInputRef}
-          type="file"
-          accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
-          hidden
-          onChange={(e) => {
-            handleCommentFileSelected(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
-
-        {/* Hidden Camera & Microphone Fallback Inputs */}
-        <input
-          ref={cameraPhotoInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-          onChange={(e) => {
-            handleCommentFileSelected(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
-        <input
-          ref={cameraVideoInputRef}
-          type="file"
-          accept="video/*"
-          capture="environment"
-          hidden
-          onChange={(e) => {
-            handleCommentFileSelected(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
-        <input
-          ref={cameraAudioInputRef}
-          type="file"
-          accept="audio/*"
-          capture
-          hidden
-          onChange={(e) => {
-            handleCommentFileSelected(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
+        <input ref={audioInputRef} type="file" accept="audio/*,.mp3,.wav,.ogg,.webm,.m4a,.aac,.flac" hidden onChange={(event) => { handleCommentFileSelected(event.target.files?.[0]); event.target.value = ''; }} />
 
         <div className="comment-compose-wrap">
-          {/* Active Voice Recording Status Bar */}
-          {isRecordingVoice && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 12px',
-                borderRadius: 10,
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
-                marginBottom: 8,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    background: '#ef4444',
-                    display: 'inline-block',
-                    animation: 'pulse 1s infinite',
-                  }}
-                />
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#fca5a5' }}>
-                  Recording Voice Note: {Math.floor(voiceSeconds / 60)}:{String(voiceSeconds % 60).padStart(2, '0')}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <button
-                  type="button"
-                  onClick={handleCancelCommentVoiceNote}
-                  style={{
-                    padding: '3px 8px',
-                    borderRadius: 6,
-                    background: 'rgba(255,255,255,0.1)',
-                    border: 'none',
-                    color: 'var(--ink)',
-                    fontSize: 11,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleStopCommentVoiceNote}
-                  style={{
-                    padding: '3px 10px',
-                    borderRadius: 6,
-                    background: 'var(--teal, #14b8a6)',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Attach
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Comment Media Attachment Preview */}
-          {commentMediaPreview && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '6px 10px',
-                borderRadius: 10,
-                background: 'var(--surface-sunken)',
-                border: '1px solid var(--border)',
-                marginBottom: 8,
-              }}
-            >
-              {commentMediaPreview.type === 'image' && (
-                <img
-                  src={commentMediaPreview.url}
-                  alt="Preview"
-                  style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover' }}
-                />
-              )}
-              {commentMediaPreview.type === 'video' && (
-                <video
-                  src={commentMediaPreview.url}
-                  style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover', background: '#000' }}
-                />
-              )}
-              {commentMediaPreview.type === 'audio' && (
-                <div
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 8,
-                    background: 'var(--teal-soft)',
-                    color: 'var(--teal)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Music size={20} />
-                </div>
-              )}
-              <div style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
-                <strong style={{ display: 'block', color: 'var(--ink)' }} className="truncate">
-                  {commentMediaPreview.name || (commentMediaPreview.type === 'audio' ? 'Voice Note' : 'Attached Media')}
-                </strong>
-                <span style={{ color: 'var(--ink-muted)', fontSize: 11 }}>
-                  {commentMediaPreview.type === 'image' ? 'Photo' : commentMediaPreview.type === 'video' ? 'Video' : 'Audio Note'} ready to send
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleRemoveCommentMedia}
-                style={{
-                  background: 'rgba(0,0,0,0.3)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: 22,
-                  height: 22,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                }}
-                title="Remove attachment"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          )}
-
           <div className="comment-input-wrap">
             <input
               ref={inputRef}
@@ -1147,74 +882,17 @@ export default function CommentThread({
 
           {/* Compact Live Capture & Attachment Options for comments */}
           {session && (
-            <div
-              className="comment-media-toolbar"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '4px 0 6px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <button
-                type="button"
-                className="tool-btn"
-                style={{ padding: '4px 8px', fontSize: 11.5, minHeight: 28 }}
-                onClick={() => cameraPhotoInputRef.current?.click()}
-                title="Take photo with camera"
-                aria-label="Take photo"
-              >
-                <Camera size={14} className="text-emerald-400" />
-                <span className="tool-label">Photo</span>
-              </button>
-
-              <button
-                type="button"
-                className="tool-btn"
-                style={{ padding: '4px 8px', fontSize: 11.5, minHeight: 28 }}
-                onClick={() => cameraVideoInputRef.current?.click()}
-                title="Record video with camera"
-                aria-label="Record video"
-              >
-                <Video size={14} className="text-amber-400" />
-                <span className="tool-label">Video</span>
-              </button>
-
-              <button
-                type="button"
-                className={`tool-btn${isRecordingVoice ? ' active' : ''}`}
-                style={{ padding: '4px 8px', fontSize: 11.5, minHeight: 28 }}
-                onClick={isRecordingVoice ? handleStopCommentVoiceNote : handleStartCommentVoiceNote}
-                title={isRecordingVoice ? 'Stop voice recording' : 'Record voice note or prayer'}
-                aria-label="Voice Note"
-              >
-                <Mic size={14} className="text-cyan-400" />
-                <span className="tool-label">{isRecordingVoice ? 'Recording…' : 'Voice'}</span>
-              </button>
-
-              <button
-                type="button"
-                className="tool-btn"
-                style={{ padding: '4px 8px', fontSize: 11.5, minHeight: 28 }}
-                onClick={() => photoInputRef.current?.click()}
-                title="Attach photo from device"
-                aria-label="Attach photo"
-              >
-                <ImageIcon size={14} className="text-emerald-400" />
-                <span className="tool-label">Upload</span>
-              </button>
-
-              <button
-                type="button"
-                className="tool-btn"
-                style={{ padding: '4px 8px', fontSize: 11.5, minHeight: 28 }}
-                onClick={() => audioInputRef.current?.click()}
-                title="Attach audio clip from device"
-                aria-label="Attach audio"
-              >
-                <FileAudio size={14} className="text-cyan-400" />
-                <span className="tool-label">Audio</span>
+            <div className="comment-media-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0 6px', flexWrap: 'wrap' }}>
+              <MediaToolbar
+                context="comment"
+                maxVideoSeconds={60}
+                onPickFile={handleCommentFileSelected}
+                onVoice={(file) => handleCommentFileSelected(file)}
+                onGif={() => setShowGifPicker(true)}
+                disabled={busy || mediaUploading}
+              />
+              <button type="button" className="tool-btn" onClick={() => audioInputRef.current?.click()} title="Attach audio file" aria-label="Attach audio" style={{ minHeight: 44 }}>
+                <FileAudio size={18} className="text-cyan-400" /><span className="tool-label">Audio</span>
               </button>
             </div>
           )}
@@ -1270,7 +948,7 @@ export default function CommentThread({
                     {text.trim()
                       ? `“${text.trim().length > 50 ? text.trim().slice(0, 47) + '…' : text.trim()}”`
                       : commentMediaPreview
-                      ? `“[${commentMediaPreview.type === 'audio' ? 'Voice Note' : commentMediaPreview.type === 'video' ? 'Video' : 'Photo'}]”`
+                      ? `“[${commentMediaPreview.type === 'audio' ? 'Voice Note' : commentMediaPreview.type === 'video' ? 'Video' : commentMediaPreview.type === 'gif' ? 'GIF' : 'Photo'}]”`
                       : '“Your comment text…”'}
                   </span>
                 </div>
@@ -1307,8 +985,10 @@ export default function CommentThread({
             </div>
           )}
         </div>
-        {error && <p className="auth-message">{error}</p>}
+        {(error || commentAttachment.error) && <p className="auth-message">{error || commentAttachment.error}</p>}
       </form>
+
+      {showGifPicker && <GifPicker onSelect={handleChooseCommentGif} onClose={() => setShowGifPicker(false)} />}
 
       {confirmDeleteId && (
         <PopupSheet

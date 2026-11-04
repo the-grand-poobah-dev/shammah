@@ -46,7 +46,6 @@ export async function getInboxConversations(currentUserId) {
           participantBadge: row.participant_badge || 'member',
           participantVerified: Boolean(row.participant_verified),
           participantRole: row.participant_role || 'member',
-          participantInboxPermission: row.participant_inbox_permission || 'everyone',
           lastMessage: row.last_message || '',
           lastMessageTime: row.last_message_time || new Date().toISOString(),
           unreadCount: Number(row.unread_count || 0),
@@ -86,7 +85,7 @@ export async function getInboxConversations(currentUserId) {
 
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, display_name, avatar_url, badge, badge_verified, role, inbox_permission')
+      .select('id, display_name, avatar_url, badge, badge_verified, role')
       .in('id', otherIds);
 
     const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
@@ -102,7 +101,6 @@ export async function getInboxConversations(currentUserId) {
         participantBadge: prof?.badge || 'member',
         participantVerified: Boolean(prof?.badge_verified),
         participantRole: prof?.role || 'member',
-        participantInboxPermission: prof?.inbox_permission || 'everyone',
         lastMessage: convData.lastMessage,
         lastMessageTime: convData.lastMessageTime,
         unreadCount: convData.unreadCount,
@@ -170,15 +168,18 @@ export async function sendDirectMessage(recipientId, text, senderId) {
     throw new Error('You cannot message yourself.');
   }
 
-  // Verify recipient allows incoming messages
-  const { data: recipientProf } = await supabase
-    .from('profiles')
-    .select('inbox_permission')
-    .eq('id', recipientId)
-    .maybeSingle();
+  // Ask the database to evaluate the recipient's private inbox preference.
+  // This RPC returns only an allow/deny result, never the private setting itself.
+  const { data: canMessage, error: permissionError } = await supabase.rpc(
+    'can_receive_direct_message',
+    { p_recipient_id: recipientId }
+  );
 
-  if (recipientProf && recipientProf.inbox_permission === 'no_one') {
-    throw new Error('This member has closed their inbox to new direct messages.');
+  if (permissionError) {
+    throw new Error('Could not verify messaging permissions. Please try again.');
+  }
+  if (canMessage !== true) {
+    throw new Error('This member does not currently accept direct messages from you.');
   }
 
   const { data, error } = await supabase

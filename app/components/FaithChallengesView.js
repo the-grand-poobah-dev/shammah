@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Flame,
   Sparkles,
@@ -29,6 +29,7 @@ import {
 import Avatar from './Avatar';
 import MemberName from './MemberName';
 import { playSound } from '../lib/soundEffects';
+import { getNotifications, saveNotifications, getFirebasePushConfig } from '../lib/notificationsManager';
 import {
   ContentLayout,
   AccentCard,
@@ -48,6 +49,7 @@ import {
   listChallenges,
   voteChallengeSubmission,
   joinChallenge,
+  sendChallengePushReminder,
 } from '../lib/data/challengesApi';
 import ChallengeCheckinModal from './challenges/ChallengeCheckinModal';
 import ChallengeSubmitModal from './challenges/ChallengeSubmitModal';
@@ -82,6 +84,7 @@ export default function FaithChallengesView({ session, profile }) {
         avatar: profile.avatar_url,
         badge: profile.badge,
         church: profile.church_name,
+        role: profile.role,
       };
     }
     if (session?.user?.id) {
@@ -110,6 +113,12 @@ export default function FaithChallengesView({ session, profile }) {
   const [category, setCategory] = useState('All');
   const [sort, setSort] = useState('trending');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [participantsTotal, setParticipantsTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [layout, setLayout] = useState('magazine-flat');
 
   // Media playback
@@ -131,40 +140,111 @@ export default function FaithChallengesView({ session, profile }) {
   const [selectedDetailChallengeId, setSelectedDetailChallengeId] = useState(null);
 
   // Load challenges data
+  const challengeRequestRef = useRef(0);
   const fetchData = useCallback(
-    async (isPullToRefresh = false) => {
+    async (isPullToRefresh = false, requestedPage = 1, append = false) => {
+      const requestId = ++challengeRequestRef.current;
       try {
-        if (isPullToRefresh) setRefreshing(true);
+        if (append) setLoadingMore(true);
+        else if (isPullToRefresh) setRefreshing(true);
         else setLoading(true);
         setError(null);
 
         const data = await listChallenges({
-          category: category !== 'All' ? category : undefined,
+          category,
           sort,
-          search: search.trim() || undefined,
-          userId: currentUser?.id,
+          search: debouncedSearch,
+          page: requestedPage,
+          pageSize: 12,
         });
 
-        setChallenges(data.challenges || []);
+        if (requestId !== challengeRequestRef.current) return;
+        setChallenges((previous) => append ? [...previous, ...(data.challenges || [])] : (data.challenges || []));
         setTodayChallenge(data.today_challenge || (data.challenges && data.challenges[0]) || null);
         setMyActive(data.my_active || []);
         setSubmissions(data.submissions || []);
         setLeaderboard(data.leaderboard || []);
         setBadges(data.badges || []);
+        setTotalCount(Number(data.totalCount || 0));
+        setParticipantsTotal(Number(data.participantsTotal || 0));
+        setHasMore(Boolean(data.hasMore));
+        setPage(requestedPage);
+        setVotedMap((previous) => {
+          const next = { ...previous };
+          (data.user_votes || []).forEach((id) => { next[id] = true; });
+          return next;
+        });
       } catch (err) {
-        console.error('Failed to load challenges:', err);
-        setError(err.message || 'Unable to load faith challenges. Please try again.');
+        if (requestId === challengeRequestRef.current) {
+          console.error('Failed to load challenges:', err);
+          setError(err.message || 'Unable to load faith challenges. Please try again.');
+        }
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (requestId === challengeRequestRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+          setLoadingMore(false);
+        }
       }
     },
-    [category, sort, search, currentUser?.id]
+    [category, sort, debouncedSearch]
   );
 
   useEffect(() => {
-    fetchData();
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    fetchData(false, 1, false);
   }, [fetchData]);
+
+  // Add one in-app nudge per day when a streak from yesterday is at risk.
+  useEffect(() => {
+    if (!currentUser?.id || loading || !myActive.length) return;
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const yesterday = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+    const atRisk = myActive.find((item) =>
+      Number(item.streak_current || 0) > 0 &&
+      !item.has_checked_in_today &&
+      String(item.last_checkin_on || '').slice(0, 10) === yesterday
+    );
+    if (!atRisk) return;
+
+    const notificationId = 'faith-challenge-streak-risk:' + currentUser.id + ':' + today;
+    const stored = getNotifications();
+    if (stored.some((item) => item.id === notificationId)) return;
+
+    const title = 'Keep your faith streak alive';
+    const body = 'Your ' + atRisk.streak_current + '-day streak in "' + atRisk.title + '" is at risk. Check in today to keep it going.';
+    const notification = {
+      id: notificationId,
+      type: 'church',
+      category: 'church',
+      title,
+      body,
+      timestamp: now.toISOString(),
+      isRead: false,
+      actorName: 'Faith Challenges',
+      targetLink: '/?tab=faith-challenges',
+      icon: '🔥',
+    };
+    saveNotifications([notification, ...stored].slice(0, 200));
+
+    const pushConfig = getFirebasePushConfig();
+    if (pushConfig.enabled && pushConfig.pushPermission === 'granted' && pushConfig.fcmToken) {
+      sendChallengePushReminder({
+        token: pushConfig.fcmToken,
+        title,
+        body,
+        link: '/?tab=faith-challenges',
+      }).catch((err) => console.warn('Faith Challenge push reminder was not sent:', err.message));
+    }
+  }, [currentUser?.id, loading, myActive]);
 
   // Handle Cheer / Like submission
   async function handleVoteSubmission(subId) {
@@ -191,8 +271,17 @@ export default function FaithChallengesView({ session, profile }) {
       await voteChallengeSubmission(subId);
     } catch (err) {
       console.error('Failed to vote:', err);
-      // Rollback
+      // Roll back both the selected state and the optimistic counter.
       setVotedMap((prev) => ({ ...prev, [subId]: isCurrentlyVoted }));
+      setSubmissions((prev) => prev.map((s) => {
+        if (s.id !== subId) return s;
+        const currentCheers = Number(s.cheers || s.like_count || 0);
+        return {
+          ...s,
+          cheers: isCurrentlyVoted ? currentCheers + 1 : Math.max(0, currentCheers - 1),
+          like_count: isCurrentlyVoted ? currentCheers + 1 : Math.max(0, currentCheers - 1),
+        };
+      }));
     }
   }
 
@@ -210,21 +299,38 @@ export default function FaithChallengesView({ session, profile }) {
 
   // Media toggle (ensures only 1 plays at a time)
   function togglePlayVideo(subId) {
+    const current = document.querySelector('[data-faith-challenge-video][data-submission-id="' + subId + '"]');
     if (playingVideoId === subId) {
+      if (current) current.pause();
       setPlayingVideoId(null);
     } else {
+      document.querySelectorAll('[data-faith-challenge-video]').forEach((video) => video.pause());
       playSound('click');
       setPlayingVideoId(subId);
+      if (current) current.play().catch(() => setPlayingVideoId(null));
     }
   }
 
   // Modals open triggers
   function triggerCheckin(ch) {
-    setSelectedCheckinChallenge(ch);
+    if (!currentUser?.id) {
+      alert('Please sign in to check in to a Faith Challenge.');
+      return;
+    }
+    const active = myActive.find((item) => item.id === ch.id || item.challenge_id === ch.id);
+    setSelectedCheckinChallenge({
+      ...ch,
+      has_checked_in_today: ch.has_checked_in_today ?? active?.has_checked_in_today ?? false,
+      currentStreak: ch.currentStreak ?? active?.streak_current ?? 0,
+    });
     setCheckinModalOpen(true);
   }
 
   function triggerSubmit(ch) {
+    if (!currentUser?.id) {
+      alert('Please sign in to submit a Faith Challenge entry.');
+      return;
+    }
     setSelectedSubmitChallenge(ch);
     setSubmitModalOpen(true);
   }
@@ -235,10 +341,6 @@ export default function FaithChallengesView({ session, profile }) {
   }
 
   // Stats calculation
-  const totalParticipants = useMemo(() => {
-    return challenges.reduce((acc, c) => acc + (c.participants_count || c.participantsCount || 0), 0);
-  }, [challenges]);
-
   const activeStreaksCount = useMemo(() => {
     return myActive.reduce((max, a) => Math.max(max, a.streak_current || 0), 0);
   }, [myActive]);
@@ -285,13 +387,13 @@ export default function FaithChallengesView({ session, profile }) {
           stats={[
             {
               label: 'Active Challenges',
-              value: challenges.length || 6,
+              value: totalCount,
               icon: Sparkles,
               color: '#f59e0b',
             },
             {
               label: 'Participants',
-              value: totalParticipants > 0 ? totalParticipants.toLocaleString() : '5,000+',
+              value: participantsTotal.toLocaleString(),
               icon: Users,
               color: '#10b981',
             },
@@ -369,11 +471,11 @@ export default function FaithChallengesView({ session, profile }) {
                   <div className="flex items-center gap-4 text-xs text-slate-400 pt-1">
                     <span className="flex items-center gap-1 font-semibold text-white">
                       <Users className="w-3.5 h-3.5 text-amber-400" />
-                      {todayChallenge.participants_count || 1420} taking part
+                      {Number(todayChallenge.participants_count || 0).toLocaleString()} taking part
                     </span>
                     <span>·</span>
                     <span className="text-amber-300 font-bold">
-                      +{todayChallenge.points || 100} Devotion Points
+                      +{Number(todayChallenge.points || 0)} Devotion Points
                     </span>
                   </div>
                 </div>
@@ -500,7 +602,7 @@ export default function FaithChallengesView({ session, profile }) {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {submissions.map((sub) => {
                 const isVoted = votedMap[sub.id];
-                const cheersCount = (sub.cheers || sub.like_count || 0) + (isVoted ? 1 : 0);
+                const cheersCount = Number(sub.cheers || sub.like_count || 0);
                 const isPlaying = playingVideoId === sub.id;
 
                 return (
@@ -509,13 +611,37 @@ export default function FaithChallengesView({ session, profile }) {
                     className="group relative aspect-[9/15] rounded-2xl overflow-hidden border border-white/10 bg-black flex flex-col justify-between shadow-lg transition-all hover:scale-[1.01] hover:border-pink-500/40"
                   >
                     {/* Media Image / Video */}
-                    <div className="absolute inset-0">
-                      <img
-                        src={sub.thumb_url || sub.media_url || sub.videoUrl}
-                        alt={sub.caption || sub.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+                    <div className="absolute inset-0 bg-black">
+                      {sub.media_type === 'video' ? (
+                        <video
+                          data-faith-challenge-video
+                          data-submission-id={sub.id}
+                          src={sub.media_url || sub.videoUrl}
+                          poster={sub.thumb_url || undefined}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          autoPlay={isPlaying}
+                          controls={isPlaying}
+                          onPlay={(event) => {
+                            document.querySelectorAll('[data-faith-challenge-video]').forEach((video) => {
+                              if (video !== event.currentTarget) video.pause();
+                            });
+                            setPlayingVideoId(sub.id);
+                          }}
+                          onPause={() => setPlayingVideoId((current) => current === sub.id ? null : current)}
+                          onEnded={() => setPlayingVideoId(null)}
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <img
+                          src={sub.thumb_url || sub.media_url || sub.videoUrl}
+                          alt={sub.caption || sub.title || 'Challenge submission'}
+                          loading="lazy"
+                          className="w-full h-full object-contain"
+                        />
+                      )}
+                      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black via-black/20 to-transparent" />
                     </div>
 
                     {/* Top Badges */}
@@ -523,13 +649,15 @@ export default function FaithChallengesView({ session, profile }) {
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-black/60 text-amber-300 border border-white/10 backdrop-blur-sm">
                         {sub.scripture || sub.hashtag || sub.challengeTag || '#Faith'}
                       </span>
-                      <button
-                        onClick={() => togglePlayVideo(sub.id)}
-                        aria-label={isPlaying ? 'Pause video' : 'Play video'}
-                        className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white border border-white/20 flex items-center justify-center hover:bg-black/80 transition-all"
-                      >
-                        {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-white" />}
-                      </button>
+                      {sub.media_type === 'video' && (
+                        <button
+                          onClick={() => togglePlayVideo(sub.id)}
+                          aria-label={isPlaying ? 'Pause video' : 'Play video'}
+                          className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md text-white border border-white/20 flex items-center justify-center hover:bg-black/80 transition-all"
+                        >
+                          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
+                        </button>
+                      )}
                     </div>
 
                     {/* Bottom Info & Cheer Action */}
@@ -592,7 +720,7 @@ export default function FaithChallengesView({ session, profile }) {
         <SectionBlock
           title="Browse Faith Challenges"
           icon={Layers}
-          badge={`${challenges.length} Available`}
+          badge={`${totalCount} Available`}
           accent="#8b5cf6"
         >
           {/* Controls: Search, Filter Chips, Sort & Layout Switcher */}
@@ -619,9 +747,10 @@ export default function FaithChallengesView({ session, profile }) {
                   onChange={(val) => setSort(val)}
                 />
                 <LayoutSwitcher
-                  layouts={['magazine-flat', 'compact', 'tiles']}
+                  options={['magazine-flat', 'compact', 'tiles']}
                   value={layout}
                   onChange={(val) => setLayout(val)}
+                  storageKey="faith-challenges"
                 />
               </div>
             </div>
@@ -701,16 +830,20 @@ export default function FaithChallengesView({ session, profile }) {
                         <span className="text-xs text-slate-400 font-semibold">
                           {participantCount} joined
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triggerCheckin(ch);
-                          }}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow-sm"
-                          style={{ background: accent }}
-                        >
-                          Check In
-                        </button>
+                        {ch.status === 'active' ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerCheckin(ch);
+                            }}
+                            className="min-h-11 px-3 rounded-lg text-xs font-bold text-white shadow-sm"
+                            style={{ background: accent }}
+                          >
+                            Check In
+                          </button>
+                        ) : (
+                          <span className="text-xs font-semibold text-slate-400">Completed</span>
+                        )}
                       </div>
                     </div>
                   );
@@ -775,21 +908,38 @@ export default function FaithChallengesView({ session, profile }) {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triggerCheckin(ch);
-                          }}
-                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-md transition-transform active:scale-95"
-                          style={{ background: accent }}
-                        >
-                          Check In
-                        </button>
+                        {ch.status === 'active' ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triggerCheckin(ch);
+                            }}
+                            className="min-h-11 px-3.5 rounded-xl text-xs font-bold text-white shadow-md transition-transform active:scale-95"
+                            style={{ background: accent }}
+                          >
+                            Check In
+                          </button>
+                        ) : (
+                          <span className="text-xs font-semibold text-slate-400">Completed</span>
+                        )}
                       </div>
                     </div>
                   </AccentCard>
                 );
               })}
+            </div>
+          )}
+          {!loading && !error && hasMore && (
+            <div className="flex justify-center pt-4">
+              <button
+                type="button"
+                onClick={() => fetchData(true, page + 1, true)}
+                disabled={loadingMore}
+                className="min-h-11 px-5 rounded-xl border text-sm font-semibold transition-opacity disabled:opacity-60"
+                style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+              >
+                {loadingMore ? 'Loading more…' : 'Load more challenges'}
+              </button>
             </div>
           )}
         </SectionBlock>
@@ -874,7 +1024,7 @@ export default function FaithChallengesView({ session, profile }) {
                 title: 'Spiritual Spark',
                 description: 'Complete 3 consecutive days of devotion.',
                 icon: '⚡',
-                unlocked: activeStreaksCount >= 3,
+                unlocked: badges.some((item) => item.badge_code === 'spiritual_spark'),
                 color: '#f59e0b',
               },
               {
@@ -883,7 +1033,7 @@ export default function FaithChallengesView({ session, profile }) {
                 title: 'Steadfast Believer',
                 description: 'Hold a 7-day uninterrupted streak.',
                 icon: '🛡️',
-                unlocked: activeStreaksCount >= 7,
+                unlocked: badges.some((item) => item.badge_code === 'steadfast_believer'),
                 color: '#0ea5e9',
               },
               {
@@ -892,7 +1042,7 @@ export default function FaithChallengesView({ session, profile }) {
                 title: 'Overcomer',
                 description: '21 days of unbroken faith habit formation.',
                 icon: '🦅',
-                unlocked: activeStreaksCount >= 21,
+                unlocked: badges.some((item) => item.badge_code === 'overcomer_in_christ'),
                 color: '#8b5cf6',
               },
               {
@@ -901,7 +1051,7 @@ export default function FaithChallengesView({ session, profile }) {
                 title: 'Kingdom Champion',
                 description: '40 days of prayer and fasting like Christ.',
                 icon: '👑',
-                unlocked: activeStreaksCount >= 40,
+                unlocked: badges.some((item) => item.badge_code === 'kingdom_champion'),
                 color: '#ec4899',
               },
             ].map((badge) => (
@@ -952,6 +1102,8 @@ export default function FaithChallengesView({ session, profile }) {
         onClose={() => setCheckinModalOpen(false)}
         challenge={selectedCheckinChallenge}
         currentUser={currentUser}
+        currentStreak={selectedCheckinChallenge?.currentStreak || 0}
+        hasCheckedInToday={Boolean(selectedCheckinChallenge?.has_checked_in_today)}
         onCheckinSuccess={() => {
           fetchData(true);
         }}

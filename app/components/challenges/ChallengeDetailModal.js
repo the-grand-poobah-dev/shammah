@@ -26,7 +26,7 @@ import {
 import Avatar from '../Avatar';
 import MemberName from '../MemberName';
 import { playSound } from '../../lib/soundEffects';
-import { getChallengeDetail, joinChallenge, voteChallengeSubmission } from '../../lib/data/challengesApi';
+import { getChallengeDetail, joinChallenge, leaveChallenge, closeChallenge, voteChallengeSubmission, addChallengeComment, moderateChallengeSubmission, deleteChallengeSubmission } from '../../lib/data/challengesApi';
 
 export default function ChallengeDetailModal({
   isOpen,
@@ -41,8 +41,14 @@ export default function ChallengeDetailModal({
   const [challengeData, setChallengeData] = useState(initialChallenge);
   const [loading, setLoading] = useState(!initialChallenge);
   const [joining, setJoining] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [leaderboardScope, setLeaderboardScope] = useState('all');
   const [copiedLink, setCopiedLink] = useState(false);
   const [votingMap, setVotingMap] = useState({});
+  const [playingSubmissionId, setPlayingSubmissionId] = useState(null);
+  const [commentingSubmissionId, setCommentingSubmissionId] = useState(null);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !challengeId) return;
@@ -51,9 +57,10 @@ export default function ChallengeDetailModal({
     async function loadDetail() {
       try {
         setLoading(true);
-        const data = await getChallengeDetail(challengeId);
+        const data = await getChallengeDetail(challengeId, leaderboardScope);
         if (isMounted) {
           setChallengeData(data);
+          setVotingMap(Object.fromEntries((data.user_votes || []).map((id) => [id, true])));
         }
       } catch (err) {
         console.error('Failed to load challenge details:', err);
@@ -66,7 +73,7 @@ export default function ChallengeDetailModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, challengeId]);
+  }, [isOpen, challengeId, leaderboardScope]);
 
   if (!isOpen) return null;
 
@@ -75,11 +82,13 @@ export default function ChallengeDetailModal({
   const submissions = challengeData?.submissions || [];
   const leaderboard = challengeData?.leaderboard || [];
   const recentCheckins = challengeData?.recent_checkins || [];
+  const participantAvatars = challengeData?.participant_avatars || [];
 
   const isJoined = !!participant;
   const streak = participant?.streak_current || 0;
   const hasCheckedInToday = participant?.has_checked_in_today || false;
   const accent = challenge?.accent || '#f59e0b';
+  const daysRemaining = challenge.ends_at ? Math.max(0, Math.ceil((new Date(challenge.ends_at).getTime() - Date.now()) / 86400000)) : null;
 
   async function handleJoin() {
     if (joining) return;
@@ -110,6 +119,23 @@ export default function ChallengeDetailModal({
     }
   }
 
+  async function handleLeave() {
+    if (leaving || !challenge?.id) return;
+    setLeaving(true);
+    try {
+      await leaveChallenge(challenge.id);
+      setChallengeData((prev) => ({
+        ...prev,
+        participant: null,
+        challenge: { ...challenge, participants_count: Math.max(0, Number(challenge.participants_count || 0) - 1) },
+      }));
+    } catch (err) {
+      alert(err.message || 'Could not leave challenge.');
+    } finally {
+      setLeaving(false);
+    }
+  }
+
   async function handleVote(subId) {
     playSound('reaction');
     setVotingMap((prev) => ({ ...prev, [subId]: !prev[subId] }));
@@ -122,6 +148,83 @@ export default function ChallengeDetailModal({
     }
   }
 
+  async function handleAddComment(submissionId) {
+    const body = commentDraft.trim();
+    if (!currentUser?.id) {
+      alert('Please sign in to comment.');
+      return;
+    }
+    if (!body || body.length > 1000 || commentSubmitting) return;
+    setCommentSubmitting(true);
+    try {
+      const result = await addChallengeComment(submissionId, body);
+      setChallengeData((prev) => ({
+        ...prev,
+        submissions: (prev.submissions || []).map((item) => item.id === submissionId
+          ? {
+              ...item,
+              comments: [...(item.comments || []), result.comment],
+              comment_count: result.comment_count,
+            }
+          : item),
+      }));
+      setCommentDraft('');
+      setCommentingSubmissionId(submissionId);
+    } catch (err) {
+      alert(err.message || 'Could not add your comment.');
+    } finally {
+      setCommentSubmitting(false);
+    }
+  }
+
+  const canModerate = Boolean(
+    currentUser?.id && (
+      currentUser.id === challenge.creator_id ||
+      ['admin', 'platform_admin', 'moderator'].includes(currentUser.role)
+    )
+  );
+
+  async function handleCloseChallenge() {
+    if (!challenge?.id || !canModerate || challenge.status !== 'active') return;
+    if (typeof window !== 'undefined' && !window.confirm('Close this challenge early? Participants will no longer be able to join or check in.')) return;
+    try {
+      const updated = await closeChallenge(challenge.id);
+      setChallengeData((prev) => ({ ...prev, challenge: updated }));
+    } catch (err) {
+      alert(err.message || 'Could not close this challenge.');
+    }
+  }
+
+  async function handleModerateSubmission(submissionId, decision) {
+    try {
+      await moderateChallengeSubmission(submissionId, decision);
+      setChallengeData((prev) => ({
+        ...prev,
+        submissions: decision === 'approve'
+          ? (prev.submissions || []).map((item) => item.id === submissionId ? { ...item, status: 'approved' } : item)
+          : (prev.submissions || []).filter((item) => item.id !== submissionId),
+      }));
+    } catch (err) {
+      alert(err.message || 'Could not review this submission.');
+    }
+  }
+
+  async function handleDeleteSubmission(submissionId) {
+    try {
+      await deleteChallengeSubmission(submissionId);
+      setChallengeData((prev) => ({ ...prev, submissions: (prev.submissions || []).filter((item) => item.id !== submissionId) }));
+    } catch (err) {
+      alert(err.message || 'Could not remove this submission.');
+    }
+  }
+
+  function handleSubmissionPlay(event, submissionId) {
+    document.querySelectorAll('[data-faith-challenge-video]').forEach((video) => {
+      if (video !== event.currentTarget) video.pause();
+    });
+    setPlayingSubmissionId(submissionId);
+  }
+
   function handleShare() {
     playSound('postPublished');
     const url = typeof window !== 'undefined' ? `${window.location.origin}/challenges?id=${challenge.id}` : '';
@@ -132,15 +235,14 @@ export default function ChallengeDetailModal({
     }
   }
 
-  // Generate 28-day calendar heatmap grid
+  // Generate a real rolling 28-day check-in calendar using calendar dates.
   const daysInGrid = Array.from({ length: 28 }, (_, i) => {
-    const dayNumber = i + 1;
-    // Check if this day is checked in
-    const isChecked = recentCheckins.some((c) => {
-      const date = new Date(c.day);
-      return date.getDate() === dayNumber;
-    });
-    return { dayNumber, isChecked };
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() - (27 - i));
+    const dateKey = date.toISOString().slice(0, 10);
+    const isChecked = recentCheckins.some((item) => String(item.day || '').slice(0, 10) === dateKey);
+    return { dateKey, label: date.getDate(), date, isChecked };
   });
 
   return (
@@ -202,7 +304,7 @@ export default function ChallengeDetailModal({
               </span>
               <span className="text-xs text-white/80 drop-shadow flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                {challenge.duration_days ? `${challenge.duration_days} Days` : 'Ongoing'}
+                {daysRemaining === null ? (challenge.duration_days ? `${challenge.duration_days} Days` : 'Ongoing') : daysRemaining > 0 ? `${daysRemaining} days left` : 'Challenge ended'}
               </span>
             </div>
             <h1 id="challenge-detail-title" className="text-xl sm:text-2xl font-black text-white drop-shadow-md line-clamp-1">
@@ -255,16 +357,38 @@ export default function ChallengeDetailModal({
 
           {/* Quick CTA */}
           <div className="flex items-center gap-2">
-            {!isJoined ? (
+            {canModerate && challenge.status === 'active' && (
+              <button
+                type="button"
+                onClick={handleCloseChallenge}
+                className="min-h-11 px-3 rounded-xl text-xs font-semibold border border-red-500/40 text-red-300 hover:bg-red-500/10"
+              >
+                Close early
+              </button>
+            )}
+            {isJoined && (
+              <button
+                type="button"
+                onClick={handleLeave}
+                disabled={leaving}
+                className="min-h-11 px-3 rounded-xl text-xs font-semibold border disabled:opacity-60"
+                style={{ borderColor: 'var(--border)', color: 'var(--ink-muted)' }}
+              >
+                {leaving ? 'Leaving…' : 'Leave'}
+              </button>
+            )}
+            {!isJoined ? challenge.status === 'active' ? (
               <button
                 onClick={handleJoin}
                 disabled={joining}
-                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-1.5 transition-transform active:scale-95"
+                className="min-h-11 px-4 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-1.5 transition-transform active:scale-95 disabled:opacity-60"
                 style={{ background: `linear-gradient(135deg, ${accent}, #ec4899)` }}
               >
                 {joining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Flame className="w-3.5 h-3.5 fill-amber-200" />}
                 Join Challenge
               </button>
+            ) : (
+              <span className="text-xs font-semibold text-slate-400">Challenge ended</span>
             ) : hasCheckedInToday ? (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/30">
                 <CheckCircle2 className="w-4 h-4" />
@@ -272,7 +396,7 @@ export default function ChallengeDetailModal({
               </div>
             ) : (
               <button
-                onClick={() => onOpenCheckin && onOpenCheckin(challenge)}
+                onClick={() => onOpenCheckin && onOpenCheckin({ ...challenge, has_checked_in_today: hasCheckedInToday, currentStreak: streak })}
                 className="px-4 py-1.5 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-1.5 transition-transform active:scale-95"
                 style={{ background: `linear-gradient(135deg, #10b981, #059669)` }}
               >
@@ -332,7 +456,7 @@ export default function ChallengeDetailModal({
                     </div>
                     {!hasCheckedInToday && (
                       <button
-                        onClick={() => onOpenCheckin && onOpenCheckin(challenge)}
+                        onClick={() => onOpenCheckin && onOpenCheckin({ ...challenge, has_checked_in_today: hasCheckedInToday, currentStreak: streak })}
                         className="px-3.5 py-2 rounded-xl text-xs font-bold text-white shadow-md bg-emerald-600 hover:bg-emerald-500 transition-all"
                       >
                         Check-in Now
@@ -378,15 +502,15 @@ export default function ChallengeDetailModal({
                 <div className="grid grid-cols-7 sm:grid-cols-14 gap-1.5 p-3 rounded-xl bg-black/20 border border-white/5">
                   {daysInGrid.map((day) => (
                     <div
-                      key={day.dayNumber}
+                      key={day.dateKey}
                       className={`h-7 rounded-md flex flex-col items-center justify-center text-[10px] font-mono transition-all ${
                         day.isChecked
                           ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 font-bold shadow-sm'
                           : 'bg-white/5 text-slate-500'
                       }`}
-                      title={day.isChecked ? `Day ${day.dayNumber}: Checked-in` : `Day ${day.dayNumber}: No record`}
+                      title={day.isChecked ? day.date.toLocaleDateString() + ': Checked in' : day.date.toLocaleDateString() + ': No check-in'}
                     >
-                      {day.isChecked ? <Check className="w-3 h-3 stroke-[3]" /> : day.dayNumber}
+                      {day.isChecked ? <Check className="w-3 h-3 stroke-[3]" /> : day.label}
                     </div>
                   ))}
                 </div>
@@ -394,10 +518,19 @@ export default function ChallengeDetailModal({
 
               {/* Share and Action Footer */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
-                <div className="flex items-center gap-2 text-xs text-slate-400">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                  {participantAvatars.length > 0 && (
+                    <div className="flex items-center -space-x-2 mr-1" aria-label="Challenge participants">
+                      {participantAvatars.slice(0, 5).map((person) => (
+                        <div key={person.user_id} className="rounded-full border-2 border-slate-900" title={person.display_name}>
+                          <Avatar src={person.avatar_url} name={person.display_name} size={24} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <Users className="w-4 h-4" />
                   <span>
-                    <strong className="text-white">{challenge.participants_count || 1}</strong> believers participating
+                    <strong className="text-white">{Number(challenge.participants_count || 0).toLocaleString()}</strong> believers participating
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -459,11 +592,27 @@ export default function ChallengeDetailModal({
                       >
                         {/* Media Preview (9:16 aspect) */}
                         <div className="relative aspect-[9/14] bg-black overflow-hidden">
-                          <img
-                            src={sub.thumb_url || sub.media_url || sub.videoUrl}
-                            alt={sub.caption || sub.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
+                          {sub.media_type === 'video' ? (
+                            <video
+                              data-faith-challenge-video
+                              data-submission-id={sub.id}
+                              src={sub.media_url || sub.videoUrl}
+                              poster={sub.thumb_url || undefined}
+                              controls
+                              playsInline
+                              preload="metadata"
+                              onPlay={(event) => handleSubmissionPlay(event, sub.id)}
+                              onPause={() => setPlayingSubmissionId((current) => current === sub.id ? null : current)}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <img
+                              src={sub.thumb_url || sub.media_url || sub.videoUrl}
+                              alt={sub.caption || sub.title || 'Challenge submission'}
+                              loading="lazy"
+                              className="w-full h-full object-contain"
+                            />
+                          )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
 
                           {/* Scripture Tag */}
@@ -511,6 +660,67 @@ export default function ChallengeDetailModal({
                             <span className="truncate">{sub.audioTitle}</span>
                           </div>
                         )}
+                        {sub.status === 'approved' && (
+                          <div className="border-t border-white/10 p-2.5 bg-black/20">
+                            <button
+                              type="button"
+                              onClick={() => setCommentingSubmissionId((current) => current === sub.id ? null : sub.id)}
+                              aria-expanded={commentingSubmissionId === sub.id}
+                              className="min-h-11 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              {Number(sub.comment_count || sub.comments?.length || 0)} comments
+                            </button>
+                            {commentingSubmissionId === sub.id && (
+                              <div className="space-y-3 pt-2">
+                                <div className="max-h-40 overflow-y-auto space-y-2">
+                                  {(sub.comments || []).map((comment) => (
+                                    <div key={comment.id} className="flex items-start gap-2">
+                                      <Avatar src={comment.author?.avatar} name={comment.author?.name || 'Member'} size={24} />
+                                      <div className="min-w-0 flex-1 rounded-lg bg-white/5 px-2.5 py-2">
+                                        <p className="text-[11px] font-bold text-white">{comment.author?.name || 'Member'}</p>
+                                        <p className="text-xs text-slate-300 whitespace-pre-wrap break-words">{comment.body}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {(!sub.comments || sub.comments.length === 0) && (
+                                    <p className="text-xs text-slate-400">No comments yet. Encourage this member with a kind word.</p>
+                                  )}
+                                </div>
+                                {currentUser?.id ? (
+                                  <form onSubmit={(event) => { event.preventDefault(); handleAddComment(sub.id); }} className="space-y-2">
+                                    <textarea
+                                      value={commentDraft}
+                                      onChange={(event) => setCommentDraft(event.target.value)}
+                                      maxLength={1000}
+                                      rows={2}
+                                      placeholder="Write an encouraging comment…"
+                                      className="w-full rounded-lg border bg-black/20 p-2.5 text-xs text-white placeholder:text-slate-500"
+                                      style={{ borderColor: 'var(--border)' }}
+                                    />
+                                    <button type="submit" disabled={commentSubmitting || !commentDraft.trim()} className="min-h-11 rounded-lg bg-amber-500 px-3 text-xs font-bold text-black disabled:opacity-50">
+                                      {commentSubmitting ? 'Posting…' : 'Post comment'}
+                                    </button>
+                                  </form>
+                                ) : (
+                                  <p className="text-xs text-slate-400">Sign in to add a comment.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {(canModerate || sub.user_id === currentUser?.id) && (
+                          <div className="flex flex-wrap items-center gap-2 p-2 border-t border-white/10 bg-black/30">
+                            {sub.status === 'pending_review' && canModerate && (
+                              <>
+                                <button type="button" onClick={() => handleModerateSubmission(sub.id, 'approve')} className="min-h-11 flex-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white">Approve</button>
+                                <button type="button" onClick={() => handleModerateSubmission(sub.id, 'reject')} className="min-h-11 flex-1 rounded-lg bg-red-600/80 px-2 text-xs font-bold text-white">Reject</button>
+                              </>
+                            )}
+                            <button type="button" onClick={() => handleDeleteSubmission(sub.id)} className="min-h-11 rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-300">Remove</button>
+                            {sub.status === 'pending_review' && <span className="text-[10px] text-amber-300">Awaiting review</span>}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -526,8 +736,30 @@ export default function ChallengeDetailModal({
                   <span>Challenge Devotion Leaderboard</span>
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Believers with the longest ongoing streaks and devotion points
+                  Believers ranked by earned devotion points and streaks
                 </p>
+              </div>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Leaderboard scope">
+                {[
+                  { id: 'all', label: 'All time' },
+                  { id: 'week', label: 'This week' },
+                  { id: 'church', label: 'My church' },
+                ].map((scope) => (
+                  <button
+                    key={scope.id}
+                    type="button"
+                    aria-pressed={leaderboardScope === scope.id}
+                    onClick={() => setLeaderboardScope(scope.id)}
+                    className="min-h-11 px-3 rounded-xl border text-xs font-semibold transition-colors"
+                    style={{
+                      borderColor: leaderboardScope === scope.id ? accent : 'var(--border)',
+                      background: leaderboardScope === scope.id ? accent + '22' : 'var(--surface)',
+                      color: 'var(--ink)',
+                    }}
+                  >
+                    {scope.label}
+                  </button>
+                ))}
               </div>
 
               {leaderboard.length === 0 ? (

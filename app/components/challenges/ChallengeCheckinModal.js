@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   X,
   Flame,
@@ -12,9 +12,11 @@ import {
   Image as ImageIcon,
   MessageSquare,
   Award,
+  UploadCloud,
 } from 'lucide-react';
 import { playSound } from '../../lib/soundEffects';
 import { checkinChallenge } from '../../lib/data/challengesApi';
+import { uploadPostMedia } from '../../lib/mediaUpload';
 
 export default function ChallengeCheckinModal({
   isOpen,
@@ -27,11 +29,35 @@ export default function ChallengeCheckinModal({
 }) {
   const [note, setNote] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaType, setMediaType] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successResult, setSuccessResult] = useState(null);
 
   if (!isOpen || !challenge) return null;
+
+  async function handleMediaSelect(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!currentUser?.id) {
+      setErrorMsg('Please sign in before uploading check-in media.');
+      return;
+    }
+    setErrorMsg('');
+    setUploading(true);
+    try {
+      const uploaded = await uploadPostMedia(file, currentUser.id);
+      setMediaUrl(uploaded.url);
+      setMediaType(uploaded.type);
+    } catch (err) {
+      setErrorMsg(err.message || 'Media upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
 
   async function handleSubmit(e) {
     if (e) e.preventDefault();
@@ -283,24 +309,34 @@ export default function ChallengeCheckinModal({
 
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: '6px' }}>
-                  Photo / Journal Proof URL (Optional)
+                  Optional Photo / Video
                 </label>
                 <input
-                  type="url"
-                  placeholder="https://... (Bible highlighter, prayer journal photo, etc.)"
-                  value={mediaUrl}
-                  onChange={(e) => setMediaUrl(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '10px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    color: 'var(--ink)',
-                    fontSize: '13px',
-                    outline: 'none',
-                  }}
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleMediaSelect}
+                  style={{ display: 'none' }}
                 />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="min-h-11 w-full rounded-xl border flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-60"
+                  style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
+                >
+                  <UploadCloud size={17} />
+                  {uploading ? 'Uploading media…' : mediaUrl && mediaType ? 'Media attached — change file' : 'Upload a photo or video'}
+                </button>
+                {mediaUrl && (
+                  <p style={{ fontSize: '11px', color: 'var(--ink-muted)', marginTop: '6px' }}>
+                    Uploaded {mediaType || 'media'} is attached to this check-in.
+                    <button type="button" onClick={() => { setMediaUrl(''); setMediaType(null); }} style={{ marginLeft: '8px', textDecoration: 'underline' }}>Remove</button>
+                  </p>
+                )}
+                <p style={{ fontSize: '11px', color: 'var(--ink-muted)', marginTop: '5px' }}>
+                  Images up to 15MB; videos up to 100MB. A reflection-only check-in is also fine.
+                </p>
               </div>
 
               {errorMsg && (

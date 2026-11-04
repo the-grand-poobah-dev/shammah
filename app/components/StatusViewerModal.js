@@ -634,12 +634,13 @@ export default function StatusViewerModal({
     >
       <div className={`status-viewer-stage status-bg-${currentStatus.bgStyle || 'emerald'} ${slideAnim}`}>
         {/* Full-frame image background with readable overlay scrim */}
-        {resolvedMediaType === 'image' && currentStatus.mediaUrl && (
+        {(resolvedMediaType === 'image' || resolvedMediaType === 'gif') && currentStatus.mediaUrl && (
           <div className="status-viewer-image-wrap">
             <img
               src={currentStatus.mediaUrl}
               alt=""
               className="status-viewer-fill-image"
+              style={{ objectFit: 'contain', width: '100%', height: '100%' }}
             />
             <div className="status-viewer-image-scrim" />
           </div>
@@ -823,6 +824,7 @@ export default function StatusViewerModal({
                 muted={isMuted}
                 playsInline
                 className="status-viewer-video"
+                style={{ objectFit: 'contain' }}
                 onTimeUpdate={(e) => {
                   const v = e.currentTarget;
                   if (v.duration && v.duration > 0) {
@@ -1397,11 +1399,11 @@ export default function StatusViewerModal({
             )}
             {currentStatus.mediaUrl && (
               <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', maxHeight: 160, position: 'relative' }}>
-                {resolvedMediaType === 'image' && (
-                  <img src={currentStatus.mediaUrl} alt="" style={{ width: '100%', maxHeight: 160, objectFit: 'cover' }} />
+                {(resolvedMediaType === 'image' || resolvedMediaType === 'gif') && (
+                  <img src={currentStatus.mediaUrl} alt="" style={{ width: '100%', maxHeight: 160, objectFit: 'contain' }} />
                 )}
                 {resolvedMediaType === 'video' && (
-                  <video src={currentStatus.mediaUrl} style={{ width: '100%', maxHeight: 160, objectFit: 'cover' }} muted />
+                  <video src={currentStatus.mediaUrl} style={{ width: '100%', maxHeight: 160, objectFit: 'contain' }} muted />
                 )}
               </div>
             )}

@@ -56,14 +56,15 @@ function isValidUuid(id) {
  * Infers whether a status media URL is 'image', 'video', or 'audio'.
  */
 export function inferMediaType(url, explicitType = null) {
-  if (explicitType && ['image', 'video', 'audio'].includes(explicitType)) {
+  if (explicitType && ['image', 'video', 'audio', 'gif'].includes(explicitType)) {
     return explicitType;
   }
   if (!url || typeof url !== 'string') return null;
   const clean = url.split('?')[0].toLowerCase();
   if (/\.(mp4|webm|mov|m4v|ogg)$/.test(clean)) return 'video';
   if (/\.(mp3|wav|m4a|aac|flac)$/.test(clean)) return 'audio';
-  if (/\.(jpg|jpeg|png|webp|gif|svg|bmp|avif)$/.test(clean)) return 'image';
+  if (/\.gif$/.test(clean)) return 'gif';
+  if (/\.(jpg|jpeg|png|webp|svg|bmp|avif)$/.test(clean)) return 'image';
   return 'image';
 }
 
@@ -585,7 +586,7 @@ export async function fetchActiveStatuses() {
     const { data, error } = await supabase
       .from('statuses')
       .select(
-        'id, user_id, text_content, scripture_tag, bg_style, media_url, media_type, created_at, expires_at, profiles(id, display_name, avatar_url, badge, badge_verified, role, allow_status_reshare)'
+        'id, user_id, text_content, scripture_tag, bg_style, media_url, media_type, media_meta, created_at, expires_at, profiles(id, display_name, avatar_url, badge, badge_verified, role, allow_status_reshare)'
       )
       .gt('expires_at', nowIso)
       .order('created_at', { ascending: false })
@@ -613,6 +614,7 @@ export async function fetchActiveStatuses() {
         bgStyle: row.bg_style || 'emerald',
         mediaUrl: row.media_url || null,
         mediaType: resolvedMediaType,
+        mediaMeta: row.media_meta || {},
         createdAt: row.created_at,
         expiresAt: row.expires_at,
         isPublic: true,
@@ -711,6 +713,7 @@ export async function createStatusUpdate({
   text,
   mediaUrl = null,
   mediaType = null,
+  mediaMeta = {},
   bgStyle = 'emerald',
   scriptureTag = null,
   visibility = 'public',
@@ -740,6 +743,7 @@ export async function createStatusUpdate({
     text: cleanText,
     mediaUrl,
     mediaType: resolvedMediaType,
+    mediaMeta: mediaMeta && typeof mediaMeta === 'object' ? mediaMeta : {},
     bgStyle: bgStyle || 'emerald',
     scriptureTag: scriptureTag || null,
     visibility: visibility || 'public',
@@ -762,6 +766,7 @@ export async function createStatusUpdate({
           bg_style: bgStyle || 'emerald',
           media_url: mediaUrl || null,
           media_type: resolvedMediaType || null,
+          media_meta: mediaMeta && typeof mediaMeta === 'object' ? mediaMeta : {},
           expires_at: expiresAt.toISOString(),
         })
         .select('id, created_at, expires_at')

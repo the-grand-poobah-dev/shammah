@@ -7,9 +7,17 @@ import { supabase } from '../../lib/supabaseClient';
 
 export const MAX_BYTES = {
   image: 15 * 1024 * 1024,   // 15 MB
+  gif: 10 * 1024 * 1024,     // 10 MB animated GIFs
   video: 100 * 1024 * 1024,  // 100 MB
   audio: 50 * 1024 * 1024,   // 50 MB
 };
+
+function createUploadNonce() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2, 12);
+}
 
 export const ALLOWED_MIME = {
   image: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
@@ -23,6 +31,7 @@ export const ALLOWED_MIME = {
 export function detectMediaType(file) {
   if (!file) return null;
   const mime = (file.type || '').split(';')[0].trim().toLowerCase();
+  if (mime === 'image/gif' || /\.gif$/i.test(file.name || '')) return 'gif';
   if (ALLOWED_MIME.image.includes(mime) || mime.startsWith('image/')) return 'image';
   if (ALLOWED_MIME.video.includes(mime) || mime.startsWith('video/')) return 'video';
   if (ALLOWED_MIME.audio.includes(mime) || mime.startsWith('audio/')) return 'audio';
@@ -34,6 +43,80 @@ export function detectMediaType(file) {
   return null;
 }
 
+function inferMediaMime(file, type) {
+  const supplied = (file?.type || '').split(';')[0].trim().toLowerCase();
+  if (supplied && supplied !== 'application/octet-stream') return supplied;
+
+  const name = (file?.name || '').toLowerCase();
+  const extensionTypes = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+    gif: 'image/gif', avif: 'image/avif',
+    mp4: 'video/mp4', webm: type === 'video' ? 'video/webm' : 'audio/webm',
+    mov: 'video/quicktime', m4v: 'video/x-m4v',
+    mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
+    m4a: 'audio/mp4', aac: 'audio/aac', flac: 'audio/flac',
+  };
+  const extension = name.includes('.') ? name.split('.').pop() : '';
+  if (extensionTypes[extension]) return extensionTypes[extension];
+  return type === 'gif' ? 'image/gif' : type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'audio/mpeg';
+}
+
+/**
+ * Read image dimensions without retaining a temporary object URL.
+ * Returns { width, height, aspect } where aspect is width / height.
+ */
+export async function getImageSize(file) {
+  if (!file) throw new Error('No image file provided.');
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const result = { width: bitmap.width, height: bitmap.height, aspect: bitmap.height ? bitmap.width / bitmap.height : null };
+      bitmap.close?.();
+      return result;
+    } catch {}
+  }
+  if (typeof Image === 'undefined' || typeof URL === 'undefined') throw new Error('Image metadata is unavailable in this environment.');
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    const dimensions = await new Promise((resolve, reject) => {
+      image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => reject(new Error('Could not read image dimensions.'));
+      image.src = url;
+    });
+    return { ...dimensions, aspect: dimensions.height ? dimensions.width / dimensions.height : null };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
+ * Read video duration and dimensions for cover/aspect metadata.
+ * The temporary object URL is always revoked, including error paths.
+ */
+export async function getVideoMeta(file) {
+  if (!file) throw new Error('No video file provided.');
+  if (typeof document === 'undefined' || typeof URL === 'undefined') throw new Error('Video metadata is unavailable in this environment.');
+  const url = URL.createObjectURL(file);
+  try {
+    const meta = await new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => resolve({
+        duration: Number.isFinite(video.duration) ? video.duration : 0,
+        width: video.videoWidth || 0,
+        height: video.videoHeight || 0,
+      });
+      video.onerror = () => reject(new Error('Could not read video metadata.'));
+      video.src = url;
+      video.load();
+    });
+    return { ...meta, aspect: meta.height ? meta.width / meta.height : null };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /**
  * Upload a single file to post-media bucket (backwards-compatible with posts & comments).
  */
@@ -43,7 +126,7 @@ export async function uploadPostMedia(file, userId) {
 
   const type = detectMediaType(file);
   if (!type) {
-    throw new Error('Unsupported file type. Please use JPG, PNG, WebP, GIF, MP4, WebM, MP3 or WAV.');
+    throw new Error('Unsupported file type. Please use JPG, PNG, WebP, GIF (up to 10 MB), MP4, WebM, MP3 or WAV.');
   }
 
   const max = MAX_BYTES[type];
@@ -56,8 +139,8 @@ export async function uploadPostMedia(file, userId) {
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .slice(0, 80);
 
-  const path = `${userId}/${Date.now()}-${safeName}`;
-  const cleanContentType = (file.type || '').split(';')[0] || (type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'audio/webm');
+  const path = `${userId}/${Date.now()}-${createUploadNonce()}-${safeName}`;
+  const cleanContentType = inferMediaMime(file, type);
 
   const { error } = await supabase.storage.from('post-media').upload(path, file, {
     cacheControl: '3600',
@@ -112,8 +195,8 @@ export async function uploadMediaItem(file, userId, options = {}) {
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .slice(0, 80);
 
-  const path = `${userId}/${Date.now()}-${safeName}`;
-  const contentType = (file.type || '').split(';')[0] || (detectedKind === 'video' ? 'video/mp4' : detectedKind === 'audio' ? 'audio/mpeg' : 'image/jpeg');
+  const path = `${userId}/${Date.now()}-${createUploadNonce()}-${safeName}`;
+  const contentType = inferMediaMime(file, detectedKind);
 
   onProgress(10);
 
@@ -182,6 +265,27 @@ export async function uploadMediaItem(file, userId, options = {}) {
     kind: detectedKind,
     size: file.size,
   };
+}
+
+/**
+ * Uploads a small WebVTT or plain-text transcript to the media library.
+ */
+export async function uploadTranscriptFile(file, userId) {
+  if (!file || !userId) throw new Error('Choose a transcript and sign in before uploading.');
+  const name = (file.name || '').toLowerCase();
+  if (!/\.(vtt|txt)$/.test(name)) throw new Error('Transcript files must use .vtt or .txt.');
+  if (file.size > 2 * 1024 * 1024) throw new Error('Transcript files must be 2 MB or smaller.');
+  const safeName = (file.name || 'transcript.txt').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+  const path = `${userId}/transcripts/${Date.now()}-${safeName}`;
+  const contentType = name.endsWith('.vtt') ? 'text/vtt' : 'text/plain';
+  const { error } = await supabase.storage.from('media-library').upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+    contentType,
+  });
+  if (error) throw new Error(error.message || 'Transcript upload failed.');
+  const { data } = supabase.storage.from('media-library').getPublicUrl(path);
+  return { url: data.publicUrl, path };
 }
 
 /**
