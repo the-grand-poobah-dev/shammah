@@ -50,3 +50,7 @@ Run against the latest **preview** deployment before merging PR #1. Do not use r
 
 ## Not yet automated
 This checklist is a manual acceptance plan. Passing a Vercel build does not mean these interactions, responsive viewports, device permissions or payment callback flows have all been tested.
+
+
+## Release acceptance record
+On 2026-11-04, the user confirmed that the release-preview smoke test passed. This records that user confirmation; it does not assert that every extended checklist item above was individually tested.
