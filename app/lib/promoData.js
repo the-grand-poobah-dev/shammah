@@ -111,10 +111,10 @@ export async function fetchFeaturedAudio() {
 export async function fetchDailyVerse() {
   try {
     const result = await supabase.from('verse_of_day')
-      .select('reference,verse_text,text,book,chapter,verse')
-      .limit(1).order('date', { ascending: false });
+      .select('ref,text,day')
+      .order('day', { ascending: false }).limit(1);
     const row = safeResult(result)?.[0];
-    if (row) return { reference: row.reference || [row.book, row.chapter, row.verse].filter(Boolean).join(' '), text: row.verse_text || row.text || '' };
+    if (row) return { reference: row.ref || '', text: row.text || '' };
   } catch { /* optional table: use the public-domain fallback */ }
   const day = Math.floor(Date.now() / 86400000);
   return KJV_VERSES[((day % KJV_VERSES.length) + KJV_VERSES.length) % KJV_VERSES.length];
@@ -133,7 +133,7 @@ export async function fetchArcadeDaily() {
   try {
     const result = await supabase.from('arcade_daily')
       .select('game_slug,day,seed')
-      .order('challenge_date', { ascending: false }).limit(1);
+      .order('day', { ascending: false }).limit(1);
     return safeResult(result)?.[0] || null;
   } catch { return null; }
 }
