@@ -1,7 +1,7 @@
 # Supabase migration inventory and release procedure
 
 Branch: `work/section-pages-prompt-pack`  
-Inventory generated from `supabase/migrations/` on 2026-11-04. **67 active SQL migration files found.** Archived production-lineage migrations are listed separately below and are not part of the active migration set.
+Inventory generated from `supabase/migrations/` on 2026-11-04. **70 active SQL migration files found.** Archived production-lineage migrations are listed separately below and are not part of the active migration set.
 
 ## Important: inventory is not an applied-migration ledger
 
