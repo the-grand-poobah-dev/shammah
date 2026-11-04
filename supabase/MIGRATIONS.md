@@ -1,7 +1,7 @@
 # Supabase migration inventory and release procedure
 
 Branch: `work/section-pages-prompt-pack`  
-Inventory generated from `supabase/migrations/` on 2026-11-04. **66 active SQL migration files found.** Archived production-lineage migrations are listed separately below and are not part of the active migration set.
+Inventory generated from `supabase/migrations/` on 2026-11-04. **67 active SQL migration files found.** Archived production-lineage migrations are listed separately below and are not part of the active migration set.
 
 ## Important: inventory is not an applied-migration ledger
 
@@ -21,7 +21,7 @@ Confirmed by the user or read-only checks in the current project:
 | Core identity/church/feed | `001_onboarding`, `007_churches_and_categories`, `008_post_media_and_rss`, `010_pinned_posts`, `012_status_privacy_and_reports`, `013_comment_media`, `014_post_location_feeling_tags`, `015_user_shortcuts` | Verify existing base tables first |
 | Polls and quizzes | `20261030_polls_and_quizzes`, `20261030_polls_hub`, `20261030_update_media_type_constraints`, `20261101_polls_privacy_hardening`, `20261102_authenticated_poll_rpc_hardening` | `seed_polls.sql` only after schema and RPCs are verified |
 | Media, audio and reels | `20261101_media_foundation`, `20261101_audio_series_follow`, media-comments access/visibility migrations, `20261102_media_types`, `20261102_reels_and_media_comments`, `20261103_fix_follows_and_media_grants` | `seed_media.sql` only after media schema is verified |
-| Courses | `20261030_courses`, `20261101_courses_security_hardening`, `20261102_courses_quiz_completion` | `seed_courses.sql`; user confirmed base migration and seed succeeded |
+| Courses | `20261030_courses`, `20261101_courses_security_hardening`, `20261102_courses_quiz_completion`, `20261104_course_lesson_rls_anon_preview_split` | `seed_courses.sql`; user confirmed base migration and seed succeeded. The 20261104 RLS fix is pending manual application after the preview exposed an anon policy permission error. |
 | Faith challenges | `20261102_faith_challenges`, `20261105_faith_challenges` | Review the later schema reconciliation before considering `seed_challenges.sql` or `seed_faith_challenges.sql` |
 | Arcade | `20261102_arcade`, `20261103_arcade_schema_reconcile`, then applicable privilege migrations | `seed_arcade.sql` after live schema verification |
 | Bible | `20261102_bible` | `seed_bible_plans.sql` after Bible schema verification |
@@ -89,6 +89,7 @@ Confirmed by the user or read-only checks in the current project:
 - `supabase/migrations/20261103_payment_and_arcade_client_privileges.sql`
 - `supabase/migrations/20261103_profile_privilege_escalation_hardening.sql`
 - `supabase/migrations/20261103_security_privilege_hardening.sql`
+- `supabase/migrations/20261104_course_lesson_rls_anon_preview_split.sql`
 - `supabase/migrations/20261104_fundraisers.sql`
 - `supabase/migrations/20261105_faith_challenges.sql`
 - `supabase/migrations/20261105_fundraiser_financial_integrity.sql`
@@ -143,4 +144,4 @@ The current release branch is reconciled with deployed production commit `8cef64
 - `20261102_security_rate_limits_and_reports.sql` — legacy setup for `rate_limits`, `content_reports` and related RPCs. Read-only checks confirm both tables currently exist in the connected database. Do not rerun; inspect the current function/policy state first.
 - `supabase/seeds/archive/seed_section_content.sql` — legacy seed uses non-UUID course identifiers and does not match the current courses schema. Do not run.
 
-These archived files are not counted among the 66 active migrations. The active migration set and fresh-project bootstrap still require a separate dependency review before using them to initialize a brand-new database.
+These archived files are not counted among the 67 active migrations. The active migration set and fresh-project bootstrap still require a separate dependency review before using them to initialize a brand-new database.
