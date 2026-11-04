@@ -34,6 +34,7 @@ Run against the latest **preview** deployment before merging PR #1. Do not use r
 - [ ] Keyboard focus is visible; icon-only controls have accessible names; reduced-motion preference is respected.
 
 ## Database and operations
+- [ ] In local development only, `/api/health` reports missing variable names without returning any values; in preview/production it returns 404.
 - [ ] Run the read-only `supabase/tests/rls_checks.sql` and inspect the results, including column-level privileges.
 - [ ] Confirm the migration inventory against the actual Supabase migration history. Do not rerun the confirmed M-Pesa callback migration.
 - [ ] Verify secrets exist by name only; never print or share secret values.
