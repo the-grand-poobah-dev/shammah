@@ -27,6 +27,7 @@ Run against the latest **preview** deployment before merging PR #1. Do not use r
 - [ ] Camera and microphone permissions granted/denied each produce a useful state; test on a real supported device.
 - [ ] GIF search and picker degrade gracefully if provider keys are absent.
 - [ ] Poll create/vote/change vote/close works; counts and visibility match expectations.
+- [ ] `GET /api/courses?action=list` returns HTTP 200 while signed out; it must not require anonymous access to private `course_enrollments` rows.
 - [ ] Courses catalogue, course detail, free enrollment, quiz completion and certificate eligibility work. Test paid access with a sandbox/test fixture only.
 - [ ] Fundraiser detail and donation intent work; callback replay is idempotent. Never use a real charge as a test.
 - [ ] Challenge join/check-in/submission and leaderboard render; arcade scoring is server-validated and duplicate submission is rejected.
@@ -41,6 +42,7 @@ Run against the latest **preview** deployment before merging PR #1. Do not use r
 ## Database and operations
 - [ ] In local development only, `/api/health` reports missing variable names without returning any values; in preview/production it returns 404.
 - [ ] Run the read-only `supabase/tests/rls_checks.sql` and inspect the results, including column-level privileges.
+- [ ] Confirm `course_lessons_read_public_previews` applies to `anon` and `course_lessons_read_authenticated_access` applies to `authenticated`; do not grant `anon` direct SELECT on `course_enrollments`.
 - [ ] Confirm the migration inventory against the actual Supabase migration history. Do not rerun the confirmed M-Pesa callback migration.
 - [ ] Verify secrets exist by name only; never print or share secret values.
 - [ ] Confirm production target, custom domain, and last-known-good deployment before merge/release.
