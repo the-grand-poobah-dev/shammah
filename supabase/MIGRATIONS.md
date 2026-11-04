@@ -30,6 +30,10 @@ Confirmed by the user or read-only checks in the current project:
 | Privacy and privilege hardening | `20261102_profile_column_privacy_hardening`, `20261102_profile_private_anon_acl_hardening`, RPC/trigger/privacy cleanup migrations, `20261103_security_privilege_hardening`, `20261103_payment_and_arcade_client_privileges`, `20261103_profile_privilege_escalation_hardening`, `20261103_church_membership_update_integrity`, `20261103_mpesa_transactions_server_only` | Do not re-run blindly; inspect grants and column-level grants, not table-level grants alone |
 | Cross-promotion | `20261111_promo_events` | Migration reported successful; promo queries have been aligned with live `verse_of_day` and `arcade_daily` columns |
 
+
+
+Pending preview validation: `20261104_profile_lock_owner_update.sql` is a new additive migration for the settings-page profile-lock toggle. Do not run it until the development preview containing the matching UI fix is READY; then verify that authenticated users can update only their own `is_locked` field and cannot change role/badge fields. The migration has not been applied merely by adding it to Git.
+
 ## All migration files
 
 - `supabase/migrations/001_onboarding.sql`
@@ -88,6 +92,7 @@ Confirmed by the user or read-only checks in the current project:
 - `supabase/migrations/20261103_mpesa_transactions_server_only.sql`
 - `supabase/migrations/20261103_payment_and_arcade_client_privileges.sql`
 - `supabase/migrations/20261103_profile_privilege_escalation_hardening.sql`
+- `supabase/migrations/20261104_profile_lock_owner_update.sql`
 - `supabase/migrations/20261103_security_privilege_hardening.sql`
 - `supabase/migrations/20261104_course_lesson_rls_anon_preview_split.sql`
 - `supabase/migrations/20261104_fundraisers.sql`
