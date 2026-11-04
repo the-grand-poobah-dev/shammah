@@ -60,7 +60,12 @@ export async function GET(request) {
     const user = await authenticatedUser(request);
     const admin = makeClient(process.env.SUPABASE_SERVICE_ROLE_KEY);
     const publicClient = makeClient(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-    const client = admin || publicClient;
+    // Without a service-role key, use the signed-in member's JWT so owner-only
+    // RLS policies can return that member's own progress and achievements.
+    const userClient = user
+      ? makeClient(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, request.headers.get('authorization'))
+      : null;
+    const client = admin || userClient || publicClient;
     if (!client) return NextResponse.json({ error: 'Arcade data is not configured yet.' }, { status: 503 });
 
     if (action === 'catalog') {
