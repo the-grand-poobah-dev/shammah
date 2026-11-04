@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 
 export default function Error({ error, reset }) {
   useEffect(() => {
@@ -16,7 +17,7 @@ export default function Error({ error, reset }) {
         <p style={{ color: 'var(--ink-muted, #94a3b8)', marginBottom: 20 }}>This section hit an unexpected error. Your account and saved content have not been intentionally changed.</p>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button type="button" onClick={() => reset()} style={{ minHeight: 44, padding: '10px 18px', borderRadius: 12, fontWeight: 700, background: 'var(--teal, #0d9488)', color: '#fff' }}>Try again</button>
-          <a href="/" style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', padding: '10px 18px', borderRadius: 12, border: '1px solid var(--border, #334155)' }}>Back to feed</a>
+          <Link href="/" style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', padding: '10px 18px', borderRadius: 12, border: '1px solid var(--border, #334155)' }}>Back to feed</Link>
         </div>
       </section>
     </main>
