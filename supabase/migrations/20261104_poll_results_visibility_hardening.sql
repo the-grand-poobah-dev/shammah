@@ -56,7 +56,7 @@ AS $function$
       )
     )
     AND (
-      NOT COALESCE(p.hide_results_until_vote, p.reveal_results_after_voting, false)
+      NOT (COALESCE(p.hide_results_until_vote, false) OR COALESCE(p.reveal_results_after_voting, false))
       OR auth.uid() = p.author_id
       OR p.poll_closed_at IS NOT NULL
       OR COALESCE(p.poll_closed_early, false)
