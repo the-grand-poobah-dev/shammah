@@ -162,7 +162,10 @@ async function fetchCoursesFromDb(supabase, userId) {
     ] = await Promise.all([
       supabase.from('course_modules').select('*').in('course_id', courseIds).order('position', { ascending: true }),
       supabase.from('course_lessons').select('*').in('course_id', courseIds).order('position', { ascending: true }),
-      supabase.from('course_quiz_questions').select('*').order('position', { ascending: true }),
+      // Quiz questions are intentionally server-only: without a service-role key, skip this query rather than requesting a private table with the anon key.
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+        ? supabase.from('course_quiz_questions').select('*').order('position', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
       supabase.from('course_reviews').select('*').in('course_id', courseIds).order('created_at', { ascending: false }),
       // Aggregate enrollment counts require a trusted server key. Never grant
       // anon SELECT on private enrollment rows just to show public course counts.
